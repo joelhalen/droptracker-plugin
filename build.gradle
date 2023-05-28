@@ -24,8 +24,8 @@ dependencies {
 	implementation 'org.json:json:20200518'
 }
 
-group = 'com.example'
-version = '1.0-SNAPSHOT'
+group = 'com.joelhalen.droptracker'
+version = 'BETA-0.1'
 sourceCompatibility = '1.8'
 
 tasks.withType(JavaCompile) {
