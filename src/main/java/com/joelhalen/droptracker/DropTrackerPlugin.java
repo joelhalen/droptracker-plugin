@@ -41,9 +41,10 @@ import java.util.concurrent.CompletableFuture;
 		tags = {"droptracker", "drop", "webhook"}
 )
 public class DropTrackerPlugin extends Plugin {
-
 	@Inject
 	private DropTrackerPluginConfig config;
+	@Inject
+	private OkHttpClient httpClient;
 	@Inject
 	private ItemManager itemManager;
 	@Inject
@@ -118,7 +119,6 @@ public class DropTrackerPlugin extends Plugin {
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
 	}
 	private void initializeServerIdToWebhookUrlMap() {
-		OkHttpClient client = new OkHttpClient();
 
 		Request request = new Request.Builder()
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
@@ -128,7 +128,7 @@ public class DropTrackerPlugin extends Plugin {
 				.build();
 
 		try {
-			Response response = client.newCall(request).execute();
+			Response response = httpClient.newCall(request).execute();
 			String jsonData = response.body().string();
 
 			JSONArray jsonArray = new JSONArray(jsonData);
@@ -171,7 +171,6 @@ public class DropTrackerPlugin extends Plugin {
 				return;
 			} else {
 				//System.out.println("Sending webhook to " + webhookUrl);
-				OkHttpClient client = new OkHttpClient();
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
 				// Setting up the embed.
@@ -224,17 +223,13 @@ public class DropTrackerPlugin extends Plugin {
 							json.toString()
 					);
 
-//					System.out.println("Sending webhook to " + webhookUrl);
-//					System.out.println("Payload: " + json.toString());
 					Request request = new Request.Builder()
 							.url(webhookUrl)
 							.post(body)
 							.build();
 
 					try {
-						Response response = client.newCall(request).execute();
-//						System.out.println("Response code: " + response.code());
-//						System.out.println("Response body: " + response.body().string());
+						Response response = httpClient.newCall(request).execute();
 						response.close();
 					} catch (IOException e) {
 						e.printStackTrace();
@@ -296,7 +291,6 @@ public class DropTrackerPlugin extends Plugin {
 							ImageIO.write((RenderedImage) image, "png", baos);
 							byte[] imageData = baos.toByteArray();
 							String nicePlayerName = playerName.replace(" ", "_");
-							OkHttpClient client = new OkHttpClient();
 
 							RequestBody requestBody = new MultipartBody.Builder()
 									.setType(MultipartBody.FORM)
@@ -309,7 +303,7 @@ public class DropTrackerPlugin extends Plugin {
 									.post(requestBody)
 									.build();
 
-							try (Response response = client.newCall(request).execute()) {
+							try (Response response = httpClient.newCall(request).execute()) {
 								if (!response.isSuccessful()) {
 									throw new IOException("Unexpected response code: " + response);
 								}
@@ -342,7 +336,6 @@ public class DropTrackerPlugin extends Plugin {
 				return;
 			}
 
-			OkHttpClient client = new OkHttpClient();
 			JSONObject json = new JSONObject();
 			json.put("content", message);
 
@@ -357,7 +350,7 @@ public class DropTrackerPlugin extends Plugin {
 					.build();
 
 			try {
-				Response response = client.newCall(request).execute();
+				Response response = httpClient.newCall(request).execute();
 				//System.out.println("Response code: " + response.code());
 				//System.out.println("Response message: " + response.message());
 				response.close();
