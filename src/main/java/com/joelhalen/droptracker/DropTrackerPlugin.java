@@ -55,8 +55,6 @@ public class DropTrackerPlugin extends Plugin {
 	private static final String PET_RECEIVED_MESSAGE = "You have a strange feeling like you're";
 	private static final String RAID_COMPLETE_MESSAGE = "You have a strange feeling like you would have";
 	private static final String COLLECTION_LOG_STRING = "Collection log";
-	//TODO: Add a side panel with drops in a queue, allow players to modify split size, etc, before submission
-	// in this case, we will send a different type of embed and the Python bot will instantly upload it to the loot leaderboard.
 	public static final String CONFIG_GROUP = "droptracker";
 //	@Setter
 //	private FileReadWriter fw = new FileReadWriter();
