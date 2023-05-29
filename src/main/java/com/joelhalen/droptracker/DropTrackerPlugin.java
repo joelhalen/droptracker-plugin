@@ -174,9 +174,8 @@ public class DropTrackerPlugin extends Plugin {
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
 				// Setting up the embed.
-				embedJson.put("title", "Webhook Submission");
+				embedJson.put("title", "DropTracker Plugin Submission");
 				embedJson.put("description", "");
-				//embedJson.put("description", "Details of the loot received from NPC: " + npcName + ", Combat Level: " + npcCombatLevel);
 				embedJson.put("color", 15258703);
 
 				JSONObject itemNameField = new JSONObject();
@@ -186,7 +185,7 @@ public class DropTrackerPlugin extends Plugin {
 
 				JSONObject geValueField = new JSONObject();
 				geValueField.put("name", "Value");
-				geValueField.put("value", "" + geValue + " GP");
+				geValueField.put("value", "```fix\n" + geValue + " GP```");
 				geValueField.put("inline", true);
 
 				JSONObject npcOrEventField = new JSONObject();
