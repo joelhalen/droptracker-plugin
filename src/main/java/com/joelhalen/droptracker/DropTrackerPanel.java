@@ -155,9 +155,9 @@ public class DropTrackerPanel extends PluginPanel
                 nameField.setToolTipText("<html>Enter clan members who were involved in the split.<br>They must be tracked in your server!</html>");
                 JScrollPane scrollPane = new JScrollPane(nameField);
 
-                Integer[] nonMemberOptions = new Integer[20];
-                for (int i = 0; i < 20; i++) {
-                    nonMemberOptions[i] = i + 1; // Fill array with numbers 1-20
+                Integer[] nonMemberOptions = new Integer[21];
+                for (int i = 0; i <= 20; i++) {
+                    nonMemberOptions[i] = i; // Fill array with numbers 0-20
                 }
                 JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
                 nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
@@ -213,8 +213,8 @@ public class DropTrackerPanel extends PluginPanel
             // `` Drop is removed from the entries list; and the panel is refreshed without it.
             // `` TODO: Implement a way of sending the actual data entered by the user to the webhook (will need a new method)
             // `` This way we can remove the necessity for verification later on Discord and handle the webhook accordingly.
-            plugin.sendEmbedWebhook(playerName, npcName, npcLevel, itemId, quantity, value, haValue);
-            System.out.println("You've submitted an item: " + itemName + "Tagged: " + memberList + " with non members: "+ nonMembers);
+            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers);
+            System.out.println("Sent a webhook with your " + itemName);
             entries.remove(entry);
             refreshPanel();
         });

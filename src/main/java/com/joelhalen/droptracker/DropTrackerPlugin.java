@@ -34,11 +34,7 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.io.ByteArrayOutputStream;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -276,7 +272,111 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
+	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers) {
+		//SwingUtilities.invokeLater(() -> {
+		//System.out.println("Grabbing item name using ID.");
+		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
+		return CompletableFuture.runAsync(() -> {
+			String serverId = config.serverId();
+			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
+			//System.out.println(thisItem);
+			//String itemName = itemComp.getName();
+			//System.out.println("item ID " + itemId +"'s  name is " + itemName);
+			if (webhookUrl == null) {
+				System.out.println("No webhook URL assigned!");
+				return;
+			}
+			if (config.ignoreDrops()) {
+				System.out.println("Tracker is disabled in configuration!");
+				return;
+			}
+			if (geValue < config.minimumValue()) {
+				System.out.println("Drop received (" + geValue + "gp) is below the threshold set of " + config.minimumValue());
+				return;
+			} else {
+				//System.out.println("Sending webhook to " + webhookUrl);
+				JSONObject json = new JSONObject();
+				JSONObject embedJson = new JSONObject();
+				// Setting up the embed.
+				embedJson.put("title", "```CONFIRMED DROP```");
+				embedJson.put("description", "");
+				embedJson.put("color", 15258703);
 
+				JSONObject memberField = new JSONObject();
+				memberField.put("name", "Clan Members");
+				memberField.put("value", memberList);
+				memberField.put("inline", true);
+
+				JSONObject nonMemberField = new JSONObject();
+				nonMemberField.put("name", "Non Member Count");
+				nonMemberField.put("value", nonMembers);
+				nonMemberField.put("inline", true);
+
+				JSONObject itemNameField = new JSONObject();
+				itemNameField.put("name", "Item name");
+				itemNameField.put("value", "```\n" + itemName + "```");
+				itemNameField.put("inline", true);
+
+				JSONObject geValueField = new JSONObject();
+				geValueField.put("name", "Value");
+				geValueField.put("value", "```fix\n" + geValue + " GP```");
+				geValueField.put("inline", true);
+
+				JSONObject npcOrEventField = new JSONObject();
+				npcOrEventField.put("name", "From");
+				if (npcCombatLevel > 0) {
+					npcOrEventField.put("value", "```" + npcName + "(lvl: " + npcCombatLevel + ")```");
+				} else {
+					npcOrEventField.put("value", "```" + npcName + "```");
+				}
+				npcOrEventField.put("inline", true);
+
+				JSONObject footer = new JSONObject();
+				footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
+
+				JSONObject author = new JSONObject();
+				author.put("name", "" + playerName);
+
+				String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
+				JSONObject thumbnail = new JSONObject();
+				thumbnail.put("url", img_url);
+
+				// Add fields to embed
+				//embedJson.append("fields", quantityField);
+				embedJson.append("fields", itemNameField);
+				embedJson.append("fields", geValueField);
+				if(!memberList.equals("")) {
+					embedJson.append("fields", memberField);
+				}
+				if(nonMembers > 0) {
+					embedJson.append("fields", nonMemberField);
+				}
+				embedJson.append("fields", npcOrEventField);
+				embedJson.put("footer", footer);
+				embedJson.put("author", author);
+				embedJson.put("thumbnail", thumbnail);
+				json.append("embeds", embedJson);
+
+				RequestBody body = RequestBody.create(
+						MediaType.parse("application/json; charset=utf-8"),
+						json.toString()
+				);
+
+				Request request = new Request.Builder()
+						.url(webhookUrl)
+						.post(body)
+						.build();
+
+				try {
+					Response response = httpClient.newCall(request).execute();
+					response.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+					System.err.println("Failed to send webhook: " + e.getMessage());
+				}
+			}
+		});
+	}
 
 	public CompletableFuture<Void> sendEmbedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, int quantity, int geValue, int haValue) {
 		//SwingUtilities.invokeLater(() -> {
@@ -331,47 +431,47 @@ public class DropTrackerPlugin extends Plugin {
 				} else {
 					npcOrEventField.put("value", "```" + npcName + "```");
 				}
-					npcOrEventField.put("inline", true);
+				npcOrEventField.put("inline", true);
 
-					JSONObject footer = new JSONObject();
-					footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
+				JSONObject footer = new JSONObject();
+				footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
 
-					JSONObject author = new JSONObject();
-					author.put("name", "" + playerName);
+				JSONObject author = new JSONObject();
+				author.put("name", "" + playerName);
 
-					String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
-					JSONObject thumbnail = new JSONObject();
-					thumbnail.put("url", img_url);
+				String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
+				JSONObject thumbnail = new JSONObject();
+				thumbnail.put("url", img_url);
 
-					// Add fields to embed
-					//embedJson.append("fields", quantityField);
-					embedJson.append("fields", itemNameField);
-					embedJson.append("fields", geValueField);
-					embedJson.append("fields", npcOrEventField);
-					embedJson.put("footer", footer);
-					embedJson.put("author", author);
-					embedJson.put("thumbnail", thumbnail);
-					json.append("embeds", embedJson);
+				// Add fields to embed
+				//embedJson.append("fields", quantityField);
+				embedJson.append("fields", itemNameField);
+				embedJson.append("fields", geValueField);
+				embedJson.append("fields", npcOrEventField);
+				embedJson.put("footer", footer);
+				embedJson.put("author", author);
+				embedJson.put("thumbnail", thumbnail);
+				json.append("embeds", embedJson);
 
-					RequestBody body = RequestBody.create(
-							MediaType.parse("application/json; charset=utf-8"),
-							json.toString()
-					);
+				RequestBody body = RequestBody.create(
+						MediaType.parse("application/json; charset=utf-8"),
+						json.toString()
+				);
 
-					Request request = new Request.Builder()
-							.url(webhookUrl)
-							.post(body)
-							.build();
+				Request request = new Request.Builder()
+						.url(webhookUrl)
+						.post(body)
+						.build();
 
-					try {
-						Response response = httpClient.newCall(request).execute();
-						response.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-						System.err.println("Failed to send webhook: " + e.getMessage());
-					}
+				try {
+					Response response = httpClient.newCall(request).execute();
+					response.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+					System.err.println("Failed to send webhook: " + e.getMessage());
 				}
-			});
+			}
+		});
 	}
 
 	private CompletableFuture<Boolean> shouldSendItem(int itemId, int quantity) {
