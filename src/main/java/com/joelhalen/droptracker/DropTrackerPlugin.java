@@ -1,18 +1,22 @@
 package com.joelhalen.droptracker;
 
 import com.google.inject.Provides;
+import net.runelite.api.*;
+import net.runelite.api.events.MenuOpened;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.api.Client;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.NPC;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.loottracker.LootReceived;
+import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
+import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
 import org.json.JSONObject;
@@ -24,9 +28,11 @@ import okhttp3.Response;
 import org.json.JSONArray;
 
 import javax.inject.Inject;
+import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import javax.imageio.ImageIO;
+import javax.swing.*;
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,13 +42,25 @@ import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 @PluginDescriptor(
 		name = "DropTracker",
 		description = "Automatically uploads your drops to the DropTracker discord bot!",
 		tags = {"droptracker", "drop", "webhook"}
 )
+
 public class DropTrackerPlugin extends Plugin {
+	//TODO: Implement pet queues and collection log slot queues
+	private static final String PET_RECEIVED_MESSAGE = "You have a strange feeling like you're";
+	private static final String RAID_COMPLETE_MESSAGE = "You have a strange feeling like you would have";
+	private static final String COLLECTION_LOG_STRING = "Collection log";
+	//TODO: Add a side panel with drops in a queue, allow players to modify split size, etc, before submission
+	// in this case, we will send a different type of embed and the Python bot will instantly upload it to the loot leaderboard.
+	public static final String CONFIG_GROUP = "droptracker";
+//	@Setter
+//	private FileReadWriter fw = new FileReadWriter();
+	//private boolean writerStarted = false;
 	@Inject
 	private DropTrackerPluginConfig config;
 	@Inject
@@ -51,10 +69,19 @@ public class DropTrackerPlugin extends Plugin {
 	private ItemManager itemManager;
 	@Inject
 	private Client client;
+	private DropTrackerPanel panel;
+	@Inject
+	private ClientThread clientThread;
+	@Inject
+	private ClientToolbar clientToolbar;
 	@Inject
 	private DrawManager drawManager;
+	private long accountHash = -1;
 	private Map<String, String> serverIdToWebhookUrlMap;
+	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
+	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
+	private DropTrackerPlugin dropTrackerPluginInst;
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
@@ -64,7 +91,6 @@ public class DropTrackerPlugin extends Plugin {
 		int npcCombatLevel = npc.getCombatLevel();
 		String playerName = client.getLocalPlayer().getName();
 		Collection<ItemStack> items = npcLootReceived.getItems();
-		Integer minimum_value = (int) config.minimumValue();
 		for (ItemStack item : items) {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
@@ -72,15 +98,27 @@ public class DropTrackerPlugin extends Plugin {
 			// Get the item's value
 			int geValue = itemManager.getItemPrice(itemId) * quantity;
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice() * quantity;
+			ItemComposition itemComp = itemManager.getItemComposition(itemId);
+			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
 			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
 				if (shouldSend) {
 					sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+					DropEntry entry = new DropEntry();
+					entry.setPlayerName(playerName);
+					entry.setNpcOrEventName(npcName);
+					entry.setNpcCombatLevel(npcCombatLevel);
+					entry.setGeValue(geValue);
+					entry.setHaValue(haValue);
+					entry.setItemName(itemName);
+					entry.setItemId(itemId);
+					entry.setQuantity(quantity);
+					panel.addDrop(entry);
 				}
 			});
 		}
 	}
-
+	private NavigationButton navButton;
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
@@ -90,7 +128,6 @@ public class DropTrackerPlugin extends Plugin {
 
 		String eventName = lootReceived.getName();
 		Collection<ItemStack> items = lootReceived.getItems();
-		Integer minimum_value = (int) config.minimumValue();
 		for (ItemStack item : items) {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
@@ -99,11 +136,32 @@ public class DropTrackerPlugin extends Plugin {
 			int geValue = itemManager.getItemPrice(itemId) * quantity;
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice() * quantity;
 			boolean ignoreDrops = config.ignoreDrops();
+			ItemComposition itemComp = itemManager.getItemComposition(itemId);
+			String itemName = itemComp.getName();
 			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
 				if (shouldSend) {
 					sendEmbedWebhook(client.getLocalPlayer().getName(), eventName, 0, itemId, quantity, geValue, haValue);
+					DropEntry entry = new DropEntry();
+					entry.setPlayerName(client.getLocalPlayer().getName());
+					entry.setNpcOrEventName(eventName);
+					entry.setNpcCombatLevel(0);
+					entry.setGeValue(geValue);
+					entry.setHaValue(haValue);
+					entry.setItemName(itemName);
+					entry.setItemId(itemId);
+					entry.setQuantity(quantity);
+					panel.addDrop(entry);
 				}
 			});
+		}
+	}
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (!event.getGroup().equals(CONFIG_GROUP))
+		{
+			return;
+		} else {
+			SwingUtilities.invokeLater(() -> panel.refreshPanel());
 		}
 	}
 
@@ -112,13 +170,85 @@ public class DropTrackerPlugin extends Plugin {
 		return configManager.getConfig(DropTrackerPluginConfig.class);
 	}
 
+	@Subscribe
+	public void onMenuOpened(MenuOpened event)
+	{
+		String serverId = config.serverId();
+		if(serverId == "")
+		{
+			return;
+		}
+		if (event.getMenuEntries().length < 2)
+		{
+			return;
+		}
+		MenuEntry entry = event.getMenuEntries()[1];
+
+		String entryTarget = entry.getTarget();
+		if (entryTarget.equals(""))
+		{
+			entryTarget = entry.getOption();
+		}
+
+		if (!entryTarget.toLowerCase().endsWith(COLLECTION_LOG_STRING.toLowerCase()))
+		{
+			return;
+		}
+		System.out.println(entryTarget);
+
+	}
+	@Override
+	protected void shutDown() throws Exception
+	{
+		clientToolbar.removeNavigation(navButton);
+		panel = null;
+		navButton = null;
+		accountHash = -1;
+	}
 	@Override
 	protected void startUp() {
 		initializeServerIdToWebhookUrlMap();
+		panel = new DropTrackerPanel(this, config, itemManager);
+		navButton = NavigationButton.builder()
+				.tooltip("Drop Tracker")
+				.icon(ICON)
+				.priority(6)
+				.panel(panel)
+				.build();
+
+		clientToolbar.addNavigation(navButton);
+
+		accountHash = client.getAccountHash();
+
+		if (!prepared)
+		{
+			clientThread.invoke(() ->
+			{
+				switch (client.getGameState())
+				{
+					case LOGIN_SCREEN:
+					case LOGIN_SCREEN_AUTHENTICATOR:
+					case LOGGING_IN:
+					case LOADING:
+					case LOGGED_IN:
+					case CONNECTION_LOST:
+					case HOPPING:
+						prepared = true;
+						return true;
+					default:
+						return false;
+				}
+			});
+		}
 	}
+
 	public String getIconUrl(int id)
 	{
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
+	}
+	public ItemComposition getItemComposition(int itemId) {
+		// Must ensure this is being called on the client thread
+		return itemManager.getItemComposition(itemId);
 	}
 	private void initializeServerIdToWebhookUrlMap() {
 
@@ -148,11 +278,12 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	private CompletableFuture<Void> sendEmbedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, int quantity, int geValue, int haValue) {
-		//System.out.println("Grabbing item name using ID.");
-		ItemComposition itemComp = itemManager.getItemComposition(itemId);
-		String itemName = itemComp.getName();
 
+
+	public CompletableFuture<Void> sendEmbedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, int quantity, int geValue, int haValue) {
+		//SwingUtilities.invokeLater(() -> {
+		//System.out.println("Grabbing item name using ID.");
+		AtomicReference<String> itemNameRef = new AtomicReference<>();
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
@@ -172,6 +303,11 @@ public class DropTrackerPlugin extends Plugin {
 				System.out.println("Drop received (" + geValue + "gp) is below the threshold set of " + config.minimumValue());
 				return;
 			} else {
+				clientThread.invokeLater(() -> {
+					ItemComposition itemComp = itemManager.getItemComposition(itemId);
+					String itemName = itemComp.getName();
+					itemNameRef.set(itemName);
+				});
 				//System.out.println("Sending webhook to " + webhookUrl);
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
@@ -182,7 +318,7 @@ public class DropTrackerPlugin extends Plugin {
 
 				JSONObject itemNameField = new JSONObject();
 				itemNameField.put("name", "Item name");
-				itemNameField.put("value", "```" + itemName + "```");
+				itemNameField.put("value", "```\n" + itemNameRef.get() + "```");
 				itemNameField.put("inline", true);
 
 				JSONObject geValueField = new JSONObject();
@@ -280,6 +416,8 @@ public class DropTrackerPlugin extends Plugin {
 		});
 		return f;
 	}
+	// `` Send screenshots directly to the DropTracker dedicated server
+	// `` This allows the DropTracker discord bot to store actual images of players' drops
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId) {
 		CompletableFuture<String> future = new CompletableFuture<>();
 		if (!config.sendScreenshots()) {
@@ -335,41 +473,5 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		}
 		return future;
-	}
-
-
-
-	private CompletableFuture<Void> sendWebhook(String message) {
-		return CompletableFuture.runAsync(() -> {
-			String serverId = config.serverId();
-			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
-
-			if (webhookUrl == null) {
-				return;
-			}
-
-			JSONObject json = new JSONObject();
-			json.put("content", message);
-
-			RequestBody body = RequestBody.create(
-					MediaType.parse("application/json; charset=utf-8"),
-					json.toString()
-			);
-
-			Request request = new Request.Builder()
-					.url(webhookUrl)
-					.post(body)
-					.build();
-
-			try {
-				Response response = httpClient.newCall(request).execute();
-				//System.out.println("Response code: " + response.code());
-				//System.out.println("Response message: " + response.message());
-				response.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-				System.err.println("Failed to send webhook: " + e.getMessage());
-			}
-		});
 	}
 }
