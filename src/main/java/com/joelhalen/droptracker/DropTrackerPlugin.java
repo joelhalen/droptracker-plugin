@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @PluginDescriptor(
 		name = "DropTracker",
@@ -269,6 +271,15 @@ public class DropTrackerPlugin extends Plugin {
 		});
 	}
 
+	private CompletableFuture<java.awt.Image> getScreenshot()
+	{
+		CompletableFuture<java.awt.Image> f = new CompletableFuture<>();
+		drawManager.requestNextFrameListener(screenshotImage ->
+		{
+			f.complete(screenshotImage);
+		});
+		return f;
+	}
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId) {
 		CompletableFuture<String> future = new CompletableFuture<>();
 		if (!config.sendScreenshots()) {
@@ -296,22 +307,24 @@ public class DropTrackerPlugin extends Plugin {
 									.addFormDataPart("file", nicePlayerName + "_" + itemName + ".png",
 											RequestBody.create(MediaType.parse("image/png"), imageData))
 									.build();
+							ExecutorService executor = Executors.newSingleThreadExecutor();
+							executor.submit(() -> {
+								Request request = new Request.Builder()
+										.url("http://instinctmc.world/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
+										.post(requestBody)
+										.build();
+								try (Response response = httpClient.newCall(request).execute()) {
+									if (!response.isSuccessful()) {
+										throw new IOException("Unexpected response code: " + response);
+									}
 
-							Request request = new Request.Builder()
-									.url("http://instinctmc.world/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
-									.post(requestBody)
-									.build();
-
-							try (Response response = httpClient.newCall(request).execute()) {
-								if (!response.isSuccessful()) {
-									throw new IOException("Unexpected response code: " + response);
+									String responseBody = response.body().string();
+									future.complete(responseBody.trim());
+								} catch (IOException e) {
+									future.completeExceptionally(e);  // if there's an exception, complete the future exceptionally
 								}
-
-								String responseBody = response.body().string();
-								future.complete(responseBody.trim());
-							} catch (IOException e) {
-								future.completeExceptionally(e);
-							}
+							});
+							executor.shutdown();
 						} catch (IOException e) {
 							future.completeExceptionally(e);
 						}

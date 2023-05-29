@@ -5,13 +5,13 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.Range;
 
-@ConfigGroup("example")
+@ConfigGroup("droptracker")
 public interface DropTrackerPluginConfig extends Config
 {
 		@ConfigItem(
 				keyName = "server_id",
-				name = "Server ID",
-				description = "The server ID for the Discord webhook"
+				name = "DropTracker Group ID",
+				description = "Input your clan's DropTracker ServerID. Ask a staff member if you're unsure."
 		)
 		default String serverId()
 		{
@@ -38,8 +38,8 @@ public interface DropTrackerPluginConfig extends Config
 		}
 		@ConfigItem(
 				keyName = "sendScreenshots",
-				name = "[WILL CAUSE LAG] Send Screenshots",
-				description = "BETA FEATURE -- Send a screenshot to the database along with your drop?"
+				name = "[Beta] Send Screenshots",
+				description = "WARNING: May cause frames to drop. Should we send a screenshot to the database along with your drop?"
 		)
 	default boolean sendScreenshots()
 		{
