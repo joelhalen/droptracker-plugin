@@ -65,7 +65,8 @@ public class DropTrackerPanel extends PluginPanel
                     "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
             dropsPanel.add(descText);
         } else {
-            JLabel descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Server ID:<b><em>" + config.serverId() +
+            String serverName = plugin.getServerName(config.serverId());
+            JLabel descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan:<b><em>" + serverName +
                     "<br></b></em><br>To submit a drop, enter<br>" +
                     "any <em>clan members</em> who were <br>" +
                     "with you <b>on their own line</b><br>" +
@@ -77,8 +78,9 @@ public class DropTrackerPanel extends PluginPanel
                     "drop will automatically be sent!</html>");
             dropsPanel.add(descText);
         }
-        JScrollPane scrollPane = new JScrollPane(dropsPanel);
-        add(scrollPane, BorderLayout.CENTER);
+
+
+        add(dropsPanel, BorderLayout.CENTER);
     }
 
 
@@ -101,6 +103,10 @@ public class DropTrackerPanel extends PluginPanel
         SwingUtilities.invokeLater(() -> {
             // Clear the panel
             dropsPanel.removeAll();
+            //re-set the layout and styles
+            dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
+            dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
+            dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
             String topLogoUrl = "http://instinctmc.world/upload/toplogo.png";
             URL url;
@@ -127,7 +133,8 @@ public class DropTrackerPanel extends PluginPanel
                         "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
                 dropsPanel.add(descText);
             } else {
-                descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Server ID:<b><em>" + config.serverId() +
+                String serverName = plugin.getServerName(config.serverId());
+                descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan:<b><em>" + serverName +
                         "<br></b></em><br>To submit a drop, enter<br>" +
                         "any <em>clan members</em> who were <br>" +
                         "with you <b>on their own line</b><br>" +
@@ -142,6 +149,7 @@ public class DropTrackerPanel extends PluginPanel
 
             // Add each drop to the panel
             for (DropEntry entry : entries) {
+
                 // Fetch image for the item
                 BufferedImage itemImage = itemManager.getImage(entry.getItemId());
                 JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
@@ -181,15 +189,17 @@ public class DropTrackerPanel extends PluginPanel
                 JPanel nameMemberPanel = new JPanel();
                 nameMemberPanel.add(scrollPane);
                 nameMemberPanel.add(nonMemberDropdown);
-
+                //Panels for each entry
                 JPanel entryPanel = new JPanel();
                 entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
+                entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                numNameTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                valueTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 entryPanel.add(imageLabel);
                 entryPanel.add(numNameTextLabel);
                 entryPanel.add(valueTextLabel);
                 entryPanel.add(nameMemberPanel);
                 entryPanel.add(submitButton);
-
                 dropsPanel.add(entryPanel);
             }
             dropsPanel.revalidate();

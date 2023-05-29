@@ -19,6 +19,7 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +73,9 @@ public class DropTrackerPlugin extends Plugin {
 	private DrawManager drawManager;
 	private long accountHash = -1;
 	private Map<String, String> serverIdToWebhookUrlMap;
+	private Map<String, Integer> serverMinimumLootVarMap;
+	private Map<String, String> serverIdToClanNameMap;
+	private Map<String, Boolean> serverIdToConfirmedOnlyMap;
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
@@ -96,18 +100,25 @@ public class DropTrackerPlugin extends Plugin {
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
 			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
+				String serverId = config.serverId();
+				Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
 				if (shouldSend) {
-					sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
-					DropEntry entry = new DropEntry();
-					entry.setPlayerName(playerName);
-					entry.setNpcOrEventName(npcName);
-					entry.setNpcCombatLevel(npcCombatLevel);
-					entry.setGeValue(geValue);
-					entry.setHaValue(haValue);
-					entry.setItemName(itemName);
-					entry.setItemId(itemId);
-					entry.setQuantity(quantity);
-					panel.addDrop(entry);
+					if (geValue < clanMinimumLoot) {
+						// TODO: Move this logic to shouldSendItem?
+						System.out.println("Drop skipped -- below clan threshold of " + clanMinimumLoot);
+					} else {
+						sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+						DropEntry entry = new DropEntry();
+						entry.setPlayerName(playerName);
+						entry.setNpcOrEventName(npcName);
+						entry.setNpcCombatLevel(npcCombatLevel);
+						entry.setGeValue(geValue);
+						entry.setHaValue(haValue);
+						entry.setItemName(itemName);
+						entry.setItemId(itemId);
+						entry.setQuantity(quantity);
+						panel.addDrop(entry);
+					}
 				}
 			});
 		}
@@ -235,7 +246,15 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
-
+	public String getServerName(String serverId) {
+		return serverIdToClanNameMap.get(serverId);
+	}
+	public int getServerMinimumLoot(int serverId) {
+		return serverMinimumLootVarMap.get(serverId);
+	}
+	public boolean getConfirmedOnlySetting(boolean serverId) {
+		return serverIdToConfirmedOnlyMap.get(serverId);
+	}
 	public String getIconUrl(int id)
 	{
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
@@ -250,15 +269,17 @@ public class DropTrackerPlugin extends Plugin {
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 				//this way we can add servers simply, without having to push updates to the plugin for each new server.
 				//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-				.url("http://instinctmc.world/data/server-hooks.json")
+				.url("http://instinctmc.world/data/server-setting.json")
 				.build();
 
 		try {
 			Response response = httpClient.newCall(request).execute();
 			String jsonData = response.body().string();
-
 			JSONArray jsonArray = new JSONArray(jsonData);
 			serverIdToWebhookUrlMap = new HashMap<>();
+			serverIdToClanNameMap = new HashMap<>();
+			serverMinimumLootVarMap = new HashMap<>();
+			serverIdToConfirmedOnlyMap = new HashMap<>();
 
 			for (int i = 0; i < jsonArray.length(); i++) {
 				JSONObject jsonObject = jsonArray.getJSONObject(i);
@@ -266,8 +287,22 @@ public class DropTrackerPlugin extends Plugin {
 						jsonObject.getString("serverId"),
 						jsonObject.getString("webhookUrl")
 				);
+				serverIdToClanNameMap.put(
+						jsonObject.getString("serverId"),
+						jsonObject.getString("serverName")
+				);
+				serverMinimumLootVarMap.put(
+						jsonObject.getString("serverId"),
+						jsonObject.getInt("minimumLoot")
+				);
+				serverIdToConfirmedOnlyMap.put(
+						jsonObject.getString("serverId"),
+						jsonObject.getBoolean("confOnly")
+				);
 			}
-		} catch (IOException e) {
+		} catch (JSONException e) {
+			e.printStackTrace();
+		} catch	(IOException e) {
 			e.printStackTrace();
 		}
 	}
@@ -279,6 +314,7 @@ public class DropTrackerPlugin extends Plugin {
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
+			int minimumClanLoot = serverMinimumLootVarMap.get(serverId);
 			//System.out.println(thisItem);
 			//String itemName = itemComp.getName();
 			//System.out.println("item ID " + itemId +"'s  name is " + itemName);
@@ -293,6 +329,10 @@ public class DropTrackerPlugin extends Plugin {
 			if (geValue < config.minimumValue()) {
 				System.out.println("Drop received (" + geValue + "gp) is below the threshold set of " + config.minimumValue());
 				return;
+			}
+			if (geValue < minimumClanLoot) {
+				// TODO:Send a chat message in-game informing the player their drop didn't qualify?
+				System.out.println("Drop received (" + geValue + "gp) is below the CLAN threshold set of " + minimumClanLoot);
 			} else {
 				//System.out.println("Sending webhook to " + webhookUrl);
 				JSONObject json = new JSONObject();
@@ -330,9 +370,9 @@ public class DropTrackerPlugin extends Plugin {
 					npcOrEventField.put("value", "```" + npcName + "```");
 				}
 				npcOrEventField.put("inline", true);
-
+				String serverName = serverIdToClanNameMap.get(serverId);
 				JSONObject footer = new JSONObject();
-				footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
+				footer.put("text", serverName + " (ID #" + serverId + ") Support: http://discord.gg/instinct");
 
 				JSONObject author = new JSONObject();
 				author.put("name", "" + playerName);
@@ -385,6 +425,13 @@ public class DropTrackerPlugin extends Plugin {
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
+			//Check if the serverId has specified in our properties file
+			//that they want to >only< send confirmed drops from the plugin panel.
+			boolean sendHooks = serverIdToConfirmedOnlyMap.get(serverId);
+			if(sendHooks) {
+				//TODO: Remove this method entirely?
+				return;
+			}
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 			//System.out.println(thisItem);
 			//String itemName = itemComp.getName();
@@ -478,10 +525,16 @@ public class DropTrackerPlugin extends Plugin {
 		int gePrice = itemManager.getItemPrice(itemId);
 		int geValue = gePrice * quantity;
 		int minimum_value = (int) config.minimumValue();
+		String serverId = config.serverId();
+		int minimumClanValue = serverMinimumLootVarMap.get(serverId);
 		boolean ignoreDrops = config.ignoreDrops();
 		if (geValue > minimum_value) {
 			if (!ignoreDrops) {
-				return CompletableFuture.completedFuture(true);
+				if (geValue > minimumClanValue) {
+					return CompletableFuture.completedFuture(true);
+				} else {
+					return CompletableFuture.completedFuture(false);
+				}
 			} else {
 				return CompletableFuture.completedFuture(false);
 			}
