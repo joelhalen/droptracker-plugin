@@ -231,7 +231,7 @@ public class DropTrackerPlugin extends Plugin {
 	public String getServerName(String serverId) {
 		return serverIdToClanNameMap.get(serverId);
 	}
-	public int getServerMinimumLoot(int serverId) {
+	public int getServerMinimumLoot(String serverId) {
 		return serverMinimumLootVarMap.get(serverId);
 	}
 	public boolean getConfirmedOnlySetting(boolean serverId) {
@@ -251,7 +251,7 @@ public class DropTrackerPlugin extends Plugin {
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 				//this way we can add servers simply, without having to push updates to the plugin for each new server.
 				//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-				.url("http://instinctmc.world/data/server-setting.json")
+				.url("http://instinctmc.world/data/servers.json")
 				.build();
 
 		try {
@@ -316,7 +316,27 @@ public class DropTrackerPlugin extends Plugin {
 				return;
 			}
 			if (geValue < minimumClanLoot) {
+				ChatMessageBuilder belowValueResp = new ChatMessageBuilder();
 				// TODO:Send a chat message in-game informing the player their drop didn't qualify?
+				belowValueResp.append(ChatColorType.NORMAL)
+						.append("Your submission (")
+						.append(ChatColorType.HIGHLIGHT)
+						.append(itemName)
+						.append(ChatColorType.NORMAL)
+						.append(") (")
+						.append(String.valueOf(geValue))
+						.append(") did not meet the required ")
+						.append(ChatColorType.HIGHLIGHT)
+						.append(String.valueOf(minimumClanLoot))
+						.append(ChatColorType.NORMAL)
+						.append("gp minimum value for ")
+						.append(serverIdToClanNameMap.get(serverId))
+						.append(ChatColorType.NORMAL)
+						.append("'s loot leaderboard.");
+				chatMessageManager.queue(QueuedMessage.builder()
+						.type(ChatMessageType.CONSOLE)
+						.runeLiteFormattedMessage(belowValueResp.build())
+						.build());
 				System.out.println("Drop received (" + geValue + "gp) is below the CLAN threshold set of " + minimumClanLoot);
 			} else {
 				//System.out.println("Sending webhook to " + webhookUrl);

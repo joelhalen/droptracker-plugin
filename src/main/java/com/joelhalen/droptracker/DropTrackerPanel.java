@@ -66,14 +66,16 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.add(descText);
         } else {
             String serverName = plugin.getServerName(config.serverId());
-            JLabel descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan:<b><em>" + serverName +
-                    "<br></b></em><br>To submit a drop, enter<br>" +
-                    "any <em>clan members</em> who were <br>" +
-                    "with you <b>on their own line</b><br>" +
+            int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+            JLabel descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
+                    "</b><br>Minimum value: <b>" + minimumClanLoot +
+                    "<br></b><br>To submit a drop, enter " +
+                    "any <em>clan<br>members</em> who were " +
+                    "with you <b>on their <br>own line</b>" +
                     " in the text field.<br>" +
-                    "Then, select how many <em>non-<br>" +
-                    "members</em><br>" +
-                    "were involved in the drop.<br>" +
+                    "Then, select how many " +
+                    "<em>non-members</em> were involved" +
+                    " in the drop.<br><br>" +
                     "<br>Once you press submit, your<br>" +
                     "drop will automatically be sent!</html>");
             dropsPanel.add(descText);
@@ -134,14 +136,16 @@ public class DropTrackerPanel extends PluginPanel
                 dropsPanel.add(descText);
             } else {
                 String serverName = plugin.getServerName(config.serverId());
-                descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan:<b><em>" + serverName +
-                        "<br></b></em><br>To submit a drop, enter<br>" +
-                        "any <em>clan members</em> who were <br>" +
-                        "with you <b>on their own line</b><br>" +
+                int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+                descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
+                        "</b><br>Minimum value: <b>" + minimumClanLoot +
+                        "<br></b><br>To submit a drop, enter " +
+                        "any <em>clan<br>members</em> who were " +
+                        "with you <b>on their <br>own line</b>" +
                         " in the text field.<br>" +
-                        "Then, select how many <em>non-<br>" +
-                        "members</em><br>" +
-                        "were involved in the drop.<br>" +
+                        "Then, select how many " +
+                        "<em>non-members</em> were involved" +
+                        " in the drop.<br><br>" +
                         "<br>Once you press submit, your<br>" +
                         "drop will automatically be sent!</html>");
                 dropsPanel.add(descText);
