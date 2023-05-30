@@ -36,9 +36,7 @@ package com.joelhalen.droptracker;
 
 import com.google.inject.Provides;
 import net.runelite.api.*;
-import net.runelite.api.events.MenuOpened;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.api.events.AccountHashChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -46,6 +44,7 @@ import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.ClientSessionManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.events.NpcLootReceived;
@@ -114,8 +113,10 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DrawManager drawManager;
 	private long accountHash = -1;
+	public String localPlayerName;
 	private Map<String, String> serverIdToWebhookUrlMap;
 	private Map<String, Integer> serverMinimumLootVarMap;
+	private Map<String, Long> clanServerDiscordIDMap;
 	private Map<String, String> serverIdToClanNameMap;
 	private Map<String, Boolean> serverIdToConfirmedOnlyMap;
 	private boolean prepared = false;
@@ -135,9 +136,12 @@ public class DropTrackerPlugin extends Plugin {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-			// Get the item's value
-			int geValue = itemManager.getItemPrice(itemId) * quantity;
-			int haValue = itemManager.getItemComposition(itemId).getHaPrice() * quantity;
+			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
+			if(quantity > 1) {
+				return;
+			}
+			int geValue = itemManager.getItemPrice(itemId);
+			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
@@ -155,11 +159,11 @@ public class DropTrackerPlugin extends Plugin {
 									.append(ChatColorType.HIGHLIGHT)
 									.append("DropTracker")
 									.append(ChatColorType.NORMAL)
-									.append("] your ")
+									.append("] Added ")
 									.append(ChatColorType.HIGHLIGHT)
 									.append(itemName)
 									.append(ChatColorType.NORMAL)
-									.append(" has been added to the RuneLite side panel for your review.");
+									.append(" to the RuneLite side panel for review");
 							chatMessageManager.queue(QueuedMessage.builder()
 									.type(ChatMessageType.CONSOLE)
 									.runeLiteFormattedMessage(addedDropToPanelMessage.build())
@@ -196,11 +200,14 @@ public class DropTrackerPlugin extends Plugin {
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			// Get the item's value
-			int geValue = itemManager.getItemPrice(itemId) * quantity;
-			int haValue = itemManager.getItemComposition(itemId).getHaPrice() * quantity;
 			boolean ignoreDrops = config.ignoreDrops();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
+			if(quantity > 1) {
+				return;
+			}
+			int geValue = itemManager.getItemPrice(itemId);
+			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
 			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
 				if (shouldSend) {
 					if(config.sendChatMessages()) {
@@ -209,11 +216,11 @@ public class DropTrackerPlugin extends Plugin {
 								.append(ChatColorType.HIGHLIGHT)
 								.append("DropTracker")
 								.append(ChatColorType.NORMAL)
-								.append("] your ")
+								.append("] Added ")
 								.append(ChatColorType.HIGHLIGHT)
 								.append(itemName)
 								.append(ChatColorType.NORMAL)
-								.append(" has been added to the RuneLite side panel for your review.");
+								.append(" to the RuneLite side panel for review");
 						chatMessageManager.queue(QueuedMessage.builder()
 								.type(ChatMessageType.CONSOLE)
 								.runeLiteFormattedMessage(addedDropToPanelMessage.build())
@@ -234,6 +241,17 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
+	@Subscribe
+	public void onAccountHashChanged(AccountHashChanged e)
+	{
+		if (accountHash == client.getAccountHash())
+		{
+			return;
+		}
+		accountHash = client.getAccountHash();
+		SwingUtilities.invokeLater(panel::refreshPanel);
+	}
+
 	public void onConfigChanged(ConfigChanged event)
 	{
 		if (!event.getGroup().equals(CONFIG_GROUP))
@@ -244,12 +262,18 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
+
 	@Provides
 	DropTrackerPluginConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(DropTrackerPluginConfig.class);
 	}
 
-
+	public String getLocalPlayerName() {
+		if (client != null && client.getLocalPlayer() != null) {
+			return client.getLocalPlayer().getName();
+		}
+		return null;
+	}
 	@Override
 	protected void shutDown() throws Exception
 	{
@@ -300,6 +324,9 @@ public class DropTrackerPlugin extends Plugin {
 	public int getServerMinimumLoot(String serverId) {
 		return serverMinimumLootVarMap.get(serverId);
 	}
+	public long getClanDiscordServerID(String serverId) {
+		return clanServerDiscordIDMap.get(serverId);
+	}
 	public boolean getConfirmedOnlySetting(boolean serverId) {
 		return serverIdToConfirmedOnlyMap.get(serverId);
 	}
@@ -328,7 +355,7 @@ public class DropTrackerPlugin extends Plugin {
 			serverIdToClanNameMap = new HashMap<>();
 			serverMinimumLootVarMap = new HashMap<>();
 			serverIdToConfirmedOnlyMap = new HashMap<>();
-
+			clanServerDiscordIDMap = new HashMap<>();
 			for (int i = 0; i < jsonArray.length(); i++) {
 				JSONObject jsonObject = jsonArray.getJSONObject(i);
 				serverIdToWebhookUrlMap.put(
@@ -346,6 +373,10 @@ public class DropTrackerPlugin extends Plugin {
 				serverIdToConfirmedOnlyMap.put(
 						jsonObject.getString("serverId"),
 						jsonObject.getBoolean("confOnly")
+				);
+				clanServerDiscordIDMap.put(
+						jsonObject.getString("serverId"),
+						jsonObject.getLong("discordServerId")
 				);
 			}
 		} catch (JSONException e) {

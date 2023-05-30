@@ -25,6 +25,7 @@
 
 package com.joelhalen.droptracker;
 
+import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
@@ -38,9 +39,14 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +59,8 @@ public class DropTrackerPanel extends PluginPanel
     private final DropTrackerPluginConfig config;
     @Inject
     private final ItemManager itemManager;
+    @Inject
+    private Client client;
 
     private final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
@@ -99,9 +107,17 @@ public class DropTrackerPanel extends PluginPanel
             int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
             NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
             String minimumLootString = clanLootFormat.format(minimumClanLoot);
+            String playerLoot;
+            String playerName = plugin.getLocalPlayerName();
+            if(playerName != null) {
+                playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
+            } else {
+                playerLoot = "<em>not signed in</em>!";
+            }
             descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                    "</b><br>Minimum value: <b>" + minimumLootString +
-                    "gp<br></b><br>To submit a drop, enter " +
+                    "</b><br>Minimum value: <b>" + minimumLootString + "gp</b><br>" +
+                    "Your total loot: <b>" + playerLoot +
+                    "</b>gp<br></b><br>To submit a drop, enter " +
                     "any <em>clan<br>members</em> who were " +
                     "with you <b>on their <br>own line</b>" +
                     " in the text field.<br>" +
@@ -109,7 +125,9 @@ public class DropTrackerPanel extends PluginPanel
                     "<em>non-members</em> were involved" +
                     " in the drop.<br><br>" +
                     "<br>Once you press submit, your<br>" +
-                    "drop will automatically be sent!</html>");
+                    "drop will automatically be sent!" +
+                    //TODO: Implement a way to update the players' loot for the month by reading via a PHP request?
+                    "</html>");
             dropsPanel.add(descText);
         }
 
@@ -171,9 +189,17 @@ public class DropTrackerPanel extends PluginPanel
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
                 NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                 String minimumLootString = clanLootFormat.format(minimumClanLoot);
+                String playerLoot;
+                String playerName = plugin.getLocalPlayerName();
+                if(playerName != null) {
+                    playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
+                } else {
+                    playerLoot = "<em>not signed in</em>!";
+                }
                 descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                        "</b><br>Minimum value: <b>" + minimumLootString +
-                        "gp<br></b><br>To submit a drop, enter " +
+                        "</b><br>Minimum value: <b>" + minimumLootString + "gp</b><br>" +
+                        "Your total loot: <b>" + playerLoot +
+                        "</b>gp<br></b><br>To submit a drop, enter " +
                         "any <em>clan<br>members</em> who were " +
                         "with you <b>on their <br>own line</b>" +
                         " in the text field.<br>" +
@@ -181,7 +207,9 @@ public class DropTrackerPanel extends PluginPanel
                         "<em>non-members</em> were involved" +
                         " in the drop.<br><br>" +
                         "<br>Once you press submit, your<br>" +
-                        "drop will automatically be sent!</html>");
+                        "drop will automatically be sent!" +
+                        //TODO: Implement a way to update the players' loot for the month by reading via a PHP request?
+                        "</html>");
                 dropsPanel.add(descText);
             }
 
@@ -267,6 +295,30 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
+    public String fetchPlayerLootFromPHP(String serverId, String playerName) {
+        Long discordServerId = plugin.getClanDiscordServerID(serverId);
+        try {
+            String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
+            URL url = new URL("http://instinctmc.world/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String line;
+            StringBuilder builder = new StringBuilder();
+
+            while ((line = reader.readLine()) != null) {
+                builder.append(line);
+            }
+
+            reader.close();
+            return builder.toString();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
 
     private void submitDrop(DropEntry entry) {
         SwingUtilities.invokeLater(() -> {
