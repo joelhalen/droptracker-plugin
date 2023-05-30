@@ -47,6 +47,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,6 +112,7 @@ public class DropTrackerPanel extends PluginPanel
             String playerName = plugin.getLocalPlayerName();
             if(playerName != null) {
                 playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
+                playerLoot = formatNumber(Double.parseDouble(playerLoot));
             } else {
                 playerLoot = "<em>not signed in</em>!";
             }
@@ -126,7 +128,6 @@ public class DropTrackerPanel extends PluginPanel
                     " in the drop.<br><br>" +
                     "<br>Once you press submit, your<br>" +
                     "drop will automatically be sent!" +
-                    //TODO: Implement a way to update the players' loot for the month by reading via a PHP request?
                     "</html>");
             dropsPanel.add(descText);
         }
@@ -135,6 +136,20 @@ public class DropTrackerPanel extends PluginPanel
         add(dropsPanel, BorderLayout.CENTER);
     }
 
+    public static String formatNumber(double number) {
+        if (number == 0) {
+            return "0";
+        }
+        String[] units = new String[] { "", "K", "M", "B", "T" };
+        int unit = (int) Math.floor((Math.log10(number) / 3)); // Determine the unit (K, M, B, etc.)
+
+        if (unit >= units.length) unit = units.length - 1; // Prevent array index out of bounds error
+
+        double num = number / Math.pow(1000, unit);
+        DecimalFormat df = new DecimalFormat("#.#");
+        String formattedNum = df.format(num);
+        return formattedNum + units[unit];
+    }
 
     public void addDrop(DropEntry entry) {
         SwingUtilities.invokeLater(() -> {
@@ -193,6 +208,7 @@ public class DropTrackerPanel extends PluginPanel
                 String playerName = plugin.getLocalPlayerName();
                 if(playerName != null) {
                     playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
+                    playerLoot = formatNumber(Double.parseDouble(playerLoot));
                 } else {
                     playerLoot = "<em>not signed in</em>!";
                 }
@@ -208,7 +224,6 @@ public class DropTrackerPanel extends PluginPanel
                         " in the drop.<br><br>" +
                         "<br>Once you press submit, your<br>" +
                         "drop will automatically be sent!" +
-                        //TODO: Implement a way to update the players' loot for the month by reading via a PHP request?
                         "</html>");
                 dropsPanel.add(descText);
             }
