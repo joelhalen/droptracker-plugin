@@ -17,16 +17,6 @@ public interface DropTrackerPluginConfig extends Config
 		{
 			return "";
 		}
-		@Range(min = 1, max = 5000000)
-		@ConfigItem(
-			name = "Minimum Item Price",
-			keyName = "minimumValue",
-			description = "Minimum item value for submissions to be sent to the webhook."
-		)
-		default double minimumValue()
-		{
-			return 2;
-		}
 		@ConfigItem(
 				keyName = "ignoreDrops",
 				name = "Ignore Drops",
@@ -36,6 +26,12 @@ public interface DropTrackerPluginConfig extends Config
 		{
 			return false;
 		}
+		@ConfigItem(
+				keyName = "sendChatMessages",
+				name = "Send Chat Messages?",
+				description = "Would you like to receive messages in your chatbox when drops are added to the panel/uploaded?"
+		)
+		default boolean sendChatMessages() { return true; }
 		@ConfigItem(
 				keyName = "sendScreenshots",
 				name = "[Beta] Send Screenshots",

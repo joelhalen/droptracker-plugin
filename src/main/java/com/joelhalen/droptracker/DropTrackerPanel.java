@@ -225,8 +225,7 @@ public class DropTrackerPanel extends PluginPanel
             int nonMembers = entry.getNonMemberCount();
             String memberList = entry.getClanMembers();
             // `` Drop is removed from the entries list; and the panel is refreshed without it.
-            // `` TODO: Implement a way of sending the actual data entered by the user to the webhook (will need a new method)
-            // `` This way we can remove the necessity for verification later on Discord and handle the webhook accordingly.
+            // data is sent to another method inside main class; which sends an embed with the entered information for this item
             plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers);
             //System.out.println("Sent a webhook with your " + itemName);
             entries.remove(entry);

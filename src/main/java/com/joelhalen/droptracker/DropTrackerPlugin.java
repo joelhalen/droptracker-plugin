@@ -115,6 +115,22 @@ public class DropTrackerPlugin extends Plugin {
 						// TODO: Move this logic to shouldSendItem?
 						System.out.println("Drop skipped -- below clan threshold of " + clanMinimumLoot);
 					} else {
+						if(config.sendChatMessages()) {
+							ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
+							addedDropToPanelMessage.append("[")
+									.append(ChatColorType.HIGHLIGHT)
+									.append("DropTracker")
+									.append(ChatColorType.NORMAL)
+									.append("] your ")
+									.append(ChatColorType.HIGHLIGHT)
+									.append(itemName)
+									.append(ChatColorType.NORMAL)
+									.append(" has been added to the RuneLite side panel for your review.");
+							chatMessageManager.queue(QueuedMessage.builder()
+									.type(ChatMessageType.CONSOLE)
+									.runeLiteFormattedMessage(addedDropToPanelMessage.build())
+									.build());
+						}
 						sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
 						DropEntry entry = new DropEntry();
 						entry.setPlayerName(playerName);
@@ -153,6 +169,22 @@ public class DropTrackerPlugin extends Plugin {
 			String itemName = itemComp.getName();
 			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
 				if (shouldSend) {
+					if(config.sendChatMessages()) {
+						ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
+						addedDropToPanelMessage.append("[")
+								.append(ChatColorType.HIGHLIGHT)
+								.append("DropTracker")
+								.append(ChatColorType.NORMAL)
+								.append("] your ")
+								.append(ChatColorType.HIGHLIGHT)
+								.append(itemName)
+								.append(ChatColorType.NORMAL)
+								.append(" has been added to the RuneLite side panel for your review.");
+						chatMessageManager.queue(QueuedMessage.builder()
+								.type(ChatMessageType.CONSOLE)
+								.runeLiteFormattedMessage(addedDropToPanelMessage.build())
+								.build());
+					}
 					sendEmbedWebhook(client.getLocalPlayer().getName(), eventName, 0, itemId, quantity, geValue, haValue);
 					DropEntry entry = new DropEntry();
 					entry.setPlayerName(client.getLocalPlayer().getName());
@@ -311,10 +343,6 @@ public class DropTrackerPlugin extends Plugin {
 				System.out.println("Tracker is disabled in configuration!");
 				return;
 			}
-			if (geValue < config.minimumValue()) {
-				System.out.println("Drop received (" + geValue + "gp) is below the threshold set of " + config.minimumValue());
-				return;
-			}
 			if (geValue < minimumClanLoot) {
 				ChatMessageBuilder belowValueResp = new ChatMessageBuilder();
 				// TODO:Send a chat message in-game informing the player their drop didn't qualify?
@@ -456,34 +484,37 @@ public class DropTrackerPlugin extends Plugin {
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
+			Integer serverMinimum = serverMinimumLootVarMap.get(serverId);
 			//Check if the serverId has specified in our properties file
 			//that they want to >only< send confirmed drops from the plugin panel.
-			boolean sendHooks = serverIdToConfirmedOnlyMap.get(serverId);
-			if(sendHooks) {
-				//TODO: Remove this method entirely?
-				return;
-			}
+			//if so, cancel the webhook being sent
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 			//System.out.println(thisItem);
 			//String itemName = itemComp.getName();
 			//System.out.println("item ID " + itemId +"'s  name is " + itemName);
 			if (webhookUrl == null) {
-				System.out.println("No webhook URL assigned!");
 				return;
 			}
 			if (config.ignoreDrops()) {
-				System.out.println("Tracker is disabled in configuration!");
 				return;
 			}
-			if (geValue < config.minimumValue()) {
-				System.out.println("Drop received (" + geValue + "gp) is below the threshold set of " + config.minimumValue());
+			if (geValue < serverMinimum) {
 				return;
-			} else {
+			}
+				boolean sendHooks = serverIdToConfirmedOnlyMap.get(serverId);
+				//grab the item name
 				clientThread.invokeLater(() -> {
 					ItemComposition itemComp = itemManager.getItemComposition(itemId);
 					String itemName = itemComp.getName();
 					itemNameRef.set(itemName);
 				});
+				if(sendHooks) {
+					//cancel the operation if the server the user has defined doesn't want submissions that aren't confirmed
+					//send a message letting them know the drop was added to their panel.
+
+					return;
+				}
+
 				//System.out.println("Sending webhook to " + webhookUrl);
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
@@ -542,50 +573,47 @@ public class DropTrackerPlugin extends Plugin {
 						.build();
 
 				try {
+					if(config.sendChatMessages()) {
+						ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
+						addedDropToPanelMessage.append("[")
+								.append(ChatColorType.HIGHLIGHT)
+								.append("DropTracker")
+								.append(ChatColorType.NORMAL)
+								.append("] your ")
+								.append(ChatColorType.HIGHLIGHT)
+								.append(itemNameRef.get())
+								.append(ChatColorType.NORMAL)
+								.append(" has been automatically submitted to the webhook server.");
+						chatMessageManager.queue(QueuedMessage.builder()
+								.type(ChatMessageType.CONSOLE)
+								.runeLiteFormattedMessage(addedDropToPanelMessage.build())
+								.build());
+					}
 					Response response = httpClient.newCall(request).execute();
 					response.close();
 				} catch (IOException e) {
 					e.printStackTrace();
 					System.err.println("Failed to send webhook: " + e.getMessage());
 				}
-			}
+
 		});
 	}
 
 	private CompletableFuture<Boolean> shouldSendItem(int itemId, int quantity) {
 		int gePrice = itemManager.getItemPrice(itemId);
 		int geValue = gePrice * quantity;
-		int minimum_value = (int) config.minimumValue();
 		String serverId = config.serverId();
 		int minimumClanValue = serverMinimumLootVarMap.get(serverId);
 		boolean ignoreDrops = config.ignoreDrops();
-		if (geValue > minimum_value) {
-			if (!ignoreDrops) {
-				if (geValue > minimumClanValue) {
-					return CompletableFuture.completedFuture(true);
-				} else {
-					return CompletableFuture.completedFuture(false);
-				}
+		if (!ignoreDrops) {
+			if (geValue > minimumClanValue) {
+				return CompletableFuture.completedFuture(true);
 			} else {
 				return CompletableFuture.completedFuture(false);
 			}
 		} else return CompletableFuture.completedFuture(false);
 	}
 
-	private CompletableFuture<Boolean> processEventNotification(LootRecordType type, String name, int itemId, int quantity)
-	{
-		return shouldSendItem(itemId, quantity).thenApply(shouldSend -> {
-			if (shouldSend) {
-				// Get the item's value
-				int geValue = itemManager.getItemPrice(itemId) * quantity;
-				int haValue = itemManager.getItemComposition(itemId).getHaPrice() * quantity;
-				// Send the webhook with the player's name, event name, item id, quantity, and the item's value
-				String playerName = client.getLocalPlayer().getName();
-				sendEmbedWebhook(playerName, name, 0, itemId, quantity, geValue, haValue);
-			}
-			return shouldSend;
-		});
-	}
 
 	// `` Send screenshots directly to the DropTracker dedicated server
 	// `` This allows the DropTracker discord bot to store actual images of players' drops
@@ -609,6 +637,7 @@ public class DropTrackerPlugin extends Plugin {
 							ByteArrayOutputStream baos = new ByteArrayOutputStream();
 							ImageIO.write((RenderedImage) image, "png", baos);
 							byte[] imageData = baos.toByteArray();
+							//remove spaces to write the filename nicely to the server.
 							String nicePlayerName = playerName.replace(" ", "_");
 
 							RequestBody requestBody = new MultipartBody.Builder()
