@@ -224,7 +224,7 @@ public class DropTrackerPanel extends PluginPanel
             // `` TODO: Implement a way of sending the actual data entered by the user to the webhook (will need a new method)
             // `` This way we can remove the necessity for verification later on Discord and handle the webhook accordingly.
             plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers);
-            System.out.println("Sent a webhook with your " + itemName);
+            //System.out.println("Sent a webhook with your " + itemName);
             entries.remove(entry);
             refreshPanel();
         });

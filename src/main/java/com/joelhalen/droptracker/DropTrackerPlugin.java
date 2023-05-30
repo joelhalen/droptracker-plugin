@@ -3,7 +3,13 @@ package com.joelhalen.droptracker;
 import com.google.inject.Provides;
 import net.runelite.api.*;
 import net.runelite.api.events.MenuOpened;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
@@ -65,6 +71,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private Client client;
 	private DropTrackerPanel panel;
+	@Inject
+	private ChatMessageManager chatMessageManager;
 	@Inject
 	private ClientThread clientThread;
 	@Inject
@@ -175,33 +183,7 @@ public class DropTrackerPlugin extends Plugin {
 		return configManager.getConfig(DropTrackerPluginConfig.class);
 	}
 
-	@Subscribe
-	public void onMenuOpened(MenuOpened event)
-	{
-		String serverId = config.serverId();
-		if(serverId == "")
-		{
-			return;
-		}
-		if (event.getMenuEntries().length < 2)
-		{
-			return;
-		}
-		MenuEntry entry = event.getMenuEntries()[1];
 
-		String entryTarget = entry.getTarget();
-		if (entryTarget.equals(""))
-		{
-			entryTarget = entry.getOption();
-		}
-
-		if (!entryTarget.toLowerCase().endsWith(COLLECTION_LOG_STRING.toLowerCase()))
-		{
-			return;
-		}
-		System.out.println(entryTarget);
-
-	}
 	@Override
 	protected void shutDown() throws Exception
 	{
@@ -310,6 +292,9 @@ public class DropTrackerPlugin extends Plugin {
 	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers) {
 		//SwingUtilities.invokeLater(() -> {
 		//System.out.println("Grabbing item name using ID.");
+		ChatMessageBuilder messageResp = new ChatMessageBuilder();
+		messageResp.append(ChatColorType.NORMAL);
+
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
@@ -406,13 +391,39 @@ public class DropTrackerPlugin extends Plugin {
 						.url(webhookUrl)
 						.post(body)
 						.build();
-
+				//ChatMessageBuilder messageResp = new ChatMessageBuilder();
 				try {
+					messageResp.append(ChatColorType.NORMAL)
+							.append("Successfully submitted ")
+							.append(ChatColorType.HIGHLIGHT)
+							.append(itemName)
+							.append(ChatColorType.NORMAL)
+							.append(" to ")
+							.append(ChatColorType.HIGHLIGHT)
+							.append(serverIdToClanNameMap.get(serverId))
+							.append(ChatColorType.NORMAL)
+							.append("'s loot leaderboard!");
+					chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(messageResp.build())
+							.build());
 					Response response = httpClient.newCall(request).execute();
 					response.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					ChatMessageBuilder errorMessageResp = new ChatMessageBuilder();
+					errorMessageResp.append("Your drop: ")
+							.append(ChatColorType.HIGHLIGHT)
+							.append(itemName)
+							.append(ChatColorType.NORMAL)
+							.append(" could not be submitted to ")
+							.append(serverIdToClanNameMap.get(serverId))
+							.append("'s loot leaderboard. Try again later!");
+					chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(errorMessageResp.build())
+							.build());
 					System.err.println("Failed to send webhook: " + e.getMessage());
+					e.printStackTrace();
 				}
 			}
 		});
@@ -538,9 +549,7 @@ public class DropTrackerPlugin extends Plugin {
 			} else {
 				return CompletableFuture.completedFuture(false);
 			}
-		} else {
-			return CompletableFuture.completedFuture(false);
-		}
+		} else return CompletableFuture.completedFuture(false);
 	}
 
 	private CompletableFuture<Boolean> processEventNotification(LootRecordType type, String name, int itemId, int quantity)
@@ -558,15 +567,6 @@ public class DropTrackerPlugin extends Plugin {
 		});
 	}
 
-	private CompletableFuture<java.awt.Image> getScreenshot()
-	{
-		CompletableFuture<java.awt.Image> f = new CompletableFuture<>();
-		drawManager.requestNextFrameListener(screenshotImage ->
-		{
-			f.complete(screenshotImage);
-		});
-		return f;
-	}
 	// `` Send screenshots directly to the DropTracker dedicated server
 	// `` This allows the DropTracker discord bot to store actual images of players' drops
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId) {
