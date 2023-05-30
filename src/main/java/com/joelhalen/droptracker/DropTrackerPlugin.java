@@ -283,7 +283,7 @@ public class DropTrackerPlugin extends Plugin {
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 				//this way we can add servers simply, without having to push updates to the plugin for each new server.
 				//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-				.url("http://instinctmc.world/data/servers.json")
+				.url("http://instinctmc.world/data/serverSettings.json")
 				.build();
 
 		try {
@@ -441,8 +441,11 @@ public class DropTrackerPlugin extends Plugin {
 						.build();
 				//ChatMessageBuilder messageResp = new ChatMessageBuilder();
 				try {
-					messageResp.append(ChatColorType.NORMAL)
-							.append("Successfully submitted ")
+					messageResp.append("[")
+							.append(ChatColorType.HIGHLIGHT)
+							.append("DropTracker")
+							.append(ChatColorType.NORMAL)
+							.append("] Successfully submitted ")
 							.append(ChatColorType.HIGHLIGHT)
 							.append(itemName)
 							.append(ChatColorType.NORMAL)
@@ -459,7 +462,11 @@ public class DropTrackerPlugin extends Plugin {
 					response.close();
 				} catch (IOException e) {
 					ChatMessageBuilder errorMessageResp = new ChatMessageBuilder();
-					errorMessageResp.append("Your drop: ")
+					errorMessageResp.append("[")
+							.append(ChatColorType.HIGHLIGHT)
+							.append("DropTracker")
+							.append(ChatColorType.NORMAL)
+							.append("] Your drop: ")
 							.append(ChatColorType.HIGHLIGHT)
 							.append(itemName)
 							.append(ChatColorType.NORMAL)
@@ -579,11 +586,11 @@ public class DropTrackerPlugin extends Plugin {
 								.append(ChatColorType.HIGHLIGHT)
 								.append("DropTracker")
 								.append(ChatColorType.NORMAL)
-								.append("] your ")
+								.append("] Sent ")
 								.append(ChatColorType.HIGHLIGHT)
 								.append(itemNameRef.get())
 								.append(ChatColorType.NORMAL)
-								.append(" has been automatically submitted to the webhook server.");
+								.append(" automatically to your server's discord webhook.");
 						chatMessageManager.queue(QueuedMessage.builder()
 								.type(ChatMessageType.CONSOLE)
 								.runeLiteFormattedMessage(addedDropToPanelMessage.build())

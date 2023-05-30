@@ -7,12 +7,16 @@ import net.runelite.client.ui.PluginPanel;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,16 +64,19 @@ public class DropTrackerPanel extends PluginPanel
         ImageIcon urlIcon = new ImageIcon(urlImage);
         JLabel urlLabel = new JLabel(urlIcon);
         dropsPanel.add(urlLabel);
+        JLabel descText;
         if(config.serverId().equals("")) {
-            JLabel descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
+            descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
                     "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
             dropsPanel.add(descText);
         } else {
             String serverName = plugin.getServerName(config.serverId());
             int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
-            JLabel descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                    "</b><br>Minimum value: <b>" + minimumClanLoot +
-                    "<br></b><br>To submit a drop, enter " +
+            NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
+            String minimumLootString = clanLootFormat.format(minimumClanLoot);
+            descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
+                    "</b><br>Minimum value: <b>" + minimumLootString +
+                    "gp<br></b><br>To submit a drop, enter " +
                     "any <em>clan<br>members</em> who were " +
                     "with you <b>on their <br>own line</b>" +
                     " in the text field.<br>" +
@@ -137,9 +144,11 @@ public class DropTrackerPanel extends PluginPanel
             } else {
                 String serverName = plugin.getServerName(config.serverId());
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+                NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
+                String minimumLootString = clanLootFormat.format(minimumClanLoot);
                 descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                        "</b><br>Minimum value: <b>" + minimumClanLoot +
-                        "<br></b><br>To submit a drop, enter " +
+                        "</b><br>Minimum value: <b>" + minimumLootString +
+                        "gp<br></b><br>To submit a drop, enter " +
                         "any <em>clan<br>members</em> who were " +
                         "with you <b>on their <br>own line</b>" +
                         " in the text field.<br>" +
@@ -160,20 +169,30 @@ public class DropTrackerPanel extends PluginPanel
                 String itemName = entry.getItemName();
                 int geValue = entry.getGeValue();
 
-                JLabel numNameTextLabel = new JLabel("Item: "+itemName);
-                JLabel valueTextLabel = new JLabel("Value: " + String.valueOf(geValue) + " gp");
+                JLabel itemTextLabel = new JLabel("<html>Item: "+itemName+"<br>Value: " + String.valueOf(geValue) + "gp</html>");
+
+                JPanel nameFieldPanel = new JPanel(new BorderLayout());
+                JLabel nameLabel = new JLabel("Names:");
+                nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
 
                 JTextArea nameField = new JTextArea(2,10);
                 nameField.setToolTipText("<html>Enter clan members who were involved in the split.<br>They must be tracked in your server!</html>");
                 JScrollPane scrollPane = new JScrollPane(nameField);
+                nameFieldPanel.add(scrollPane, BorderLayout.CENTER);
 
                 Integer[] nonMemberOptions = new Integer[21];
                 for (int i = 0; i <= 20; i++) {
                     nonMemberOptions[i] = i; // Fill array with numbers 0-20
                 }
+
+                JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
+                JLabel nonMemberLabel = new JLabel("Non-members:");
+                nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
+
                 JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
                 nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
                 nonMemberDropdown.setPreferredSize((new Dimension(45,25)));
+                nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
 
                 JButton submitButton = new JButton("Submit");
                 JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
@@ -189,21 +208,33 @@ public class DropTrackerPanel extends PluginPanel
                     submitDrop(entry);
                 });
                 submitButton.setPreferredSize(new Dimension(90, 20));
-
+                submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+                submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
                 JPanel nameMemberPanel = new JPanel();
-                nameMemberPanel.add(scrollPane);
-                nameMemberPanel.add(nonMemberDropdown);
+                nameMemberPanel.add(nameFieldPanel);
+                nameMemberPanel.add(nonMemberDropdownPanel);
                 //Panels for each entry
                 JPanel entryPanel = new JPanel();
                 entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
                 entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                numNameTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                valueTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                entryPanel.add(imageLabel);
-                entryPanel.add(numNameTextLabel);
-                entryPanel.add(valueTextLabel);
+                entryPanel.setBackground(Color.DARK_GRAY);
+                Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
+                Border innerBorder = new EmptyBorder(0, 0, 10, 0);
+                CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
+                entryPanel.setBorder(compoundBorder);
+                // Place the item, value, and loot inside an object together
+                JPanel itemContainer = new JPanel();
+                itemContainer.add(imageLabel);
+                // Change the alignment of objects inside the itemContainer
+                imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                itemContainer.add(itemTextLabel);
+                entryPanel.add(itemContainer);
+                //entryPanel.add(numNameTextLabel);
+                //entryPanel.add(valueTextLabel);
                 entryPanel.add(nameMemberPanel);
                 entryPanel.add(submitButton);
+                entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 dropsPanel.add(entryPanel);
             }
             dropsPanel.revalidate();
