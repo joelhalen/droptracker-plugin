@@ -29,6 +29,7 @@ import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.ImageUtil;
 
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -67,6 +68,7 @@ public class DropTrackerPanel extends PluginPanel
 
     private final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
+    private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
 
     public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager) {
         super();
@@ -82,25 +84,11 @@ public class DropTrackerPanel extends PluginPanel
         dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
         dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
         dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        String topLogoUrl = "http://instinctmc.world/upload/toplogo.png";
-        URL url = null;
-        try {
-            url = new URL(topLogoUrl);
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
-        }
-        BufferedImage urlImage = null;
-        try {
-            urlImage = ImageIO.read(url);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        // Create an ImageIcon from the URL image
-        ImageIcon urlIcon = new ImageIcon(urlImage);
-        JLabel urlLabel = new JLabel(urlIcon);
-        dropsPanel.add(urlLabel);
-
+        // Create an ImageIcon from the TOP_LOGO BufferedImage
+        ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
+        JLabel logoLabel = new JLabel(logoIcon);
+        // Add the logo to the top of panel
+        dropsPanel.add(logoLabel);
         /* Add a button to refresh the panel incase data is inaccurate */
         JButton refreshButton = new JButton("Refresh");
         refreshButton.addActionListener(e -> refreshPanel());
@@ -109,9 +97,13 @@ public class DropTrackerPanel extends PluginPanel
         buttonPanel.add(Box.createHorizontalGlue());
         buttonPanel.add(refreshButton);
         buttonPanel.add(Box.createHorizontalGlue());
-        dropsPanel.add(buttonPanel);
-
-        /* Build the text to be displayed */
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(buttonPanel);
+        topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        topPanel.add(logoLabel, BorderLayout.NORTH);
+        topPanel.add(buttonPanel, BorderLayout.CENTER);
+        dropsPanel.add(topPanel, BorderLayout.NORTH);
+        dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
         JLabel descText;
         if(config.serverId().equals("")) {
             descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
@@ -229,26 +221,11 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
             dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-            String topLogoUrl = "http://instinctmc.world/upload/toplogo.png";
-            URL url;
-            try {
-                url = new URL(topLogoUrl);
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
-            }
-            BufferedImage urlImage;
-            try {
-                urlImage = ImageIO.read(url);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-
-            // Create an ImageIcon from the URL image
-            ImageIcon urlIcon = new ImageIcon(urlImage);
-            JLabel urlLabel = new JLabel(urlIcon);
-            dropsPanel.add(urlLabel);
-
+            // Create an ImageIcon from the TOP_LOGO BufferedImage
+            ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
+            JLabel logoLabel = new JLabel(logoIcon);
+            // Add the logo to the top of panel
+            dropsPanel.add(logoLabel);
             /* Add a button to refresh the panel incase data is inaccurate */
             JButton refreshButton = new JButton("Refresh");
             refreshButton.addActionListener(e -> refreshPanel());
@@ -260,11 +237,10 @@ public class DropTrackerPanel extends PluginPanel
             JPanel topPanel = new JPanel(new BorderLayout());
             topPanel.add(buttonPanel);
             topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-            topPanel.add(urlLabel, BorderLayout.NORTH);
+            topPanel.add(logoLabel, BorderLayout.NORTH);
             topPanel.add(buttonPanel, BorderLayout.CENTER);
             dropsPanel.add(topPanel, BorderLayout.NORTH);
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
-
             JLabel descText;
             if(config.serverId().equals("")) {
                 descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
