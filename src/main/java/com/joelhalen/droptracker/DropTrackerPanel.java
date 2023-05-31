@@ -37,6 +37,8 @@ import javax.swing.border.Border;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.MatteBorder;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -98,6 +100,18 @@ public class DropTrackerPanel extends PluginPanel
         ImageIcon urlIcon = new ImageIcon(urlImage);
         JLabel urlLabel = new JLabel(urlIcon);
         dropsPanel.add(urlLabel);
+
+        /* Add a button to refresh the panel incase data is inaccurate */
+        JButton refreshButton = new JButton("Refresh");
+        refreshButton.addActionListener(e -> refreshPanel());
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+        buttonPanel.add(Box.createHorizontalGlue());
+        buttonPanel.add(refreshButton);
+        buttonPanel.add(Box.createHorizontalGlue());
+        dropsPanel.add(buttonPanel);
+
+        /* Build the text to be displayed */
         JLabel descText;
         if(config.serverId().equals("")) {
             descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
@@ -106,20 +120,61 @@ public class DropTrackerPanel extends PluginPanel
         } else {
             String serverName = plugin.getServerName(config.serverId());
             int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+            Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
             NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
             String minimumLootString = clanLootFormat.format(minimumClanLoot);
             String playerLoot;
+            String formattedServerTotal = "0";
+            if(config.serverId() != "") {
+                String serverLootTotal = fetchServerLootTotal();
+                if(serverLootTotal == "Invalid server ID.") {
+                    formattedServerTotal = "0";
+                } else {
+                    formattedServerTotal = formatNumber(Double.parseDouble(serverLootTotal));
+                }
+            }
             String playerName = plugin.getLocalPlayerName();
             if(playerName != null) {
                 playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
                 playerLoot = formatNumber(Double.parseDouble(playerLoot));
             } else {
-                playerLoot = "<em>not signed in</em>!";
+                playerLoot = "not signed in!";
+                formattedServerTotal = "0";
             }
-            descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                    "</b><br>Minimum value: <b>" + minimumLootString + "gp</b><br>" +
-                    "Your total loot: <b>" + playerLoot +
-                    "</b>gp<br></b><br>To submit a drop, enter " +
+            String[][] data = {
+                    {"Your Clan", serverName},
+                    {"Minimum value", minimumLootString + " gp"},
+                    {"Your total loot", playerLoot},
+                    {"Clan Total:", formattedServerTotal + " gp"},
+            };
+
+            String[] columnNames = {"Key", "Value"};
+            DefaultTableModel model = new DefaultTableModel(data, columnNames) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    // This causes all cells to be not editable
+                    return false;
+                }
+            };
+            JTable table = new JTable(model);
+            table.setPreferredScrollableViewportSize(new Dimension(500, 70));
+            table.setFillsViewportHeight(true);
+            // Set custom renderer to bold the keys in the table (is there a better way to do this?)
+            table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                Font originalFont = null;
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    if (originalFont == null) {
+                        originalFont = c.getFont();
+                    }
+                    c.setFont(originalFont.deriveFont(Font.BOLD));
+                    return c;
+                }
+            });
+
+            dropsPanel.add(table);
+            descText = new JLabel("<html><br><br>To submit a drop, enter " +
                     "any <em>clan<br>members</em> who were " +
                     "with you <b>on their <br>own line</b>" +
                     " in the text field.<br>" +
@@ -194,6 +249,22 @@ public class DropTrackerPanel extends PluginPanel
             JLabel urlLabel = new JLabel(urlIcon);
             dropsPanel.add(urlLabel);
 
+            /* Add a button to refresh the panel incase data is inaccurate */
+            JButton refreshButton = new JButton("Refresh");
+            refreshButton.addActionListener(e -> refreshPanel());
+            JPanel buttonPanel = new JPanel();
+            buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+            buttonPanel.add(Box.createHorizontalGlue());
+            buttonPanel.add(refreshButton);
+            buttonPanel.add(Box.createHorizontalGlue());
+            JPanel topPanel = new JPanel(new BorderLayout());
+            topPanel.add(buttonPanel);
+            topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            topPanel.add(urlLabel, BorderLayout.NORTH);
+            topPanel.add(buttonPanel, BorderLayout.CENTER);
+            dropsPanel.add(topPanel, BorderLayout.NORTH);
+            dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
+
             JLabel descText;
             if(config.serverId().equals("")) {
                 descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
@@ -202,20 +273,61 @@ public class DropTrackerPanel extends PluginPanel
             } else {
                 String serverName = plugin.getServerName(config.serverId());
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+                Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
                 NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                 String minimumLootString = clanLootFormat.format(minimumClanLoot);
                 String playerLoot;
+                String formattedServerTotal = "0";
+                if(config.serverId() != "") {
+                    String serverLootTotal = fetchServerLootTotal();
+                    if(serverLootTotal == "Invalid server ID.") {
+                        formattedServerTotal = "0";
+                    } else {
+                        formattedServerTotal = formatNumber(Double.parseDouble(serverLootTotal));
+                    }
+                }
                 String playerName = plugin.getLocalPlayerName();
                 if(playerName != null) {
                     playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
                     playerLoot = formatNumber(Double.parseDouble(playerLoot));
                 } else {
-                    playerLoot = "<em>not signed in</em>!";
+                    playerLoot = "not signed in!";
+                    formattedServerTotal = "0";
                 }
-                descText = new JLabel("<html>Welcome to the <b>DropTracker</b> plugin!<br><br><em>This plugin is under construction.</em><br><br>Your Clan: <b>" + serverName +
-                        "</b><br>Minimum value: <b>" + minimumLootString + "gp</b><br>" +
-                        "Your total loot: <b>" + playerLoot +
-                        "</b>gp<br></b><br>To submit a drop, enter " +
+                String[][] data = {
+                        {"Your Clan: ", serverName},
+                        {"Minimum Value: ", minimumLootString + " gp"},
+                        {"Your total loot: ", playerLoot, " gp"},
+                        {"Clan Total: ", formattedServerTotal + " gp"},
+                };
+
+                String[] columnNames = {"Key", "Value"};
+                DefaultTableModel model = new DefaultTableModel(data, columnNames) {
+                    @Override
+                    public boolean isCellEditable(int row, int column) {
+                        // This causes all cells to be not editable
+                        return false;
+                    }
+                };
+                JTable table = new JTable(model);
+                table.setPreferredScrollableViewportSize(new Dimension(500, 70));
+                table.setFillsViewportHeight(true);
+                // Set custom renderer to bold the keys in the table (is there a better way to do this?)
+                table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                    Font originalFont = null;
+                    @Override
+                    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                        Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                        if (originalFont == null) {
+                            originalFont = c.getFont();
+                        }
+                        c.setFont(originalFont.deriveFont(Font.BOLD));
+                        return c;
+                    }
+                });
+
+                dropsPanel.add(table);
+                descText = new JLabel("<html><br><br>To submit a drop, enter " +
                         "any <em>clan<br>members</em> who were " +
                         "with you <b>on their <br>own line</b>" +
                         " in the text field.<br>" +
@@ -225,6 +337,7 @@ public class DropTrackerPanel extends PluginPanel
                         "<br>Once you press submit, your<br>" +
                         "drop will automatically be sent!" +
                         "</html>");
+                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 dropsPanel.add(descText);
             }
 
@@ -310,7 +423,30 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
+    public String fetchServerLootTotal() {
+        Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
+        try {
+            URL url = new URL("http://instinctmc.world/data/player_data.php?totalServerId=" + discordServerId);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String line;
+            StringBuilder builder = new StringBuilder();
+
+            while ((line = reader.readLine()) != null) {
+                builder.append(line);
+            }
+
+            reader.close();
+            return builder.toString();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public String fetchPlayerLootFromPHP(String serverId, String playerName) {
+        /* Grab the player's total loot from the server via PHP*/
         Long discordServerId = plugin.getClanDiscordServerID(serverId);
         try {
             String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
@@ -344,13 +480,12 @@ public class DropTrackerPanel extends PluginPanel
             int itemId = entry.getItemId();
             int npcLevel = entry.getNpcCombatLevel();
             int quantity = entry.getQuantity();
-            int haValue = entry.getHaValue();
             int nonMembers = entry.getNonMemberCount();
             String memberList = entry.getClanMembers();
             // `` Drop is removed from the entries list; and the panel is refreshed without it.
             // data is sent to another method inside main class; which sends an embed with the entered information for this item
+            // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
             plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers);
-            //System.out.println("Sent a webhook with your " + itemName);
             entries.remove(entry);
             refreshPanel();
         });

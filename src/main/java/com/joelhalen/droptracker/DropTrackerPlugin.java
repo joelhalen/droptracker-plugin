@@ -35,8 +35,12 @@
 package com.joelhalen.droptracker;
 
 import com.google.inject.Provides;
+
 import net.runelite.api.*;
 import net.runelite.api.events.AccountHashChanged;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -44,7 +48,6 @@ import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.ClientSessionManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.events.NpcLootReceived;
@@ -58,6 +61,7 @@ import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -99,6 +103,8 @@ public class DropTrackerPlugin extends Plugin {
 	private DropTrackerPluginConfig config;
 	@Inject
 	private OkHttpClient httpClient;
+	private boolean panelRefreshed = false;
+	private String currentPlayerName = "";
 	@Inject
 	private ItemManager itemManager;
 	@Inject
@@ -151,7 +157,7 @@ public class DropTrackerPlugin extends Plugin {
 				if (shouldSend) {
 					if (geValue < clanMinimumLoot) {
 						// TODO: Move this logic to shouldSendItem?
-						System.out.println("Drop skipped -- below clan threshold of " + clanMinimumLoot);
+
 					} else {
 						if(config.sendChatMessages()) {
 							ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
@@ -251,6 +257,18 @@ public class DropTrackerPlugin extends Plugin {
 		accountHash = client.getAccountHash();
 		SwingUtilities.invokeLater(panel::refreshPanel);
 	}
+	@Subscribe
+	public void onGameTick(GameTick event) {
+		if (client.getGameState() == GameState.LOGGED_IN && client.getLocalPlayer().getName() != null && client.getLocalPlayer().getName() != currentPlayerName) {
+			if (!panelRefreshed) {
+				panel.refreshPanel();
+				currentPlayerName = client.getLocalPlayer().getName();
+				panelRefreshed = true;
+			}
+		} else {
+			panelRefreshed = false;
+		}
+	}
 
 	public void onConfigChanged(ConfigChanged event)
 	{
@@ -319,17 +337,24 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	public String getServerName(String serverId) {
+		if(serverId == "" || !serverIdToClanNameMap.containsKey(serverId)) {
+			return "None!";
+		}
 		return serverIdToClanNameMap.get(serverId);
 	}
 	public int getServerMinimumLoot(String serverId) {
+		if(serverId == "" || !serverMinimumLootVarMap.containsKey(serverId)) {
+			return 0;
+		}
 		return serverMinimumLootVarMap.get(serverId);
 	}
 	public long getClanDiscordServerID(String serverId) {
+		if(serverId == "" || !clanServerDiscordIDMap.containsKey(serverId)) {
+			return 0;
+		}
 		return clanServerDiscordIDMap.get(serverId);
 	}
-	public boolean getConfirmedOnlySetting(boolean serverId) {
-		return serverIdToConfirmedOnlyMap.get(serverId);
-	}
+
 	public String getIconUrl(int id)
 	{
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
@@ -387,8 +412,6 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers) {
-		//SwingUtilities.invokeLater(() -> {
-		//System.out.println("Grabbing item name using ID.");
 		ChatMessageBuilder messageResp = new ChatMessageBuilder();
 		messageResp.append(ChatColorType.NORMAL);
 
@@ -397,15 +420,10 @@ public class DropTrackerPlugin extends Plugin {
 			String serverId = config.serverId();
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 			int minimumClanLoot = serverMinimumLootVarMap.get(serverId);
-			//System.out.println(thisItem);
-			//String itemName = itemComp.getName();
-			//System.out.println("item ID " + itemId +"'s  name is " + itemName);
 			if (webhookUrl == null) {
-				System.out.println("No webhook URL assigned!");
 				return;
 			}
 			if (config.ignoreDrops()) {
-				System.out.println("Tracker is disabled in configuration!");
 				return;
 			}
 			if (geValue < minimumClanLoot) {
@@ -430,12 +448,9 @@ public class DropTrackerPlugin extends Plugin {
 						.type(ChatMessageType.CONSOLE)
 						.runeLiteFormattedMessage(belowValueResp.build())
 						.build());
-				System.out.println("Drop received (" + geValue + "gp) is below the CLAN threshold set of " + minimumClanLoot);
 			} else {
-				//System.out.println("Sending webhook to " + webhookUrl);
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
-				// Setting up the embed.
 				embedJson.put("title", "```CONFIRMED DROP```");
 				embedJson.put("description", "");
 				embedJson.put("color", 15258703);
@@ -542,7 +557,6 @@ public class DropTrackerPlugin extends Plugin {
 							.type(ChatMessageType.CONSOLE)
 							.runeLiteFormattedMessage(errorMessageResp.build())
 							.build());
-					System.err.println("Failed to send webhook: " + e.getMessage());
 					e.printStackTrace();
 				}
 			}
@@ -550,8 +564,6 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendEmbedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, int quantity, int geValue, int haValue) {
-		//SwingUtilities.invokeLater(() -> {
-		//System.out.println("Grabbing item name using ID.");
 		AtomicReference<String> itemNameRef = new AtomicReference<>();
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
@@ -561,9 +573,6 @@ public class DropTrackerPlugin extends Plugin {
 			//that they want to >only< send confirmed drops from the plugin panel.
 			//if so, cancel the webhook being sent
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
-			//System.out.println(thisItem);
-			//String itemName = itemComp.getName();
-			//System.out.println("item ID " + itemId +"'s  name is " + itemName);
 			if (webhookUrl == null) {
 				return;
 			}
@@ -587,7 +596,6 @@ public class DropTrackerPlugin extends Plugin {
 					return;
 				}
 
-				//System.out.println("Sending webhook to " + webhookUrl);
 				JSONObject json = new JSONObject();
 				JSONObject embedJson = new JSONObject();
 				// Setting up the embed.
@@ -665,7 +673,6 @@ public class DropTrackerPlugin extends Plugin {
 					response.close();
 				} catch (IOException e) {
 					e.printStackTrace();
-					System.err.println("Failed to send webhook: " + e.getMessage());
 				}
 
 		});
