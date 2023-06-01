@@ -63,6 +63,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 
 public class DropTrackerPanel extends PluginPanel
@@ -78,6 +80,8 @@ public class DropTrackerPanel extends PluginPanel
     private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
     private final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
+    public String localAuthKey = null;
+    public String localPlayerName = null;
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
 
     public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager, ChatMessageManager chatMessageManager) {
@@ -124,14 +128,15 @@ public class DropTrackerPanel extends PluginPanel
         } else {
             // If they entered a server ID, check if the auth key is empty
             // We also handle if the auth key does not match the expected value here.
-            if(config.authKey().equals("") || config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
+            if(localAuthKey != null && localPlayerName == client.getLocalPlayer().getName()) {
+                // do nothing if they have a localAuthKey stored with the correct playername
+            } else if (config.authKey().equals("") || config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
                 descText = new JLabel("<html>You have not entered an <br>" +
                         "authentication token into the DropTracker config.<br>" +
                         "<br>You should have been DMed one by @DropTracker#4420<br><br>" +
                         "If not, send the discord bot a DM<br>Saying: `auth`</html>");
                 dropsPanel.add(descText);
             } else {
-                log.debug("We are receiving the following authKey: `" + config.authKey() + "`");
                 String serverName = plugin.getServerName(config.serverId());
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
                 Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
@@ -237,15 +242,15 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
-    public Future<String> checkAuthKeyAsync(String playerName, String serverId, String authKey) {
-        return executorService.submit(() -> {
+    public void checkAuthKeyAsync(String playerName, String serverId, String authKey, Consumer<String> callback) {
+        executorService.submit(() -> {
             String result = checkAuthKey(playerName, serverId, authKey);
             if (result.equals("New token generated.")) {
-                return "discord";
+                callback.accept("discord");
             } else if (result.equals("Authenticated.")) {
-                return "yes";
+                callback.accept("yes");
             } else {
-                return result;
+                callback.accept(result);
             }
         });
     }
@@ -286,49 +291,54 @@ public class DropTrackerPanel extends PluginPanel
             //re-set the layout and styles
             String playerName = plugin.getLocalPlayerName();
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
-            String playerLoot = "none";
+            AtomicReference<String> playerLoot = new AtomicReference<>("none");
             String formattedServerTotal = "0";
             if(!config.authKey().equals("")) {
-                if(playerName != null) {
-                    Future<String> isAuthenticated = checkAuthKeyAsync(playerName, config.serverId(), config.authKey());
-                    try {
-                        String authRes = isAuthenticated.get();
-                        if(authRes.equals("discord")) {
-                            // This response means they did not have a UID before, but had one generated now.
-                            // This also means that: 1. their account was found in the server's database,
-                            // 2. They have an assigned discord account tied to the server,
-                            // 3. They do not already have an auth token for their discord UUID
-                            //TODO: Send a proper message to let the player know they need to input this UUID.
-                            System.out.println("Check your discord DMs!");
-                            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                    .append("DropTracker")
-                                    .append("]")
-                                    .append(ChatColorType.NORMAL)
-                                    .append("A new authentication token has been generated for you! Check your discord.");
-                            plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                    .type(ChatMessageType.CONSOLE)
-                                    .runeLiteFormattedMessage(messageResponse.build())
-                                    .build());
-                        } else if(!authRes.equals("yes")) {
-                            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                    .append("DropTracker")
-                                    .append("] You have entered an invalid authentication")
-                                    .append(" token in the configuration for DropTracker.");
-                            plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                    .type(ChatMessageType.CONSOLE)
-                                    .runeLiteFormattedMessage(messageResponse.build())
-                                    .build());
-                            return;
-                        }
-                    } catch (InterruptedException | ExecutionException e) {
-                        log.error("An error occurred.");
+                if (playerName != null) {
+                    String finalPlayerName = playerName;
+                    if(localAuthKey != null && localPlayerName == client.getLocalPlayer().getName()) {
+                        System.out.println("We received: " + localPlayerName + localAuthKey);
+                        // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
+                    } else {
+                        checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
+                            SwingUtilities.invokeLater(() -> {
+                                if (authRes.equals("discord")) {
+                                    // This response means they did not have a UID before, but had one generated now.
+                                    System.out.println("Check your discord DMs!");
+                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+                                            .append("DropTracker")
+                                            .append("]")
+                                            .append(ChatColorType.NORMAL)
+                                            .append("A new authentication token has been generated for you! Check your discord.");
+                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                            .type(ChatMessageType.CONSOLE)
+                                            .runeLiteFormattedMessage(messageResponse.build())
+                                            .build());
+                                } else if (!authRes.equals("yes")) {
+                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+                                            .append("DropTracker")
+                                            .append("] You have entered an invalid authentication")
+                                            .append(" token in the configuration for DropTracker.");
+                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                            .type(ChatMessageType.CONSOLE)
+                                            .runeLiteFormattedMessage(messageResponse.build())
+                                            .build());
+                                } else {
+                                    // Successful authentication
+                                    localAuthKey = config.authKey();
+                                    if(client.getLocalPlayer().getName() != null) {
+                                        localPlayerName = client.getLocalPlayer().getName();
+                                    }
+                                    String loot = fetchPlayerLootFromPHP(config.serverId(), finalPlayerName);
+                                    playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                }
+                            });
+                        });
                     }
-                    playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
-                    playerLoot = formatNumber(Double.parseDouble(playerLoot));
                 } else {
-                    playerLoot = "not signed in!";
+                    playerLoot.set("not signed in!");
                     formattedServerTotal = "0";
                 }
             } else {
@@ -385,7 +395,6 @@ public class DropTrackerPanel extends PluginPanel
                             "If not, send the discord bot a DM<br>Saying: `auth`</html>");
                     dropsPanel.add(descText);
                 } else {
-                    log.debug("We are receiving the following authKey: `" + config.authKey() + "`");
                     String serverName = plugin.getServerName(config.serverId());
                     int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
                     Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
@@ -399,14 +408,12 @@ public class DropTrackerPanel extends PluginPanel
                             formattedServerTotal = formatNumber(Double.parseDouble(serverLootTotal));
                         }
                     }
-
                     String[][] data = {
                             {"Your Clan: ", serverName},
                             {"Minimum Value: ", minimumLootString + " gp"},
-                            {"Your total loot: ", playerLoot, " gp"},
+                            {"Your total loot: ", playerLoot.get(), " gp"},
                             {"Clan Total: ", formattedServerTotal + " gp"},
                     };
-
                     String[] columnNames = {"Key", "Value"};
                     DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                         @Override

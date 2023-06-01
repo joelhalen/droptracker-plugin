@@ -106,7 +106,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ItemManager itemManager;
 	@Inject
-	private Client client;
+	public Client client;
 	private DropTrackerPanel panel;
 	@Inject
 	public ChatMessageManager chatMessageManager;
