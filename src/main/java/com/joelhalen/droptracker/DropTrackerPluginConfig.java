@@ -41,11 +41,20 @@ public interface DropTrackerPluginConfig extends Config
 		{
 			return "";
 		}
+
+		@ConfigItem(
+				keyName = "authKey",
+				name = "Auth Token",
+				description = "<html>DO NOT SHARE THIS TOKEN!<br>To generate an auth token, enter a valid serverID and refresh the DropPanel!</html>"
+		)
+
+		default String authKey() { return ""; }
 		@ConfigItem(
 				keyName = "ignoreDrops",
 				name = "Ignore Drops",
 				description = "Toggle sending your drops to the tracker entirely"
 		)
+
 		default boolean ignoreDrops()
 		{
 			return false;
@@ -61,7 +70,7 @@ public interface DropTrackerPluginConfig extends Config
 				name = "[Beta] Send Screenshots",
 				description = "WARNING: May cause frames to drop. Should we send a screenshot to the database along with your drop?"
 		)
-	default boolean sendScreenshots()
+		default boolean sendScreenshots()
 		{
 			return false;
 		}

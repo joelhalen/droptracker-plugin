@@ -38,9 +38,7 @@ import com.google.inject.Provides;
 
 import net.runelite.api.*;
 import net.runelite.api.events.AccountHashChanged;
-import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.VarbitChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -111,7 +109,7 @@ public class DropTrackerPlugin extends Plugin {
 	private Client client;
 	private DropTrackerPanel panel;
 	@Inject
-	private ChatMessageManager chatMessageManager;
+	public ChatMessageManager chatMessageManager;
 	@Inject
 	private ClientThread clientThread;
 	@Inject
@@ -119,7 +117,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DrawManager drawManager;
 	private long accountHash = -1;
-	public String localPlayerName;
 	private Map<String, String> serverIdToWebhookUrlMap;
 	private Map<String, Integer> serverMinimumLootVarMap;
 	private Map<String, Long> clanServerDiscordIDMap;
@@ -128,7 +125,6 @@ public class DropTrackerPlugin extends Plugin {
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
-	private DropTrackerPlugin dropTrackerPluginInst;
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
@@ -259,6 +255,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	@Subscribe
 	public void onGameTick(GameTick event) {
+		/* Refresh the panel every time the game state changes, or the player's local name changes */
 		if (client.getGameState() == GameState.LOGGED_IN && client.getLocalPlayer().getName() != null && client.getLocalPlayer().getName() != currentPlayerName) {
 			if (!panelRefreshed) {
 				panel.refreshPanel();
@@ -303,7 +300,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		initializeServerIdToWebhookUrlMap();
-		panel = new DropTrackerPanel(this, config, itemManager);
+		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
 		navButton = NavigationButton.builder()
 				.tooltip("Drop Tracker")
 				.icon(ICON)
@@ -381,6 +378,7 @@ public class DropTrackerPlugin extends Plugin {
 			serverMinimumLootVarMap = new HashMap<>();
 			serverIdToConfirmedOnlyMap = new HashMap<>();
 			clanServerDiscordIDMap = new HashMap<>();
+			//TODO: Implement a PHP request to get webhookUrls, so that they're not easily read
 			for (int i = 0; i < jsonArray.length(); i++) {
 				JSONObject jsonObject = jsonArray.getJSONObject(i);
 				serverIdToWebhookUrlMap.put(
