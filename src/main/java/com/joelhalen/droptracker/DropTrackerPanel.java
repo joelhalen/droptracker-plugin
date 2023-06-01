@@ -59,10 +59,7 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -296,17 +293,16 @@ public class DropTrackerPanel extends PluginPanel
             //if they have a playerName assigned:
             if (playerName != null) {
                 String finalPlayerName = playerName;
-                // if the localAuthKey is stored; and they playerName is still the same, don't update.
-                if(localAuthKey != null && finalPlayerName == localPlayerName) {
-                    System.out.println("We received: " + localAuthKey);
+                // if the localAuthKey is stored; and the playerName is still the same, don't update.
+                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
+                    System.out.println("Skipped UUID refresh due to a cached localAuthKey.");
                     // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
                 } else {
-                    System.out.println("No auth key or name changed. " + localAuthKey);
+                    System.out.println("Auth key or name changed. Authenticating.");
                     checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
                                     // This response means they did not have a UID before, but had one generated now.
-                                    System.out.println("Check your discord DMs!");
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
@@ -333,8 +329,12 @@ public class DropTrackerPanel extends PluginPanel
                                     if(plugin.getLocalPlayerName() != null) {
                                         localPlayerName = plugin.getLocalPlayerName();
                                     }
-                                    String loot = fetchPlayerLootFromPHP(config.serverId(), finalPlayerName);
-                                    playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                    CompletableFuture.runAsync(() -> {
+                                        String loot = fetchPlayerLootFromPHP(config.serverId(), finalPlayerName);
+                                        SwingUtilities.invokeLater(() -> {
+                                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                        });
+                                    });
                                 }
                             });
                         });
@@ -386,34 +386,46 @@ public class DropTrackerPanel extends PluginPanel
                         "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
                 dropsPanel.add(descText);
             } else {
-                // If they entered a server ID, check if the auth key is empty
-                // We also handle if the auth key does not match the expected value here.
-                System.out.println(checkAuthKey(playerName, config.serverId(), config.authKey()));
-                if(config.authKey().equals("") || config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
-                    descText = new JLabel("<html>You have not entered an <br>" +
-                            "authentication token into the DropTracker config.<br>" +
-                            "<br>You should have been DMed one by @DropTracker#4420<br><br>" +
-                            "If not, send the discord bot a DM<br>Saying: `auth`</html>");
-                    dropsPanel.add(descText);
-                } else {
+
                     String serverName = plugin.getServerName(config.serverId());
                     int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
                     Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
                     NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                     String minimumLootString = clanLootFormat.format(minimumClanLoot);
-                    if (config.serverId() != "") {
-                        String serverLootTotal = fetchServerLootTotal();
-                        if (serverLootTotal == "Invalid server ID.") {
-                            formattedServerTotal = "0";
-                        } else {
-                            formattedServerTotal = formatNumber(Double.parseDouble(serverLootTotal));
-                        }
+                    AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("0");
+                    if (!config.serverId().isEmpty()) {
+                        CompletableFuture<String> serverLootTotalFuture = CompletableFuture.supplyAsync(() -> {
+                            // Here is your blocking PHP function call
+                            return fetchServerLootTotal();
+                        });
+                        serverLootTotalFuture.thenAccept(serverLootTotal -> {
+                            SwingUtilities.invokeLater(() -> {
+                                // Ensure thread safety for GUI updates
+                                if (serverLootTotal.equals("Invalid server ID.")) {
+                                    formattedServerTotalRef.set("0");
+                                } else {
+                                    if(serverLootTotal.equals("None")) {
+                                        formattedServerTotalRef.set("0");
+                                    } else {
+                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(serverLootTotal)));
+                                    }
+                                }
+                            });
+                        });
                     }
+                    SwingUtilities.invokeLater(() -> {
+                        if (formattedServerTotalRef.get().equals("Invalid server ID.")) {
+                            formattedServerTotalRef.set("0");
+                        } else {
+                            formattedServerTotalRef.set(formatNumber(Double.parseDouble(formattedServerTotalRef.get())));
+                        }
+                    });
+
                     String[][] data = {
                             {"Your Clan: ", serverName},
                             {"Minimum Value: ", minimumLootString + " gp"},
                             {"Your total loot: ", playerLoot.get(), " gp"},
-                            {"Clan Total: ", formattedServerTotal + " gp"},
+                            {"Clan Total: ", formattedServerTotalRef.get() + " gp"},
                     };
                     String[] columnNames = {"Key", "Value"};
                     DefaultTableModel model = new DefaultTableModel(data, columnNames) {
@@ -454,7 +466,7 @@ public class DropTrackerPanel extends PluginPanel
                             "</html>");
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                     dropsPanel.add(descText);
-                }
+
             }
 
             // Add each drop to the panel
