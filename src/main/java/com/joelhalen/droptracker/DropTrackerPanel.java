@@ -270,10 +270,12 @@ public class DropTrackerPanel extends PluginPanel
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
             String response = reader.readLine();
-
+            System.out.println(response);
             reader.close();
             connection.disconnect();
-
+            if(response.equals("<br />")) {
+                response = "yes";
+            }
             return response;
         } catch (IOException e) {
             e.printStackTrace();
@@ -314,6 +316,7 @@ public class DropTrackerPanel extends PluginPanel
                                             .runeLiteFormattedMessage(messageResponse.build())
                                             .build());
                                 } else if (!authRes.equals("yes")) {
+                                    System.out.println("Auth response: " + authRes);
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
@@ -346,16 +349,17 @@ public class DropTrackerPanel extends PluginPanel
             if(config.authKey().equals("")) {
                 return;
             }
-            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                    .append("DropTracker")
-                    .append("] ")
-                    .append(ChatColorType.NORMAL)
-                    .append("Authenticated.");
-                plugin.chatMessageManager.queue(QueuedMessage.builder()
-                        .type(ChatMessageType.CONSOLE)
-                        .runeLiteFormattedMessage(messageResponse.build())
-                        .build());
+            //Remove notification for successful authentications to reduce spam.
+//            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+//            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+//                    .append("DropTracker")
+//                    .append("] ")
+//                    .append(ChatColorType.NORMAL)
+//                    .append("Authenticated.");
+//                plugin.chatMessageManager.queue(QueuedMessage.builder()
+//                        .type(ChatMessageType.CONSOLE)
+//                        .runeLiteFormattedMessage(messageResponse.build())
+//                        .build());
             dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
             dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
             // Create an ImageIcon from the TOP_LOGO BufferedImage
