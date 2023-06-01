@@ -13,14 +13,14 @@ repositories {
 def runeLiteVersion = 'latest.release'
 
 dependencies {
-	compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
+	compileOnly group: 'net.runelite', name:'client', version: '1.10.4-SNAPSHOT'
 
 	compileOnly 'org.projectlombok:lombok:1.18.20'
 	annotationProcessor 'org.projectlombok:lombok:1.18.20'
 
 	testImplementation 'junit:junit:4.12'
-	testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
-	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
+	testImplementation group: 'net.runelite', name:'client', version: '1.10.4-SNAPSHOT'
+	testImplementation group: 'net.runelite', name:'jshell', version: '1.10.4-SNAPSHOT'
 	implementation 'org.json:json:20200518'
 }
 

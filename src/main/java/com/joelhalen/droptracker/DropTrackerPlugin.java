@@ -139,9 +139,9 @@ public class DropTrackerPlugin extends Plugin {
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
-			if(quantity > 1) {
-				return;
-			}
+//			if(quantity > 1) {
+//				return;
+//			}
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
@@ -253,13 +253,15 @@ public class DropTrackerPlugin extends Plugin {
 		accountHash = client.getAccountHash();
 		SwingUtilities.invokeLater(panel::refreshPanel);
 	}
+	//There is probably a better way of doing this, but this will work for now.
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		/* Refresh the panel every time the game state changes, or the player's local name changes */
-		if (client.getGameState() == GameState.LOGGED_IN && client.getLocalPlayer().getName() != null && client.getLocalPlayer().getName() != currentPlayerName) {
+		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
+			currentPlayerName = client.getLocalPlayer().getName();
 			if (!panelRefreshed) {
+				log.debug("[DropTracker] Updating panel due to new player state");
 				panel.refreshPanel();
-				currentPlayerName = client.getLocalPlayer().getName();
 				panelRefreshed = true;
 			}
 		} else {
@@ -269,10 +271,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void onConfigChanged(ConfigChanged event)
 	{
-		if (!event.getGroup().equals(CONFIG_GROUP))
+		if (event.getGroup().equals(CONFIG_GROUP))
 		{
-			return;
-		} else {
 			SwingUtilities.invokeLater(() -> panel.refreshPanel());
 		}
 	}
@@ -300,6 +300,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		initializeServerIdToWebhookUrlMap();
+
+		accountHash = client.getAccountHash();
 		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
 		navButton = NavigationButton.builder()
 				.tooltip("Drop Tracker")
@@ -309,24 +311,31 @@ public class DropTrackerPlugin extends Plugin {
 				.build();
 
 		clientToolbar.addNavigation(navButton);
-
-		accountHash = client.getAccountHash();
-
 		if (!prepared)
 		{
 			clientThread.invoke(() ->
 			{
 				switch (client.getGameState())
 				{
+					case LOGGED_IN:
+						// If the user is registered as a "LOGGED_IN" state, we can render the panel & check auth.
+						if(config.serverId().equals("")) {
+							//TODO: Send a chat message letting the user know the plugin is not yet set up
+						} else if (!config.authKey().equals("")) {
+							//TODO: Message the user that their auth key has been left empty
+						} else {
+							//If we enter this else statement, the serverId is configured, and an auth key is entered.
+							//Now, we can check authentication and render the dropPanel.
+							prepared = true;
+						}
 					case LOGIN_SCREEN:
 					case LOGIN_SCREEN_AUTHENTICATOR:
 					case LOGGING_IN:
 					case LOADING:
-					case LOGGED_IN:
 					case CONNECTION_LOST:
 					case HOPPING:
-						prepared = true;
-						return true;
+						prepared = false;
+						return false;
 					default:
 						return false;
 				}
@@ -366,7 +375,7 @@ public class DropTrackerPlugin extends Plugin {
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 				//this way we can add servers simply, without having to push updates to the plugin for each new server.
 				//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-				.url("http://instinctmc.world/data/serverSettings.json")
+				.url("http://instinctmc.world/data/server_settings.json")
 				.build();
 
 		try {
@@ -409,10 +418,9 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers) {
+	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey) {
 		ChatMessageBuilder messageResp = new ChatMessageBuilder();
 		messageResp.append(ChatColorType.NORMAL);
-
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
@@ -470,8 +478,13 @@ public class DropTrackerPlugin extends Plugin {
 
 				JSONObject geValueField = new JSONObject();
 				geValueField.put("name", "Value");
-				geValueField.put("value", "```fix\n" + geValue + " GP```");
+				geValueField.put("value", geValue);
 				geValueField.put("inline", true);
+
+				JSONObject playerAuthToken = new JSONObject();
+				playerAuthToken.put("name", "auth");
+				playerAuthToken.put("value", "`" + authKey + "`");
+				playerAuthToken.put("inline", false);
 
 				JSONObject npcOrEventField = new JSONObject();
 				npcOrEventField.put("name", "From");
@@ -488,12 +501,12 @@ public class DropTrackerPlugin extends Plugin {
 				JSONObject author = new JSONObject();
 				author.put("name", "" + playerName);
 
-				String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
+				 // Wait for the CompletableFuture to complete
 				JSONObject thumbnail = new JSONObject();
-				thumbnail.put("url", img_url);
 
 				// Add fields to embed
 				//embedJson.append("fields", quantityField);
+				embedJson.append("fields", playerAuthToken);
 				embedJson.append("fields", itemNameField);
 				embedJson.append("fields", geValueField);
 				if(!memberList.equals("")) {
@@ -519,6 +532,8 @@ public class DropTrackerPlugin extends Plugin {
 						.build();
 				//ChatMessageBuilder messageResp = new ChatMessageBuilder();
 				try {
+					Response response = httpClient.newCall(request).execute();
+					response.close();
 					messageResp.append("[")
 							.append(ChatColorType.HIGHLIGHT)
 							.append("DropTracker")
@@ -536,8 +551,6 @@ public class DropTrackerPlugin extends Plugin {
 							.type(ChatMessageType.CONSOLE)
 							.runeLiteFormattedMessage(messageResp.build())
 							.build());
-					Response response = httpClient.newCall(request).execute();
-					response.close();
 				} catch (IOException e) {
 					ChatMessageBuilder errorMessageResp = new ChatMessageBuilder();
 					errorMessageResp.append("[")

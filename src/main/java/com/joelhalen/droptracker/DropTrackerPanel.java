@@ -270,7 +270,6 @@ public class DropTrackerPanel extends PluginPanel
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
             String response = reader.readLine();
-            System.out.println(response);
             reader.close();
             connection.disconnect();
             if(response.equals("<br />")) {
@@ -297,14 +296,12 @@ public class DropTrackerPanel extends PluginPanel
                 String finalPlayerName = playerName;
                 // if the localAuthKey is stored; and the playerName is still the same, don't update.
                 if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
-                    System.out.println("Skipped UUID refresh due to a cached localAuthKey.");
                     // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
                 } else {
-                    System.out.println("Auth key or name changed. Authenticating.");
                     checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
-                                    // This response means they did not have a UID before, but had one generated now.
+                                    // This response means they did not have a auth key before, but had one generated just now.
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
@@ -316,7 +313,7 @@ public class DropTrackerPanel extends PluginPanel
                                             .runeLiteFormattedMessage(messageResponse.build())
                                             .build());
                                 } else if (!authRes.equals("yes")) {
-                                    System.out.println("Auth response: " + authRes);
+                                    // in any other case, if the response doesn't say "yes", the auth key is invalid.
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
@@ -327,7 +324,7 @@ public class DropTrackerPanel extends PluginPanel
                                             .runeLiteFormattedMessage(messageResponse.build())
                                             .build());
                                 } else {
-                                    // Successful authentication
+                                    // authentication has succeeded, proceed.
                                     localAuthKey = config.authKey();
                                     if(plugin.getLocalPlayerName() != null) {
                                         localPlayerName = plugin.getLocalPlayerName();
@@ -458,24 +455,29 @@ public class DropTrackerPanel extends PluginPanel
                     });
 
                     dropsPanel.add(table);
+                    //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                     descText = new JLabel("<html><br><br>To submit a drop, enter " +
-                            "any <em>clan<br>members</em> who were " +
-                            "with you <b>on their <br>own line</b>" +
-                            " in the text field.<br>" +
+                            "any <em>clan members</em> who were " +
+                            "with you <b>on their own line</b> " +
+                            "in the text field." +
                             "Then, select how many " +
-                            "<em>non-members</em> were involved" +
-                            " in the drop.<br><br>" +
-                            "<br>Once you press submit, your<br>" +
-                            "drop will automatically be sent!" +
-                            "</html>");
+                            "<em>non-members</em> were involved " +
+                            "in the drop." +
+                            "<br>Once you press submit, your " +
+                            "drop will automatically be sent!</html>");
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    dropsPanel.add(descText);
+                    Box descTextBox = Box.createHorizontalBox();
+                    descTextBox.add(descText);
+                    descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+
+                dropsPanel.add(descTextBox);
 
             }
 
             // Add each drop to the panel
             for (DropEntry entry : entries) {
-
+                dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                Box entryItemBox = Box.createHorizontalBox();
                 // Fetch image for the item
                 BufferedImage itemImage = itemManager.getImage(entry.getItemId());
                 JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
@@ -548,7 +550,9 @@ public class DropTrackerPanel extends PluginPanel
                 entryPanel.add(nameMemberPanel);
                 entryPanel.add(submitButton);
                 entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                dropsPanel.add(entryPanel);
+                entryItemBox.add(entryPanel);
+                dropsPanel.add(entryItemBox);
+                //dropsPanel.add(entryPanel);
             }
             dropsPanel.revalidate();
             dropsPanel.repaint();
@@ -617,7 +621,8 @@ public class DropTrackerPanel extends PluginPanel
             // `` Drop is removed from the entries list; and the panel is refreshed without it.
             // data is sent to another method inside main class; which sends an embed with the entered information for this item
             // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
-            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers);
+            String authKey = config.authKey();
+            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey);
             entries.remove(entry);
             refreshPanel();
         });
