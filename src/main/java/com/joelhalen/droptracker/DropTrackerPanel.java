@@ -103,7 +103,7 @@ public class DropTrackerPanel extends PluginPanel
         JLabel logoLabel = new JLabel(logoIcon);
         // Add the logo to the top of panel
         dropsPanel.add(logoLabel);
-        /* Add a button to refresh the panel incase data is inaccurate */
+        /* Add a button to refresh the panel  */
         JButton refreshButton = new JButton("Refresh");
         refreshButton.addActionListener(e -> refreshPanel());
         JPanel buttonPanel = new JPanel();
@@ -128,7 +128,7 @@ public class DropTrackerPanel extends PluginPanel
         } else {
             // If they entered a server ID, check if the auth key is empty
             // We also handle if the auth key does not match the expected value here.
-            if(localAuthKey != null && localPlayerName == client.getLocalPlayer().getName()) {
+            if(localAuthKey != null && localPlayerName == plugin.getLocalPlayerName()) {
                 // do nothing if they have a localAuthKey stored with the correct playername
             } else if (config.authKey().equals("") || config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
                 descText = new JLabel("<html>You have not entered an <br>" +
@@ -296,8 +296,8 @@ public class DropTrackerPanel extends PluginPanel
             if(!config.authKey().equals("")) {
                 if (playerName != null) {
                     String finalPlayerName = playerName;
-                    if(localAuthKey != null && localPlayerName == client.getLocalPlayer().getName()) {
-                        System.out.println("We received: " + localPlayerName + localAuthKey);
+                    if(localAuthKey != null) {
+                        System.out.println("We received: " + localAuthKey);
                         // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
                     } else {
                         checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
@@ -328,8 +328,8 @@ public class DropTrackerPanel extends PluginPanel
                                 } else {
                                     // Successful authentication
                                     localAuthKey = config.authKey();
-                                    if(client.getLocalPlayer().getName() != null) {
-                                        localPlayerName = client.getLocalPlayer().getName();
+                                    if(plugin.getLocalPlayerName() != null) {
+                                        localPlayerName = plugin.getLocalPlayerName();
                                     }
                                     String loot = fetchPlayerLootFromPHP(config.serverId(), finalPlayerName);
                                     playerLoot.set(formatNumber(Double.parseDouble(loot)));
