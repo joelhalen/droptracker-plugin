@@ -293,14 +293,16 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("none");
             String formattedServerTotal = "0";
-            if(!config.authKey().equals("")) {
-                if (playerName != null) {
-                    String finalPlayerName = playerName;
-                    if(localAuthKey != null) {
-                        System.out.println("We received: " + localAuthKey);
-                        // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
-                    } else {
-                        checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
+            //if they have a playerName assigned:
+            if (playerName != null) {
+                String finalPlayerName = playerName;
+                // if the localAuthKey is stored; and they playerName is still the same, don't update.
+                if(localAuthKey != null && finalPlayerName == localPlayerName) {
+                    System.out.println("We received: " + localAuthKey);
+                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
+                } else {
+                    System.out.println("No auth key or name changed. " + localAuthKey);
+                    checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
                                     // This response means they did not have a UID before, but had one generated now.
@@ -336,14 +338,13 @@ public class DropTrackerPanel extends PluginPanel
                                 }
                             });
                         });
-                    }
-                } else {
-                    playerLoot.set("not signed in!");
-                    formattedServerTotal = "0";
                 }
             } else {
-                //TODO: Remove the rest of the panel if the player's auth key is blank
-                // (entering this statement means they left the field empty currently)
+                playerLoot.set("not signed in!");
+                formattedServerTotal = "0";
+            }
+            if(config.authKey().equals("")) {
+                return;
             }
             ChatMessageBuilder messageResponse = new ChatMessageBuilder();
             messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
