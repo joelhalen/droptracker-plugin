@@ -394,6 +394,25 @@ public class DropTrackerPanel extends PluginPanel
 //                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
 //                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
 //                } else {
+                if(config.serverId().equals("")) {
+                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                    messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                            .append("DropTracker")
+                            .append(ChatColorType.NORMAL)
+                            .append("]")
+                            .append("You have not configured a serverID in the plugin config! If your server is not part of the DropTracker, the plugin will not work!");
+                    plugin.chatMessageManager.queue(QueuedMessage.builder()
+                            .type(ChatMessageType.CONSOLE)
+                            .runeLiteFormattedMessage(messageResponse.build())
+                            .build());
+                    playerLoot.set("<em>...</em>");
+                    try {
+                        plugin.shutDown();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                    return;
+                }
                     checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
@@ -448,6 +467,8 @@ public class DropTrackerPanel extends PluginPanel
                                                 } else {
                                                     if(serverLootTotal.equals("None")) {
                                                         formattedServerTotalRef.set("0");
+                                                    } else if(serverLootTotal.equals("Invalid Server ID.")) {
+                                                        formattedServerTotalRef.set("Invalid server ID!");
                                                     } else {
                                                         formattedServerTotalRef.set(formatNumber(Double.parseDouble(serverLootTotal)));
                                                     }
@@ -455,22 +476,21 @@ public class DropTrackerPanel extends PluginPanel
                                             });
                                         });
                                     }
-                                    SwingUtilities.invokeLater(() -> {
-                                        if (formattedServerTotalRef.get().equals("Invalid server ID.")) {
-                                            formattedServerTotalRef.set("0");
-                                        }
-                                    });
                                     CompletableFuture.runAsync(() -> {
                                         if(!config.permPlayerName().equals("")) {
                                             localPlayerName = config.permPlayerName();
                                         }
                                         fetchPlayerLootFromPHP(config.serverId(), localPlayerName).thenAccept(loot -> {
                                             SwingUtilities.invokeLater(() -> {
-                                                if(!loot.equals("None")) {
-                                                    playerLoot.set(formatNumber(Double.parseDouble(loot)));
-                                                } else {
-                                                    playerLoot.set("unregistered");
-                                                }
+                                                    if (!loot.equals("None")) {
+                                                        try {
+                                                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                                        } catch (Exception e) {
+                                                            playerLoot.set("Invalid server ID!");
+                                                        }
+                                                        } else {
+                                                        playerLoot.set("unregistered");
+                                                    }
                                                 updateTable(playerLoot.get(), formattedServerTotalRef.get());
                                                 // refresh the panel or perform other updates here
                                             });
@@ -524,7 +544,7 @@ public class DropTrackerPanel extends PluginPanel
             playerName = plugin.getLocalPlayerName();
             // If the server ID is empty OR the player has not entered an authentication key:
             if(config.serverId().equals("") || config.authKey().equals("")) {
-                descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
+                descText = new JLabel("<html><br><br>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
                         "your server must be added<br> to our database, and you must configure the plugin from settings panel -><br> Contact a member of your clan's staff team to get set up, or obtain your ServerID!</html>");
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box descTextBox = Box.createHorizontalBox();
@@ -573,7 +593,7 @@ public class DropTrackerPanel extends PluginPanel
 
                     dropsPanel.add(table);
                     //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    descText = new JLabel("<html>To submit a drop, enter " +
+                    descText = new JLabel("<html><br><br>To submit a drop, enter " +
                             "any <em>clan members</em> who were " +
                             "with you <b>on their own line</b> " +
                             "in the text field.<br />" +
