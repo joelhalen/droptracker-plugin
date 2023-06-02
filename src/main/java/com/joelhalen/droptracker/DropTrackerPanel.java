@@ -128,11 +128,24 @@ public class DropTrackerPanel extends PluginPanel
             // We also handle if the auth key does not match the expected value here.
             if(localAuthKey != null && localPlayerName == plugin.getLocalPlayerName()) {
                 // do nothing if they have a localAuthKey stored with the correct playername
-            } else if (config.authKey().equals("") || config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
+            //if they have entered nothing for their auth token
+                //todo: insert a message if their account was not found?
+            } else if (config.authKey().equals("")) {
                 descText = new JLabel("<html>You have not entered an <br>" +
                         "authentication token into the DropTracker config.<br>" +
                         "<br>You should have been DMed one by @DropTracker#4420<br><br>" +
                         "If not, send the discord bot a DM<br>Saying: `auth`</html>");
+                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                Box descTextBox = Box.createHorizontalBox();
+                descTextBox.add(descText);
+                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                dropsPanel.add(descTextBox);
+            //invalid authentication token entered
+            } else if (config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
+                descText = new JLabel("<html>The authentication token you entered is invalid.<br><br>" +
+                        "If you play multiple accounts, and your token is for another account, you can configure a username in the plugin settings.<br><br>" +
+                        "<br>Otherwise, you should have been DMed a token when you first started the plugin.<br><br>" +
+                        "If not, type <em>`/myauth`</em> in your clan's discord server!</html>");
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box descTextBox = Box.createHorizontalBox();
                 descTextBox.add(descText);
@@ -146,7 +159,7 @@ public class DropTrackerPanel extends PluginPanel
                 String minimumLootString = clanLootFormat.format(minimumClanLoot);
                 AtomicReference<String> playerLoot = new AtomicReference<>("none");
                 String formattedServerTotal = "0";
-                if (config.serverId() != "") {
+                if (!config.serverId().equals("")) {
                     AtomicReference<String> serverLootTotal = new AtomicReference<>("none");
                     fetchServerLootTotal().thenAccept(total -> {
                         SwingUtilities.invokeLater(() -> {
@@ -170,9 +183,9 @@ public class DropTrackerPanel extends PluginPanel
                         {"Your Clan", serverName},
                         {"Minimum value", minimumLootString + " gp"},
                         {"Your total loot", "loading..."},
-                        {"Clan Total:", formattedServerTotal + " gp"},
+                        {"Clan Total:", "loading..."},
                 };
-
+                updateTable("load", "load");
                 String[] columnNames = {"Key", "Value"};
                 DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                     @Override
@@ -198,7 +211,11 @@ public class DropTrackerPanel extends PluginPanel
                         return c;
                     }
                 });
-
+                JLabel authText = new JLabel("<html><em>Authenticated</em><br><br></html>");
+                Box authTextBox = Box.createHorizontalBox();
+                authTextBox.add(authText);
+                authTextBox.add(Box.createHorizontalGlue());
+                dropsPanel.add(authTextBox);
                 dropsPanel.add(table);
                 descText = new JLabel("<html>To submit a drop, enter " +
                         "any <em>clan<br>members</em> who were " +
@@ -244,17 +261,21 @@ public class DropTrackerPanel extends PluginPanel
             Integer minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
             NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
             String minimumLootString = clanLootFormat.format(minimumClanLoot);
-            double serverTotalDub = Double.parseDouble(serverTotal);
-            double playerLootDub = Double.parseDouble(playerLoot);
-            String serverFormattedTotal = clanLootFormat.format(serverTotalDub);
-            String playerFormattedTotal = clanLootFormat.format(playerLootDub);
+            String serverFormattedTotal;
+            String playerFormattedTotal;
+            if(serverTotal.equals("load") && playerLoot.equals("load")) {
+                serverFormattedTotal = "<em>unknown</em>";
+                playerFormattedTotal = "<em>unknown</em>";
+            } else {
+                serverFormattedTotal = serverTotal;
+                playerFormattedTotal = playerLoot;
+            }
             String[][] data = {
                     {"Your Clan: ", serverName},
                     {"Minimum Value: ", minimumLootString + " gp"},
                     {"Your total loot: ", playerFormattedTotal, " gp"},
                     {"Clan Total: ", serverFormattedTotal + " gp"},
             };
-
             String[] columnNames = {"Key", "Value"};
             DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                 @Override
@@ -263,24 +284,28 @@ public class DropTrackerPanel extends PluginPanel
                     return false;
                 }
             };
-            table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-                Font originalFont = null;
-
-                @Override
-                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                    if (originalFont == null) {
-                        originalFont = c.getFont();
-                    }
-                    c.setFont(originalFont.deriveFont(Font.BOLD));
-                    return c;
-                }
-            });
+            table.setModel(model);
             table.setPreferredScrollableViewportSize(new Dimension(500, 70));
             table.setFillsViewportHeight(true);
+            // Set custom renderer to bold the keys in the table (is there a better way to do this?)
+            if (table.getColumnModel().getColumnCount() > 0) {
+                table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                    Font originalFont = null;
 
-            // Set the new model to the table
+                    @Override
+                    public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                        Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                        if (originalFont == null) {
+                            originalFont = c.getFont();
+                        }
+                        c.setFont(originalFont.deriveFont(Font.BOLD));
+                        return c;
+                    }
+                });
+            }
             table.setModel(model);
+            table.setPreferredScrollableViewportSize(new Dimension(500, 70));
+            table.setFillsViewportHeight(true);
         });
     }
 
@@ -301,8 +326,14 @@ public class DropTrackerPanel extends PluginPanel
 
     public void checkAuthKeyAsync(String playerName, String serverId, String authKey, Consumer<String> callback) {
         executorService.submit(() -> {
-            if(playerName != null && serverId != "" && authKey != "") {
-                String result = checkAuthKey(playerName, serverId, authKey);
+            String finalPlayerName = "";
+            if(!config.permPlayerName().equals("")) {
+                finalPlayerName = config.permPlayerName();
+            } else {
+                finalPlayerName = playerName;
+            }
+            if(playerName != null && !serverId.equals("") && !authKey.equals("")) {
+                String result = checkAuthKey(finalPlayerName, serverId, authKey);
                 if (result.equals("New token generated.")) {
                     callback.accept("discord");
                 } else if (result.equals("Authenticated.")) {
@@ -354,7 +385,7 @@ public class DropTrackerPanel extends PluginPanel
             String playerName = plugin.getLocalPlayerName();
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
-            AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("0");
+            AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
             String formattedServerTotal = "0";
             //if they have a playerName assigned:
             if (playerName != null) {
@@ -377,13 +408,26 @@ public class DropTrackerPanel extends PluginPanel
                                             .type(ChatMessageType.CONSOLE)
                                             .runeLiteFormattedMessage(messageResponse.build())
                                             .build());
+                                    playerLoot.set("<em>...</em>");
+                                } else if (authRes.equals("No account")) {
+                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+                                            .append("DropTracker")
+                                            .append("] Your account was not found in " + plugin.getServerName(config.serverId()))
+                                            .append("'s database!");
+                                    playerLoot.set("<em>unregistered</em>");
+                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                            .type(ChatMessageType.CONSOLE)
+                                            .runeLiteFormattedMessage(messageResponse.build())
+                                            .build());
                                 } else if (!authRes.equals("yes")) {
-                                    // in any other case, if the response doesn't say "yes", the auth key is invalid.
+                                    // in any other case, if the response doesn't say "yes", the auth key is invalid
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
                                             .append("] You have entered an invalid authentication")
                                             .append(" token in the configuration for DropTracker.");
+                                    playerLoot.set("<em>unregistered</em>");
                                     plugin.chatMessageManager.queue(QueuedMessage.builder()
                                             .type(ChatMessageType.CONSOLE)
                                             .runeLiteFormattedMessage(messageResponse.build())
@@ -414,14 +458,19 @@ public class DropTrackerPanel extends PluginPanel
                                     SwingUtilities.invokeLater(() -> {
                                         if (formattedServerTotalRef.get().equals("Invalid server ID.")) {
                                             formattedServerTotalRef.set("0");
-                                        } else {
-                                            formattedServerTotalRef.set(formatNumber(Double.parseDouble(formattedServerTotalRef.get())));
                                         }
                                     });
                                     CompletableFuture.runAsync(() -> {
+                                        if(!config.permPlayerName().equals("")) {
+                                            localPlayerName = config.permPlayerName();
+                                        }
                                         fetchPlayerLootFromPHP(config.serverId(), localPlayerName).thenAccept(loot -> {
                                             SwingUtilities.invokeLater(() -> {
-                                                playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                                if(!loot.equals("None")) {
+                                                    playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                                } else {
+                                                    playerLoot.set("unregistered");
+                                                }
                                                 updateTable(playerLoot.get(), formattedServerTotalRef.get());
                                                 // refresh the panel or perform other updates here
                                             });
@@ -486,7 +535,6 @@ public class DropTrackerPanel extends PluginPanel
 
                     String serverName = plugin.getServerName(config.serverId());
                     int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
-                    Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
                     NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                     String minimumLootString = clanLootFormat.format(minimumClanLoot);
                     String[][] data = {

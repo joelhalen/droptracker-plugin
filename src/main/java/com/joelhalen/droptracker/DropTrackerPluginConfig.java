@@ -44,8 +44,9 @@ public interface DropTrackerPluginConfig extends Config
 
 		@ConfigItem(
 				keyName = "authKey",
-				name = "Auth Token",
-				description = "<html>DO NOT SHARE THIS TOKEN!<br>To generate an auth token, enter a valid serverID and refresh the DropPanel!</html>"
+				name = "Verification Key",
+				secret = true,
+				description = "<html>DO NOT SHARE THIS TOKEN!<br>If you do not have one yet, enter a valid serverID and refresh the DropPanel!</html>"
 		)
 
 		default String authKey() { return ""; }
@@ -60,6 +61,12 @@ public interface DropTrackerPluginConfig extends Config
 			return false;
 		}
 		@ConfigItem(
+				keyName = "permPlayerName",
+				name = "Permanent player name",
+				description = "If you play multiple accounts, you can enter the RSN you use on the DropTracker here to avoid issues!"
+		)
+		default String permPlayerName() { return ""; }
+		@ConfigItem(
 				keyName = "sendChatMessages",
 				name = "Send Chat Messages?",
 				description = "Would you like to receive messages in your chatbox when drops are added to the panel/uploaded?"
@@ -68,7 +75,7 @@ public interface DropTrackerPluginConfig extends Config
 		@ConfigItem(
 				keyName = "sendScreenshots",
 				name = "[Beta] Send Screenshots",
-				description = "WARNING: May cause frames to drop. Should we send a screenshot to the database along with your drop?"
+				description = "<html> Should we send a screenshot to the database along with your drop?<br><b>WARNING<b>: <em>May cause slight frame latency</em></html>"
 		)
 		default boolean sendScreenshots()
 		{

@@ -130,7 +130,12 @@ public class DropTrackerPlugin extends Plugin {
 		NPC npc = npcLootReceived.getNpc();
 		String npcName = npc.getName();
 		int npcCombatLevel = npc.getCombatLevel();
-		String playerName = client.getLocalPlayer().getName();
+		String playerName;
+		if(config.permPlayerName().equals("")) {
+			playerName = client.getLocalPlayer().getName();
+		} else {
+			playerName = config.permPlayerName();
+		}
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		for (ItemStack item : items) {
 			int itemId = item.getId();
@@ -173,10 +178,18 @@ public class DropTrackerPlugin extends Plugin {
 							// Is the discord server accepting a non-confirmed stream of items?
 							// otherwise, we won't send an embed until the item is "submitted" from the panel.
 							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+								if(config.permPlayerName().equals("")) {
+									sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+								} else {
+									sendEmbedWebhook(config.permPlayerName(), npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+								}
 							}
 							DropEntry entry = new DropEntry();
-							entry.setPlayerName(playerName);
+							if(config.permPlayerName().equals("")) {
+								entry.setPlayerName(playerName);
+							} else {
+								entry.setPlayerName(config.permPlayerName());
+							}
 							entry.setNpcOrEventName(npcName);
 							entry.setNpcCombatLevel(npcCombatLevel);
 							entry.setGeValue(geValue);
@@ -323,7 +336,6 @@ public class DropTrackerPlugin extends Plugin {
 				.priority(6)
 				.panel(panel)
 				.build();
-
 		clientToolbar.addNavigation(navButton);
 		if (!prepared) {
 			clientThread.invoke(() ->
