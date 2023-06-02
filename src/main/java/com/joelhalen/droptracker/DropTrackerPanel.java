@@ -133,7 +133,11 @@ public class DropTrackerPanel extends PluginPanel
                         "authentication token into the DropTracker config.<br>" +
                         "<br>You should have been DMed one by @DropTracker#4420<br><br>" +
                         "If not, send the discord bot a DM<br>Saying: `auth`</html>");
-                dropsPanel.add(descText);
+                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                Box descTextBox = Box.createHorizontalBox();
+                descTextBox.add(descText);
+                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                dropsPanel.add(descTextBox);
             } else {
                 String serverName = plugin.getServerName(config.serverId());
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
@@ -165,7 +169,7 @@ public class DropTrackerPanel extends PluginPanel
                 String[][] data = {
                         {"Your Clan", serverName},
                         {"Minimum value", minimumLootString + " gp"},
-                        {"Your total loot", playerLoot.get()},
+                        {"Your total loot", "loading..."},
                         {"Clan Total:", formattedServerTotal + " gp"},
                 };
 
@@ -206,8 +210,12 @@ public class DropTrackerPanel extends PluginPanel
                         "<br>Once you press submit, your<br>" +
                         "drop will automatically be sent!" +
                         "</html>");
+                // to place the text in the correct location
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                dropsPanel.add(descText);
+                Box descTextBox = Box.createHorizontalBox();
+                descTextBox.add(descText);
+                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                dropsPanel.add(descTextBox);
             }
         }
 
@@ -229,18 +237,22 @@ public class DropTrackerPanel extends PluginPanel
         String formattedNum = df.format(num);
         return formattedNum + units[unit];
     }
-
-    //TODO: implement a more effective way of updating the panel with data pulled from PHP?
-    // This was the best way I could come up with
+    //send an update to the table on the panel once the data has returned from the php script
     private void updateTable(String playerLoot, String serverTotal) {
         SwingUtilities.invokeLater(() -> {
             String serverName = plugin.getServerName(config.serverId());
-            Integer minimumLootString = plugin.getServerMinimumLoot(config.serverId());
+            Integer minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+            NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
+            String minimumLootString = clanLootFormat.format(minimumClanLoot);
+            double serverTotalDub = Double.parseDouble(serverTotal);
+            double playerLootDub = Double.parseDouble(playerLoot);
+            String serverFormattedTotal = clanLootFormat.format(serverTotalDub);
+            String playerFormattedTotal = clanLootFormat.format(playerLootDub);
             String[][] data = {
                     {"Your Clan: ", serverName},
                     {"Minimum Value: ", minimumLootString + " gp"},
-                    {"Your total loot: ", playerLoot, " gp"},
-                    {"Clan Total: ", serverTotal + " gp"},
+                    {"Your total loot: ", playerFormattedTotal, " gp"},
+                    {"Clan Total: ", serverFormattedTotal + " gp"},
             };
 
             String[] columnNames = {"Key", "Value"};
@@ -266,20 +278,6 @@ public class DropTrackerPanel extends PluginPanel
             });
             table.setPreferredScrollableViewportSize(new Dimension(500, 70));
             table.setFillsViewportHeight(true);
-            // Set custom renderer to bold the keys in the table (is there a better way to do this?)
-            table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-                Font originalFont = null;
-
-                @Override
-                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                    if (originalFont == null) {
-                        originalFont = c.getFont();
-                    }
-                    c.setFont(originalFont.deriveFont(Font.BOLD));
-                    return c;
-                }
-            });
 
             // Set the new model to the table
             table.setModel(model);
@@ -355,7 +353,7 @@ public class DropTrackerPanel extends PluginPanel
             //re-set the layout and styles
             String playerName = plugin.getLocalPlayerName();
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
-            AtomicReference<String> playerLoot = new AtomicReference<>("none");
+            AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
             AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("0");
             String formattedServerTotal = "0";
             //if they have a playerName assigned:
@@ -694,12 +692,13 @@ public class DropTrackerPanel extends PluginPanel
             int npcLevel = entry.getNpcCombatLevel();
             int quantity = entry.getQuantity();
             int nonMembers = entry.getNonMemberCount();
+            String imageUrl = entry.getImageLink();
             String memberList = entry.getClanMembers();
             // `` Drop is removed from the entries list; and the panel is refreshed without it.
             // data is sent to another method inside main class; which sends an embed with the entered information for this item
             // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
             String authKey = config.authKey();
-            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey);
+            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
             entries.remove(entry);
             refreshPanel();
         });

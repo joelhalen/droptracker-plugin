@@ -1,4 +1,7 @@
 package com.joelhalen.droptracker;
+
+import java.util.concurrent.CompletableFuture;
+
 public class DropEntry {
     private String playerName;
     private String npcOrEventName;
@@ -10,6 +13,7 @@ public class DropEntry {
     private int itemId;
     private String clanMembers;
     private int nonMemberCount;
+    private String imageLink;
 
 
     // getters
@@ -24,6 +28,7 @@ public class DropEntry {
     public int getNpcCombatLevel() {
         return this.npcCombatLevel;
     }
+    public String getImageLink() { return this.imageLink; }
 
     public String getItemName() {
         return this.itemName;
@@ -52,6 +57,8 @@ public class DropEntry {
     // setters
     public void setPlayerName(String playerName) {
         this.playerName = playerName;
+    }
+    public void setImageLink(String imageLink) { this.imageLink = imageLink;
     }
 
     public void setNpcOrEventName(String npcOrEventName) {

@@ -94,9 +94,7 @@ public class DropTrackerPlugin extends Plugin {
 	private static final String RAID_COMPLETE_MESSAGE = "You have a strange feeling like you would have";
 	private static final String COLLECTION_LOG_STRING = "Collection log";
 	public static final String CONFIG_GROUP = "droptracker";
-//	@Setter
-//	private FileReadWriter fw = new FileReadWriter();
-	//private boolean writerStarted = false;
+	private final ExecutorService executor = Executors.newCachedThreadPool();
 	@Inject
 	private DropTrackerPluginConfig config;
 	@Inject
@@ -139,7 +137,7 @@ public class DropTrackerPlugin extends Plugin {
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
-			if(quantity > 1) {
+			if (quantity > 1) {
 				return;
 			}
 			//If quantity < 1 and geValue > clanValue, then we can assume the drop will be trackable.
@@ -148,51 +146,63 @@ public class DropTrackerPlugin extends Plugin {
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
-			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
-				String serverId = config.serverId();
-				Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
-				if (shouldSend) {
-					if (geValue < clanMinimumLoot) {
-						// TODO: Move this logic to shouldSendItem?
+			SwingUtilities.invokeLater(() -> {
+				shouldSendItem(geValue).thenAccept(shouldSend -> {
+					String serverId = config.serverId();
+					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
+					if (shouldSend) {
+						if (geValue < clanMinimumLoot) {
 
-					} else {
-						if(config.sendChatMessages()) {
-							ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
-							addedDropToPanelMessage.append("[")
-									.append(ChatColorType.HIGHLIGHT)
-									.append("DropTracker")
-									.append(ChatColorType.NORMAL)
-									.append("] Added ")
-									.append(ChatColorType.HIGHLIGHT)
-									.append(itemName)
-									.append(ChatColorType.NORMAL)
-									.append(" to the RuneLite side panel for review");
-							chatMessageManager.queue(QueuedMessage.builder()
-									.type(ChatMessageType.CONSOLE)
-									.runeLiteFormattedMessage(addedDropToPanelMessage.build())
-									.build());
+						} else {
+							if (config.sendChatMessages()) {
+								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
+								addedDropToPanelMessage.append("[")
+										.append(ChatColorType.HIGHLIGHT)
+										.append("DropTracker")
+										.append(ChatColorType.NORMAL)
+										.append("] Added ")
+										.append(ChatColorType.HIGHLIGHT)
+										.append(itemName)
+										.append(ChatColorType.NORMAL)
+										.append(" to the RuneLite side panel for review");
+								chatMessageManager.queue(QueuedMessage.builder()
+										.type(ChatMessageType.CONSOLE)
+										.runeLiteFormattedMessage(addedDropToPanelMessage.build())
+										.build());
+							}
+							// Is the discord server accepting a non-confirmed stream of items?
+							// otherwise, we won't send an embed until the item is "submitted" from the panel.
+							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
+								sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+							}
+							DropEntry entry = new DropEntry();
+							entry.setPlayerName(playerName);
+							entry.setNpcOrEventName(npcName);
+							entry.setNpcCombatLevel(npcCombatLevel);
+							entry.setGeValue(geValue);
+							entry.setHaValue(haValue);
+							entry.setItemName(itemName);
+							entry.setItemId(itemId);
+							entry.setQuantity(quantity);
+							if (config.sendScreenshots()) {
+								getScreenshot(playerName, itemId).thenAccept(imageUrl -> {
+									SwingUtilities.invokeLater(() -> {
+										entry.setImageLink(imageUrl);
+									});
+								});
+							} else {
+								entry.setImageLink("none");
+							}
+							panel.addDrop(entry);
 						}
-						// Is the discord server accepting a non-confirmed stream of items?
-						// otherwise, we won't send an embed until the item is "submitted" from the panel.
-						if(serverIdToConfirmedOnlyMap.get(serverId) != true) {
-							sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
-						}
-						DropEntry entry = new DropEntry();
-						entry.setPlayerName(playerName);
-						entry.setNpcOrEventName(npcName);
-						entry.setNpcCombatLevel(npcCombatLevel);
-						entry.setGeValue(geValue);
-						entry.setHaValue(haValue);
-						entry.setItemName(itemName);
-						entry.setItemId(itemId);
-						entry.setQuantity(quantity);
-						panel.addDrop(entry);
 					}
-				}
+				});
 			});
 		}
 	}
+
 	private NavigationButton navButton;
+
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
@@ -210,14 +220,14 @@ public class DropTrackerPlugin extends Plugin {
 			boolean ignoreDrops = config.ignoreDrops();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
-			if(quantity > 1) {
+			if (quantity > 1) {
 				return;
 			}
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
-			shouldSendItem(item.getId(), item.getQuantity()).thenAccept(shouldSend -> {
+			shouldSendItem(geValue).thenAccept(shouldSend -> {
 				if (shouldSend) {
-					if(config.sendChatMessages()) {
+					if (config.sendChatMessages()) {
 						ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 						addedDropToPanelMessage.append("[")
 								.append(ChatColorType.HIGHLIGHT)
@@ -248,16 +258,16 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
+
 	@Subscribe
-	public void onAccountHashChanged(AccountHashChanged e)
-	{
-		if (accountHash == client.getAccountHash())
-		{
+	public void onAccountHashChanged(AccountHashChanged e) {
+		if (accountHash == client.getAccountHash()) {
 			return;
 		}
 		accountHash = client.getAccountHash();
 		SwingUtilities.invokeLater(panel::refreshPanel);
 	}
+
 	//There is probably a better way of doing this, but this will work for now.
 	@Subscribe
 	public void onGameTick(GameTick event) {
@@ -274,10 +284,8 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	public void onConfigChanged(ConfigChanged event)
-	{
-		if (event.getGroup().equals(CONFIG_GROUP))
-		{
+	public void onConfigChanged(ConfigChanged event) {
+		if (event.getGroup().equals(CONFIG_GROUP)) {
 			SwingUtilities.invokeLater(() -> panel.refreshPanel());
 		}
 	}
@@ -294,14 +302,15 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		return null;
 	}
+
 	@Override
-	protected void shutDown() throws Exception
-	{
+	protected void shutDown() throws Exception {
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 		navButton = null;
 		accountHash = -1;
 	}
+
 	@Override
 	protected void startUp() {
 		initializeServerIdToWebhookUrlMap();
@@ -316,15 +325,13 @@ public class DropTrackerPlugin extends Plugin {
 				.build();
 
 		clientToolbar.addNavigation(navButton);
-		if (!prepared)
-		{
+		if (!prepared) {
 			clientThread.invoke(() ->
 			{
-				switch (client.getGameState())
-				{
+				switch (client.getGameState()) {
 					case LOGGED_IN:
 						// If the user is registered as a "LOGGED_IN" state, we can render the panel & check auth.
-						if(config.serverId().equals("")) {
+						if (config.serverId().equals("")) {
 							//TODO: Send a chat message letting the user know the plugin is not yet set up
 						} else if (config.authKey().equals("")) {
 							//TODO: Message the user that their auth key has been left empty
@@ -347,85 +354,89 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
+
 	public String getServerName(String serverId) {
-		if(serverId == "" || !serverIdToClanNameMap.containsKey(serverId)) {
+		if (serverId == "" || !serverIdToClanNameMap.containsKey(serverId)) {
 			return "None!";
 		}
 		return serverIdToClanNameMap.get(serverId);
 	}
+
 	public int getServerMinimumLoot(String serverId) {
-		if(serverId == "" || !serverMinimumLootVarMap.containsKey(serverId)) {
+		if (serverId == "" || !serverMinimumLootVarMap.containsKey(serverId)) {
 			return 0;
 		}
 		return serverMinimumLootVarMap.get(serverId);
 	}
+
 	public long getClanDiscordServerID(String serverId) {
-		if(serverId == "" || !clanServerDiscordIDMap.containsKey(serverId)) {
+		if (serverId == "" || !clanServerDiscordIDMap.containsKey(serverId)) {
 			return 0;
 		}
 		return clanServerDiscordIDMap.get(serverId);
 	}
 
-	public String getIconUrl(int id)
-	{
+	public String getIconUrl(int id) {
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
 	}
+
 	public ItemComposition getItemComposition(int itemId) {
 		// Must ensure this is being called on the client thread
 		return itemManager.getItemComposition(itemId);
 	}
+
 	private void initializeServerIdToWebhookUrlMap() {
 		CompletableFuture.runAsync(() -> {
 
-		Request request = new Request.Builder()
-				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
-				//this way we can add servers simply, without having to push updates to the plugin for each new server.
-				//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-				.url("http://instinctmc.world/data/server_settings.json")
-				.build();
+			Request request = new Request.Builder()
+					//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
+					//this way we can add servers simply, without having to push updates to the plugin for each new server.
+					//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
+					.url("http://instinctmc.world/data/server_settings.json")
+					.build();
 
-		try {
-			Response response = httpClient.newCall(request).execute();
-			String jsonData = response.body().string();
-			JSONArray jsonArray = new JSONArray(jsonData);
-			serverIdToWebhookUrlMap = new HashMap<>();
-			serverIdToClanNameMap = new HashMap<>();
-			serverMinimumLootVarMap = new HashMap<>();
-			serverIdToConfirmedOnlyMap = new HashMap<>();
-			clanServerDiscordIDMap = new HashMap<>();
-			//TODO: Implement a PHP request to get webhookUrls, so that they're not easily read
-			for (int i = 0; i < jsonArray.length(); i++) {
-				JSONObject jsonObject = jsonArray.getJSONObject(i);
-				serverIdToWebhookUrlMap.put(
-						jsonObject.getString("serverId"),
-						jsonObject.getString("webhookUrl")
-				);
-				serverIdToClanNameMap.put(
-						jsonObject.getString("serverId"),
-						jsonObject.getString("serverName")
-				);
-				serverMinimumLootVarMap.put(
-						jsonObject.getString("serverId"),
-						jsonObject.getInt("minimumLoot")
-				);
-				serverIdToConfirmedOnlyMap.put(
-						jsonObject.getString("serverId"),
-						jsonObject.getBoolean("confOnly")
-				);
-				clanServerDiscordIDMap.put(
-						jsonObject.getString("serverId"),
-						jsonObject.getLong("discordServerId")
-				);
+			try {
+				Response response = httpClient.newCall(request).execute();
+				String jsonData = response.body().string();
+				JSONArray jsonArray = new JSONArray(jsonData);
+				serverIdToWebhookUrlMap = new HashMap<>();
+				serverIdToClanNameMap = new HashMap<>();
+				serverMinimumLootVarMap = new HashMap<>();
+				serverIdToConfirmedOnlyMap = new HashMap<>();
+				clanServerDiscordIDMap = new HashMap<>();
+				//TODO: Implement a PHP request to get webhookUrls, so that they're not easily read
+				for (int i = 0; i < jsonArray.length(); i++) {
+					JSONObject jsonObject = jsonArray.getJSONObject(i);
+					serverIdToWebhookUrlMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getString("webhookUrl")
+					);
+					serverIdToClanNameMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getString("serverName")
+					);
+					serverMinimumLootVarMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getInt("minimumLoot")
+					);
+					serverIdToConfirmedOnlyMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getBoolean("confOnly")
+					);
+					clanServerDiscordIDMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getLong("discordServerId")
+					);
+				}
+			} catch (JSONException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-		} catch (JSONException e) {
-			e.printStackTrace();
-		} catch	(IOException e) {
-			e.printStackTrace();
-		}
-	});
+		});
 	}
 
-	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey) {
+	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
 		ChatMessageBuilder messageResp = new ChatMessageBuilder();
 		messageResp.append(ChatColorType.NORMAL);
 		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
@@ -509,21 +520,24 @@ public class DropTrackerPlugin extends Plugin {
 				author.put("name", "" + playerName);
 
 				JSONObject thumbnail = new JSONObject();
+				if(imageUrl != "none") {
+					thumbnail.put("url", imageUrl);
+					embedJson.put("thumbnail", thumbnail);
+				}
 
 				// Add fields to embed
 				embedJson.append("fields", playerAuthToken);
 				embedJson.append("fields", itemNameField);
 				embedJson.append("fields", geValueField);
-				if(!memberList.equals("")) {
+				if (!memberList.equals("")) {
 					embedJson.append("fields", memberField);
 				}
-				if(nonMembers > 0) {
+				if (nonMembers > 0) {
 					embedJson.append("fields", nonMemberField);
 				}
 				embedJson.append("fields", npcOrEventField);
 				embedJson.put("footer", footer);
 				embedJson.put("author", author);
-				embedJson.put("thumbnail", thumbnail);
 				json.append("embeds", embedJson);
 
 				RequestBody body = RequestBody.create(
@@ -599,105 +613,103 @@ public class DropTrackerPlugin extends Plugin {
 			if (geValue < serverMinimum) {
 				return;
 			}
-				boolean sendHooks = serverIdToConfirmedOnlyMap.get(serverId);
-				//grab the item name
-				clientThread.invokeLater(() -> {
-					ItemComposition itemComp = itemManager.getItemComposition(itemId);
-					String itemName = itemComp.getName();
-					itemNameRef.set(itemName);
-				});
-				if(sendHooks) {
-					//cancel the operation if the server the user has defined doesn't want submissions that aren't confirmed
-					//send a message letting them know the drop was added to their panel.
+			boolean sendHooks = serverIdToConfirmedOnlyMap.get(serverId);
+			//grab the item name
+			clientThread.invokeLater(() -> {
+				ItemComposition itemComp = itemManager.getItemComposition(itemId);
+				String itemName = itemComp.getName();
+				itemNameRef.set(itemName);
+			});
+			if (sendHooks) {
+				//cancel the operation if the server the user has defined doesn't want submissions that aren't confirmed
+				//send a message letting them know the drop was added to their panel.
 
-					return;
+				return;
+			}
+
+			JSONObject json = new JSONObject();
+			JSONObject embedJson = new JSONObject();
+			// Setting up the embed.
+			embedJson.put("title", "DropTracker Plugin Submission");
+			embedJson.put("description", "");
+			embedJson.put("color", 15258703);
+
+			JSONObject itemNameField = new JSONObject();
+			itemNameField.put("name", "Item name");
+			itemNameField.put("value", "```\n" + itemNameRef.get() + "```");
+			itemNameField.put("inline", true);
+
+			JSONObject geValueField = new JSONObject();
+			geValueField.put("name", "Value");
+			geValueField.put("value", "```fix\n" + geValue + " GP```");
+			geValueField.put("inline", true);
+
+			JSONObject npcOrEventField = new JSONObject();
+			npcOrEventField.put("name", "From");
+			if (npcCombatLevel > 0) {
+				npcOrEventField.put("value", "```" + npcName + "(lvl: " + npcCombatLevel + ")```");
+			} else {
+				npcOrEventField.put("value", "```" + npcName + "```");
+			}
+			npcOrEventField.put("inline", true);
+
+			JSONObject footer = new JSONObject();
+			footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
+
+			JSONObject author = new JSONObject();
+			author.put("name", "" + playerName);
+
+			String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
+			JSONObject thumbnail = new JSONObject();
+			thumbnail.put("url", img_url);
+
+			// Add fields to embed
+			//embedJson.append("fields", quantityField);
+			embedJson.append("fields", itemNameField);
+			embedJson.append("fields", geValueField);
+			embedJson.append("fields", npcOrEventField);
+			embedJson.put("footer", footer);
+			embedJson.put("author", author);
+			embedJson.put("thumbnail", thumbnail);
+			json.append("embeds", embedJson);
+
+			RequestBody body = RequestBody.create(
+					MediaType.parse("application/json; charset=utf-8"),
+					json.toString()
+			);
+
+			Request request = new Request.Builder()
+					.url(webhookUrl)
+					.post(body)
+					.build();
+
+			try {
+				if (config.sendChatMessages()) {
+					ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
+					addedDropToPanelMessage.append("[")
+							.append(ChatColorType.HIGHLIGHT)
+							.append("DropTracker")
+							.append(ChatColorType.NORMAL)
+							.append("] Sent ")
+							.append(ChatColorType.HIGHLIGHT)
+							.append(itemNameRef.get())
+							.append(ChatColorType.NORMAL)
+							.append(" automatically to your server's discord webhook.");
+					chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(addedDropToPanelMessage.build())
+							.build());
 				}
-
-				JSONObject json = new JSONObject();
-				JSONObject embedJson = new JSONObject();
-				// Setting up the embed.
-				embedJson.put("title", "DropTracker Plugin Submission");
-				embedJson.put("description", "");
-				embedJson.put("color", 15258703);
-
-				JSONObject itemNameField = new JSONObject();
-				itemNameField.put("name", "Item name");
-				itemNameField.put("value", "```\n" + itemNameRef.get() + "```");
-				itemNameField.put("inline", true);
-
-				JSONObject geValueField = new JSONObject();
-				geValueField.put("name", "Value");
-				geValueField.put("value", "```fix\n" + geValue + " GP```");
-				geValueField.put("inline", true);
-
-				JSONObject npcOrEventField = new JSONObject();
-				npcOrEventField.put("name", "From");
-				if (npcCombatLevel > 0) {
-					npcOrEventField.put("value", "```" + npcName + "(lvl: " + npcCombatLevel + ")```");
-				} else {
-					npcOrEventField.put("value", "```" + npcName + "```");
-				}
-				npcOrEventField.put("inline", true);
-
-				JSONObject footer = new JSONObject();
-				footer.put("text", "(DropTracker Server ID #" + serverId + ") http://discord.gg/instinct");
-
-				JSONObject author = new JSONObject();
-				author.put("name", "" + playerName);
-
-				String img_url = uploadFuture.join(); // Wait for the CompletableFuture to complete
-				JSONObject thumbnail = new JSONObject();
-				thumbnail.put("url", img_url);
-
-				// Add fields to embed
-				//embedJson.append("fields", quantityField);
-				embedJson.append("fields", itemNameField);
-				embedJson.append("fields", geValueField);
-				embedJson.append("fields", npcOrEventField);
-				embedJson.put("footer", footer);
-				embedJson.put("author", author);
-				embedJson.put("thumbnail", thumbnail);
-				json.append("embeds", embedJson);
-
-				RequestBody body = RequestBody.create(
-						MediaType.parse("application/json; charset=utf-8"),
-						json.toString()
-				);
-
-				Request request = new Request.Builder()
-						.url(webhookUrl)
-						.post(body)
-						.build();
-
-				try {
-					if(config.sendChatMessages()) {
-						ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
-						addedDropToPanelMessage.append("[")
-								.append(ChatColorType.HIGHLIGHT)
-								.append("DropTracker")
-								.append(ChatColorType.NORMAL)
-								.append("] Sent ")
-								.append(ChatColorType.HIGHLIGHT)
-								.append(itemNameRef.get())
-								.append(ChatColorType.NORMAL)
-								.append(" automatically to your server's discord webhook.");
-						chatMessageManager.queue(QueuedMessage.builder()
-								.type(ChatMessageType.CONSOLE)
-								.runeLiteFormattedMessage(addedDropToPanelMessage.build())
-								.build());
-					}
-					Response response = httpClient.newCall(request).execute();
-					response.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
+				Response response = httpClient.newCall(request).execute();
+				response.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 
 		});
 	}
 
-	private CompletableFuture<Boolean> shouldSendItem(int itemId, int quantity) {
-		int gePrice = itemManager.getItemPrice(itemId);
-		int geValue = gePrice * quantity;
+	private CompletableFuture<Boolean> shouldSendItem(int geValue) {
 		String serverId = config.serverId();
 		int minimumClanValue = serverMinimumLootVarMap.get(serverId);
 		boolean ignoreDrops = config.ignoreDrops();
@@ -715,58 +727,53 @@ public class DropTrackerPlugin extends Plugin {
 	// `` This allows the DropTracker discord bot to store actual images of players' drops
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId) {
 		CompletableFuture<String> future = new CompletableFuture<>();
-		if (!config.sendScreenshots()) {
-			String wikiUrl = getIconUrl(itemId);
-			future.complete(wikiUrl);
-		} else {
-			try {
-				String serverId = config.serverId();
-				String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 
-				if (webhookUrl == null) {
-					future.complete(null);
-				} else {
-					drawManager.requestNextFrameListener(image -> {
-						try {
-							ItemComposition itemComp = itemManager.getItemComposition(itemId);
-							String itemName = itemComp.getName();
-							ByteArrayOutputStream baos = new ByteArrayOutputStream();
-							ImageIO.write((RenderedImage) image, "png", baos);
-							byte[] imageData = baos.toByteArray();
-							//remove spaces to write the filename nicely to the server.
-							String nicePlayerName = playerName.replace(" ", "_");
+		try {
+			String serverId = config.serverId();
+			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 
-							RequestBody requestBody = new MultipartBody.Builder()
-									.setType(MultipartBody.FORM)
-									.addFormDataPart("file", nicePlayerName + "_" + itemName + ".png",
-											RequestBody.create(MediaType.parse("image/png"), imageData))
+			if (webhookUrl == null) {
+				future.complete(null);
+			} else {
+				drawManager.requestNextFrameListener(image -> {
+					try {
+						ItemComposition itemComp = itemManager.getItemComposition(itemId);
+						String itemName = itemComp.getName();
+						ByteArrayOutputStream baos = new ByteArrayOutputStream();
+						ImageIO.write((RenderedImage) image, "png", baos);
+						byte[] imageData = baos.toByteArray();
+						//remove spaces to write the filename nicely to the server.
+						String nicePlayerName = playerName.replace(" ", "_");
+
+						RequestBody requestBody = new MultipartBody.Builder()
+								.setType(MultipartBody.FORM)
+								.addFormDataPart("file", nicePlayerName + "_" + itemName + ".png",
+										RequestBody.create(MediaType.parse("image/png"), imageData))
+								.build();
+						executor.submit(() -> {
+							Request request = new Request.Builder()
+									.url("http://instinctmc.world/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
+									.post(requestBody)
 									.build();
-							ExecutorService executor = Executors.newSingleThreadExecutor();
-							executor.submit(() -> {
-								Request request = new Request.Builder()
-										.url("http://instinctmc.world/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
-										.post(requestBody)
-										.build();
-								try (Response response = httpClient.newCall(request).execute()) {
-									if (!response.isSuccessful()) {
-										throw new IOException("Unexpected response code: " + response);
-									}
-
-									String responseBody = response.body().string();
-									future.complete(responseBody.trim());
-								} catch (IOException e) {
-									future.completeExceptionally(e);  // if there's an exception, complete the future exceptionally
+							try (Response response = httpClient.newCall(request).execute()) {
+								if (!response.isSuccessful()) {
+									throw new IOException("Unexpected response code: " + response);
 								}
-							});
-							executor.shutdown();
-						} catch (IOException e) {
-							future.completeExceptionally(e);
-						}
-					});
-				}
-			} catch (Exception e) {
-				future.completeExceptionally(e);
+
+								String responseBody = response.body().string();
+								future.complete(responseBody.trim());
+							} catch (IOException e) {
+								future.completeExceptionally(e);  // if there's an exception, complete the future exceptionally
+							}
+						});
+					} catch (IOException e) {
+						future.completeExceptionally(e);
+					}
+				});
 			}
+		} catch (Exception e) {
+			future.completeExceptionally(e);
+			executor.shutdown();
 		}
 		return future;
 	}
