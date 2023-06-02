@@ -190,7 +190,7 @@ public class DropTrackerPanel extends PluginPanel
                 });
 
                 dropsPanel.add(table);
-                descText = new JLabel("<html><br><br>To submit a drop, enter " +
+                descText = new JLabel("<html>To submit a drop, enter " +
                         "any <em>clan<br>members</em> who were " +
                         "with you <b>on their <br>own line</b>" +
                         " in the text field.<br>" +
@@ -241,14 +241,18 @@ public class DropTrackerPanel extends PluginPanel
 
     public void checkAuthKeyAsync(String playerName, String serverId, String authKey, Consumer<String> callback) {
         executorService.submit(() -> {
-            String result = checkAuthKey(playerName, serverId, authKey);
-            if (result.equals("New token generated.")) {
-                callback.accept("discord");
-            } else if (result.equals("Authenticated.")) {
-                callback.accept("yes");
+            if(playerName != null && serverId != "" && authKey != "") {
+                String result = checkAuthKey(playerName, serverId, authKey);
+                if (result.equals("New token generated.")) {
+                    callback.accept("discord");
+                } else if (result.equals("Authenticated.")) {
+                    callback.accept("yes");
+                } else {
+                    callback.accept(result);
+                }
             } else {
-                callback.accept(result);
-            }
+                callback.accept("invalid parameters.");
+        }
         });
     }
 
@@ -384,8 +388,12 @@ public class DropTrackerPanel extends PluginPanel
             // If the server ID is empty OR the player has not entered an authentication key:
             if(config.serverId().equals("") || config.authKey().equals("")) {
                 descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
-                        "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
-                dropsPanel.add(descText);
+                        "your server must be added<br> to our database, and you must configure the plugin from settings panel -><br> Contact a member of your clan's staff team to get set up, or obtain your ServerID!</html>");
+                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                Box descTextBox = Box.createHorizontalBox();
+                descTextBox.add(descText);
+                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                dropsPanel.add(descTextBox);
             } else {
 
                     String serverName = plugin.getServerName(config.serverId());
@@ -456,14 +464,14 @@ public class DropTrackerPanel extends PluginPanel
 
                     dropsPanel.add(table);
                     //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    descText = new JLabel("<html><br><br>To submit a drop, enter " +
+                    descText = new JLabel("<html>To submit a drop, enter " +
                             "any <em>clan members</em> who were " +
                             "with you <b>on their own line</b> " +
-                            "in the text field." +
+                            "in the text field.<br />" +
                             "Then, select how many " +
                             "<em>non-members</em> were involved " +
                             "in the drop." +
-                            "<br>Once you press submit, your " +
+                            "Once you press submit, your " +
                             "drop will automatically be sent!</html>");
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                     Box descTextBox = Box.createHorizontalBox();

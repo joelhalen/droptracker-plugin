@@ -321,7 +321,7 @@ public class DropTrackerPlugin extends Plugin {
 						// If the user is registered as a "LOGGED_IN" state, we can render the panel & check auth.
 						if(config.serverId().equals("")) {
 							//TODO: Send a chat message letting the user know the plugin is not yet set up
-						} else if (!config.authKey().equals("")) {
+						} else if (config.authKey().equals("")) {
 							//TODO: Message the user that their auth key has been left empty
 						} else {
 							//If we enter this else statement, the serverId is configured, and an auth key is entered.
@@ -370,6 +370,7 @@ public class DropTrackerPlugin extends Plugin {
 		return itemManager.getItemComposition(itemId);
 	}
 	private void initializeServerIdToWebhookUrlMap() {
+		CompletableFuture.runAsync(() -> {
 
 		Request request = new Request.Builder()
 				//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
@@ -416,6 +417,7 @@ public class DropTrackerPlugin extends Plugin {
 		} catch	(IOException e) {
 			e.printStackTrace();
 		}
+	});
 	}
 
 	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey) {
