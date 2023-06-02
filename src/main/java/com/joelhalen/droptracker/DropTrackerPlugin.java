@@ -157,11 +157,9 @@ public class DropTrackerPlugin extends Plugin {
 					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
 					if (shouldSend) {
 						if (geValue < clanMinimumLoot) {
-							System.out.println("Item is below clan value");
 							//Is the discord server accepting a non-confirmed stream of items?
 							//This means they track every single drop a player receives
 							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								System.out.println("clan has specified they want to receive all drops");
 								//If so, and the item is under clan value, send it to the localDropEntry object
 								//When there are 10+ of these, they will all be sent in a single embed
 								//first check if they stored a name, since sending the current player name if it doesn't match their database name
@@ -175,7 +173,6 @@ public class DropTrackerPlugin extends Plugin {
 								storedDrop.setGeValue(geValue);
 								//Adds the drop to the main object
 								storedDrops.add(storedDrop);
-								System.out.println("Added to storedDrops");
 								if (storedDrops.size() >= 8) {
 									//Send all items once 8 are reached -- discord limits embeds to 10 entries
 									//this avoids an event where the player gets 3+ drops on the same game tick
@@ -676,21 +673,17 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendEmbedWebhook(List<DropEntryStream> storedDrops) {
-		System.out.println("Called send embed webhook");
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
 			if (webhookUrl == null || config.ignoreDrops()) {
-				System.out.println("returning on webhookurl or ignoredrops");
 				return;
 			}
 			JSONObject json = new JSONObject();
 			for (DropEntryStream drop : storedDrops) {
-				System.out.println("Calling createEmbedJson");
 				// Create embed for each drop
 				JSONObject embedJson = createEmbedJson(drop);
 				// Append each embed to main json object
-				System.out.println("Created the embed object. Here it is: " + embedJson);
 				json.append("embeds", embedJson);
 			}
 			RequestBody body = RequestBody.create(
@@ -703,7 +696,6 @@ public class DropTrackerPlugin extends Plugin {
 					.post(body)
 					.build();
 			try {
-				System.out.println("Sent to the webhook. Data: " + json);
 				Response response = httpClient.newCall(request).execute();
 				response.close();
 				storedDrops.clear();  // clear the list after sending
@@ -715,7 +707,6 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private JSONObject createEmbedJson(DropEntryStream drop) {
-		System.out.println("Called createEmbedJson");
 
 		JSONObject embedJson = new JSONObject();
 
