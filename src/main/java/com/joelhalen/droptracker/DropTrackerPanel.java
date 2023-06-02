@@ -492,9 +492,11 @@ public class DropTrackerPanel extends PluginPanel
                             return false;
                         }
                     };
+                    table.setModel(model);
                     table.setPreferredScrollableViewportSize(new Dimension(500, 70));
                     table.setFillsViewportHeight(true);
                     // Set custom renderer to bold the keys in the table (is there a better way to do this?)
+                if (table.getColumnModel().getColumnCount() > 0) {
                     table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
                         Font originalFont = null;
 
@@ -508,6 +510,7 @@ public class DropTrackerPanel extends PluginPanel
                             return c;
                         }
                     });
+                }
 
                     dropsPanel.add(table);
                     //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
