@@ -139,9 +139,10 @@ public class DropTrackerPlugin extends Plugin {
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
-//			if(quantity > 1) {
-//				return;
-//			}
+			if(quantity > 1) {
+				return;
+			}
+			//If quantity < 1 and geValue > clanValue, then we can assume the drop will be trackable.
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
@@ -171,7 +172,11 @@ public class DropTrackerPlugin extends Plugin {
 									.runeLiteFormattedMessage(addedDropToPanelMessage.build())
 									.build());
 						}
-						sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+						// Is the discord server accepting a non-confirmed stream of items?
+						// otherwise, we won't send an embed until the item is "submitted" from the panel.
+						if(serverIdToConfirmedOnlyMap.get(serverId) != true) {
+							sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
+						}
 						DropEntry entry = new DropEntry();
 						entry.setPlayerName(playerName);
 						entry.setNpcOrEventName(npcName);
@@ -503,11 +508,9 @@ public class DropTrackerPlugin extends Plugin {
 				JSONObject author = new JSONObject();
 				author.put("name", "" + playerName);
 
-				 // Wait for the CompletableFuture to complete
 				JSONObject thumbnail = new JSONObject();
 
 				// Add fields to embed
-				//embedJson.append("fields", quantityField);
 				embedJson.append("fields", playerAuthToken);
 				embedJson.append("fields", itemNameField);
 				embedJson.append("fields", geValueField);
@@ -586,6 +589,7 @@ public class DropTrackerPlugin extends Plugin {
 			//that they want to >only< send confirmed drops from the plugin panel.
 			//if so, cancel the webhook being sent
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
+			//return in the case that the drop doesn't meet requirements
 			if (webhookUrl == null) {
 				return;
 			}

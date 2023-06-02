@@ -74,6 +74,7 @@ public class DropTrackerPanel extends PluginPanel
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     @Inject
     private Client client;
+    private JTable table = new JTable();
     private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
     private final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
@@ -139,27 +140,32 @@ public class DropTrackerPanel extends PluginPanel
                 Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
                 NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                 String minimumLootString = clanLootFormat.format(minimumClanLoot);
-                String playerLoot;
+                AtomicReference<String> playerLoot = new AtomicReference<>("none");
                 String formattedServerTotal = "0";
                 if (config.serverId() != "") {
-                    String serverLootTotal = fetchServerLootTotal();
-                    if (serverLootTotal == "Invalid server ID.") {
-                        formattedServerTotal = "0";
-                    } else {
-                        formattedServerTotal = formatNumber(Double.parseDouble(serverLootTotal));
-                    }
+                    AtomicReference<String> serverLootTotal = new AtomicReference<>("none");
+                    fetchServerLootTotal().thenAccept(total -> {
+                        SwingUtilities.invokeLater(() -> {
+                            serverLootTotal.set(formatNumber(Double.parseDouble(total)));
+                            // refresh the panel or perform other updates here
+                        });
+                    });
                 }
                 if (playerName != null) {
-                    playerLoot = fetchPlayerLootFromPHP(config.serverId(), playerName);
-                    playerLoot = formatNumber(Double.parseDouble(playerLoot));
+                    fetchPlayerLootFromPHP(config.serverId(), playerName).thenAccept(loot -> {
+                        SwingUtilities.invokeLater(() -> {
+                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                            // refresh the panel or perform other updates here
+                        });
+                    });
                 } else {
-                    playerLoot = "not signed in!";
+                    playerLoot.set("not signed in!");
                     formattedServerTotal = "0";
                 }
                 String[][] data = {
                         {"Your Clan", serverName},
                         {"Minimum value", minimumLootString + " gp"},
-                        {"Your total loot", playerLoot},
+                        {"Your total loot", playerLoot.get()},
                         {"Clan Total:", formattedServerTotal + " gp"},
                 };
 
@@ -222,6 +228,49 @@ public class DropTrackerPanel extends PluginPanel
         DecimalFormat df = new DecimalFormat("#.#");
         String formattedNum = df.format(num);
         return formattedNum + units[unit];
+    }
+
+    //TODO: implement a more effective way of updating the panel with data pulled from PHP?
+    // This was the best way I could come up with
+    private void updateTable(String playerLoot, String serverTotal) {
+        SwingUtilities.invokeLater(() -> {
+            String serverName = plugin.getServerName(config.serverId());
+            Integer minimumLootString = plugin.getServerMinimumLoot(config.serverId());
+            String[][] data = {
+                    {"Your Clan: ", serverName},
+                    {"Minimum Value: ", minimumLootString + " gp"},
+                    {"Your total loot: ", playerLoot, " gp"},
+                    {"Clan Total: ", serverTotal + " gp"},
+            };
+
+            String[] columnNames = {"Key", "Value"};
+            DefaultTableModel model = new DefaultTableModel(data, columnNames) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    // This causes all cells to be not editable
+                    return false;
+                }
+            };
+            table.setPreferredScrollableViewportSize(new Dimension(500, 70));
+            table.setFillsViewportHeight(true);
+            // Set custom renderer to bold the keys in the table (is there a better way to do this?)
+            table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                Font originalFont = null;
+
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    if (originalFont == null) {
+                        originalFont = c.getFont();
+                    }
+                    c.setFont(originalFont.deriveFont(Font.BOLD));
+                    return c;
+                }
+            });
+
+            // Set the new model to the table
+            table.setModel(model);
+        });
     }
 
     public void addDrop(DropEntry entry) {
@@ -294,14 +343,15 @@ public class DropTrackerPanel extends PluginPanel
             String playerName = plugin.getLocalPlayerName();
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("none");
+            AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("0");
             String formattedServerTotal = "0";
             //if they have a playerName assigned:
             if (playerName != null) {
                 String finalPlayerName = playerName;
                 // if the localAuthKey is stored; and the playerName is still the same, don't update.
-                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
-                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
-                } else {
+//                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
+//                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
+//                } else {
                     checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
@@ -333,16 +383,43 @@ public class DropTrackerPanel extends PluginPanel
                                     if(plugin.getLocalPlayerName() != null) {
                                         localPlayerName = plugin.getLocalPlayerName();
                                     }
+                                    //Grab server loot total + personal loot total
+                                    if (!config.serverId().isEmpty()) {
+                                        fetchServerLootTotal().thenAccept(serverLootTotal -> {
+                                            SwingUtilities.invokeLater(() -> {
+                                                // Ensure thread safety for GUI updates
+                                                if (serverLootTotal.equals("Invalid server ID.")) {
+                                                    formattedServerTotalRef.set("0");
+                                                } else {
+                                                    if(serverLootTotal.equals("None")) {
+                                                        formattedServerTotalRef.set("0");
+                                                    } else {
+                                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(serverLootTotal)));
+                                                    }
+                                                }
+                                            });
+                                        });
+                                    }
+                                    SwingUtilities.invokeLater(() -> {
+                                        if (formattedServerTotalRef.get().equals("Invalid server ID.")) {
+                                            formattedServerTotalRef.set("0");
+                                        } else {
+                                            formattedServerTotalRef.set(formatNumber(Double.parseDouble(formattedServerTotalRef.get())));
+                                        }
+                                    });
                                     CompletableFuture.runAsync(() -> {
-                                        String loot = fetchPlayerLootFromPHP(config.serverId(), finalPlayerName);
-                                        SwingUtilities.invokeLater(() -> {
-                                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                        fetchPlayerLootFromPHP(config.serverId(), localPlayerName).thenAccept(loot -> {
+                                            SwingUtilities.invokeLater(() -> {
+                                                playerLoot.set(formatNumber(Double.parseDouble(loot)));
+                                                updateTable(playerLoot.get(), formattedServerTotalRef.get());
+                                                // refresh the panel or perform other updates here
+                                            });
                                         });
                                     });
                                 }
                             });
                         });
-                }
+
             } else {
                 playerLoot.set("not signed in!");
                 formattedServerTotal = "0";
@@ -401,35 +478,6 @@ public class DropTrackerPanel extends PluginPanel
                     Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
                     NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
                     String minimumLootString = clanLootFormat.format(minimumClanLoot);
-                    AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("0");
-                    if (!config.serverId().isEmpty()) {
-                        CompletableFuture<String> serverLootTotalFuture = CompletableFuture.supplyAsync(() -> {
-                            // Here is your blocking PHP function call
-                            return fetchServerLootTotal();
-                        });
-                        serverLootTotalFuture.thenAccept(serverLootTotal -> {
-                            SwingUtilities.invokeLater(() -> {
-                                // Ensure thread safety for GUI updates
-                                if (serverLootTotal.equals("Invalid server ID.")) {
-                                    formattedServerTotalRef.set("0");
-                                } else {
-                                    if(serverLootTotal.equals("None")) {
-                                        formattedServerTotalRef.set("0");
-                                    } else {
-                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(serverLootTotal)));
-                                    }
-                                }
-                            });
-                        });
-                    }
-                    SwingUtilities.invokeLater(() -> {
-                        if (formattedServerTotalRef.get().equals("Invalid server ID.")) {
-                            formattedServerTotalRef.set("0");
-                        } else {
-                            formattedServerTotalRef.set(formatNumber(Double.parseDouble(formattedServerTotalRef.get())));
-                        }
-                    });
-
                     String[][] data = {
                             {"Your Clan: ", serverName},
                             {"Minimum Value: ", minimumLootString + " gp"},
@@ -444,7 +492,6 @@ public class DropTrackerPanel extends PluginPanel
                             return false;
                         }
                     };
-                    JTable table = new JTable(model);
                     table.setPreferredScrollableViewportSize(new Dimension(500, 70));
                     table.setFillsViewportHeight(true);
                     // Set custom renderer to bold the keys in the table (is there a better way to do this?)
@@ -567,52 +614,58 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
-    public String fetchServerLootTotal() {
-        Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
-        try {
-            URL url = new URL("http://instinctmc.world/data/player_data.php?totalServerId=" + discordServerId);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String line;
-            StringBuilder builder = new StringBuilder();
+    public CompletableFuture<String> fetchServerLootTotal() {
+        return CompletableFuture.supplyAsync(() -> {
+            Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
+            try {
+                URL url = new URL("http://instinctmc.world/data/player_data.php?totalServerId=" + discordServerId);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
 
-            while ((line = reader.readLine()) != null) {
-                builder.append(line);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                String line;
+                StringBuilder builder = new StringBuilder();
+
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line);
+                }
+
+                reader.close();
+                return builder.toString();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
             }
-
-            reader.close();
-            return builder.toString();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        });
     }
 
-    public String fetchPlayerLootFromPHP(String serverId, String playerName) {
-        /* Grab the player's total loot from the server via PHP*/
-        Long discordServerId = plugin.getClanDiscordServerID(serverId);
-        try {
-            String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-            URL url = new URL("http://instinctmc.world/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
 
-            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String line;
-            StringBuilder builder = new StringBuilder();
+    public CompletableFuture<String> fetchPlayerLootFromPHP(String serverId, String playerName) {
+        return CompletableFuture.supplyAsync(() -> {
+            Long discordServerId = plugin.getClanDiscordServerID(serverId);
+            try {
+                String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
+                URL url = new URL("http://instinctmc.world/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
 
-            while ((line = reader.readLine()) != null) {
-                builder.append(line);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                String line;
+                StringBuilder builder = new StringBuilder();
+
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line);
+                }
+
+                reader.close();
+                return builder.toString();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+                return null;
             }
-
-            reader.close();
-            return builder.toString();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        });
     }
 
     private void submitDrop(DropEntry entry) {
