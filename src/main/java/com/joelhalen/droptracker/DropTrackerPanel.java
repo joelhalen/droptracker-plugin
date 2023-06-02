@@ -251,6 +251,19 @@ public class DropTrackerPanel extends PluginPanel
                     return false;
                 }
             };
+            table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                Font originalFont = null;
+
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    if (originalFont == null) {
+                        originalFont = c.getFont();
+                    }
+                    c.setFont(originalFont.deriveFont(Font.BOLD));
+                    return c;
+                }
+            });
             table.setPreferredScrollableViewportSize(new Dimension(500, 70));
             table.setFillsViewportHeight(true);
             // Set custom renderer to bold the keys in the table (is there a better way to do this?)
