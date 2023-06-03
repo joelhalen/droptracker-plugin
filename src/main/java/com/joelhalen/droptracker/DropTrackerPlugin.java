@@ -143,9 +143,7 @@ public class DropTrackerPlugin extends Plugin {
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
-			if (quantity > 1) {
-				return;
-			}
+
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
@@ -183,6 +181,11 @@ public class DropTrackerPlugin extends Plugin {
 
 							}
 						} else {
+							/* Don't send drops that are >1 quantity in the table */
+							/* This may potentially affect double drops? */
+							if (quantity > 1) {
+								return;
+							}
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -244,10 +247,6 @@ public class DropTrackerPlugin extends Plugin {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-			// Make sure the quantity is 1, so that we aren't submitting item stacks that are above the specified value
-			if (quantity > 1) {
-				return;
-			}
 			//If quantity < 1 and geValue > clanValue, then we can assume the drop will be trackable.
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
@@ -291,6 +290,12 @@ public class DropTrackerPlugin extends Plugin {
 							}
 						//entering this blocks means the drop was above clan's minimum value
 						} else {
+							/* Don't send drops that are >1 quantity in the table */
+							/* This may potentially affect double drops from things like thieving w/ rogue's? */
+							/* Will need to be tested further. */
+							if (quantity > 1) {
+								return;
+							}
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -471,7 +476,7 @@ public class DropTrackerPlugin extends Plugin {
 					//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 					//this way we can add servers simply, without having to push updates to the plugin for each new server.
 					//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-					.url("http://instinctmc.world/data/temp_settings.json")
+					.url("http://instinctmc.world/data/server_settings.json")
 					.build();
 
 			try {
@@ -718,6 +723,11 @@ public class DropTrackerPlugin extends Plugin {
 		itemNameField.put("name", "item"); //
 		itemNameField.put("value", drop.getItemName());
 		itemNameField.put("inline", true);
+
+		JSONObject quantityField = new JSONObject();
+		quantityField.put("name", "amt"); //
+		quantityField.put("value", drop.getQuantity());
+		quantityField.put("inline", true);
 
 		JSONObject geValueField = new JSONObject();
 		geValueField.put("name", "Value");
