@@ -560,8 +560,8 @@ public class DropTrackerPanel extends PluginPanel
                     String[][] data = {
                             {"Your Clan: ", serverName},
                             {"Minimum Value: ", minimumLootString + " gp"},
-                            {"Your total loot: ", playerLoot.get(), " gp"},
-                            {"Clan Total: ", formattedServerTotalRef.get() + " gp"},
+                            {"Your total loot: ", playerLoot.get(), ""},
+                            {"Clan Total: ", formattedServerTotalRef.get() + ""},
                     };
                     String[] columnNames = {"Key", "Value"};
                     DefaultTableModel model = new DefaultTableModel(data, columnNames) {

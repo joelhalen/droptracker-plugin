@@ -750,6 +750,7 @@ public class DropTrackerPlugin extends Plugin {
 		// Add fields to embed
 		embedJson.append("fields", playerAuthToken);
 		embedJson.append("fields", itemNameField);
+		embedJson.append("fields", quantityField);
 		embedJson.append("fields", geValueField);
 		embedJson.put("footer", footer);
 		embedJson.put("author", author);
