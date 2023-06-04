@@ -30,6 +30,9 @@
 		- Discord Rare Drop Notificator (onLootReceived events, sending webhooks+creating embeds)
 		- COX and TOB data tracker - learned how to create a panel, borrowed some code
 		For support, contact me on GitHub: https://github.com/joelhalen
+		Or via the DropTracker website: https://www.droptracker.io/
+
+		~~~SHARES THE USER'S IP ADDRESS WITH THE AUTHENTICATION/DROP SUBMISSION SERVER~~~
 
  */
 package com.joelhalen.droptracker;
@@ -90,9 +93,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class DropTrackerPlugin extends Plugin {
 	//TODO: Implement pet queues and collection log slot queues
-	private static final String PET_RECEIVED_MESSAGE = "You have a strange feeling like you're";
-	private static final String RAID_COMPLETE_MESSAGE = "You have a strange feeling like you would have";
-	private static final String COLLECTION_LOG_STRING = "Collection log";
 	public static final String CONFIG_GROUP = "droptracker";
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	@Inject
@@ -124,6 +124,7 @@ public class DropTrackerPlugin extends Plugin {
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
+	private NavigationButton navButton;
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
@@ -233,7 +234,6 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	private NavigationButton navButton;
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
@@ -344,15 +344,6 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	@Subscribe
-	public void onAccountHashChanged(AccountHashChanged e) {
-		if (accountHash == client.getAccountHash()) {
-			return;
-		}
-		accountHash = client.getAccountHash();
-		SwingUtilities.invokeLater(panel::refreshPanel);
-	}
-
 	//There is probably a better way of doing this, but this will work for now.
 	@Subscribe
 	public void onGameTick(GameTick event) {
@@ -360,7 +351,7 @@ public class DropTrackerPlugin extends Plugin {
 		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
 			currentPlayerName = client.getLocalPlayer().getName();
 			if (!panelRefreshed) {
-				log.debug("[DropTracker] Updating panel due to new player state");
+				log.debug("[DropTracker] Updating panel due to a new player state");
 				panel.refreshPanel();
 				panelRefreshed = true;
 			}
@@ -370,9 +361,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public void onConfigChanged(ConfigChanged event) {
-		if (event.getGroup().equals(CONFIG_GROUP)) {
-			SwingUtilities.invokeLater(() -> panel.refreshPanel());
-		}
+		panel.refreshPanel();
 	}
 
 
@@ -476,7 +465,7 @@ public class DropTrackerPlugin extends Plugin {
 					//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
 					//this way we can add servers simply, without having to push updates to the plugin for each new server.
 					//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
-					.url("http://instinctmc.world/data/server_settings.json")
+					.url("http://data.droptracker.io/data/server_settings.json")
 					.build();
 
 			try {
@@ -598,7 +587,7 @@ public class DropTrackerPlugin extends Plugin {
 				npcOrEventField.put("inline", true);
 				String serverName = serverIdToClanNameMap.get(serverId);
 				JSONObject footer = new JSONObject();
-				footer.put("text", serverName + " (ID #" + serverId + ") Support: http://discord.gg/instinct");
+				footer.put("text", serverName + " (ID #" + serverId + ") Support: http://www.droptracker.io");
 
 				JSONObject author = new JSONObject();
 				author.put("name", "" + playerName);
@@ -742,7 +731,7 @@ public class DropTrackerPlugin extends Plugin {
 		String serverName = serverIdToClanNameMap.get(config.serverId());
 
 		JSONObject footer = new JSONObject();
-		footer.put("text", serverName + " (ID #" + config.serverId() + ") Support: http://discord.gg/instinct");
+		footer.put("text", serverName + " (ID #" + config.serverId() + ") Support: http://www.droptracker.io");
 
 		JSONObject author = new JSONObject();
 		author.put("name", "" + drop.getPlayerName());
@@ -803,7 +792,7 @@ public class DropTrackerPlugin extends Plugin {
 								.build();
 						executor.submit(() -> {
 							Request request = new Request.Builder()
-									.url("http://instinctmc.world/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
+									.url("http://data.droptracker.io/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
 									.post(requestBody)
 									.build();
 							try (Response response = httpClient.newCall(request).execute()) {

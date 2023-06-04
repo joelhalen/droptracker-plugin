@@ -352,9 +352,8 @@ public class DropTrackerPanel extends PluginPanel
     }
     public String checkAuthKey(String playerName, String serverId, String authKey) {
         Long discordServerId = plugin.getClanDiscordServerID(serverId);
-        int port = 6000;
         try {
-            URL url = new URL("http://instinctmc.world/data/uuid.php");
+            URL url = new URL("http://data.droptracker.io/data/uuid.php");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
@@ -389,7 +388,6 @@ public class DropTrackerPanel extends PluginPanel
             String formattedServerTotal = "0";
             //if they have a playerName assigned:
             if (playerName != null) {
-                String finalPlayerName = playerName;
                 // if the localAuthKey is stored; and the playerName is still the same, don't update.
 //                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
 //                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
@@ -416,7 +414,7 @@ public class DropTrackerPanel extends PluginPanel
                     checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
                             SwingUtilities.invokeLater(() -> {
                                 if (authRes.equals("discord")) {
-                                    // This response means they did not have a auth key before, but had one generated just now.
+                                    // This response means they did not have an auth key before, but had one generated just now.
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
@@ -492,7 +490,6 @@ public class DropTrackerPanel extends PluginPanel
                                                         playerLoot.set("unregistered");
                                                     }
                                                 updateTable(playerLoot.get(), formattedServerTotalRef.get());
-                                                // refresh the panel or perform other updates here
                                             });
                                         });
                                     });
@@ -502,22 +499,10 @@ public class DropTrackerPanel extends PluginPanel
 
             } else {
                 playerLoot.set("not signed in!");
-                formattedServerTotal = "0";
             }
             if(config.authKey().equals("")) {
                 return;
             }
-            //Remove notification for successful authentications to reduce spam.
-//            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-//            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-//                    .append("DropTracker")
-//                    .append("] ")
-//                    .append(ChatColorType.NORMAL)
-//                    .append("Authenticated.");
-//                plugin.chatMessageManager.queue(QueuedMessage.builder()
-//                        .type(ChatMessageType.CONSOLE)
-//                        .runeLiteFormattedMessage(messageResponse.build())
-//                        .build());
             dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
             dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
             // Create an ImageIcon from the TOP_LOGO BufferedImage
@@ -541,7 +526,6 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.add(topPanel, BorderLayout.NORTH);
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             JLabel descText;
-            playerName = plugin.getLocalPlayerName();
             // If the server ID is empty OR the player has not entered an authentication key:
             if(config.serverId().equals("") || config.authKey().equals("")) {
                 descText = new JLabel("<html><br><br>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
@@ -682,14 +666,11 @@ public class DropTrackerPanel extends PluginPanel
                 itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 itemContainer.add(itemTextLabel);
                 entryPanel.add(itemContainer);
-                //entryPanel.add(numNameTextLabel);
-                //entryPanel.add(valueTextLabel);
                 entryPanel.add(nameMemberPanel);
                 entryPanel.add(submitButton);
                 entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 entryItemBox.add(entryPanel);
                 dropsPanel.add(entryItemBox);
-                //dropsPanel.add(entryPanel);
             }
             dropsPanel.revalidate();
             dropsPanel.repaint();
@@ -700,7 +681,7 @@ public class DropTrackerPanel extends PluginPanel
         return CompletableFuture.supplyAsync(() -> {
             Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
             try {
-                URL url = new URL("http://instinctmc.world/data/player_data.php?totalServerId=" + discordServerId);
+                URL url = new URL("http://data.droptracker.io/data/player_data.php?totalServerId=" + discordServerId);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 
@@ -728,7 +709,7 @@ public class DropTrackerPanel extends PluginPanel
             Long discordServerId = plugin.getClanDiscordServerID(serverId);
             try {
                 String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("http://instinctmc.world/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
+                URL url = new URL("http://data.droptracker.io/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 
