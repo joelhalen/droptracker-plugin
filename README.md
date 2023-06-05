@@ -1,4 +1,4 @@
-#DropTracker
+
 The DropTracker RuneLite plugin is intended to be used as an automated method of submitting your drops to the Loot Leaderboard.
 
 Loot Leaderboards exist in servers that have contacted me and asked to be included in the tracker system I've created.
