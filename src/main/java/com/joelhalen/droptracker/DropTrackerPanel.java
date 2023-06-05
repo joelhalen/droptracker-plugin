@@ -332,7 +332,7 @@ public class DropTrackerPanel extends PluginPanel
             } else {
                 finalPlayerName = playerName;
             }
-            if(playerName != null && !serverId.equals("") && !authKey.equals("")) {
+            if(playerName != null && !serverId.equals("")) {
                 String result = checkAuthKey(finalPlayerName, serverId, authKey);
                 if (result.equals("New token generated.")) {
                     callback.accept("discord");
@@ -440,6 +440,7 @@ public class DropTrackerPanel extends PluginPanel
                                 } else if (!authRes.equals("yes")) {
                                     // in any other case, if the response doesn't say "yes", the auth key is invalid
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                    System.out.println(authRes);
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
                                             .append("] You have entered an invalid authentication")
@@ -505,11 +506,12 @@ public class DropTrackerPanel extends PluginPanel
             }
             dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
             dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-            // Create an ImageIcon from the TOP_LOGO BufferedImage
+
             ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
             JLabel logoLabel = new JLabel(logoIcon);
-            // Add the logo to the top of panel
+
             dropsPanel.add(logoLabel);
+
             /* Add a button to refresh the panel incase data is inaccurate */
             JButton refreshButton = new JButton("Refresh");
             refreshButton.addActionListener(e -> refreshPanel());
