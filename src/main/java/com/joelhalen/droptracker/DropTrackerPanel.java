@@ -440,7 +440,6 @@ public class DropTrackerPanel extends PluginPanel
                                 } else if (!authRes.equals("yes")) {
                                     // in any other case, if the response doesn't say "yes", the auth key is invalid
                                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                                    System.out.println(authRes);
                                     messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                             .append("DropTracker")
                                             .append("] You have entered an invalid authentication")
