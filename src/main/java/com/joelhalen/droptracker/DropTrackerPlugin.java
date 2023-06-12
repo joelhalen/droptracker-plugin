@@ -474,7 +474,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	public int getServerWiseOldManGroupID(String serverId) {
 		/* If empty serverId or the mapping doesn't contain the server ID, then return 0 */
-		System.out.println("Server ID is being introduced as " + serverId);
 		if (serverId == "" | !clanWiseOldManGroupIDMap.containsKey(serverId)) {
 			return 0;
 		}
