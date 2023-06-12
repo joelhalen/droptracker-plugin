@@ -25,6 +25,7 @@
 
 package com.joelhalen.droptracker;
 
+import com.joelhalen.droptracker.ui.MembersComboBox;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.client.chat.ChatColorType;
@@ -578,13 +579,10 @@ public class DropTrackerPanel extends PluginPanel
 
                     dropsPanel.add(table);
                     //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    descText = new JLabel("<html><br><br>To submit a drop, enter " +
-                            "any <em>clan members</em> who were " +
-                            "with you <b>on their own line</b> " +
-                            "in the text field.<br />" +
-                            "Then, select how many " +
-                            "<em>non-members</em> were involved " +
-                            "in the drop." +
+                    descText = new JLabel("<html><br><center><h3>To submit a drop:</h3></center><br />" +
+                            "Select any members involved in the drop from the drop-down list." +
+                            "<br>If you split the drop with any non-members, select how many from the drop-down." +
+                            "<br />" +
                             "Once you press submit, your " +
                             "drop will automatically be sent!</html>");
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -595,8 +593,7 @@ public class DropTrackerPanel extends PluginPanel
                 dropsPanel.add(descTextBox);
 
             }
-
-            // Add each drop to the panel
+            /* Initialize the membersComboBox prior to each drop, so that we don't try to pull data for each drop received */
             for (DropEntry entry : entries) {
                 dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box entryItemBox = Box.createHorizontalBox();
@@ -609,13 +606,11 @@ public class DropTrackerPanel extends PluginPanel
                 JLabel itemTextLabel = new JLabel("<html>Item: "+itemName+"<br>Value: " + String.valueOf(geValue) + "gp</html>");
 
                 JPanel nameFieldPanel = new JPanel(new BorderLayout());
-                JLabel nameLabel = new JLabel("Names:");
+                JLabel nameLabel = new JLabel("Select Members:");
                 nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
-
-                JTextArea nameField = new JTextArea(2,10);
-                nameField.setToolTipText("<html>Enter clan members who were involved in the split.<br>They must be tracked in your server!</html>");
-                JScrollPane scrollPane = new JScrollPane(nameField);
-                nameFieldPanel.add(scrollPane, BorderLayout.CENTER);
+                MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
+                membersComboBox.setPreferredSize(new Dimension(75, 25));
+                nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
 
                 Integer[] nonMemberOptions = new Integer[21];
                 for (int i = 0; i <= 20; i++) {
@@ -633,13 +628,15 @@ public class DropTrackerPanel extends PluginPanel
 
                 JButton submitButton = new JButton("Submit");
                 JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
-                JTextArea finalNameField = nameField;
+
                 submitButton.addActionListener(e -> {
-                    // Get values from text area and combo box
-                    String names = finalNameField.getText();  // Extract names entered by player
+                    // Get values from combo box and other field
+                    List<String> selectedMembersList = membersComboBox.getSelectedItems();  // Get selected names from MembersComboBox
+                    String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
+
                     int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();  // Get non-member count from dropdown
 
-                    entry.setClanMembers(names);
+                    entry.setClanMembers(selectedMembersString);  // Set the selected names
                     entry.setNonMemberCount(nonMemberCount);
 
                     submitDrop(entry);
@@ -650,6 +647,7 @@ public class DropTrackerPanel extends PluginPanel
                 JPanel nameMemberPanel = new JPanel();
                 nameMemberPanel.add(nameFieldPanel);
                 nameMemberPanel.add(nonMemberDropdownPanel);
+
                 //Panels for each entry
                 JPanel entryPanel = new JPanel();
                 entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));

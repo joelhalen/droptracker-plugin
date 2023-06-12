@@ -40,7 +40,6 @@ package com.joelhalen.droptracker;
 import com.google.inject.Provides;
 
 import net.runelite.api.*;
-import net.runelite.api.events.AccountHashChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
@@ -83,7 +82,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
+
 
 @PluginDescriptor(
 		name = "DropTracker",
@@ -121,11 +120,14 @@ public class DropTrackerPlugin extends Plugin {
 	private Map<String, Long> clanServerDiscordIDMap;
 	private Map<String, String> serverIdToClanNameMap;
 	private Map<String, Boolean> serverIdToConfirmedOnlyMap;
+	public Map<String, Integer> clanWiseOldManGroupIDMap;
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	private NavigationButton navButton;
 
+	private String[] groupMembers = new String[0];
+	private final Object groupMembersLock = new Object();
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		// handles drops from NPCs that are obtained on the floor (mostly)
@@ -151,7 +153,7 @@ public class DropTrackerPlugin extends Plugin {
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
 			SwingUtilities.invokeLater(() -> {
-				shouldSendItem(geValue).thenAccept(shouldSend -> {
+				canBeSent(geValue).thenAccept(shouldSend -> {
 					String serverId = config.serverId();
 					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
 					if (shouldSend) {
@@ -187,6 +189,8 @@ public class DropTrackerPlugin extends Plugin {
 							if (quantity > 1) {
 								return;
 							}
+							/* Create the screenshot object so that we can upload it, saving the url to the drop object */
+							CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -217,7 +221,6 @@ public class DropTrackerPlugin extends Plugin {
 							entry.setItemId(itemId);
 							entry.setQuantity(quantity);
 							if (config.sendScreenshots()) {
-								if(geValue < clanMinimumLoot)
 								getScreenshot(playerName, itemId).thenAccept(imageUrl -> {
 									SwingUtilities.invokeLater(() -> {
 										entry.setImageLink(imageUrl);
@@ -234,7 +237,21 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-
+	public void loadGroupMembersAsync() {
+		executor.execute(() -> {
+			while (true) {
+				try {
+					String[] newGroupMembers = WiseOldManClient.getGroupMembers(getServerWiseOldManGroupID(config.serverId()));
+					synchronized (groupMembersLock) {
+						groupMembers = newGroupMembers;
+					}
+					Thread.sleep(180 * 60 * 1000); // update every 180 minutes
+				} catch (IOException | InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+	}
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
@@ -254,7 +271,7 @@ public class DropTrackerPlugin extends Plugin {
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
 			SwingUtilities.invokeLater(() -> {
-				shouldSendItem(geValue).thenAccept(shouldSend -> {
+				canBeSent(geValue).thenAccept(shouldSend -> {
 					String serverId = config.serverId();
 					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
 					String submissionPlayer = "";
@@ -281,9 +298,9 @@ public class DropTrackerPlugin extends Plugin {
 								storedDrop.setGeValue(geValue);
 								//Adds the drop to the main object
 								storedDrops.add(storedDrop);
-								if (storedDrops.size() >= 10) {
-									//Send all items once 10 are reached
-									//discord limits each message to 10 embeds
+								if (storedDrops.size() >= 3) {
+									//Send all items once 3 are reached; to prevent missing as many items as possible
+									//discord limits each message to 10 embeds.
 									sendEmbedWebhook(storedDrops);
 									storedDrops.clear();  // clear the list after sending
 								}
@@ -296,6 +313,7 @@ public class DropTrackerPlugin extends Plugin {
 							if (quantity > 1) {
 								return;
 							}
+							CompletableFuture<String> uploadFuture = getScreenshot(submissionPlayer, itemId);
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -326,13 +344,12 @@ public class DropTrackerPlugin extends Plugin {
 							entry.setItemId(itemId);
 							entry.setQuantity(quantity);
 							if (config.sendScreenshots()) {
-								//if they configured to send screenshots and the value was > minimum
-								if(geValue > clanMinimumLoot)
-									getScreenshot(submissionPlayer, itemId).thenAccept(imageUrl -> {
-										SwingUtilities.invokeLater(() -> {
-											entry.setImageLink(imageUrl);
-										});
+								//if they configured to send screenshots
+								getScreenshot(submissionPlayer, itemId).thenAccept(imageUrl -> {
+									SwingUtilities.invokeLater(() -> {
+										entry.setImageLink(imageUrl);
 									});
+								});
 							} else {
 								entry.setImageLink("none");
 							}
@@ -369,7 +386,11 @@ public class DropTrackerPlugin extends Plugin {
 	DropTrackerPluginConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(DropTrackerPluginConfig.class);
 	}
-
+	public String[] getGroupMembers() {
+		synchronized (groupMembersLock) {
+			return groupMembers;
+		}
+	}
 	public String getLocalPlayerName() {
 		if (client != null && client.getLocalPlayer() != null) {
 			return client.getLocalPlayer().getName();
@@ -387,7 +408,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		initializeServerIdToWebhookUrlMap();
+		initializeServerIdToWebhookUrlMap().thenRun(this::loadGroupMembersAsync);
 
 		accountHash = client.getAccountHash();
 		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
@@ -449,6 +470,15 @@ public class DropTrackerPlugin extends Plugin {
 		return clanServerDiscordIDMap.get(serverId);
 	}
 
+	public int getServerWiseOldManGroupID(String serverId) {
+		/* If empty serverId or the mapping doesn't contain the server ID, then return 0 */
+		System.out.println("Server ID is being introduced as " + serverId);
+		if (serverId == "" | !clanWiseOldManGroupIDMap.containsKey(serverId)) {
+			return 0;
+		}
+		return clanWiseOldManGroupIDMap.get(serverId);
+	}
+
 	public String getIconUrl(int id) {
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
 	}
@@ -458,16 +488,12 @@ public class DropTrackerPlugin extends Plugin {
 		return itemManager.getItemComposition(itemId);
 	}
 
-	private void initializeServerIdToWebhookUrlMap() {
-		CompletableFuture.runAsync(() -> {
+	private CompletableFuture<Void> initializeServerIdToWebhookUrlMap() {
+		return CompletableFuture.runAsync(() -> {
 
 			Request request = new Request.Builder()
-					//for now, store the server IDs and corresponding webhook URLs in a simple JSON-formatted file
-					//this way we can add servers simply, without having to push updates to the plugin for each new server.
-					//there is probably a much better way of approaching this, but I don't find that the server IDs/URLs are important to keep safe.
 					.url("http://data.droptracker.io/data/server_settings.json")
 					.build();
-
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
@@ -477,7 +503,8 @@ public class DropTrackerPlugin extends Plugin {
 				serverMinimumLootVarMap = new HashMap<>();
 				serverIdToConfirmedOnlyMap = new HashMap<>();
 				clanServerDiscordIDMap = new HashMap<>();
-				//TODO: Implement a PHP request to get webhookUrls, so that they're not easily read
+				clanWiseOldManGroupIDMap = new HashMap<>();
+
 				for (int i = 0; i < jsonArray.length(); i++) {
 					JSONObject jsonObject = jsonArray.getJSONObject(i);
 					serverIdToWebhookUrlMap.put(
@@ -500,6 +527,10 @@ public class DropTrackerPlugin extends Plugin {
 							jsonObject.getString("serverId"),
 							jsonObject.getLong("discordServerId")
 					);
+					clanWiseOldManGroupIDMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getInt("womGroup")
+					);
 				}
 			} catch (JSONException e) {
 				e.printStackTrace();
@@ -512,7 +543,6 @@ public class DropTrackerPlugin extends Plugin {
 	public CompletableFuture<Void> sendConfirmedWebhook(String playerName, String npcName, int npcCombatLevel, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
 		ChatMessageBuilder messageResp = new ChatMessageBuilder();
 		messageResp.append(ChatColorType.NORMAL);
-		CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
 		return CompletableFuture.runAsync(() -> {
 			String serverId = config.serverId();
 			String webhookUrl = serverIdToWebhookUrlMap.get(serverId);
@@ -747,7 +777,7 @@ public class DropTrackerPlugin extends Plugin {
 		return embedJson;
 	}
 
-	private CompletableFuture<Boolean> shouldSendItem(int geValue) {
+	private CompletableFuture<Boolean> canBeSent(int geValue) {
 		String serverId = config.serverId();
 		int minimumClanValue = serverMinimumLootVarMap.get(serverId);
 		boolean ignoreDrops = config.ignoreDrops();
