@@ -128,6 +128,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	private String[] groupMembers = new String[0];
 	private final Object groupMembersLock = new Object();
+	@Inject
+	private WiseOldManClient wiseOldManClient;
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		// handles drops from NPCs that are obtained on the floor (mostly)
@@ -241,7 +243,7 @@ public class DropTrackerPlugin extends Plugin {
 		executor.execute(() -> {
 			while (true) {
 				try {
-					String[] newGroupMembers = WiseOldManClient.getGroupMembers(getServerWiseOldManGroupID(config.serverId()));
+					String[] newGroupMembers = wiseOldManClient.getGroupMembers(getServerWiseOldManGroupID(config.serverId()));
 					synchronized (groupMembersLock) {
 						groupMembers = newGroupMembers;
 					}

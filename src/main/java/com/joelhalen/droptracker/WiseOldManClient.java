@@ -12,9 +12,12 @@ import java.util.Objects;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import javax.inject.Inject;
+
 public class WiseOldManClient {
-    public static String[] getGroupMembers (int groupId) throws IOException {
-        OkHttpClient client = new OkHttpClient();
+    @Inject
+    private OkHttpClient client;
+    public String[] getGroupMembers (int groupId) throws IOException {
         String groupUrl = "https://api.wiseoldman.net/v2/groups/" + groupId;
         Request request = new Request.Builder().url(groupUrl).build();
 
