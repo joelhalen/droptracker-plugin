@@ -41,6 +41,8 @@ import com.google.inject.Provides;
 
 import net.runelite.api.*;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -346,11 +348,13 @@ public class DropTrackerPlugin extends Plugin {
 							entry.setItemId(itemId);
 							entry.setQuantity(quantity);
 							if (config.sendScreenshots()) {
-								//if they configured to send screenshots
-								getScreenshot(submissionPlayer, itemId).thenAccept(imageUrl -> {
+								uploadFuture.thenAccept(imageUrl -> {
 									SwingUtilities.invokeLater(() -> {
 										entry.setImageLink(imageUrl);
 									});
+								}).exceptionally(ex -> {
+									log.error("Failed to get screenshot", ex);
+									return null;
 								});
 							} else {
 								entry.setImageLink("none");
@@ -366,6 +370,7 @@ public class DropTrackerPlugin extends Plugin {
 	//There is probably a better way of doing this, but this will work for now.
 	@Subscribe
 	public void onGameTick(GameTick event) {
+
 		/* Refresh the panel every time the game state changes, or the player's local name changes */
 		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
 			currentPlayerName = client.getLocalPlayer().getName();
@@ -493,7 +498,7 @@ public class DropTrackerPlugin extends Plugin {
 		return CompletableFuture.runAsync(() -> {
 
 			Request request = new Request.Builder()
-					.url("http://data.droptracker.io/data/server_settings.json")
+					.url("http://data.droptracker.io/data/temp_settings.json")
 					.build();
 			try {
 				Response response = httpClient.newCall(request).execute();
