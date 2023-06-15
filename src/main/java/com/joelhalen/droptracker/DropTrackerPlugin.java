@@ -154,6 +154,9 @@ public class DropTrackerPlugin extends Plugin {
 
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+			if(geValue == 0 && haValue == 0) {
+				return;
+			}
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
@@ -277,6 +280,9 @@ public class DropTrackerPlugin extends Plugin {
 			//If quantity < 1 and geValue > clanValue, then we can assume the drop will be trackable.
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+			if(geValue == 0 && haValue == 0) {
+				return;
+			}
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
 			boolean ignoreDrops = config.ignoreDrops();
