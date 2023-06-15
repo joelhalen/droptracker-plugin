@@ -123,6 +123,7 @@ public class DropTrackerPlugin extends Plugin {
 	private Map<String, String> serverIdToClanNameMap;
 	private Map<String, Boolean> serverIdToConfirmedOnlyMap;
 	public Map<String, Integer> clanWiseOldManGroupIDMap;
+	public Map<String, Boolean> clanEventActiveMap;
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
@@ -178,11 +179,16 @@ public class DropTrackerPlugin extends Plugin {
 								storedDrop.setGeValue(geValue);
 								//Adds the drop to the main object
 								storedDrops.add(storedDrop);
-								if (storedDrops.size() >= 8) {
-									//Send all items once 8 are reached -- discord limits embeds to 10 entries
-									//this avoids an event where the player gets 3+ drops on the same game tick
+								Boolean clanEvent = clanEventActiveMap.get(config.serverId());
+								Integer clumpSize;
+								if(clanEvent == true) {
 									sendEmbedWebhook(storedDrops);
+								} else {
+									if (storedDrops.size() >= 8) {
+										sendEmbedWebhook(storedDrops);
+									}
 								}
+
 								//sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
 								//sendEmbedWebhook(config.permPlayerName(), npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
 
@@ -485,6 +491,12 @@ public class DropTrackerPlugin extends Plugin {
 		return clanWiseOldManGroupIDMap.get(serverId);
 	}
 
+	public Boolean clanEventActive(String serverId) {
+		if (serverId == "" | !clanEventActiveMap.containsKey(serverId)) {
+			return false;
+		}
+		return clanEventActiveMap.get(serverId);
+	}
 	public String getIconUrl(int id) {
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
 	}
@@ -498,11 +510,12 @@ public class DropTrackerPlugin extends Plugin {
 		return CompletableFuture.runAsync(() -> {
 
 			Request request = new Request.Builder()
-					.url("http://data.droptracker.io/data/temp_settings.json")
+					.url("http://data.droptracker.io/data/server_settings1.json")
 					.build();
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
+				System.out.println(jsonData);
 				JSONArray jsonArray = new JSONArray(jsonData);
 				serverIdToWebhookUrlMap = new HashMap<>();
 				serverIdToClanNameMap = new HashMap<>();
@@ -510,6 +523,7 @@ public class DropTrackerPlugin extends Plugin {
 				serverIdToConfirmedOnlyMap = new HashMap<>();
 				clanServerDiscordIDMap = new HashMap<>();
 				clanWiseOldManGroupIDMap = new HashMap<>();
+				clanEventActiveMap = new HashMap<>();
 
 				for (int i = 0; i < jsonArray.length(); i++) {
 					JSONObject jsonObject = jsonArray.getJSONObject(i);
@@ -537,6 +551,11 @@ public class DropTrackerPlugin extends Plugin {
 							jsonObject.getString("serverId"),
 							jsonObject.getInt("womGroup")
 					);
+					clanEventActiveMap.put(
+							jsonObject.getString("serverId"),
+							jsonObject.getBoolean("eventActive")
+					);
+
 				}
 			} catch (JSONException e) {
 				e.printStackTrace();
