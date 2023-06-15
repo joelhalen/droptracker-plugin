@@ -521,7 +521,6 @@ public class DropTrackerPlugin extends Plugin {
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
-				System.out.println(jsonData);
 				JSONArray jsonArray = new JSONArray(jsonData);
 				serverIdToWebhookUrlMap = new HashMap<>();
 				serverIdToClanNameMap = new HashMap<>();
