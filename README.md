@@ -23,8 +23,9 @@ https://cdn.discordapp.com/attachments/691682908997681212/1117757640844521472/im
 
 Completely automated _Random Item Hunts_, which allow random items to be assigned as tasks for players to obtain, with optional rewards provided:
 
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/0c5871de-b706-4715-bdb2-2c36d947f2cf)
+![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/bd28c64f-d39d-4998-92a8-93c78c157f18)
 
 
-This can easily be used as for bingo, etc, with the verification keys used as a way of confirmation. The bot can automatically complete tasks based on what the player achieved.
+
+This can easily be used as for bingo, etc, with the verification keys used as a way of confirmation. The discord bot which receives and handles these webhooks can automatically complete tasks based on what the player achieved.
 
