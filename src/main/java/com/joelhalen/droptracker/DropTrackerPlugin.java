@@ -321,7 +321,7 @@ public class DropTrackerPlugin extends Plugin {
 									storedDrops.clear();  // clear the list after sending
 								}
 							}
-						//entering this blocks means the drop was above clan's minimum value
+							//entering this blocks means the drop was above clan's minimum value
 						} else {
 							/* Don't send drops that are >1 quantity in the table */
 							/* This may potentially affect double drops from things like thieving w/ rogue's? */
@@ -783,6 +783,11 @@ public class DropTrackerPlugin extends Plugin {
 		geValueField.put("value", drop.getGeValue());
 		geValueField.put("inline", true);
 
+		JSONObject receivedFrom = new JSONObject();
+		receivedFrom.put("name", "source");
+		receivedFrom.put("value", drop.getNpcOrEventName());
+		receivedFrom.put("inline", true);
+
 		JSONObject playerAuthToken = new JSONObject();
 		playerAuthToken.put("name", "auth");
 		playerAuthToken.put("value", "`" + config.authKey() + "`");
@@ -800,6 +805,7 @@ public class DropTrackerPlugin extends Plugin {
 		embedJson.append("fields", playerAuthToken);
 		embedJson.append("fields", itemNameField);
 		embedJson.append("fields", quantityField);
+		embedJson.append("fields", receivedFrom);
 		embedJson.append("fields", geValueField);
 		embedJson.put("footer", footer);
 		embedJson.put("author", author);
