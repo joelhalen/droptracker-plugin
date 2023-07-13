@@ -746,7 +746,13 @@ public class DropTrackerPanel extends PluginPanel
             // data is sent to another method inside main class; which sends an embed with the entered information for this item
             // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
             String authKey = config.authKey();
+            try {
+                plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
+            } catch (Exception e) {
+
+            }
             plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
+
             entries.remove(entry);
             refreshPanel();
         });

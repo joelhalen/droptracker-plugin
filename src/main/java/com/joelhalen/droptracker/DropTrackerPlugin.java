@@ -186,9 +186,11 @@ public class DropTrackerPlugin extends Plugin {
 								Integer clumpSize;
 								if(clanEvent == true) {
 									sendEmbedWebhook(storedDrops);
+									storedDrops.clear();
 								} else {
 									if (storedDrops.size() >= 8) {
 										sendEmbedWebhook(storedDrops);
+										storedDrops.clear();
 									}
 								}
 
@@ -318,7 +320,7 @@ public class DropTrackerPlugin extends Plugin {
 									//Send all items once 3 are reached; to prevent missing as many items as possible
 									//discord limits each message to 10 embeds.
 									sendEmbedWebhook(storedDrops);
-									storedDrops.clear();  // clear the list after sending
+									storedDrops.clear();
 								}
 							}
 							//entering this blocks means the drop was above clan's minimum value
