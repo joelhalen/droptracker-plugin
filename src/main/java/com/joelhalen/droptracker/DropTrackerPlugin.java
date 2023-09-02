@@ -37,54 +37,68 @@
  */
 package com.joelhalen.droptracker;
 
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.Multiset;
 import com.google.inject.Provides;
-
+import com.joelhalen.droptracker.api.DropTrackerApi;
+import com.joelhalen.droptracker.ui.DropTrackerOverlay;
+import lombok.var;
 import net.runelite.api.*;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetID;
+import net.runelite.api.events.StatChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.api.*;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.events.*;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.eventbus.EventBus;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.NpcLootReceived;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.events.NpcLootReceived;
-import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
-import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
-import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
+import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.events.NpcLootReceived;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStack;
+import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.loottracker.LootReceived;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.DrawManager;
 import okhttp3.*;
-
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import org.json.JSONArray;
 
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import javax.swing.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
-import java.io.IOException;
-import javax.imageio.ImageIO;
-import javax.swing.*;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
+import com.joelhalen.droptracker.api.exp;
 
 @PluginDescriptor(
 		name = "DropTracker",
@@ -93,7 +107,6 @@ import java.util.concurrent.Executors;
 )
 
 public class DropTrackerPlugin extends Plugin {
-	//TODO: Implement pet queues and collection log slot queues
 	public static final String CONFIG_GROUP = "droptracker";
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	@Inject
@@ -115,7 +128,12 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientToolbar clientToolbar;
 	@Inject
+	private OverlayManager overlayManager;
+	@Inject
+	private DropTrackerOverlay dropTrackerOverlay;
+	@Inject
 	private DrawManager drawManager;
+	private DropTrackerApi dropTrackerApi;
 	private long accountHash = -1;
 	private Map<String, String> serverIdToWebhookUrlMap;
 	private Map<String, Integer> serverMinimumLootVarMap;
@@ -128,7 +146,34 @@ public class DropTrackerPlugin extends Plugin {
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	private NavigationButton navButton;
+	private final Map<Skill, Integer> previousSkillExpTable = new EnumMap<>(Skill.class);
+	private static final Pattern WOOD_CUT_PATTERN = Pattern.compile("You get (?:some|an)[\\w ]+(?:logs?|mushrooms)\\.");
+	private static final Pattern MINING_PATTERN = Pattern.compile(
+			"You " +
+					"(?:manage to|just)" +
+					" (?:mined?|quarry) " +
+					"(?:some|an?) " +
+					"(?:copper|tin|clay|iron|silver|coal|gold|mithril|adamantite|runeite|amethyst|sandstone|granite|barronite shards|barronite deposit|Opal|piece of Jade|Red Topaz|Emerald|Sapphire|Ruby|Diamond)" +
+					"(?:\\.|!)");
 
+	private Multiset<Integer> previousInventorySnapshot;
+	private Integer containerChangedCount = 0;
+	private Integer pendingInventoryUpdates = 0;
+	private WorldPoint currentLocation = null;
+
+	private Multiset<Integer> getInventorySnapshot()
+	{
+		final ItemContainer inventory = client.getItemContainer(InventoryID.INVENTORY);
+		Multiset<Integer> inventorySnapshot = HashMultiset.create();
+
+		if (inventory != null)
+		{
+			Arrays.stream(inventory.getItems())
+					.forEach(item -> inventorySnapshot.add(item.getId(), item.getQuantity()));
+		}
+
+		return inventorySnapshot;
+	}
 	private String[] groupMembers = new String[0];
 	private final Object groupMembersLock = new Object();
 	@Inject
@@ -166,41 +211,19 @@ public class DropTrackerPlugin extends Plugin {
 					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
 					if (shouldSend) {
 						if (geValue < clanMinimumLoot) {
-							//Is the discord server accepting a non-confirmed stream of items?
-							//This means they track every single drop a player receives
 							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								//If so, and the item is under clan value, send it to the localDropEntry object
-								//When there are 10+ of these, they will all be sent in a single embed
-								//first check if they stored a name, since sending the current player name if it doesn't match their database name
-								//will throw errors on the discord end
-								DropEntryStream storedDrop = new DropEntryStream();
-								storedDrop.setPlayerName(playerName);
-								storedDrop.setNpcOrEventName(npcName);
-								storedDrop.setQuantity(quantity);
-								storedDrop.setItemId(itemId);
-								storedDrop.setItemName(itemName);
-								storedDrop.setGeValue(geValue);
-								//Adds the drop to the main object
-								storedDrops.add(storedDrop);
-								Boolean clanEvent = clanEventActiveMap.get(config.serverId());
-								Integer clumpSize;
-								if(clanEvent == true) {
-									sendEmbedWebhook(storedDrops);
-									storedDrops.clear();
-								} else {
-									if (storedDrops.size() >= 8) {
-										sendEmbedWebhook(storedDrops);
-										storedDrops.clear();
-									}
+								String memberList = "";
+								String imageUrl = null;
+								Integer nonMembers = 0;
+								String authKey = config.authKey();
+								try {
+									dropTrackerApi.sendDropToApi(playerName, npcName, npcCombatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
+								} catch (IOException e) {
+									throw new RuntimeException(e);
 								}
-
-								//sendEmbedWebhook(playerName, npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
-								//sendEmbedWebhook(config.permPlayerName(), npcName, npcCombatLevel, itemId, quantity, geValue, haValue);
-
 							}
 						} else {
-							/* Don't send drops that are >1 quantity in the table */
-							/* This may potentially affect double drops? */
+							/* Drops entering this else are > clan's defined min. value */
 							if (quantity > 1) {
 								return;
 							}
@@ -267,12 +290,64 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
+	/* Handles excluding temporary worlds like deadman/etc from exp tracking events */
+	private boolean isTracking() {
+			return !isFakeWorld() && !config.authKey().isEmpty();
+	}
+	private boolean isFakeWorld() {
+		EnumSet<WorldType> worldType = client.getWorldType();
+		return worldType.contains(WorldType.BETA_WORLD)
+				|| worldType.contains(WorldType.DEADMAN)
+				|| worldType.contains(WorldType.FRESH_START_WORLD)
+				|| worldType.contains(WorldType.LAST_MAN_STANDING)
+				|| worldType.contains(WorldType.NOSAVE_MODE)
+				|| worldType.contains(WorldType.PVP_ARENA)
+				|| worldType.contains(WorldType.QUEST_SPEEDRUNNING)
+				|| worldType.contains(WorldType.SEASONAL)
+				|| worldType.contains(WorldType.TOURNAMENT_WORLD);
+	}
+	/* Experience tracking method which sends data >every< time experience changes, and all exp on login. */
+	@Subscribe
+	public void onStatChanged(StatChanged statChanged) {
+		if (isTracking()) {
+			final Skill skill = statChanged.getSkill();
+			final int xp = statChanged.getXp();
+			Long accountHash = this.client.getAccountHash();
+			String apiKey = config.authKey();
+
+			Integer previous = previousSkillExpTable.put(skill, xp);
+			// Since we get all the skills upon login/load/whenever, we don't have to worry about seeding the table.
+			if (previous != null) {
+				int delta = xp - previous;
+				if (delta > 0) {
+
+					// Use the new ApiClient to send the XP data
+					dropTrackerApi.sendXP(new exp(skill.name(), delta, xp, apiKey, accountHash, config));
+
+					if (statChanged.getSkill() == Skill.RUNECRAFT) {
+						pendingInventoryUpdates++;
+						log.debug("Runecrafting increasing pending inv");
+					}
+				}
+			} else {
+				// Use the new ApiClient to send the XP data
+				dropTrackerApi.sendXP(new exp(skill.name(), 0, xp, apiKey, accountHash, config));
+			}
+		}
+	}
+
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
 		if (lootReceived.getType() == LootRecordType.NPC) {
 			//if the drop was an NPC, it's already been handled in onNpcLootReceived
 			return;
+		}
+		String playerName;
+		if(config.permPlayerName().equals("")) {
+			playerName = client.getLocalPlayer().getName();
+		} else {
+			playerName = config.permPlayerName();
 		}
 		Collection<ItemStack> items = lootReceived.getItems();
 		for (ItemStack item : items) {
@@ -300,34 +375,22 @@ public class DropTrackerPlugin extends Plugin {
 							submissionPlayer = client.getLocalPlayer().getName();
 						}
 						if (geValue < clanMinimumLoot) {
-							//Is the discord server accepting a non-confirmed stream of items?
-							//This means they track every single drop a player receives
 							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								//If so, and the item is under clan value, send it to the localDropEntry object
-								//When there are 10+ of these, they will all be sent in a single embed
-								//first check if they stored a name, since sending the current player name if it doesn't match their database name
-								//will throw errors on the discord end
-								DropEntryStream storedDrop = new DropEntryStream();
-								storedDrop.setPlayerName(submissionPlayer);
-								storedDrop.setNpcOrEventName(lootReceived.getName());
-								storedDrop.setQuantity(quantity);
-								storedDrop.setItemId(itemId);
-								storedDrop.setItemName(itemName);
-								storedDrop.setGeValue(geValue);
-								//Adds the drop to the main object
-								storedDrops.add(storedDrop);
-								if (storedDrops.size() >= 3) {
-									//Send all items once 3 are reached; to prevent missing as many items as possible
-									//discord limits each message to 10 embeds.
-									sendEmbedWebhook(storedDrops);
-									storedDrops.clear();
+
+								String memberList = "";
+								String imageUrl = null;
+								Integer nonMembers = 0;
+								String npcName = lootReceived.getName();
+								Integer combatLevel = lootReceived.getCombatLevel();
+								Integer npcCombatLevel = 0;
+								String authKey = config.authKey();
+								try {
+									dropTrackerApi.sendDropToApi(playerName, npcName, combatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
+								} catch (IOException e) {
+									throw new RuntimeException(e);
 								}
 							}
-							//entering this blocks means the drop was above clan's minimum value
 						} else {
-							/* Don't send drops that are >1 quantity in the table */
-							/* This may potentially affect double drops from things like thieving w/ rogue's? */
-							/* Will need to be tested further. */
 							if (quantity > 1) {
 								return;
 							}
@@ -381,7 +444,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	//There is probably a better way of doing this, but this will work for now.
+
 	@Subscribe
 	public void onGameTick(GameTick event) {
 
@@ -400,6 +463,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void onConfigChanged(ConfigChanged event) {
 		panel.refreshPanel();
+
 	}
 
 
@@ -424,6 +488,7 @@ public class DropTrackerPlugin extends Plugin {
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 		navButton = null;
+		overlayManager.remove(dropTrackerOverlay);
 		accountHash = -1;
 	}
 
@@ -432,7 +497,7 @@ public class DropTrackerPlugin extends Plugin {
 		initializeServerIdToWebhookUrlMap().thenRun(this::loadGroupMembersAsync);
 
 		accountHash = client.getAccountHash();
-		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
+		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager, dropTrackerApi);
 		navButton = NavigationButton.builder()
 				.tooltip("Drop Tracker")
 				.icon(ICON)
@@ -440,6 +505,7 @@ public class DropTrackerPlugin extends Plugin {
 				.panel(panel)
 				.build();
 		clientToolbar.addNavigation(navButton);
+		dropTrackerApi = new DropTrackerApi(httpClient, this, config);
 		if (!prepared) {
 			clientThread.invoke(() ->
 			{
@@ -451,6 +517,7 @@ public class DropTrackerPlugin extends Plugin {
 						} else if (config.authKey().equals("")) {
 							//TODO: Message the user that their auth key has been left empty
 						} else {
+							overlayManager.add(dropTrackerOverlay);
 							//If we enter this else statement, the serverId is configured, and an auth key is entered.
 							//Now, we can check authentication and render the dropPanel.
 							prepared = true;
@@ -518,7 +585,7 @@ public class DropTrackerPlugin extends Plugin {
 		return CompletableFuture.runAsync(() -> {
 
 			Request request = new Request.Builder()
-					.url("http://data.droptracker.io/data/server_settings1.json")
+					.url("http://data.droptracker.io/data/server_settings3.json")
 					.build();
 			try {
 				Response response = httpClient.newCall(request).execute();
@@ -727,6 +794,21 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
+	private JSONObject createDropJsonForApi(DropEntryStream drop) {
+		JSONObject json = new JSONObject();
+
+		// Fields common to both low-value and high-value drops
+		json.put("currentname", drop.getPlayerName());
+		json.put("itemName", drop.getItemName());
+		json.put("quantity", drop.getQuantity());
+		json.put("npcName", drop.getNpcOrEventName());
+		json.put("value", drop.getGeValue()); // Assuming 'getGeValue' returns the GE value
+		json.put("apiKey", config.authKey());
+		json.put("serverid", getClanDiscordServerID(config.serverId())); // Replace with the correct method if different
+		json.put("npcLevel", 0);
+
+		return json;
+	}
 
 	public CompletableFuture<Void> sendEmbedWebhook(List<DropEntryStream> storedDrops) {
 		return CompletableFuture.runAsync(() -> {
@@ -737,10 +819,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 			JSONObject json = new JSONObject();
 			for (DropEntryStream drop : storedDrops) {
-				// Create embed for each drop
-				JSONObject embedJson = createEmbedJson(drop);
-				// Append each embed to main json object
-				json.append("embeds", embedJson);
+				sendDropToApi(drop); // Assuming all storedDrops are low-value
 			}
 			RequestBody body = RequestBody.create(
 					MediaType.parse("application/json; charset=utf-8"),
@@ -761,60 +840,33 @@ public class DropTrackerPlugin extends Plugin {
 
 		});
 	}
+	private void sendDropToApi(DropEntryStream drop) {
+		System.out.println("SendDropToApi");
+		JSONObject jsonForApi = createDropJsonForApi(drop);
+		// Create a RequestBody containing your JSON data
+		RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonForApi.toString());
 
-	private JSONObject createEmbedJson(DropEntryStream drop) {
+		// Create a new Request
+		Request request = new Request.Builder()
+				.url("http://api.droptracker.io/api/drops") // Replace with your API URL
+				.post(body)
+				.addHeader("Authorization", "Bearer " + config.authKey()) // Replace with your Auth method
+				.build();
 
-		JSONObject embedJson = new JSONObject();
-
-		embedJson.put("title", "low-value"); // title
-		embedJson.put("description", "");
-		embedJson.put("color", 15258703);
-
-		JSONObject itemNameField = new JSONObject();
-		itemNameField.put("name", "item"); //
-		itemNameField.put("value", drop.getItemName());
-		itemNameField.put("inline", true);
-
-		JSONObject quantityField = new JSONObject();
-		quantityField.put("name", "amt"); //
-		quantityField.put("value", drop.getQuantity());
-		quantityField.put("inline", true);
-
-		JSONObject geValueField = new JSONObject();
-		geValueField.put("name", "Value");
-		geValueField.put("value", drop.getGeValue());
-		geValueField.put("inline", true);
-
-		JSONObject receivedFrom = new JSONObject();
-		receivedFrom.put("name", "source");
-		receivedFrom.put("value", drop.getNpcOrEventName());
-		receivedFrom.put("inline", true);
-
-		JSONObject playerAuthToken = new JSONObject();
-		playerAuthToken.put("name", "auth");
-		playerAuthToken.put("value", "`" + config.authKey() + "`");
-		playerAuthToken.put("inline", false);
-
-		String serverName = serverIdToClanNameMap.get(config.serverId());
-
-		JSONObject footer = new JSONObject();
-		footer.put("text", serverName + " (ID #" + config.serverId() + ") Support: http://www.droptracker.io");
-
-		JSONObject author = new JSONObject();
-		author.put("name", "" + drop.getPlayerName());
-
-		// Add fields to embed
-		embedJson.append("fields", playerAuthToken);
-		embedJson.append("fields", itemNameField);
-		embedJson.append("fields", quantityField);
-		embedJson.append("fields", receivedFrom);
-		embedJson.append("fields", geValueField);
-		embedJson.put("footer", footer);
-		embedJson.put("author", author);
-
-		return embedJson;
+		// Make the request
+		try (Response response = httpClient.newCall(request).execute()) {
+			if (response.isSuccessful()) {
+				log.debug("Sent low-value drop to the api endpoint");
+				log.debug("Response: " + response.body() + response.message());
+			} else {
+				log.error("Error occurred sending low value drops..");
+				log.error("HTTP Error Code: " + response.code());
+				log.error("HTTP Error Message: " + response.message());
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
-
 	private CompletableFuture<Boolean> canBeSent(int geValue) {
 		String serverId = config.serverId();
 		int minimumClanValue = serverMinimumLootVarMap.get(serverId);

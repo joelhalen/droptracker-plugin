@@ -36,6 +36,7 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
+import okhttp3.OkHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,16 +64,19 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-
+import com.joelhalen.droptracker.api.DropTrackerApi;
 
 public class DropTrackerPanel extends PluginPanel
 {
     @Inject
     private final DropTrackerPlugin plugin;
+    @Inject
     private final DropTrackerPluginConfig config;
     @Inject
+    private final DropTrackerApi api;
+    @Inject
     private final ItemManager itemManager;
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     @Inject
     private Client client;
     private JTable table = new JTable();
@@ -83,12 +87,12 @@ public class DropTrackerPanel extends PluginPanel
     public String localPlayerName = null;
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
 
-    public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager, ChatMessageManager chatMessageManager) {
+    public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager, ChatMessageManager chatMessageManager, DropTrackerApi api) {
         super();
         this.plugin = plugin;
         this.config = config;
         this.itemManager = itemManager;
-
+        this.api = new DropTrackerApi(new OkHttpClient(),plugin,config);
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
@@ -747,12 +751,11 @@ public class DropTrackerPanel extends PluginPanel
             // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
             String authKey = config.authKey();
             try {
-                plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
+                api.sendDropToApi(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
             } catch (Exception e) {
-
+                // Handle exception
+                e.printStackTrace();
             }
-            plugin.sendConfirmedWebhook(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
-
             entries.remove(entry);
             refreshPanel();
         });
