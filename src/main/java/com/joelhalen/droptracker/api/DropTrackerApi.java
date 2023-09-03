@@ -174,7 +174,6 @@ public class DropTrackerApi {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
                 JSONObject jsonResponse = new JSONObject(responseBody);
-                System.out.println(responseBody);
                 String status = jsonResponse.optString("status", "");
                 String message = jsonResponse.optString("message", "");
                 String teamName = jsonResponse.optString("teamname", "");
@@ -186,17 +185,15 @@ public class DropTrackerApi {
                     if (task != null) {
                         this.currentTask = task;
                     }
-                    System.out.println("DropTrackerApi - Updated teamName: " + this.teamName);
-                    System.out.println("DropTrackerApi - Updated currentTask: " + this.currentTask.optString("quantity", "") + this.currentTask.optString("task", ""));
                 } else {
                     System.out.println("Received an OK response but the status is not OK.");
                 }
             } else {
-                System.out.println("Received an unsuccessful HTTP response.");
-                System.out.println("HTTP Status Code: " + response.code());
-                System.out.println("HTTP Status Message: " + response.message());
+                System.out.println("[DropTracker] Received an unsuccessful HTTP response.");
+                System.out.println("[DropTracker] HTTP Status Code: " + response.code());
+                System.out.println("[DropTracker] HTTP Status Message: " + response.message());
                 if (response.body() != null) {
-                    System.out.println("HTTP Response Body: " + response.body().string());
+                    System.out.println("[DropTracker] HTTP Response Body: " + response.body().string());
                 }
             }
         }

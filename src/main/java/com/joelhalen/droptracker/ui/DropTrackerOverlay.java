@@ -25,6 +25,7 @@ public class DropTrackerOverlay extends OverlayPanel
     private Client client;
     private DropTrackerPluginConfig config;
     private long lastApiCallTime = 0;
+    private long lastApiLootRefresh = 0;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final PanelComponent panelComponent = new PanelComponent();
     private String teamName;
@@ -51,10 +52,8 @@ public class DropTrackerOverlay extends OverlayPanel
                 .text("Event")
                 .color(Color.GREEN)
                 .build());
-        // Set the size of the overlay (width)
         // Only call the API if at least 10 seconds have passed since the last call
         if (currentTime - lastApiCallTime > 10000) {
-            System.out.println("Executing API call");
             lastApiCallTime = currentTime;
             executorService.submit(() -> {
                 try {
@@ -70,6 +69,18 @@ public class DropTrackerOverlay extends OverlayPanel
                 }
             });
         }
+//        if (currentTime - lastApiLootRefresh > 10000) {
+//            String playerName = plugin.getLocalPlayerName();
+//            String authKey = config.authKey();
+//            try {
+//                api.fetchCurrentTask(playerName, authKey);
+//                this.lootStatistics = api.fetchLootStatistics(client.getLocalPlayer().getName(), String.valueOf(plugin.getClanDiscordServerID(config.serverId())), config.authKey());
+//            } catch (IOException e) {
+//                throw new RuntimeException(e);
+//            }
+//
+//        }
+
 
         if (teamName != null && currentTask != null) {
             panelComponent.getChildren().add(LineComponent.builder()
@@ -94,7 +105,6 @@ public class DropTrackerOverlay extends OverlayPanel
                     .right(String.valueOf(quantity))
                     .build());
         } else {
-            System.out.println("Null object: " + teamName + currentTask);
         }
         if (lootStatistics != null) {
             panelComponent.getChildren().add(TitleComponent.builder()

@@ -218,6 +218,7 @@ public class DropTrackerPlugin extends Plugin {
 								String authKey = config.authKey();
 								try {
 									dropTrackerApi.sendDropToApi(playerName, npcName, npcCombatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
+									System.out.println("Sent a drop with npcName " + npcName);
 								} catch (IOException e) {
 									throw new RuntimeException(e);
 								}
@@ -338,9 +339,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
-		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
 		if (lootReceived.getType() == LootRecordType.NPC) {
-			//if the drop was an NPC, it's already been handled in onNpcLootReceived
 			return;
 		}
 		String playerName;
@@ -386,6 +385,7 @@ public class DropTrackerPlugin extends Plugin {
 								String authKey = config.authKey();
 								try {
 									dropTrackerApi.sendDropToApi(playerName, npcName, combatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
+									System.out.println("Sending with npc name: " + npcName);
 								} catch (IOException e) {
 									throw new RuntimeException(e);
 								}
@@ -463,6 +463,11 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void onConfigChanged(ConfigChanged event) {
 		panel.refreshPanel();
+		if (!config.showOverlay()) {
+			overlayManager.remove(dropTrackerOverlay);
+		} else {
+			overlayManager.resetOverlay(dropTrackerOverlay);
+		}
 
 	}
 

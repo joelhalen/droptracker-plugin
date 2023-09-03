@@ -67,6 +67,12 @@ public interface DropTrackerPluginConfig extends Config
 		)
 		default String permPlayerName() { return ""; }
 		@ConfigItem(
+				keyName = "showOverlay",
+				name = "Show onscreen overlay",
+				description = "Show the in-game overlay (mainly for events)"
+		)
+		default boolean showOverlay() { return true; }
+		@ConfigItem(
 				keyName = "sendChatMessages",
 				name = "Send Chat Messages?",
 				description = "Would you like to receive messages in your chatbox when drops are added to the panel/uploaded?"
