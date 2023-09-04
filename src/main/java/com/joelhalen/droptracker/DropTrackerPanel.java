@@ -37,6 +37,7 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
 import okhttp3.OkHttpClient;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -160,37 +161,67 @@ public class DropTrackerPanel extends PluginPanel
                 String serverName = plugin.getServerName(config.serverId());
                 int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
                 Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
-                NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
-                String minimumLootString = clanLootFormat.format(minimumClanLoot);
-                AtomicReference<String> playerLoot = new AtomicReference<>("none");
-                String formattedServerTotal = "0";
-                if (!config.serverId().equals("")) {
-                    AtomicReference<String> serverLootTotal = new AtomicReference<>("none");
-                    fetchServerLootTotal().thenAccept(total -> {
-                        SwingUtilities.invokeLater(() -> {
-                            serverLootTotal.set(formatNumber(Double.parseDouble(total)));
-                            // refresh the panel or perform other updates here
-                        });
-                    });
-                }
+                AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
+                AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
+                //if they have a playerName assigned:
                 if (playerName != null) {
-                    fetchPlayerLootFromPHP(config.serverId(), playerName).thenAccept(loot -> {
-                        SwingUtilities.invokeLater(() -> {
-                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
-                            // refresh the panel or perform other updates here
-                        });
+                    if (config.serverId().equals("")) {
+                        ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                        messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                                .append("DropTracker")
+                                .append(ChatColorType.NORMAL)
+                                .append("]")
+                                .append("You have not configured a serverID in the plugin config! If your server is not part of the DropTracker, the plugin will not work!");
+                        plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                .type(ChatMessageType.CONSOLE)
+                                .runeLiteFormattedMessage(messageResponse.build())
+                                .build());
+                        playerLoot.set("<em>...</em>");
+                        try {
+                            plugin.shutDown();
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                        return;
+                    }
+
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            AtomicReference<Long> newPlayerLoot = new AtomicReference<>(api.getMonthlyTotalPlayer());
+                            AtomicReference<Long> newServerLoot = new AtomicReference<>(api.getMonthlyTotalServer());
+                            SwingUtilities.invokeLater(() -> {
+                                if (newPlayerLoot.get() != null) {
+                                    playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
+                                } else {
+                                    String serverIdString = String.valueOf(plugin.getClanDiscordServerID(config.serverId()));
+                                    try {
+                                        api.fetchLootStatistics(playerName, serverIdString, config.authKey());
+                                        newPlayerLoot.set(api.getMonthlyTotalPlayer());
+                                        newServerLoot.set(api.getMonthlyTotalServer());
+                                        playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
+                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(newServerLoot.toString())));
+                                    } catch (IOException e) {
+                                        throw new RuntimeException(e);
+                                    } catch (ExecutionException e) {
+                                        throw new RuntimeException(e);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                }
+                                // Update table or UI with new playerLoot
+                                updateTable(playerLoot.get(), formattedServerTotalRef.get());
+                            });
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     });
-                } else {
-                    playerLoot.set("not signed in!");
-                    formattedServerTotal = "0";
                 }
                 String[][] data = {
-                        {"Your Clan", serverName},
-                        {"Minimum value", minimumLootString + " gp"},
-                        {"Your total loot", "loading..."},
-                        {"Clan Total:", "loading..."},
+                        {"Your Clan: ", serverName},
+                        {"Minimum Value: - gp"},
+                        {"Your total loot: ", playerLoot.get(), ""},
+                        {"Clan Total: ", formattedServerTotalRef.get() + ""},
                 };
-                updateTable("load", "load");
                 String[] columnNames = {"Key", "Value"};
                 DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                     @Override
@@ -338,17 +369,43 @@ public class DropTrackerPanel extends PluginPanel
                 finalPlayerName = playerName;
             }
             if(playerName != null && !serverId.equals("")) {
-                String result = checkAuthKey(finalPlayerName, serverId, authKey);
-                if (result.equals("New token generated.")) {
-                    callback.accept("discord");
-                } else if (result.equals("Authenticated.")) {
-                    callback.accept("yes");
-                } else {
-                    callback.accept(result);
+                try {
+                    // Construct the API endpoint URL
+                    String apiUrl = "http://api.droptracker.io/api/verify_token?server_id=" + serverId + "&discord_id=" + finalPlayerName + "&auth_key=" + authKey;
+                    URL url = new URL(apiUrl);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+                    // Set up the GET request
+                    conn.setRequestMethod("GET");
+                    int responseCode = conn.getResponseCode();
+
+                    // Read the response
+                    BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    String inputLine;
+                    StringBuffer response = new StringBuffer();
+
+                    while ((inputLine = in.readLine()) != null) {
+                        response.append(inputLine);
+                    }
+                    in.close();
+
+                    // Parse the response (assuming it returns JSON)
+                    JSONObject jsonResponse = new JSONObject(response.toString());
+                    String status = jsonResponse.getString("status");
+
+                    if (status.equals("OK")) {
+                        callback.accept("yes");
+                    } else {
+                        callback.accept("Unauthorized");
+                    }
+
+                } catch (Exception e) {
+                    // Handle exceptions
+                    callback.accept(e.getMessage());
                 }
             } else {
                 callback.accept("invalid parameters.");
-        }
+            }
         });
     }
 
@@ -390,13 +447,9 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
             AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
-            String formattedServerTotal = "0";
+
             //if they have a playerName assigned:
             if (playerName != null) {
-                // if the localAuthKey is stored; and the playerName is still the same, don't update.
-//                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
-//                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
-//                } else {
                 if(config.serverId().equals("")) {
                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                     messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
@@ -409,99 +462,46 @@ public class DropTrackerPanel extends PluginPanel
                             .runeLiteFormattedMessage(messageResponse.build())
                             .build());
                     playerLoot.set("<em>...</em>");
-                    try {
-                        plugin.shutDown();
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
+                try {
+                    plugin.shutDown();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
                     return;
                 }
-                    checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
-                            SwingUtilities.invokeLater(() -> {
-                                if (authRes.equals("discord")) {
-                                    // This response means they did not have an auth key before, but had one generated just now.
-                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                            .append("DropTracker")
-                                            .append("]")
-                                            .append(ChatColorType.NORMAL)
-                                            .append("A new authentication token has been generated for you! Check your discord.");
-                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                            .type(ChatMessageType.CONSOLE)
-                                            .runeLiteFormattedMessage(messageResponse.build())
-                                            .build());
-                                    playerLoot.set("<em>...</em>");
-                                } else if (authRes.equals("No account")) {
-                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                            .append("DropTracker")
-                                            .append("] Your account was not found in " + plugin.getServerName(config.serverId()))
-                                            .append("'s database!");
-                                    playerLoot.set("<em>unregistered</em>");
-                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                            .type(ChatMessageType.CONSOLE)
-                                            .runeLiteFormattedMessage(messageResponse.build())
-                                            .build());
-                                } else if (!authRes.equals("yes")) {
-                                    // in any other case, if the response doesn't say "yes", the auth key is invalid
-                                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                                    messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                            .append("DropTracker")
-                                            .append("] You have entered an invalid authentication")
-                                            .append(" token in the configuration for DropTracker.");
-                                    playerLoot.set("<em>unregistered</em>");
-                                    plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                            .type(ChatMessageType.CONSOLE)
-                                            .runeLiteFormattedMessage(messageResponse.build())
-                                            .build());
-                                } else {
-                                    // authentication has succeeded, proceed.
-                                    localAuthKey = config.authKey();
-                                    if(plugin.getLocalPlayerName() != null) {
-                                        localPlayerName = plugin.getLocalPlayerName();
-                                    }
-                                    //Grab server loot total + personal loot total
-                                    if (!config.serverId().isEmpty()) {
-                                        fetchServerLootTotal().thenAccept(serverLootTotal -> {
-                                            SwingUtilities.invokeLater(() -> {
-                                                // Ensure thread safety for GUI updates
-                                                if (serverLootTotal.equals("Invalid server ID.")) {
-                                                    formattedServerTotalRef.set("0");
-                                                } else {
-                                                    if(serverLootTotal.equals("None")) {
-                                                        formattedServerTotalRef.set("0");
-                                                    } else if(serverLootTotal.equals("Invalid Server ID.")) {
-                                                        formattedServerTotalRef.set("Invalid server ID!");
-                                                    } else {
-                                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(serverLootTotal)));
-                                                    }
-                                                }
-                                            });
-                                        });
-                                    }
-                                    CompletableFuture.runAsync(() -> {
-                                        if(!config.permPlayerName().equals("")) {
-                                            localPlayerName = config.permPlayerName();
-                                        }
-                                        fetchPlayerLootFromPHP(config.serverId(), localPlayerName).thenAccept(loot -> {
-                                            SwingUtilities.invokeLater(() -> {
-                                                    if (!loot.equals("None")) {
-                                                        try {
-                                                            playerLoot.set(formatNumber(Double.parseDouble(loot)));
-                                                        } catch (Exception e) {
-                                                            playerLoot.set("Invalid server ID!");
-                                                        }
-                                                        } else {
-                                                        playerLoot.set("unregistered");
-                                                    }
-                                                updateTable(playerLoot.get(), formattedServerTotalRef.get());
-                                            });
-                                        });
-                                    });
-                                }
-                            });
-                        });
 
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        AtomicReference<Long> newPlayerLoot = new AtomicReference<>(api.getMonthlyTotalPlayer());
+                        AtomicReference<Long> newServerLoot = new AtomicReference<>(api.getMonthlyTotalServer());
+                        SwingUtilities.invokeLater(() -> {
+                            if (newPlayerLoot.get() != null) {
+                                playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
+                                newServerLoot.set(api.getMonthlyTotalServer());
+                                formattedServerTotalRef.set(formatNumber(Double.parseDouble(newServerLoot.toString())));
+                            } else {
+                                String serverIdString = String.valueOf(plugin.getClanDiscordServerID(config.serverId()));
+                                try {
+                                    api.fetchLootStatistics(playerName,serverIdString,config.authKey());
+                                    newPlayerLoot.set(api.getMonthlyTotalPlayer());
+                                    newServerLoot.set(api.getMonthlyTotalServer());
+                                    playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
+                                    formattedServerTotalRef.set(formatNumber(Double.parseDouble(newServerLoot.toString())));
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                } catch (ExecutionException e) {
+                                    throw new RuntimeException(e);
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+                            // Update table or UI with new playerLoot
+                            updateTable(playerLoot.get(), formattedServerTotalRef.get());
+                        });
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
             } else {
                 playerLoot.set("not signed in!");
             }
@@ -597,7 +597,6 @@ public class DropTrackerPanel extends PluginPanel
                 dropsPanel.add(descTextBox);
 
             }
-            /* Initialize the membersComboBox prior to each drop, so that we don't try to pull data for each drop received */
             for (DropEntry entry : entries) {
                 dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box entryItemBox = Box.createHorizontalBox();
@@ -680,60 +679,6 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
-    public CompletableFuture<String> fetchServerLootTotal() {
-        return CompletableFuture.supplyAsync(() -> {
-            Long discordServerId = plugin.getClanDiscordServerID(config.serverId());
-            try {
-                URL url = new URL("http://data.droptracker.io/data/player_data.php?totalServerId=" + discordServerId);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                String line;
-                StringBuilder builder = new StringBuilder();
-
-                while ((line = reader.readLine()) != null) {
-                    builder.append(line);
-                }
-
-                reader.close();
-                return builder.toString();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null;
-            }
-        });
-    }
-
-
-    public CompletableFuture<String> fetchPlayerLootFromPHP(String serverId, String playerName) {
-        return CompletableFuture.supplyAsync(() -> {
-            Long discordServerId = plugin.getClanDiscordServerID(serverId);
-            try {
-                String encodedPlayerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("http://data.droptracker.io/data/player_data.php?serverId=" + discordServerId + "&playerName=" + encodedPlayerName);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-                String line;
-                StringBuilder builder = new StringBuilder();
-
-                while ((line = reader.readLine()) != null) {
-                    builder.append(line);
-                }
-
-                reader.close();
-                return builder.toString();
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null;
-            }
-        });
-    }
-
     private void submitDrop(DropEntry entry) {
         SwingUtilities.invokeLater(() -> {
             String itemName = entry.getItemName();
@@ -746,14 +691,10 @@ public class DropTrackerPanel extends PluginPanel
             int nonMembers = entry.getNonMemberCount();
             String imageUrl = entry.getImageLink();
             String memberList = entry.getClanMembers();
-            // `` Drop is removed from the entries list; and the panel is refreshed without it.
-            // data is sent to another method inside main class; which sends an embed with the entered information for this item
-            // Python bot reads the webhook inside discord and updates the servers' loot tracker accordingly.
             String authKey = config.authKey();
             try {
                 api.sendDropToApi(playerName, npcName, npcLevel, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
             } catch (Exception e) {
-                // Handle exception
                 e.printStackTrace();
             }
             entries.remove(entry);

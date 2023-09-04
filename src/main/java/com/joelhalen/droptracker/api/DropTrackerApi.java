@@ -9,10 +9,16 @@ import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.QueuedMessage;
 import okhttp3.*;
 import com.google.gson.Gson;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import javax.inject.Inject;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class DropTrackerApi {
@@ -22,9 +28,22 @@ public class DropTrackerApi {
     private final DropTrackerPluginConfig config;
     private String username;
     private String apiKey;
+    public Long monthlyTotalPlayer;
+    public String motd = "";
+    private Map<String, String> serverIdToWebhookUrlMap;
+    private Map<String, Integer> serverMinimumLootVarMap;
+    private Map<String, Long> clanServerDiscordIDMap;
+    private Map<String, String> serverIdToClanNameMap;
+    private Map<String, Boolean> serverIdToConfirmedOnlyMap;
+    public Map<String, Integer> clanWiseOldManGroupIDMap;
+    private Boolean hasSentMOTD = false;
+    public Map<String, Boolean> clanEventActiveMap;
+    public Long monthlyTotalServer;
+    public Map<String, Object> currentLootMap = new HashMap<>();
     private String messageString;
-    private String teamName = "";
-    private JSONObject currentTask;
+    private volatile String teamName;
+    private volatile JSONObject currentTask;
+    private CompletableFuture<Void> initializer;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
 
     @Inject
@@ -32,8 +51,20 @@ public class DropTrackerApi {
         this.httpClient = httpClient;
         this.plugin = plugin;
         this.config = config;
+        initializer = initializeServerIdToWebhookUrlMap();
     }
 
+    public static String formatNumber(double number) {
+        char[] suffix = {' ', 'K', 'M', 'B', 'T'};
+        int idx = 0;
+
+        while (number >= 1000 && idx < suffix.length - 1) {
+            number /= 1000.0;
+            idx++;
+        }
+
+        return String.format("%.1f%c", number, suffix[idx]);
+    }
 
     public void setUsername(String username) {
         this.username = username;
@@ -48,76 +79,128 @@ public class DropTrackerApi {
                 .runeLiteFormattedMessage(messageString.build())
                 .build());
     }
-    private void makeRequest(Request request) {
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                // Handle failure
-            }
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                // Handle success
-                response.close();
+
+
+    public CompletableFuture<Void> initializeServerIdToWebhookUrlMap() {
+        return CompletableFuture.runAsync(() -> {
+            serverIdToClanNameMap = new HashMap<>();
+            serverMinimumLootVarMap = new HashMap<>();
+            serverIdToConfirmedOnlyMap = new HashMap<>();
+            clanServerDiscordIDMap = new HashMap<>();
+            clanWiseOldManGroupIDMap = new HashMap<>();
+            clanEventActiveMap = new HashMap<>();
+            Request request = new Request.Builder()
+                    .url("http://api.droptracker.io/api/config")
+                    .build();
+            try {
+                Response response = httpClient.newCall(request).execute();
+                String jsonData = response.body().string();
+                JSONObject jsonResponse = new JSONObject(jsonData);
+                if ("OK".equals(jsonResponse.getString("status"))) {
+                    JSONArray jsonArray = jsonResponse.getJSONArray("server_settings");
+
+                    for (int i = 0; i < jsonArray.length(); i++) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(i);
+                        if (jsonObject.has("motd")) {
+                            this.motd = jsonObject.getString("motd");
+                        }
+                        serverIdToClanNameMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getString("serverName")
+                        );
+                        serverMinimumLootVarMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getInt("minimumLoot")
+                        );
+                        serverIdToConfirmedOnlyMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getInt("confOnly") != 0
+                        );
+                        clanServerDiscordIDMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getLong("discordServerId")
+                        );
+                        clanWiseOldManGroupIDMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getInt("womGroup")
+                        );
+                        clanEventActiveMap.put(
+                                String.valueOf(jsonObject.getInt("serverId")),
+                                jsonObject.getInt("eventActive") != 0
+                        );
+                    }
+                    if(hasSentMOTD == false && serverIdToClanNameMap.containsKey(config.serverId())) {
+                        ChatMessageBuilder messageString = new ChatMessageBuilder();
+                        messageString.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                                .append(serverIdToClanNameMap.get(config.serverId()))
+                                .append(ChatColorType.NORMAL)
+                                .append("] ")
+                                .append(motd);
+                        sendChatMessage(new ChatMessage(), messageString);
+                    }
+                } else{
+                }
+
+            } catch(JSONException e){
+                e.printStackTrace();
+            } catch(IOException e){
+                e.printStackTrace();
             }
         });
     }
     public void sendXP(exp expData) {
-        if(expData == null || plugin == null || config == null) {
-            System.out.println("Null object: " + plugin + config + expData);
-            return;
-        }
-        JSONObject json = new JSONObject();
-        json.put("skill", expData.getSkill());
-        json.put("amount", expData.getAmount());
-        json.put("currentTotal", expData.getCurrentTotal());
-        json.put("apiKey", expData.getApiKey());
-        json.put("accountHash", expData.getAccountHash());
-        json.put("serverid", plugin.getClanDiscordServerID(config.serverId()));
-        json.put("currentname", plugin.getLocalPlayerName());
-
-        // Create request body
-        RequestBody body = RequestBody.create(JSON, json.toString());
-
-        // Build the request
-        Request request = new Request.Builder()
-                .url("http://api.droptracker.io/api/xp")
-                .post(body)
-                .addHeader("Authorization", "Bearer " + expData.getApiKey())
-                .build();
-
-        // Make the request
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+        initializer.thenRun(() -> {
+            if (expData == null || plugin == null || config == null || this.clanServerDiscordIDMap == null) {
+                return;
             }
+            JSONObject json = new JSONObject();
+            json.put("skill", expData.getSkill());
+            json.put("amount", expData.getAmount());
+            json.put("currentTotal", expData.getCurrentTotal());
+            json.put("apiKey", expData.getApiKey());
+            json.put("accountHash", expData.getAccountHash());
+            json.put("serverid", plugin.getClanDiscordServerID(config.serverId()));
+            json.put("currentname", plugin.getLocalPlayerName());
+            RequestBody body = RequestBody.create(JSON, json.toString());
+            Request request = new Request.Builder()
+                    .url("http://api.droptracker.io/api/xp")
+                    .post(body)
+                    .addHeader("Authorization", "Bearer " + expData.getApiKey())
+                    .build();
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                }
 
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-            try {
-                    if (response.isSuccessful()) {
-                        // Handle successful response
-                    } else {
-                        // Handle error
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try {
+                        if (response.isSuccessful()) {
+                        } else {
+                        }
+                    } finally {
+                        response.close();
                     }
-            } finally {
-                response.close();
-            }
-            }
+                }
+            });
         });
     }
     public String getTeamName() {
         return teamName;
     }
-
-    public JSONObject getCurrentTask() {
-        return currentTask;
+    public Long getMonthlyTotalPlayer() {
+            return this.monthlyTotalPlayer;
     }
-    public JSONObject fetchLootStatistics(String playerName, String serverId, String authKey) throws IOException {
-        // Create a new OkHttpClient (you can reuse the existing one if you have it)
-
-        // Build the URL including query parameters
+    public Long getMonthlyTotalServer() {
+        return this.monthlyTotalServer;
+    }
+    public JSONObject getCurrentTask() {
+        return this.currentTask;
+    }
+    public JSONObject fetchLootStatistics(String playerName, String serverId, String authKey) throws IOException, ExecutionException, InterruptedException {
+        initializer.get();
         HttpUrl url = new HttpUrl.Builder()
                 .scheme("http")
                 .host("api.droptracker.io")
@@ -125,85 +208,76 @@ public class DropTrackerApi {
                 .addQueryParameter("player_name", playerName)
                 .addQueryParameter("server_id", serverId)
                 .build();
-
-        // Create a new Request
         Request request = new Request.Builder()
                 .url(url)
                 .get()
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
 
-        // Make the request and handle the response
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
                 JSONObject jsonResponse = new JSONObject(responseBody);
-                return jsonResponse;  // You may want to extract and return specific fields
+                this.monthlyTotalPlayer = jsonResponse.optLong("monthly_total_player", 0);
+                this.monthlyTotalServer = jsonResponse.optLong("overall_month_server", 0);
+                return jsonResponse;
             } else {
-                System.out.println("Received an unsuccessful HTTP response.");
-                System.out.println("HTTP Status Code: " + response.code());
-                System.out.println("HTTP Status Message: " + response.message());
-                if (response.body() != null) {
-                    System.out.println("HTTP Response Body: " + response.body().string());
-                }
-                return null;  // Or throw an exception
+                return null;
             }
         }
     }
-
     public void fetchCurrentTask(String playerName, String authKey) throws IOException {
 
-        // Create JSON object to send player's name and authentication key
         JSONObject json = new JSONObject();
         json.put("currentname", playerName);
         json.put("authKey", authKey);
-        json.put("serverid", plugin.getClanDiscordServerID(config.serverId()));
+        json.put("serverid", clanServerDiscordIDMap.get(config.serverId()));
 
-        // Create a RequestBody containing your JSON data
+
         RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json.toString());
 
-        // Create a new Request
         Request request = new Request.Builder()
                 .url("http://www.droptracker.io/api/events/get_task")
                 .post(body)
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
 
-        // Make the request
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
                 JSONObject jsonResponse = new JSONObject(responseBody);
                 String status = jsonResponse.optString("status", "");
                 String message = jsonResponse.optString("message", "");
-                String teamName = jsonResponse.optString("teamname", "");
                 JSONObject task = jsonResponse.optJSONObject("task");
 
                 if ("OK".equals(status)) {
-                    // Save the team name and task to instance variables
+                    System.out.println("Raw output: " + responseBody);
                     this.teamName = jsonResponse.optString("teamname", "");
-                    if (task != null) {
-                        this.currentTask = task;
-                    }
-                } else {
-                    System.out.println("Received an OK response but the status is not OK.");
-                }
-            } else {
-                System.out.println("[DropTracker] Received an unsuccessful HTTP response.");
-                System.out.println("[DropTracker] HTTP Status Code: " + response.code());
-                System.out.println("[DropTracker] HTTP Status Message: " + response.message());
-                if (response.body() != null) {
-                    System.out.println("[DropTracker] HTTP Response Body: " + response.body().string());
+                    System.out.println("Team name set: " + teamName);
+                    this.currentTask = new JSONObject(responseBody);
+
+//                    if (task != null) {
+//                        System.out.println("Task object: " + task.toString());
+//
+//                        // Initialize and populate currentTask
+//                        this.currentTask = new JSONObject();
+//                        this.currentTask.put("task", task.optString("task"));
+//                        this.currentTask.put("per", task.optBoolean("per"));
+//                        this.currentTask.put("quantity", task.optInt("current_progress"));
+//                        this.currentTask.put("required_amount", task.optInt("required_quantity"));
+//
+//                        System.out.println("Debug fetchCurrentTask: TeamName - " + this.teamName);
+//                        System.out.println("Debug fetchCurrentTask: CurrentTask - " + this.currentTask.toString());
+//                    }
                 }
             }
         }
     }
+
     public void sendDropToApi(String playerName, String npcName, int npcLevel, int itemId, String itemName,
                                String memberList, int quantity, int value, int nonMembers, String authKey, String imageUrl)
             throws IOException {
 
-
-        // Create JSON object to hold your data
         JSONObject json = new JSONObject();
         json.put("playerName", playerName);
         json.put("npcName", npcName);
@@ -219,17 +293,14 @@ public class DropTrackerApi {
         json.put("serverid", plugin.getClanDiscordServerID(config.serverId()));
         json.put("currentname", plugin.getLocalPlayerName());
 
-        // Create a RequestBody containing your JSON data
         RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json.toString());
 
-        // Create a new Request
         Request request = new Request.Builder()
                 .url("http://api.droptracker.io/api/drops")
                 .post(body)
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
 
-        // Make the request
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
@@ -237,7 +308,22 @@ public class DropTrackerApi {
 
                 String status = jsonResponse.optString("status", "");
                 String message = jsonResponse.optString("message", "");
+                String newTotal = jsonResponse.optString("new_total","");
+                double newTotalDouble = Double.parseDouble(newTotal);
+                String formattedTotal = formatNumber(newTotalDouble);
+                fetchCurrentTask(playerName, String.valueOf(plugin.getClanDiscordServerID(config.serverId())));
+                if (currentTask != null) {
+                    System.out.println("Current task for team: " + currentTask.optString("task", ""));
+                    String niceNameTask = currentTask.optString("task", "");
+                    System.out.println(niceNameTask);
+                    System.out.println(itemName);
+                    if(itemName.equals(niceNameTask)) {
+                        System.out.println("Player has completed their task (or part) of it!!!");
+                    }
+                } else {
+                    System.out.println("[API] Current task for team is null.");
 
+                }
                 if ("OK".equals(status)) {
                     if ("Success".equals(message)) {
                         if (value < plugin.getServerMinimumLoot(config.serverId())) {
@@ -247,23 +333,41 @@ public class DropTrackerApi {
                         messageString.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
                                 .append("DropTracker")
                                 .append(ChatColorType.NORMAL)
-                                .append("]")
-                                .append(ChatColorType.HIGHLIGHT)
-                                .append(itemName)
+                                .append("] ")
                                 .append(ChatColorType.NORMAL)
-                                .append(" has successfully been submitted to the database.");
+                                .append(" Drop submitted. Your new total: ")
+                                .append(ChatColorType.HIGHLIGHT)
+                                .append(formattedTotal);
                         sendChatMessage(new ChatMessage(), messageString);
-                    } else {
-                        System.out.println("Drop was submitted, value didn't qualify for notification.");
                     }
-                } else {
-                    System.out.println("Received an OK response but the status is not OK.");
                 }
-            } else {
-                System.out.println("Received an unsuccessful HTTP response.");
             }
         }
     }
+    /** GETTER METHODS ***/
+    public Map<String, String> getServerIdToClanNameMap() {
+        return serverIdToClanNameMap;
+    }
 
-    // Add more methods to interact with other API endpoints
+    public Map<String, Integer> getServerMinimumLootVarMap() {
+        return serverMinimumLootVarMap;
+    }
+    public Map<String, Boolean> getServerIdToConfirmedOnlyMap() {
+        return serverIdToConfirmedOnlyMap;
+    }
+
+    public Map<String, Long> getClanServerDiscordIDMap() {
+        return clanServerDiscordIDMap;
+    }
+
+    public Map<String, Integer> getClanWiseOldManGroupIDMap() {
+        return clanWiseOldManGroupIDMap;
+    }
+
+    public Map<String, Boolean> getClanEventActiveMap() {
+        return clanEventActiveMap;
+    }
+
+
+
 }
