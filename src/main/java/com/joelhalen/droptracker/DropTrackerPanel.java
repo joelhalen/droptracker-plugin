@@ -28,6 +28,7 @@ package com.joelhalen.droptracker;
 import com.joelhalen.droptracker.ui.MembersComboBox;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.ItemComposition;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -37,6 +38,7 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
 import okhttp3.OkHttpClient;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +85,11 @@ public class DropTrackerPanel extends PluginPanel
     private JTable table = new JTable();
     private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
     private final List<DropEntry> entries = new ArrayList<>();
-    private final JPanel dropsPanel;
+    private JPanel cardPanel;
+    private JPanel dropsPanel = new JPanel();
+    private JPanel leaderboardPanel = new JPanel();
+    private JPanel eventPanel = new JPanel();
+    private CardLayout cardLayout;
     public String localAuthKey = null;
     public String localPlayerName = null;
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
@@ -94,8 +100,62 @@ public class DropTrackerPanel extends PluginPanel
         this.config = config;
         this.itemManager = itemManager;
         this.api = new DropTrackerApi(new OkHttpClient(),plugin,config);
+        createDropsPanel();
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        // Step 1: Create CardLayout and Panel
+        cardLayout = new CardLayout();
+        cardPanel = new JPanel(cardLayout);
+
+        // Create Drops Panel and add to Card Panel
+        cardPanel.add(dropsPanel, "DropTracker");
+
+        // Create Navigation Bar
+        JPanel navPanel = new JPanel(new FlowLayout());
+        JButton dropsButton = new JButton("DropTracker");
+        // Add more buttons for other panels here
+        navPanel.add(dropsButton);
+
+        // Attach event listeners to buttons
+        dropsButton.addActionListener(e -> cardLayout.show(cardPanel, "DropTracker"));
+        // Add Navigation and CardPanel to Main Panel
+        add(navPanel, BorderLayout.NORTH);
+        add(cardPanel, BorderLayout.CENTER);  // This line is important
+    }
+
+    private JPanel createItemEntryPanel(String itemName, String playerName, String timeAgo, ImageIcon itemImage) {
+        // Outer panel
+        JPanel itemPanel = new JPanel(new BorderLayout());
+        itemPanel.setBackground(new Color(40, 40, 40)); // Dark background
+        itemPanel.setBorder(BorderFactory.createLineBorder(Color.gray, 1)); // Thin border
+
+        // Image
+        JLabel imageLabel = new JLabel(itemImage);
+        imageLabel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Padding around image
+        itemPanel.add(imageLabel, BorderLayout.WEST);
+
+        // Inner panel for text
+        JPanel textPanel = new JPanel(new GridLayout(3, 1)); // 3 rows, 1 column
+        textPanel.setOpaque(false); // Make it transparent to inherit parent's background
+
+        // Item name, player name, and time
+        JLabel nameLabel = new JLabel(itemName);
+        JLabel playerLabel = new JLabel("Received by: " + playerName);
+        JLabel timeLabel = new JLabel(timeAgo + " ago");
+
+        // Adding labels to the inner text panel
+        textPanel.add(nameLabel);
+        textPanel.add(playerLabel);
+        textPanel.add(timeLabel);
+
+        // Adding the text panel to the right of the image
+        itemPanel.add(textPanel, BorderLayout.CENTER);
+
+        return itemPanel;
+    }
+
+    private void createDropsPanel() {
 
         // Panel for drops
         dropsPanel = new JPanel();
@@ -125,6 +185,7 @@ public class DropTrackerPanel extends PluginPanel
         JLabel descText;
         String playerName = plugin.getLocalPlayerName();
         // If the server ID is empty OR the player has not entered an authentication key:
+        boolean isKeyValid = api.isAuthKeyValid();
         if(config.serverId().equals("") || !config.authKey().equals("")) {
             descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
                     "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
@@ -133,9 +194,6 @@ public class DropTrackerPanel extends PluginPanel
             // If they entered a server ID, check if the auth key is empty
             // We also handle if the auth key does not match the expected value here.
             if(localAuthKey != null && localPlayerName == plugin.getLocalPlayerName()) {
-                // do nothing if they have a localAuthKey stored with the correct playername
-            //if they have entered nothing for their auth token
-                //todo: insert a message if their account was not found?
             } else if (config.authKey().equals("")) {
                 descText = new JLabel("<html>You have not entered an <br>" +
                         "authentication token into the DropTracker config.<br>" +
@@ -146,8 +204,8 @@ public class DropTrackerPanel extends PluginPanel
                 descTextBox.add(descText);
                 descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
                 dropsPanel.add(descTextBox);
-            //invalid authentication token entered
-            } else if (config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
+                //invalid authentication token entered
+            } else if (!isKeyValid) {
                 descText = new JLabel("<html>The authentication token you entered is invalid.<br><br>" +
                         "If you play multiple accounts, and your token is for another account, you can configure a username in the plugin settings.<br><br>" +
                         "<br>Otherwise, you should have been DMed a token when you first started the plugin.<br><br>" +
@@ -412,31 +470,6 @@ public class DropTrackerPanel extends PluginPanel
     public void shutdownExecutorService() {
         executorService.shutdown();
     }
-    public String checkAuthKey(String playerName, String serverId, String authKey) {
-        Long discordServerId = plugin.getClanDiscordServerID(serverId);
-        try {
-            URL url = new URL("http://data.droptracker.io/data/uuid.php");
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            connection.setDoOutput(true);
-
-            String message = String.format("player_name=%s&server_id=%s&auth_key=%s", playerName, discordServerId, authKey);
-            connection.getOutputStream().write(message.getBytes("UTF-8"));
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String response = reader.readLine();
-            reader.close();
-            connection.disconnect();
-            if(response.equals("<br />")) {
-                response = "yes";
-            }
-            return response;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
 
     void refreshPanel() {
         SwingUtilities.invokeLater(() -> {
@@ -447,6 +480,16 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
             AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
+            String serverIdString = String.valueOf(plugin.getClanDiscordServerID(config.serverId()));
+            try {
+                api.fetchLootStatistics(playerName,serverIdString,config.authKey());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
 
             //if they have a playerName assigned:
             if (playerName != null) {
@@ -479,24 +522,9 @@ public class DropTrackerPanel extends PluginPanel
                                 playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
                                 newServerLoot.set(api.getMonthlyTotalServer());
                                 formattedServerTotalRef.set(formatNumber(Double.parseDouble(newServerLoot.toString())));
-                            } else {
-                                String serverIdString = String.valueOf(plugin.getClanDiscordServerID(config.serverId()));
-                                try {
-                                    api.fetchLootStatistics(playerName,serverIdString,config.authKey());
-                                    newPlayerLoot.set(api.getMonthlyTotalPlayer());
-                                    newServerLoot.set(api.getMonthlyTotalServer());
-                                    playerLoot.set(formatNumber(Double.parseDouble(newPlayerLoot.toString())));
-                                    formattedServerTotalRef.set(formatNumber(Double.parseDouble(newServerLoot.toString())));
-                                } catch (IOException e) {
-                                    throw new RuntimeException(e);
-                                } catch (ExecutionException e) {
-                                    throw new RuntimeException(e);
-                                } catch (InterruptedException e) {
-                                    throw new RuntimeException(e);
-                                }
+                                // Now call updateTable to refresh the UI
+                                updateTable(playerLoot.get(), formattedServerTotalRef.get());
                             }
-                            // Update table or UI with new playerLoot
-                            updateTable(playerLoot.get(), formattedServerTotalRef.get());
                         });
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -660,10 +688,8 @@ public class DropTrackerPanel extends PluginPanel
                 Border innerBorder = new EmptyBorder(0, 0, 10, 0);
                 CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
                 entryPanel.setBorder(compoundBorder);
-                // Place the item, value, and loot inside an object together
                 JPanel itemContainer = new JPanel();
                 itemContainer.add(imageLabel);
-                // Change the alignment of objects inside the itemContainer
                 imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 itemContainer.add(itemTextLabel);
@@ -676,6 +702,7 @@ public class DropTrackerPanel extends PluginPanel
             }
             dropsPanel.revalidate();
             dropsPanel.repaint();
+
         });
     }
 

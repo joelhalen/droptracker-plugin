@@ -54,7 +54,6 @@ public class DropTrackerOverlay extends OverlayPanel
 
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastApiCallTime > 10000) {
-            System.out.println("API Call...");
             lastApiCallTime = currentTime;
             executorService.submit(() -> {
                 try {

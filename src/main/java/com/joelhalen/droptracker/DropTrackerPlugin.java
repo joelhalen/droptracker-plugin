@@ -96,6 +96,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import com.joelhalen.droptracker.api.exp;
@@ -183,46 +184,29 @@ public class DropTrackerPlugin extends Plugin {
 		} else {
 			playerName = config.permPlayerName();
 		}
+		System.out.println("NPCLootReceived Event");
+		AtomicBoolean screenshotTaken = new AtomicBoolean(false);
 		Collection<ItemStack> items = npcLootReceived.getItems();
+		System.out.println("Items size: " + items.size());
+		System.out.println("Items: " + items.toString());
 		for (ItemStack item : items) {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
 			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+			String itemName = itemManager.getItemComposition(itemId).getName();
+			System.out.println("Item name entering the function: " + itemName);
 			if(geValue == 0 && haValue == 0) {
+				System.out.println("No value, not saving...");
 				return;
 			}
-			ItemComposition itemComp = itemManager.getItemComposition(itemId);
-			String itemName = itemComp.getName();
-			boolean ignoreDrops = config.ignoreDrops();
 			SwingUtilities.invokeLater(() -> {
 				canBeSent(geValue).thenAccept(shouldSend -> {
+					System.out.println("Inside SwingUtilities");
 					String serverId = config.serverId();
 					Integer clanMinimumLoot = dropTrackerApi.getServerMinimumLootVarMap().get(serverId);
 					if (shouldSend) {
-						if (geValue < clanMinimumLoot) {
-							if (dropTrackerApi.getServerIdToConfirmedOnlyMap().get(serverId) != true) {
-								JSONObject currentTask = dropTrackerApi.getCurrentTask();
-								if (currentTask != null) {
-									String niceNameTask = currentTask.optString("task", "");
-									if(itemName.equals(niceNameTask)) {
-									}
-								} else {
-
-								}
-								String memberList = "";
-								String imageUrl = null;
-								Integer nonMembers = 0;
-								totalDrops++;
-								String authKey = config.authKey();
-								try {
-									dropTrackerApi.sendDropToApi(playerName, npcName, npcCombatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
-								} catch (IOException e) {
-									throw new RuntimeException(e);
-								}
-							}
-						} else {
 							/* Drops entering this else are > clan's defined min. value */
 							if (quantity > 1) {
 								return;
@@ -258,7 +242,8 @@ public class DropTrackerPlugin extends Plugin {
 							entry.setItemName(itemName);
 							entry.setItemId(itemId);
 							entry.setQuantity(quantity);
-							if (config.sendScreenshots()) {
+							if (!screenshotTaken.get() && config.sendScreenshots()) {
+								screenshotTaken.set(true);
 								getScreenshot(playerName, itemId).thenAccept(imageUrl -> {
 									SwingUtilities.invokeLater(() -> {
 										entry.setImageLink(imageUrl);
@@ -268,6 +253,15 @@ public class DropTrackerPlugin extends Plugin {
 								entry.setImageLink("none");
 							}
 							panel.addDrop(entry);
+					} else if (geValue < clanMinimumLoot) {
+						Boolean isEventRunning = dropTrackerApi.getClanEventActiveMap().get(serverId);
+						System.out.println("event running? " + isEventRunning);
+						if (isEventRunning == true) {
+							String memberList = "";
+							String imageUrl = null;
+							Integer nonMembers = 0;
+							String authKey = config.authKey();
+							dropTrackerApi.sendDropToApi(playerName, npcName, npcCombatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
 						}
 					}
 				});
@@ -290,7 +284,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
-	/* Handles excluding temporary worlds like deadman/etc from exp tracking events */
+	/* Handles excluding temporary worlds like deadman/etc. from exp tracking events */
 	private boolean isTracking() {
 			return !isFakeWorld() && !config.authKey().isEmpty();
 	}
@@ -363,7 +357,6 @@ public class DropTrackerPlugin extends Plugin {
 			}
 			ItemComposition itemComp = itemManager.getItemComposition(itemId);
 			String itemName = itemComp.getName();
-			boolean ignoreDrops = config.ignoreDrops();
 			SwingUtilities.invokeLater(() -> {
 				canBeSent(geValue).thenAccept(shouldSend -> {
 					String serverId = config.serverId();
@@ -384,18 +377,13 @@ public class DropTrackerPlugin extends Plugin {
 									}
 								}
 								String memberList = "";
-								String imageUrl = null;
+								String imageUrl = "";
 								Integer nonMembers = 0;
 								String npcName = lootReceived.getName();
 								Integer combatLevel = lootReceived.getCombatLevel();
 								Integer npcCombatLevel = 0;
 								String authKey = config.authKey();
-								try {
-									dropTrackerApi.sendDropToApi(playerName, npcName, combatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
-
-								} catch (IOException e) {
-									throw new RuntimeException(e);
-								}
+								dropTrackerApi.sendDropToApi(playerName, npcName, combatLevel, itemId, itemName, memberList, quantity, geValue, nonMembers, authKey, imageUrl);
 							}
 						} else {
 							if (quantity > 1) {
@@ -534,19 +522,24 @@ public class DropTrackerPlugin extends Plugin {
 						} else if (config.authKey().equals("")) {
 							//TODO: Message the user that their auth key has been left empty
 						} else {
-							//If we enter this else statement, the serverId is configured, and an auth key is entered.
-							//Now, we can check authentication and render the dropPanel.
+							if (dropTrackerApi != null) {
+								dropTrackerApi.startAuthCheck();
+							} else {
+								System.out.println("dropTrackerApi is null");
+							}
 							prepared = true;
 						}
 					case LOGIN_SCREEN:
+						prepared=false;
 					case LOGIN_SCREEN_AUTHENTICATOR:
 					case LOGGING_IN:
 					case LOADING:
 					case CONNECTION_LOST:
 					case HOPPING:
-						prepared = false;
+						prepared=false;
 						return false;
 					default:
+						prepared=false;
 						return false;
 				}
 			});
@@ -641,13 +634,15 @@ public class DropTrackerPlugin extends Plugin {
 	private CompletableFuture<Boolean> canBeSent(int geValue) {
 		String serverId = config.serverId();
 		int minimumClanValue = dropTrackerApi.getServerMinimumLootVarMap().get(serverId);
-		boolean ignoreDrops = config.ignoreDrops();
+		boolean ignoreDrops = isTracking();
 		if (!ignoreDrops) {
 			if (geValue > minimumClanValue) {
+				System.out.println("Item is over clan minimum value");
 				return CompletableFuture.completedFuture(true);
 			} else if(dropTrackerApi.getServerIdToConfirmedOnlyMap().get(serverId) != true) {
 				return CompletableFuture.completedFuture(true);
 			} else {
+				System.out.println("Item is under clan minimum value (" + geValue + "/" + minimumClanValue);
 				return CompletableFuture.completedFuture(false);
 			}
 		} else return CompletableFuture.completedFuture(false);

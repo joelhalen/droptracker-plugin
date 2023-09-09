@@ -51,16 +51,6 @@ public interface DropTrackerPluginConfig extends Config
 
 		default String authKey() { return ""; }
 		@ConfigItem(
-				keyName = "ignoreDrops",
-				name = "Ignore Drops",
-				description = "Toggle sending your drops to the tracker entirely"
-		)
-
-		default boolean ignoreDrops()
-		{
-			return false;
-		}
-		@ConfigItem(
 				keyName = "permPlayerName",
 				name = "Permanent player name",
 				description = "If you play multiple accounts, you can enter the RSN you use on the DropTracker here to avoid issues!"

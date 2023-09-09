@@ -14,12 +14,16 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import javax.inject.Inject;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 public class DropTrackerApi {
 
@@ -35,7 +39,10 @@ public class DropTrackerApi {
     private Map<String, Long> clanServerDiscordIDMap;
     private Map<String, String> serverIdToClanNameMap;
     private Map<String, Boolean> serverIdToConfirmedOnlyMap;
+    private boolean isCheckingAuthKey = false;
     public Map<String, Integer> clanWiseOldManGroupIDMap;
+    private boolean isAuthKeyValid;
+    public CompletableFuture<Boolean> lastAuthCheckFuture;
     private Boolean hasSentMOTD = false;
     public Map<String, Boolean> clanEventActiveMap;
     public Long monthlyTotalServer;
@@ -44,7 +51,9 @@ public class DropTrackerApi {
     private volatile String teamName;
     private volatile JSONObject currentTask;
     private CompletableFuture<Void> initializer;
+    private Boolean currentCompletionNotificationSent = false;
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     @Inject
     public DropTrackerApi(OkHttpClient httpClient, DropTrackerPlugin plugin, DropTrackerPluginConfig config) {
@@ -130,7 +139,7 @@ public class DropTrackerApi {
                                 jsonObject.getInt("eventActive") != 0
                         );
                     }
-                    if(hasSentMOTD == false && serverIdToClanNameMap.containsKey(config.serverId())) {
+                    if(hasSentMOTD == false) {
                         ChatMessageBuilder messageString = new ChatMessageBuilder();
                         messageString.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
                                 .append(serverIdToClanNameMap.get(config.serverId()))
@@ -138,8 +147,9 @@ public class DropTrackerApi {
                                 .append("] ")
                                 .append(motd);
                         sendChatMessage(new ChatMessage(), messageString);
+                        this.hasSentMOTD = true;
                     }
-                } else{
+                } else {
                 }
 
             } catch(JSONException e){
@@ -147,7 +157,7 @@ public class DropTrackerApi {
             } catch(IOException e){
                 e.printStackTrace();
             }
-        });
+        }, executorService);
     }
     public void sendXP(exp expData) {
         initializer.thenRun(() -> {
@@ -200,7 +210,13 @@ public class DropTrackerApi {
         return this.currentTask;
     }
     public JSONObject fetchLootStatistics(String playerName, String serverId, String authKey) throws IOException, ExecutionException, InterruptedException {
+
         initializer.get();
+
+        if(!this.isAuthKeyValid) {
+
+            startAuthCheck();
+        }
         HttpUrl url = new HttpUrl.Builder()
                 .scheme("http")
                 .host("api.droptracker.io")
@@ -213,7 +229,6 @@ public class DropTrackerApi {
                 .get()
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
-
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
@@ -226,6 +241,99 @@ public class DropTrackerApi {
             }
         }
     }
+    public void startAuthCheck() {
+        initializer.thenRun(() -> {
+            if (isCheckingAuthKey) {
+
+                return;
+            }
+            if(isAuthKeyValid) {
+
+                this.isAuthKeyValid = true;
+                return;
+            }
+            isCheckingAuthKey = true;
+
+            // Use a dedicated thread for slow operations
+            CompletableFuture<Boolean> future = CompletableFuture.supplyAsync(() -> checkAuthKey(), executorService);
+
+            future.thenAccept(valid -> {
+                this.isAuthKeyValid = valid;
+                isCheckingAuthKey = false; // reset the flag
+            }).exceptionally(e -> {
+                e.printStackTrace();
+                isCheckingAuthKey = false; // reset the flag
+                return null;
+            });
+        });
+    }
+    public boolean checkAuthKey() {
+        String playerName = plugin.getLocalPlayerName();
+        String finalPlayerName = "";
+        if (!config.permPlayerName().equals("")) {
+            finalPlayerName = config.permPlayerName();
+        } else {
+            finalPlayerName = playerName;
+        }
+        String serverId = config.serverId();
+        Long discordServerId = clanServerDiscordIDMap.get(config.serverId());
+        String authKey = config.authKey();
+
+        if (isAuthKeyValid) {
+            return true;
+        }
+
+        if (serverId.equals("") || authKey.equals("") || finalPlayerName.equals("")) {
+
+            return false;
+        }
+
+        if (playerName != null && !discordServerId.equals("")) {
+            try {
+                String encodedServerId = URLEncoder.encode(String.valueOf(discordServerId), "UTF-8");
+                String encodedFinalPlayerName = URLEncoder.encode(finalPlayerName, "UTF-8");
+                String encodedAuthKey = URLEncoder.encode(authKey, "UTF-8");
+                String apiUrl = "http://api.droptracker.io/api/verify_token?server_id=" + encodedServerId + "&player_name=" + encodedFinalPlayerName + "&auth_key=" + encodedAuthKey;
+                URL url = new URL(apiUrl);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                int responseCode = conn.getResponseCode();
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String inputLine;
+                StringBuffer response = new StringBuffer();
+
+                while ((inputLine = in.readLine()) != null) {
+                    response.append(inputLine);
+                }
+                in.close();
+                JSONObject jsonResponse = new JSONObject(response.toString());
+                String status = jsonResponse.getString("status");
+
+                if (status.equals("OK")) {
+
+                    this.isAuthKeyValid = true;
+                    return true;
+                } else {
+
+                    return false;
+                }
+
+            } catch (Exception e) {
+                // Handle exceptions
+                e.printStackTrace();
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    public boolean isAuthKeyValid() {
+        return isAuthKeyValid;
+    }
+    public void shutdownExecutorService() {
+        executorService.shutdown();
+    }
     public void fetchCurrentTask(String playerName, String authKey) throws IOException {
 
         JSONObject json = new JSONObject();
@@ -237,7 +345,7 @@ public class DropTrackerApi {
         RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json.toString());
 
         Request request = new Request.Builder()
-                .url("http://www.droptracker.io/api/events/get_task")
+                .url("http://api.droptracker.io/api/events/get_task")
                 .post(body)
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
@@ -251,34 +359,58 @@ public class DropTrackerApi {
                 JSONObject task = jsonResponse.optJSONObject("task");
 
                 if ("OK".equals(status)) {
-                    System.out.println("Raw output: " + responseBody);
                     this.teamName = jsonResponse.optString("teamname", "");
-                    System.out.println("Team name set: " + teamName);
                     this.currentTask = new JSONObject(responseBody);
+                    if (!currentCompletionNotificationSent) {
 
-//                    if (task != null) {
-//                        System.out.println("Task object: " + task.toString());
-//
-//                        // Initialize and populate currentTask
-//                        this.currentTask = new JSONObject();
-//                        this.currentTask.put("task", task.optString("task"));
-//                        this.currentTask.put("per", task.optBoolean("per"));
-//                        this.currentTask.put("quantity", task.optInt("current_progress"));
-//                        this.currentTask.put("required_amount", task.optInt("required_quantity"));
-//
-//                        System.out.println("Debug fetchCurrentTask: TeamName - " + this.teamName);
-//                        System.out.println("Debug fetchCurrentTask: CurrentTask - " + this.currentTask.toString());
-//                    }
+                    }
+                    Integer currentProg = this.currentTask.optInt("current_progress", 1);
+                    Integer requiredAmount = this.currentTask.optInt("required_quantity", 1);
+                    Integer currentPoints = this.currentTask.optInt("team_points",0);
+                    if (currentProg >= requiredAmount) {
+                        if (!currentCompletionNotificationSent) {
+                            ChatMessageBuilder messageString = new ChatMessageBuilder();
+                            messageString.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                                    .append(serverIdToClanNameMap.get(config.serverId()))
+                                    .append(ChatColorType.NORMAL)
+                                    .append("] Your current task has been completed! Current points:")
+                                    .append(String.valueOf(currentPoints));
+                            sendChatMessage(new ChatMessage(), messageString);
+                            currentCompletionNotificationSent = true;
+                        }
+                    }
                 }
             }
         }
     }
 
-    public void sendDropToApi(String playerName, String npcName, int npcLevel, int itemId, String itemName,
-                               String memberList, int quantity, int value, int nonMembers, String authKey, String imageUrl)
-            throws IOException {
+    public CompletableFuture<JSONArray> fetchRecentDrops(int minValue) {
+        return CompletableFuture.supplyAsync(() -> {
+            String url = "http://api.droptracker.io/api/drops/recent?value=" + minValue + "&amt=5&id=true";
+            System.out.println("URL: " + url);
+            Request request = new Request.Builder()
+                    .url(url)
+                    .build();
 
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful()) {
+                    String jsonStr = response.body().string();
+                    JSONObject jsonResponse = new JSONObject(jsonStr);
+                    return jsonResponse.getJSONArray("drops");
+                } else {
+                    return null;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }, executorService);
+    }
+    public void sendDropToApi(String playerName, String npcName, int npcLevel, int itemId, String itemName,
+                               String memberList, int quantity, int value, int nonMembers, String authKey, String imageUrl) {
+        executorService.submit(() -> {
         JSONObject json = new JSONObject();
+        System.out.println("Sending a drop with item ID " + itemId + "to the API");
         json.put("playerName", playerName);
         json.put("npcName", npcName);
         json.put("npcLevel", npcLevel);
@@ -286,21 +418,18 @@ public class DropTrackerApi {
         json.put("itemName", itemName);
         json.put("memberList", memberList);
         json.put("quantity", quantity);
-        json.put("value", value);
+        json.put("value", value * quantity);
         json.put("nonMembers", nonMembers);
         json.put("apiKey", authKey);
         json.put("imageUrl", imageUrl);
         json.put("serverid", plugin.getClanDiscordServerID(config.serverId()));
         json.put("currentname", plugin.getLocalPlayerName());
-
         RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json.toString());
-
         Request request = new Request.Builder()
                 .url("http://api.droptracker.io/api/drops")
                 .post(body)
                 .addHeader("Authorization", "Bearer " + authKey)
                 .build();
-
         try (Response response = httpClient.newCall(request).execute()) {
             if (response.isSuccessful()) {
                 String responseBody = response.body().string();
@@ -308,7 +437,7 @@ public class DropTrackerApi {
 
                 String status = jsonResponse.optString("status", "");
                 String message = jsonResponse.optString("message", "");
-                String newTotal = jsonResponse.optString("new_total","");
+                String newTotal = jsonResponse.optString("new_total", "");
                 double newTotalDouble = Double.parseDouble(newTotal);
                 String formattedTotal = formatNumber(newTotalDouble);
                 fetchCurrentTask(playerName, String.valueOf(plugin.getClanDiscordServerID(config.serverId())));
@@ -317,8 +446,10 @@ public class DropTrackerApi {
                     String niceNameTask = currentTask.optString("task", "");
                     System.out.println(niceNameTask);
                     System.out.println(itemName);
-                    if(itemName.equals(niceNameTask)) {
+                    if (itemName.equals(niceNameTask)) {
                         System.out.println("Player has completed their task (or part) of it!!!");
+                    } else {
+                        System.out.println("False!");
                     }
                 } else {
                     System.out.println("[API] Current task for team is null.");
@@ -342,7 +473,10 @@ public class DropTrackerApi {
                     }
                 }
             }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+    });
     }
     /** GETTER METHODS ***/
     public Map<String, String> getServerIdToClanNameMap() {
