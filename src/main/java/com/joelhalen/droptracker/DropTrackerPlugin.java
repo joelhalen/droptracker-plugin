@@ -253,7 +253,7 @@ public class DropTrackerPlugin extends Plugin {
 								entry.setImageLink("none");
 							}
 							panel.addDrop(entry);
-					} else if (geValue < clanMinimumLoot) {
+					} else {
 						Boolean isEventRunning = dropTrackerApi.getClanEventActiveMap().get(serverId);
 						System.out.println("event running? " + isEventRunning);
 						if (isEventRunning == true) {
