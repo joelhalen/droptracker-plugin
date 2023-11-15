@@ -2,7 +2,6 @@ package com.joelhalen.droptracker.ui;
 
 import com.joelhalen.droptracker.DropTrackerPlugin;
 import com.joelhalen.droptracker.DropTrackerPluginConfig;
-import com.joelhalen.droptracker.WiseOldManClient;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -10,7 +9,6 @@ import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

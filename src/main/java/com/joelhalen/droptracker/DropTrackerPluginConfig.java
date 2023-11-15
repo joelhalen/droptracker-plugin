@@ -34,8 +34,8 @@ public interface DropTrackerPluginConfig extends Config
 {
 		@ConfigItem(
 				keyName = "server_id",
-				name = "DropTracker Group ID",
-				description = "Input your clan's DropTracker ServerID. Ask a staff member if you're unsure."
+				name = "Discord Server ID",
+				description = "Insert your clan's discord server ID."
 		)
 		default String serverId()
 		{
@@ -46,14 +46,14 @@ public interface DropTrackerPluginConfig extends Config
 				keyName = "authKey",
 				name = "Verification Key",
 				secret = true,
-				description = "<html>DO NOT SHARE THIS TOKEN!<br>If you do not have one yet, enter a valid serverID and refresh the DropPanel!</html>"
+				description = "<html>DO NOT SHARE THIS TOKEN!<br>Use <b>/gettoken</b> in discord to retrieve it once registered.</html>"
 		)
 
 		default String authKey() { return ""; }
 		@ConfigItem(
 				keyName = "ignoreDrops",
 				name = "Ignore Drops",
-				description = "Toggle sending your drops to the tracker entirely"
+				description = "Checked = send your drops. Unchecked = ignore all drops."
 		)
 
 		default boolean ignoreDrops()
@@ -63,19 +63,19 @@ public interface DropTrackerPluginConfig extends Config
 		@ConfigItem(
 				keyName = "permPlayerName",
 				name = "Permanent player name",
-				description = "If you play multiple accounts, you can enter the RSN you use on the DropTracker here to avoid issues!"
+				description = "If you play on many accounts, you can submit all of your drops under this name."
 		)
 		default String permPlayerName() { return ""; }
 		@ConfigItem(
 				keyName = "sendChatMessages",
 				name = "Send Chat Messages?",
-				description = "Would you like to receive messages in your chatbox when drops are added to the panel/uploaded?"
+				description = "Would you like to receive various chat messages when drops are<br>received/added to your panel?"
 		)
 		default boolean sendChatMessages() { return true; }
 		@ConfigItem(
 				keyName = "sendScreenshots",
 				name = "[Beta] Send Screenshots",
-				description = "<html> Should we send a screenshot to the database along with your drop?<br><b>WARNING<b>: <em>May cause slight frame latency</em></html>"
+				description = "<html> Should we send a screenshot to the database along with your drop?<br><b>WARNING<b>: All uploads are PUBLICLY ACCESSIBLE!</html>"
 		)
 		default boolean sendScreenshots()
 		{
