@@ -1,31 +1,26 @@
+# DropTracker
 
-The DropTracker RuneLite plugin is intended to be used in sync with the Discord bot, and by players in servers who have a loot leaderboard set up.
-
-The plugin uses Discord webhooks alongside PHP requests to deliver a complete solution for clan events, clan-wide loot tracking metrics (coming soon), etc.
+This plugin is intended to be used in tandem with the DropTracker discord bot to maintain loot leaderboards and drop metrics for members of your clan.
+There is also planned functionality for fully-automated events based off of the Discord bot/RuneLite plugin.
 
 **Features**:
-Automatic generation of verification keys for each user if they exist in your server:
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/cfced6b0-5033-48b1-9f0f-9eeb63694b35)
+> Real-time monthly loot tallies for players and for your clan:
+![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/ed087120-2636-4bd6-89e7-8140ee834f74)
+> Loot Leaderboards inside of your Discord server to show the "top looters":
+![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/cd6f71d2-e612-4c4d-9956-b4778d5736c3)
+> A website with an Administration Panel for clan owners to modify their servers, enable events, view drop metrics, etc.
+![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/a6195671-b51e-47d5-8b5e-cf272efd6c99)
 
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/a7ed9529-58b3-4b84-b793-ce5648782c9a)
+Authentication keys that are unique to each player, to prevent users from submitting bogus drops for your events/leaderboard:
+![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/66212907-2a7c-4c61-aa56-7c5b5d1bbbec)
 
-
-_This means that drops with an non-matching verification key, or from a user not registered, will be **completely ignored** by the clan's Loot Leaderboard!_
 
 
 Automated tracking of all drops received:
 
 ![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/7dea5f8c-27d2-4c85-8a74-575fb168cf9b)
 
-Automatic split tracking, with a list of clan members populated via clan WiseOldMan groups:
+Automatic calculation of drop values based on split sizes (configurable). Players can submit drops with other clan members receiving the split as credit towards their total loot that month.
 
-https://cdn.discordapp.com/attachments/691682908997681212/1117757640844521472/image.png
-
-Completely automated _Random Item Hunts_, which allow random items to be assigned as tasks for players to obtain, with optional rewards provided:
-
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/bd28c64f-d39d-4998-92a8-93c78c157f18)
-
-
-
-This can easily be used as for bingo, etc, with the verification keys used as a way of confirmation. The discord bot which receives and handles these webhooks can automatically complete tasks based on what the player achieved.
-
+And much more coming soon! Stay tuned! :)
+http://www.droptracker.io/
