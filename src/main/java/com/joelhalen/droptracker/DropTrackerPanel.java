@@ -122,11 +122,13 @@ public class DropTrackerPanel extends PluginPanel
         dropsPanel.add(topPanel, BorderLayout.NORTH);
         dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
         JLabel descText;
-        String playerName = plugin.getLocalPlayerName();
+        String playerName = getPlayerName();
         // If the server ID is empty OR the player has not entered an authentication key:
         if(config.serverId().equals("") || !config.authKey().equals("")) {
-            descText = new JLabel("<html>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
-                    "your server must be added<br> to our database. Contact a<br>member of your clan's<br> staff team to get set up!</html>");
+            descText = new JLabel("<html><center><h1>Welcome to the DropTracker!</h1><br>" +
+                    "<span>It appears that you do not have a server ID configured or that your auth token has been left blank.<br></span>" +
+                    "<span>This plugin requires registration and valid authentication!<br>Use your clan's Discord Server ID!</span>" +
+                    "<br />Try using /gettoken inside the discord server to retrieve your token if it's been lost.</html>");
             dropsPanel.add(descText);
         } else {
             // If they entered a server ID, check if the auth key is empty
@@ -136,10 +138,9 @@ public class DropTrackerPanel extends PluginPanel
             //if they have entered nothing for their auth token
                 //todo: insert a message if their account was not found?
             } else if (config.authKey().equals("")) {
-                descText = new JLabel("<html>You have not entered an <br>" +
-                        "authentication token into the DropTracker config.<br>" +
-                        "<br>You should have been DMed one by @DropTracker#4420<br><br>" +
-                        "If not, send the discord bot a DM<br>Saying: `auth`</html>");
+                descText = new JLabel("<html>You do not have an authentication token in your plugin configuration!<br>" +
+                        "This should have been provided to you when you registered in the Discord.<br>" +
+                        "If you've lost it, visit www.droptracker.io to request a reset.</html>");
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box descTextBox = Box.createHorizontalBox();
                 descTextBox.add(descText);
@@ -147,10 +148,10 @@ public class DropTrackerPanel extends PluginPanel
                 dropsPanel.add(descTextBox);
             //invalid authentication token entered
             } else if (config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
-                descText = new JLabel("<html>The authentication token you entered is invalid.<br><br>" +
-                        "If you play multiple accounts, and your token is for another account, you can configure a username in the plugin settings.<br><br>" +
-                        "<br>Otherwise, you should have been DMed a token when you first started the plugin.<br><br>" +
-                        "If not, type <em>`/myauth`</em> in your clan's discord server!</html>");
+                descText = new JLabel("<html><center>The authentication token you entered is invalid.<br><br>" +
+                        "If you play multiple accounts, ensure that the account you registered with is entered" +
+                        " into the <b>Permanent Player Name</b> config option.<br><br>" +
+                        "If you've lost your authentication token, use /gettoken inside Discord.</center></html>");
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box descTextBox = Box.createHorizontalBox();
                 descTextBox.add(descText);
@@ -216,28 +217,20 @@ public class DropTrackerPanel extends PluginPanel
                         return c;
                     }
                 });
-                JLabel authText = new JLabel("<html><em>Authenticated</em><br><br></html>");
-                Box authTextBox = Box.createHorizontalBox();
-                authTextBox.add(authText);
-                authTextBox.add(Box.createHorizontalGlue());
-                dropsPanel.add(authTextBox);
                 dropsPanel.add(table);
-                descText = new JLabel("<html>To submit a drop, enter " +
-                        "any <em>clan<br>members</em> who were " +
-                        "with you <b>on their <br>own line</b>" +
-                        " in the text field.<br>" +
-                        "Then, select how many " +
-                        "<em>non-members</em> were involved" +
-                        " in the drop.<br><br>" +
-                        "<br>Once you press submit, your<br>" +
-                        "drop will automatically be sent!" +
-                        "</html>");
-                // to place the text in the correct location
-                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                Box descTextBox = Box.createHorizontalBox();
-                descTextBox.add(descText);
-                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
-                dropsPanel.add(descTextBox);
+                if (config.showHelpText()) {
+                    descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
+                            "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
+                            "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
+                            "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
+                            "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
+                    // to place the text in the correct location
+                    descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    Box descTextBox = Box.createHorizontalBox();
+                    descTextBox.add(descText);
+                    descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                    dropsPanel.add(descTextBox);
+                }
             }
         }
 
@@ -456,22 +449,6 @@ public class DropTrackerPanel extends PluginPanel
                                         localPlayerName = plugin.getLocalPlayerName();
                                     }
                                     //Grab server loot total + personal loot total
-                                    if (!config.serverId().isEmpty()) {
-                                        fetchLootFromServer().thenAccept(lootData -> {
-                                            SwingUtilities.invokeLater(() -> {
-                                                if (lootData != null) {
-                                                    if (lootData.containsKey("playerLoot")) {
-                                                        playerLoot.set(formatNumber(Double.parseDouble(lootData.get("playerLoot"))));
-                                                        // refresh the panel or perform other updates for player loot
-                                                    }
-                                                    if (lootData.containsKey("serverLoot")) {
-                                                        formattedServerTotalRef.set(formatNumber(Double.parseDouble(lootData.get("serverLoot"))));
-                                                        // refresh the panel or perform other updates for server loot
-                                                    }
-                                                }
-                                            });
-                                        });
-                                    }
                                     CompletableFuture.runAsync(() -> {
                                         if(!config.permPlayerName().equals("")) {
                                             localPlayerName = config.permPlayerName();
@@ -481,11 +458,9 @@ public class DropTrackerPanel extends PluginPanel
                                                 if (lootData != null) {
                                                     if (lootData.containsKey("playerLoot")) {
                                                         playerLoot.set(formatNumber(Double.parseDouble(lootData.get("playerLoot"))));
-                                                        // refresh the panel or perform other updates for player loot
                                                     }
                                                     if (lootData.containsKey("serverLoot")) {
                                                         formattedServerTotalRef.set(formatNumber(Double.parseDouble(lootData.get("serverLoot"))));
-                                                        // refresh the panel or perform other updates for server loot
                                                     }
                                                 } else {
                                                         playerLoot.set("unregistered");
@@ -514,7 +489,7 @@ public class DropTrackerPanel extends PluginPanel
 
             dropsPanel.add(logoLabel);
 
-            /* Add a button to refresh the panel incase data is inaccurate */
+            /* Add a button to refresh the panel */
             JButton refreshButton = new JButton("Refresh");
             refreshButton.addActionListener(e -> refreshPanel());
             JPanel buttonPanel = new JPanel();
@@ -581,101 +556,120 @@ public class DropTrackerPanel extends PluginPanel
 
                     dropsPanel.add(table);
                     //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    descText = new JLabel("<html><br><center><h3>To submit a drop:</h3></center><br />" +
-                            "Select any members involved in the drop from the drop-down list." +
-                            "<br>If you split the drop with any non-members, select how many from the drop-down." +
-                            "<br />" +
-                            "Once you press submit, your " +
-                            "drop will automatically be sent!</html>");
+                if (config.showHelpText()) {
+                    descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
+                            "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
+                            "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
+                            "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
+                            "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
+                    // to place the text in the correct location
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                     Box descTextBox = Box.createHorizontalBox();
                     descTextBox.add(descText);
                     descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
-
-                dropsPanel.add(descTextBox);
+                    dropsPanel.add(descTextBox);
+                }
 
             }
             /* Initialize the membersComboBox prior to each drop, so that we don't try to pull data for each drop received */
-            for (DropEntry entry : entries) {
-                dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                Box entryItemBox = Box.createHorizontalBox();
-                // Fetch image for the item
-                BufferedImage itemImage = itemManager.getImage(entry.getItemId());
-                JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
-                String itemName = entry.getItemName();
-                int geValue = entry.getGeValue();
+            if (entries.isEmpty()) {
+                descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
+                // to place the text in the correct location
+                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                Box descTextBox = Box.createHorizontalBox();
+                descTextBox.add(descText);
+                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                dropsPanel.add(descTextBox);
+            } else {
+                for (DropEntry entry : entries) {
+                    dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    Box entryItemBox = Box.createHorizontalBox();
+                    // Fetch image for the item
+                    BufferedImage itemImage = itemManager.getImage(entry.getItemId());
+                    JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
+                    String itemName = entry.getItemName();
+                    int geValue = entry.getGeValue();
 
-                JLabel itemTextLabel = new JLabel("<html>Item: "+itemName+"<br>Value: " + String.valueOf(geValue) + "gp</html>");
+                    JLabel itemTextLabel = new JLabel("<html>Item: " + itemName + "<br>Value: " + String.valueOf(geValue) + "gp</html>");
 
-                JPanel nameFieldPanel = new JPanel(new BorderLayout());
-                JLabel nameLabel = new JLabel("Select Members:");
-                nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
-                MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
-                membersComboBox.setPreferredSize(new Dimension(75, 25));
-                nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
+                    JPanel nameFieldPanel = new JPanel(new BorderLayout());
+                    JLabel nameLabel = new JLabel("Select Members:");
+                    nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
+                    MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
+                    membersComboBox.setPreferredSize(new Dimension(75, 25));
+                    nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
 
-                Integer[] nonMemberOptions = new Integer[21];
-                for (int i = 0; i <= 20; i++) {
-                    nonMemberOptions[i] = i; // Fill array with numbers 0-20
+                    Integer[] nonMemberOptions = new Integer[21];
+                    for (int i = 0; i <= 20; i++) {
+                        nonMemberOptions[i] = i; // Fill array with numbers 0-20
+                    }
+
+                    JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
+                    JLabel nonMemberLabel = new JLabel("Non-members:");
+                    nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
+
+                    JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
+                    nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
+                    nonMemberDropdown.setPreferredSize((new Dimension(45, 25)));
+                    nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
+
+                    JButton submitButton = new JButton("Submit");
+                    JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
+
+                    submitButton.addActionListener(e -> {
+                        // Get values from combo box and other field
+                        List<String> selectedMembersList = membersComboBox.getSelectedItems();  // Get selected names from MembersComboBox
+                        String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
+
+                        int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();  // Get non-member count from dropdown
+
+                        entry.setClanMembers(selectedMembersString);  // Set the selected names
+                        entry.setNonMemberCount(nonMemberCount);
+
+                        submitDrop(entry);
+                    });
+                    submitButton.setPreferredSize(new Dimension(90, 20));
+                    submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+                    submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
+                    JPanel nameMemberPanel = new JPanel();
+                    nameMemberPanel.add(nameFieldPanel);
+                    nameMemberPanel.add(nonMemberDropdownPanel);
+
+                    //Panels for each entry
+                    JPanel entryPanel = new JPanel();
+                    entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
+                    entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    entryPanel.setBackground(Color.DARK_GRAY);
+                    Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
+                    Border innerBorder = new EmptyBorder(0, 0, 10, 0);
+                    CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
+                    entryPanel.setBorder(compoundBorder);
+                    // Place the item, value, and loot inside an object together
+                    JPanel itemContainer = new JPanel();
+                    itemContainer.add(imageLabel);
+                    // Change the alignment of objects inside the itemContainer
+                    imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    itemContainer.add(itemTextLabel);
+                    entryPanel.add(itemContainer);
+                    entryPanel.add(nameMemberPanel);
+                    entryPanel.add(submitButton);
+                    entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    entryItemBox.add(entryPanel);
+                    dropsPanel.add(entryItemBox);
                 }
-
-                JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
-                JLabel nonMemberLabel = new JLabel("Non-members:");
-                nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
-
-                JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
-                nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
-                nonMemberDropdown.setPreferredSize((new Dimension(45,25)));
-                nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
-
-                JButton submitButton = new JButton("Submit");
-                JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
-
-                submitButton.addActionListener(e -> {
-                    // Get values from combo box and other field
-                    List<String> selectedMembersList = membersComboBox.getSelectedItems();  // Get selected names from MembersComboBox
-                    String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
-
-                    int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();  // Get non-member count from dropdown
-
-                    entry.setClanMembers(selectedMembersString);  // Set the selected names
-                    entry.setNonMemberCount(nonMemberCount);
-
-                    submitDrop(entry);
-                });
-                submitButton.setPreferredSize(new Dimension(90, 20));
-                submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-                submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
-                JPanel nameMemberPanel = new JPanel();
-                nameMemberPanel.add(nameFieldPanel);
-                nameMemberPanel.add(nonMemberDropdownPanel);
-
-                //Panels for each entry
-                JPanel entryPanel = new JPanel();
-                entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
-                entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                entryPanel.setBackground(Color.DARK_GRAY);
-                Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
-                Border innerBorder = new EmptyBorder(0, 0, 10, 0);
-                CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
-                entryPanel.setBorder(compoundBorder);
-                // Place the item, value, and loot inside an object together
-                JPanel itemContainer = new JPanel();
-                itemContainer.add(imageLabel);
-                // Change the alignment of objects inside the itemContainer
-                imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                itemContainer.add(itemTextLabel);
-                entryPanel.add(itemContainer);
-                entryPanel.add(nameMemberPanel);
-                entryPanel.add(submitButton);
-                entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                entryItemBox.add(entryPanel);
-                dropsPanel.add(entryItemBox);
             }
             dropsPanel.revalidate();
             dropsPanel.repaint();
         });
+    }
+
+    public String getPlayerName() {
+        if (config.permPlayerName().equals("")) {
+            return client.getLocalPlayer().getName();
+        } else {
+            return config.permPlayerName();
+        }
     }
 
     public CompletableFuture<Map<String, String>> fetchLootFromServer() {
@@ -683,12 +677,8 @@ public class DropTrackerPanel extends PluginPanel
             Long discordServerId = Long.valueOf(config.serverId());
             Map<String, String> lootData = new HashMap<>();
             try {
-                String playerName = "null";
-                if(config.permPlayerName().equals("")) {
-                    playerName = client.getLocalPlayer().getName();
-                } else {
-                    playerName = config.permPlayerName();
-                }
+                String playerName = getPlayerName();
+
                 playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
                 URL url = new URL("http://data.droptracker.io/admin/api/fetch_drop_data.php?server_id=" + config.serverId() + "&player_name=" + playerName);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();

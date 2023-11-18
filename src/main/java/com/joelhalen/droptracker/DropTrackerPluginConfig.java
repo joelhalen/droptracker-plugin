@@ -61,6 +61,16 @@ public interface DropTrackerPluginConfig extends Config
 			return false;
 		}
 		@ConfigItem(
+				keyName = "showEventPanel",
+				name = "Show Event Panel?",
+				description = "If your clan is running an event, do you want to render the additional RuneLite panel?"
+		)
+
+		default boolean showEventPanel()
+		{
+			return false;
+		}
+		@ConfigItem(
 				keyName = "permPlayerName",
 				name = "Permanent player name",
 				description = "If you play on many accounts, you can submit all of your drops under this name."
@@ -72,6 +82,12 @@ public interface DropTrackerPluginConfig extends Config
 				description = "Would you like to receive various chat messages when drops are<br>received/added to your panel?"
 		)
 		default boolean sendChatMessages() { return true; }
+		@ConfigItem(
+				keyName = "showHelpText",
+				name = "Show Helpful Descriptions?",
+				description = "Do you want to be presented with how-to information on the DropTracker panel?"
+		)
+		default boolean showHelpText() { return true; }
 		@ConfigItem(
 				keyName = "sendScreenshots",
 				name = "[Beta] Send Screenshots",

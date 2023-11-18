@@ -22,25 +22,11 @@
 		CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 		OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
-/*
-
-		``` @joelhalen and @droptracker.io on discord
-		A decent bit of this code was pulled from pre-existing repositories for RuneLite plugins.
-		Mainly:
-		- Discord Rare Drop Notificator (onLootReceived events)
-		- COX and TOB data tracker - learned how to create a panel, borrowed some code
-		For support, contact me on GitHub: https://github.com/joelhalen
-		Or via the DropTracker website: https://www.droptracker.io/
-
-		~~~SHARES THE USER'S IP ADDRESS WITH THE AUTHENTICATION/DROP SUBMISSION SERVER~~~
-
- */
 package com.joelhalen.droptracker;
 
 import com.google.inject.Provides;
 
 import net.runelite.api.*;
-import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
@@ -78,11 +64,14 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.io.ByteArrayOutputStream;
+import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 
 
 @PluginDescriptor(
@@ -97,15 +86,18 @@ public class DropTrackerPlugin extends Plugin {
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	@Inject
 	private DropTrackerPluginConfig config;
+
 	@Inject
 	private OkHttpClient httpClient;
 	private boolean panelRefreshed = false;
+	private boolean eventPanelRefreshed = false;
 	private String currentPlayerName = "";
 	@Inject
 	private ItemManager itemManager;
 	@Inject
 	public Client client;
 	private DropTrackerPanel panel;
+	private DropTrackerEventPanel eventPanel;
 	@Inject
 	public ChatMessageManager chatMessageManager;
 	List<DropEntryStream> storedDrops = new CopyOnWriteArrayList<>();
@@ -126,13 +118,14 @@ public class DropTrackerPlugin extends Plugin {
 	private boolean prepared = false;
 	private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
 	private static final BufferedImage ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
+	private static final BufferedImage EVENT_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "event_icon.png");
 	private NavigationButton navButton;
-
+	private NavigationButton eventNavButton;
 	private String[] groupMembers = new String[0];
 	private final Object groupMembersLock = new Object();
 
 	@Inject
-	private GroupMemberClient wiseOldManClient;
+	private GroupMemberClient groupMemberClient;
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		// handles drops from NPCs that are obtained on the floor (mostly)
@@ -221,11 +214,11 @@ public class DropTrackerPlugin extends Plugin {
 		executor.execute(() -> {
 			while (true) {
 				try {
-					String[] newGroupMembers = wiseOldManClient.getGroupMembers(Long.valueOf(config.serverId()), getLocalPlayerName());
+					String[] newGroupMembers = groupMemberClient.getGroupMembers(Long.valueOf(config.serverId()), getLocalPlayerName());
 					synchronized (groupMembersLock) {
 						groupMembers = newGroupMembers;
 					}
-					Thread.sleep(180 * 60 * 1000); // update every 180 minutes
+					Thread.sleep(15 * 60 * 1000); // update every 15 minutes
 				} catch (IOException | InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -331,13 +324,25 @@ public class DropTrackerPlugin extends Plugin {
 				panel.refreshPanel();
 				panelRefreshed = true;
 			}
+			if (client.getGameState() == GameState.LOGGED_IN && !eventPanelRefreshed) {
+				initializeEventPanel();
+				eventPanelRefreshed = true;
+			} else if (client.getGameState() != GameState.LOGGED_IN) {
+				eventPanelRefreshed = false;
+			}
+
 		} else {
+
 			panelRefreshed = false;
+			eventPanelRefreshed = false;
 		}
 	}
-
+	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
 		panel.refreshPanel();
+		if (config.showEventPanel() && clanEventActiveMap.get(config.serverId()) && this.eventPanel != null) {
+			eventPanel.refreshPanel();
+		}
 	}
 
 
@@ -360,24 +365,29 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void shutDown() throws Exception {
 		clientToolbar.removeNavigation(navButton);
+		clientToolbar.removeNavigation(eventNavButton);
 		panel = null;
+		eventPanel = null;
 		navButton = null;
 		accountHash = -1;
 	}
 
 	@Override
 	protected void startUp() {
-		grabServerConfiguration().thenRun(this::loadGroupMembersAsync);
+		initializeEventPanel();
+		loadGroupMembersAsync();
 
 		accountHash = client.getAccountHash();
 		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
+
 		navButton = NavigationButton.builder()
 				.tooltip("Drop Tracker")
 				.icon(ICON)
-				.priority(6)
+				.priority(2)
 				.panel(panel)
 				.build();
 		clientToolbar.addNavigation(navButton);
+
 		if (!prepared) {
 			clientThread.invoke(() ->
 			{
@@ -386,6 +396,7 @@ public class DropTrackerPlugin extends Plugin {
 						// If the user is registered as a "LOGGED_IN" state, we can render the panel & check auth.
 						if (config.serverId().equals("")) {
 							//TODO: Send a chat message letting the user know the plugin is not yet set up
+
 						} else if (config.authKey().equals("")) {
 							//TODO: Message the user that their auth key has been left empty
 						} else {
@@ -407,7 +418,32 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
+	private void initializeEventPanel() {
+		grabServerConfiguration()
+				.thenRun(() -> {
+					if (client.getGameState() == GameState.LOGGED_IN && config.showEventPanel()) {
+						String serverId = config.serverId();
+						Boolean isEventActive = clanEventActiveMap.getOrDefault(serverId, false);
 
+						if (isEventActive && eventPanel == null) {
+							SwingUtilities.invokeLater(() -> {
+								eventPanel = new DropTrackerEventPanel(this, config, itemManager, chatMessageManager);
+								eventNavButton = NavigationButton.builder()
+										.tooltip("DropTracker - Events")
+										.icon(EVENT_ICON)
+										.priority(3)
+										.panel(eventPanel)
+										.build();
+								clientToolbar.addNavigation(eventNavButton);
+							});
+						}
+					}
+				})
+				.exceptionally(ex -> {
+					log.error("Error fetching server configuration", ex);
+					return null;
+				});
+	}
 	public String getServerName(String serverId) {
 		if (serverId == "" || !serverIdToClanNameMap.containsKey(serverId)) {
 			return "None!";
@@ -472,6 +508,7 @@ public class DropTrackerPlugin extends Plugin {
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
+				System.out.println(jsonData);
 				JSONObject jsonObject = new JSONObject(jsonData);
 				serverIdToClanNameMap = new HashMap<>();
 				serverMinimumLootVarMap = new HashMap<>();
@@ -487,9 +524,11 @@ public class DropTrackerPlugin extends Plugin {
 
 				// Parse the config field, which is a JSON string, into a JSONObject
 				JSONObject configObject = new JSONObject(jsonObject.optString("config"));
-
+				String isEventActiveStr = configObject.optString("is_event_currently_active");
+				String storeOnlyConfirmed = configObject.optString("store_only_confirmed_drops");
+				boolean isEventActive = "1".equals(isEventActiveStr);
+				boolean storeOnlyConfirmedDrops = "1".equals(storeOnlyConfirmed);
 				// Now extract data from the configObject
-
 				serverIdToClanNameMap.put(
 						serverId,
 						serverName
@@ -500,11 +539,11 @@ public class DropTrackerPlugin extends Plugin {
 				);
 				serverIdToConfirmedOnlyMap.put(
 						serverId,
-						configObject.optBoolean("store_only_confirmed_drops")
+						storeOnlyConfirmedDrops
 				);
 				clanEventActiveMap.put(
 						serverId,
-						configObject.optBoolean("is_event_currently_active")
+						isEventActive
 				);
 				clanWiseOldManGroupIDMap.put(
 						serverId,
@@ -524,10 +563,14 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 		HttpUrl url = HttpUrl.parse("http://droptracker.io/admin/api/store_drop_data.php"); // Replace with your PHP script URL
 		String serverId = config.serverId();
 		String notified_str = "1";
+		boolean send_msg;
 		if (geValue > getServerMinimumLoot(config.serverId())) {
 			notified_str = "0";
+			send_msg = true;
+		} else {
+			send_msg = false;
 		}
-		FormBody.Builder formBuilder = new FormBody.Builder()
+	FormBody.Builder formBuilder = new FormBody.Builder()
 				.add("auth_token", authKey) // Use "auth_token" if using authToken
 				.add("item_name", itemName)
 				.add("item_id", String.valueOf(itemId))
@@ -549,11 +592,32 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 		return CompletableFuture.runAsync(() -> {
 			try (Response response = httpClient.newCall(request).execute()) {
 				if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-
 				// Handle response
 				String responseData = response.body().string();
+				try {
+					Integer realValue = (quantity * geValue);
+					JSONObject jsonObj = new JSONObject(responseData);
+					if (jsonObj.has("success") && (send_msg == true)) {
+						String playerTotalLoot = jsonObj.optString("totalLootValue");
+						ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+						NumberFormat playerLootFormat = NumberFormat.getNumberInstance();
+						String playerLootString = formatNumber(Double.parseDouble(playerTotalLoot));
+						messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+								.append("DropTracker")
+								.append(ChatColorType.NORMAL)
+								.append("]")
+								.append("Your drop has been submitted! You now have a total of " + playerLootString);
+						chatMessageManager.queue(QueuedMessage.builder()
+								.type(ChatMessageType.CONSOLE)
+								.runeLiteFormattedMessage(messageResponse.build())
+								.build());
+					} else {
 
-				// Further processing based on the response
+					}
+				} catch (Exception e) {
+					// Handle parsing errors
+					e.printStackTrace();
+				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
