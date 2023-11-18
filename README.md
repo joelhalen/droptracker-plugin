@@ -17,11 +17,7 @@ There is also planned functionality for fully-automated events based off of the 
 Authentication keys that are unique to each player, to prevent users from submitting bogus drops for your events/leaderboard:
 ![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/66212907-2a7c-4c61-aa56-7c5b5d1bbbec)
 
-
-
-Automated tracking of all drops received:
-
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/7dea5f8c-27d2-4c85-8a74-575fb168cf9b)
+All drops received using the plugin are automatically uploaded to the database if the user has a valid authentication token entered.
 
 Automatic calculation of drop values based on split sizes (configurable). Players can submit drops with other clan members receiving the split as credit towards their total loot that month.
 
