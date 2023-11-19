@@ -60,16 +60,7 @@ public interface DropTrackerPluginConfig extends Config
 		{
 			return false;
 		}
-		@ConfigItem(
-				keyName = "showEventPanel",
-				name = "Show Event Panel?",
-				description = "If your clan is running an event, do you want to render the additional RuneLite panel?"
-		)
 
-		default boolean showEventPanel()
-		{
-			return false;
-		}
 		@ConfigItem(
 				keyName = "permPlayerName",
 				name = "Permanent player name",
@@ -89,11 +80,27 @@ public interface DropTrackerPluginConfig extends Config
 		)
 		default boolean showHelpText() { return true; }
 		@ConfigItem(
+				keyName = "showOverlay",
+				name = "Show Overlay for Stored Drops?",
+				description = "<html>When you have a drop awaiting submission, do you want<br>an overlay to appear on-screen?</html>"
+		)
+		default boolean showOverlay() { return true; }
+		@ConfigItem(
 				keyName = "sendScreenshots",
 				name = "[Beta] Send Screenshots",
 				description = "<html> Should we send a screenshot to the database along with your drop?<br><b>WARNING<b>: All uploads are PUBLICLY ACCESSIBLE!</html>"
 		)
 		default boolean sendScreenshots()
+		{
+			return false;
+		}
+		@ConfigItem(
+				keyName = "showEventPanel",
+				name = "Show Event Panel?",
+				description = "If your clan is running an event, do you want to render the additional RuneLite panel?"
+		)
+
+		default boolean showEventPanel()
 		{
 			return false;
 		}

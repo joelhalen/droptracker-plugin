@@ -26,6 +26,7 @@ package com.joelhalen.droptracker;
 
 import com.google.inject.Provides;
 
+import com.joelhalen.droptracker.ui.DropEntryOverlay;
 import net.runelite.api.*;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
@@ -45,6 +46,7 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
@@ -81,6 +83,11 @@ import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 )
 
 public class DropTrackerPlugin extends Plugin {
+	private OverlayManager overlayManager;
+	private DropEntryOverlay overlay;
+	public DropTrackerPlugin() {
+
+	}
 	//TODO: Implement pet queues and collection log slot queues
 	public static final String CONFIG_GROUP = "droptracker";
 	private final ExecutorService executor = Executors.newCachedThreadPool();
@@ -112,7 +119,6 @@ public class DropTrackerPlugin extends Plugin {
 	private Map<String, Long> clanServerDiscordIDMap;
 	private Map<String, String> serverIdToClanNameMap;
 	private Map<String, Boolean> serverIdToConfirmedOnlyMap;
-	public Map<String, Integer> clanWiseOldManGroupIDMap;
 	public Map<String, Boolean> clanEventActiveMap;
 	private Set<DropEntryStream> sentDrops = new HashSet<>();
 	private boolean prepared = false;
@@ -123,9 +129,27 @@ public class DropTrackerPlugin extends Plugin {
 	private NavigationButton eventNavButton;
 	private String[] groupMembers = new String[0];
 	private final Object groupMembersLock = new Object();
-
 	@Inject
 	private GroupMemberClient groupMemberClient;
+
+	// A static method to get the instance from anywhere
+	public void removeOverlay() {
+		setOverlayManager(overlayManager);
+		setDropEntryOverlay(overlay);
+		if (this.overlay != null) {
+			this.overlayManager.remove(overlay);
+		}
+	}
+	@Inject
+	public void setOverlayManager(OverlayManager overlayManager) {
+		this.overlayManager = overlayManager;
+	}
+
+	@Inject
+	public void setDropEntryOverlay(DropEntryOverlay overlay) {
+		this.overlay = overlay;
+	}
+
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		// handles drops from NPCs that are obtained on the floor (mostly)
@@ -206,6 +230,9 @@ public class DropTrackerPlugin extends Plugin {
 								entry.setImageLink("none");
 							}
 							panel.addDrop(entry);
+							if (config.showOverlay() && panel.getEntries() != null) {
+								overlayManager.add(overlay);
+							}
 						}
 			});
 		}
@@ -324,6 +351,9 @@ public class DropTrackerPlugin extends Plugin {
 				panel.refreshPanel();
 				panelRefreshed = true;
 			}
+			if (panel.getEntries() == null && overlay != null) {
+				overlayManager.remove(overlay);
+			}
 			if (client.getGameState() == GameState.LOGGED_IN && !eventPanelRefreshed) {
 				initializeEventPanel();
 				eventPanelRefreshed = true;
@@ -342,6 +372,13 @@ public class DropTrackerPlugin extends Plugin {
 		panel.refreshPanel();
 		if (config.showEventPanel() && clanEventActiveMap.get(config.serverId()) && this.eventPanel != null) {
 			eventPanel.refreshPanel();
+		}
+		if (overlay != null) {
+			if (!config.showOverlay()) {
+				overlayManager.remove(overlay);
+			} else if (config.showOverlay() && panel.getEntries() != null) {
+				overlayManager.add(overlay);
+			}
 		}
 	}
 
@@ -366,12 +403,21 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		clientToolbar.removeNavigation(navButton);
 		clientToolbar.removeNavigation(eventNavButton);
+		overlayManager.remove(overlay);
 		panel = null;
 		eventPanel = null;
 		navButton = null;
+		overlayManager = null;
+		overlay = null;
 		accountHash = -1;
 	}
-
+	public String getPlayerName() {
+		if (config.permPlayerName().equals("")) {
+			return client.getLocalPlayer().getName();
+		} else {
+			return config.permPlayerName();
+		}
+	}
 	@Override
 	protected void startUp() {
 		initializeEventPanel();
@@ -424,7 +470,7 @@ public class DropTrackerPlugin extends Plugin {
 					if (client.getGameState() == GameState.LOGGED_IN && config.showEventPanel()) {
 						String serverId = config.serverId();
 						Boolean isEventActive = clanEventActiveMap.getOrDefault(serverId, false);
-
+						// -- The event panel includes plugin implementation for fully-automated events later on
 						if (isEventActive && eventPanel == null) {
 							SwingUtilities.invokeLater(() -> {
 								eventPanel = new DropTrackerEventPanel(this, config, itemManager, chatMessageManager);
@@ -465,14 +511,6 @@ public class DropTrackerPlugin extends Plugin {
 		return clanServerDiscordIDMap.get(serverId);
 	}
 
-	public int getServerWiseOldManGroupID(String serverId) {
-		/* If empty serverId or the mapping doesn't contain the server ID, then return 0 */
-		if (serverId == "" | !clanWiseOldManGroupIDMap.containsKey(serverId)) {
-			return 0;
-		}
-		return clanWiseOldManGroupIDMap.get(serverId);
-	}
-
 	public Boolean clanEventActive(String serverId) {
 		if (serverId == "" | !clanEventActiveMap.containsKey(serverId)) {
 			return false;
@@ -508,12 +546,10 @@ public class DropTrackerPlugin extends Plugin {
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
-				System.out.println(jsonData);
 				JSONObject jsonObject = new JSONObject(jsonData);
 				serverIdToClanNameMap = new HashMap<>();
 				serverMinimumLootVarMap = new HashMap<>();
 				serverIdToConfirmedOnlyMap = new HashMap<>();
-				clanWiseOldManGroupIDMap = new HashMap<>();
 				clanEventActiveMap = new HashMap<>();
 
 				// Extract server name directly
@@ -544,10 +580,6 @@ public class DropTrackerPlugin extends Plugin {
 				clanEventActiveMap.put(
 						serverId,
 						isEventActive
-				);
-				clanWiseOldManGroupIDMap.put(
-						serverId,
-						configObject.optInt("wise_old_man_group_id")
 				);
 				// Add other mappings as needed...
 
@@ -605,7 +637,7 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 						messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
 								.append("DropTracker")
 								.append(ChatColorType.NORMAL)
-								.append("]")
+								.append("] ")
 								.append("Your drop has been submitted! You now have a total of " + playerLootString);
 						chatMessageManager.queue(QueuedMessage.builder()
 								.type(ChatMessageType.CONSOLE)

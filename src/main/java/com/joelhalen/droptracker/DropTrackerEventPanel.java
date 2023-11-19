@@ -29,6 +29,8 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import javax.inject.Inject;
 import javax.swing.*;
@@ -37,7 +39,17 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.Arrays;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 public class DropTrackerEventPanel extends PluginPanel {
     private final JPanel mainPanel;
@@ -45,8 +57,11 @@ public class DropTrackerEventPanel extends PluginPanel {
     private final DropTrackerPlugin plugin;
     private final DropTrackerPluginConfig config;
     private final ItemManager itemManager;
-    private final ChatMessageManager chatMessageManager;
-
+    private JLabel currentTaskLabel;
+    private JLabel progressLabel;
+    private JLabel descriptionLabel;
+    private JTable infoTable;
+    private JLabel imageLabel;
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo-events.png");
 
     public DropTrackerEventPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config,
@@ -55,7 +70,6 @@ public class DropTrackerEventPanel extends PluginPanel {
         this.plugin = plugin;
         this.config = config;
         this.itemManager = itemManager;
-        this.chatMessageManager = chatMessageManager;
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
         mainPanel = new JPanel();
@@ -114,6 +128,44 @@ public class DropTrackerEventPanel extends PluginPanel {
             this.revalidate();
             this.repaint();
         });
+        refreshEventStatus();
+    }
+    private void updateTeamInfoTable(Map<String, String> eventData) {
+        String[] columnNames = {"Info", "Value"};
+        Object[][] newData = {
+                {"<html><b>Your Team</b>:</html>", eventData.getOrDefault("teamName", "N/A")},
+                {"<html><b>Current Tile</b>:</html>", eventData.getOrDefault("currentTile", "N/A")},
+                {"<html><b>Points</b>:</html>", eventData.getOrDefault("currentPoints", "N/A")},
+                {"<html><b>Turn #</b>:</html>", eventData.getOrDefault("currentTurnNumber", "N/A")},
+                {"<html><b>Members</b>:</html>", eventData.getOrDefault("teamMembers", "N/A")}
+        };
+
+        SwingUtilities.invokeLater(() -> {
+            DefaultTableModel model = new DefaultTableModel(newData, columnNames);
+            infoTable.setModel(model);
+        });
+    }
+    private void updateTileSectionPanel(Map<String, String> eventData) {
+        SwingUtilities.invokeLater(() -> {
+            String currentTask = eventData.getOrDefault("currentTask", "N/A");
+            currentTaskLabel.setText(currentTask);
+            String required_amount = eventData.getOrDefault("currentTaskAmt", "1");
+            descriptionLabel.setText("<html>" + eventData.getOrDefault("currentTaskDescription", "Obtain" + required_amount + " x " + currentTask + ".") + "</html>");
+            progressLabel.setText("<html><b>Status</b>: " + eventData.getOrDefault("currentTaskProgress", "N/A") + "/" + required_amount + ".</html>");
+            try {
+                imageLabel.setIcon(new ImageIcon(new URL(eventData.getOrDefault("currentTaskImage","http://www.droptracker.io/img/dt-logo.png"))));
+                imageLabel.setPreferredSize(new Dimension(50,60));
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+    public void refreshEventStatus() {
+        fetchEventStatus().thenAccept(eventData -> SwingUtilities.invokeLater(() -> {
+            updateTeamInfoTable(eventData);
+            updateTileSectionPanel(eventData);
+            // Update other UI components here as needed
+        }));
     }
     private JPanel createTeamInfoPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -134,7 +186,7 @@ public class DropTrackerEventPanel extends PluginPanel {
         };
 
         // Team info table
-        JTable infoTable = new JTable(data, columnNames);
+        infoTable = new JTable(data, columnNames);
         infoTable.setPreferredScrollableViewportSize(new Dimension(250, 100));
         infoTable.setFillsViewportHeight(true);
         infoTable.setEnabled(false); // Make the table non-editable
@@ -157,18 +209,65 @@ public class DropTrackerEventPanel extends PluginPanel {
 
         return panel;
     }
+    public CompletableFuture<Map<String, String>> fetchEventStatus() {
+        return CompletableFuture.supplyAsync(() -> {
+            Long discordServerId = Long.valueOf(config.serverId());
+            Map<String, String> eventData = new HashMap<>();
+            try {
+                String playerName = plugin.getPlayerName();
+
+                playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
+                URL url = new URL("http://data.droptracker.io/admin/api/events/get_current_status.php?" + discordServerId + "&player_name=" + playerName);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+
+                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+                String line;
+                StringBuilder builder = new StringBuilder();
+
+                while ((line = reader.readLine()) != null) {
+                    builder.append(line);
+                }
+
+                reader.close();
+                JSONObject jsonResponse = new JSONObject(builder.toString());
+                // TODO: Build a response on the server containing all of the relevant data for the current game status
+                eventData.put("currentTile", jsonResponse.getString("team_current_tile"));
+                eventData.put("teamName", jsonResponse.getString("team_name"));
+                eventData.put("currentPoints", jsonResponse.getString("team_current_points"));
+                eventData.put("currentTask", jsonResponse.getString("current_task_string"));
+                eventData.put("currentTaskDescription", jsonResponse.getString("current_task_description"));
+                eventData.put("currentPlayerPoints", jsonResponse.getString("current_player_points"));
+                eventData.put("teamMembers", jsonResponse.getString("current_team_members"));
+                eventData.put("currentTaskAmt", jsonResponse.getString("current_task_quantity_required"));
+                eventData.put("currentTaskProgress", jsonResponse.getString("current_task_progress"));
+                eventData.put("currentTaskItemsObtained", jsonResponse.getString("current_task_items_obtained"));
+                eventData.put("currentTurnNumber", jsonResponse.getString("current_turn_number"));
+                eventData.put("teamRank", jsonResponse.getString("team_current_placement"));
+                eventData.put("allTeamLocations", jsonResponse.getString("all_team_locations"));
+                eventData.put("currentEffects", jsonResponse.getString("current_effects"));
+                eventData.put("currentTaskImage", jsonResponse.getString("current_task_image"));
+
+            } catch (IOException | JSONException e) {
+                e.printStackTrace();
+            }
+            return eventData;
+        });
+    }
     private JPanel createTileSectionPanel() {
+        /*  Creates the panel for the currently-assigned task to appear on.  */
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         BufferedImage itemImage = itemManager.getImage(20997);
-        JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
+        imageLabel = new JLabel(new ImageIcon(itemImage));
         JPanel tilePanel = createTilePanel(imageLabel);
         panel.add(tilePanel, BorderLayout.WEST);
-        JLabel currentTaskLabel = new JLabel("Current Task");
+        JLabel currentTaskTitleLabel = new JLabel("Current Task"); // Update class field
+        progressLabel = new JLabel("<html><b>Status</b>: 0/1</html>");
         JPanel currentTaskTextPanel = new JPanel();
         currentTaskTextPanel.setLayout(new BoxLayout(currentTaskTextPanel, BoxLayout.Y_AXIS));
-        currentTaskTextPanel.add(currentTaskLabel, BorderLayout.CENTER);
+        currentTaskTextPanel.add(currentTaskTitleLabel, BorderLayout.CENTER);
         panel.add(currentTaskTextPanel, BorderLayout.CENTER);
         // Create a panel for the text
         JPanel textPanel = new JPanel();
@@ -176,20 +275,19 @@ public class DropTrackerEventPanel extends PluginPanel {
         textPanel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Optional padding
 
         // Add labels
-        JLabel titleLabel = new JLabel("Any Raids Unique");
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 12)); // Set font and size
-        titleLabel.setForeground(Color.WHITE); // Set text color to white
+        currentTaskLabel = new JLabel("Unknown...");
+        currentTaskLabel.setFont(new Font("Arial", Font.PLAIN, 12));
 
-        JLabel descriptionLabel = new JLabel("<html>Obtain a unique from any raid!</html>");
+        descriptionLabel = new JLabel("<html><i>Your task could not be loaded...</i></html>");
         descriptionLabel.setFont(new Font("Arial", Font.PLAIN, 10));
 
 
-        JLabel progressLabel = new JLabel("<html><b>Status</b>: 0/1</html>");
+        progressLabel = new JLabel("<html>Please try again later.</html>");
         progressLabel.setFont(new Font("Arial", Font.PLAIN, 11));
 
 
         // Add labels to the text panel
-        textPanel.add(titleLabel);
+        textPanel.add(currentTaskLabel);
         textPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing between labels
         textPanel.add(descriptionLabel);
         textPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing between labels
@@ -221,6 +319,7 @@ public class DropTrackerEventPanel extends PluginPanel {
 
     void refreshPanel() {
         SwingUtilities.invokeLater(() -> {
+            refreshEventStatus();
             mainPanel.removeAll(); // Clear all components from mainPanel
             remove(mainPanel);
 
