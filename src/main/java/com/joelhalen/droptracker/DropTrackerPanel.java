@@ -549,7 +549,7 @@ public class DropTrackerPanel extends PluginPanel
 
                     Integer[] nonMemberOptions = new Integer[21];
                     for (int i = 0; i <= 20; i++) {
-                        nonMemberOptions[i] = i; \
+                        nonMemberOptions[i] = i;
                     }
 
                     JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
