@@ -132,12 +132,18 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private GroupMemberClient groupMemberClient;
 
-	// A static method to get the instance from anywhere
 	public void removeOverlay() {
 		setOverlayManager(overlayManager);
 		setDropEntryOverlay(overlay);
 		if (this.overlay != null) {
 			this.overlayManager.remove(overlay);
+		}
+	}
+	public void addOverlay() {
+		setOverlayManager(overlayManager);
+		setDropEntryOverlay(overlay);
+		if (this.overlay != null) {
+			this.overlayManager.add(overlay);
 		}
 	}
 	@Inject
@@ -231,7 +237,7 @@ public class DropTrackerPlugin extends Plugin {
 							}
 							panel.addDrop(entry);
 							if (config.showOverlay() && panel.getEntries() != null) {
-								overlayManager.add(overlay);
+								addOverlay();
 							}
 						}
 			});
@@ -352,7 +358,10 @@ public class DropTrackerPlugin extends Plugin {
 				panelRefreshed = true;
 			}
 			if (panel.getEntries() == null && overlay != null) {
-				overlayManager.remove(overlay);
+				removeOverlay();
+			}
+			if (config.showOverlay() && panel.getEntries() != null) {
+				addOverlay();
 			}
 			if (client.getGameState() == GameState.LOGGED_IN && !eventPanelRefreshed) {
 				initializeEventPanel();
@@ -375,9 +384,9 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		if (overlay != null) {
 			if (!config.showOverlay()) {
-				overlayManager.remove(overlay);
+				removeOverlay();
 			} else if (config.showOverlay() && panel.getEntries() != null) {
-				overlayManager.add(overlay);
+				addOverlay();
 			}
 		}
 	}
@@ -403,7 +412,7 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		clientToolbar.removeNavigation(navButton);
 		clientToolbar.removeNavigation(eventNavButton);
-		overlayManager.remove(overlay);
+		removeOverlay();
 		panel = null;
 		eventPanel = null;
 		navButton = null;

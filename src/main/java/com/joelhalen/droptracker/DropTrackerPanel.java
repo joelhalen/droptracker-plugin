@@ -303,6 +303,7 @@ public class DropTrackerPanel extends PluginPanel
             AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
             String formattedServerTotal = "0";
             //if they have a playerName assigned:
+            AtomicBoolean isAllItemsBoxAdded = new AtomicBoolean(false);
             if (playerName != null) {
                 // if the localAuthKey is stored; and the playerName is still the same, don't update.
 //                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
@@ -371,7 +372,6 @@ public class DropTrackerPanel extends PluginPanel
                                 if(!config.permPlayerName().equals("")) {
                                     localPlayerName = config.permPlayerName();
                                 }
-                                AtomicBoolean isAllItemsBoxAdded = new AtomicBoolean(false);
                                 fetchLootFromServer().thenAccept(lootData -> {
                                     SwingUtilities.invokeLater(() -> {
                                         if (lootData != null) {
@@ -442,6 +442,8 @@ public class DropTrackerPanel extends PluginPanel
                                                 isAllItemsBoxAdded.set(true);
                                             }
                                         }
+                                        dropsPanel.revalidate();
+                                        dropsPanel.repaint();
                                         if (entries.isEmpty()) {
                                             JLabel descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
                                             // to place the text in the correct location
@@ -716,6 +718,9 @@ public class DropTrackerPanel extends PluginPanel
             // Add the entry to the list
             entries.add(entry);
             // Update the panel
+            if (config.showOverlay()) {
+                plugin.addOverlay();
+            }
             refreshPanel();
         });
     }
