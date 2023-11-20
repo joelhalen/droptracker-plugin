@@ -44,7 +44,7 @@ public class GroupMemberClient {
 
     public String[] getGroupMembers(Long serverId, String playerName) throws IOException {
         // Update this URL to point to your backend API endpoint
-        String groupUrl = "http://droptracker.io/admin/api/get_users_by_server_id.php?server_id=" + serverId;
+        String groupUrl = "https://droptracker.io/admin/api/get_users_by_server_id.php?server_id=" + serverId;
         Request request = new Request.Builder().url(groupUrl).build();
 
         Response response = client.newCall(request).execute();

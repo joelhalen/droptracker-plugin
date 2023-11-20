@@ -153,7 +153,7 @@ public class DropTrackerEventPanel extends PluginPanel {
             descriptionLabel.setText("<html>" + eventData.getOrDefault("currentTaskDescription", "Obtain" + required_amount + " x " + currentTask + ".") + "</html>");
             progressLabel.setText("<html><b>Status</b>: " + eventData.getOrDefault("currentTaskProgress", "N/A") + "/" + required_amount + ".</html>");
             try {
-                imageLabel.setIcon(new ImageIcon(new URL(eventData.getOrDefault("currentTaskImage","http://www.droptracker.io/img/dt-logo.png"))));
+                imageLabel.setIcon(new ImageIcon(new URL(eventData.getOrDefault("currentTaskImage","https://www.droptracker.io/img/dt-logo.png"))));
                 imageLabel.setPreferredSize(new Dimension(50,60));
             } catch (MalformedURLException e) {
                 throw new RuntimeException(e);
@@ -217,7 +217,7 @@ public class DropTrackerEventPanel extends PluginPanel {
                 String playerName = plugin.getPlayerName();
 
                 playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("http://data.droptracker.io/admin/api/events/get_current_status.php?" + discordServerId + "&player_name=" + playerName);
+                URL url = new URL("https://data.droptracker.io/admin/api/events/get_current_status.php?" + discordServerId + "&player_name=" + playerName);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 

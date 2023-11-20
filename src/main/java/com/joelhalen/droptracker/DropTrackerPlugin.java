@@ -548,7 +548,7 @@ public class DropTrackerPlugin extends Plugin {
 					"auth_token=" + config.authKey() + "&player_name=" + playerName);
 
 			Request request = new Request.Builder()
-					.url("http://data.droptracker.io/admin/api/runelite_client_settings.php") // Update this URL
+					.url("https://data.droptracker.io/admin/api/runelite_client_settings.php") // Update this URL
 					.post(body)
 					.addHeader("Content-Type", "application/x-www-form-urlencoded")
 					.build();
@@ -601,7 +601,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
-		HttpUrl url = HttpUrl.parse("http://droptracker.io/admin/api/store_drop_data.php"); // Replace with your PHP script URL
+		HttpUrl url = HttpUrl.parse("https://droptracker.io/admin/api/store_drop_data.php"); // Replace with your PHP script URL
 		String serverId = config.serverId();
 		String notified_str = "1";
 		boolean send_msg;
@@ -689,7 +689,7 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 							.build();
 						executor.submit(() -> {
 							Request request = new Request.Builder()
-									.url("http://data.droptracker.io/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
+									.url("https://data.droptracker.io/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
 									.post(requestBody)
 									.build();
 							try (Response response = httpClient.newCall(request).execute()) {

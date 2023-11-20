@@ -265,7 +265,7 @@ public class DropTrackerPanel extends PluginPanel
                 String playerName = plugin.getPlayerName();
 
                 playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("http://data.droptracker.io/admin/api/fetch_drop_data.php?server_id=" + config.serverId() + "&player_name=" + playerName);
+                URL url = new URL("https://data.droptracker.io/admin/api/fetch_drop_data.php?server_id=" + config.serverId() + "&player_name=" + playerName);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 
@@ -742,7 +742,7 @@ public class DropTrackerPanel extends PluginPanel
     }
     public String checkAuthKey(String playerName, String serverId, String authKey) {
         try {
-            URL url = new URL("http://data.droptracker.io/admin/api/authenticate.php");
+            URL url = new URL("https://data.droptracker.io/admin/api/authenticate.php");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
