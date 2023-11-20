@@ -98,7 +98,6 @@ public class DropTrackerPanel extends PluginPanel
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
 
     public List<DropEntry> getEntries() {
-        // Check if 'entries' is non-null and not empty
         if (entries != null && !entries.isEmpty()) {
             return this.entries;
         } else {
@@ -114,18 +113,16 @@ public class DropTrackerPanel extends PluginPanel
 
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(10, 10, 10, 10));
-
-        // Panel for drops
         dropsPanel = new JPanel();
         dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
         dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
         dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        // Create an ImageIcon from the TOP_LOGO BufferedImage
+
         ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
         JLabel logoLabel = new JLabel(logoIcon);
-        // Add the logo to the top of panel
+
         dropsPanel.add(logoLabel);
-        /* Add a button to refresh the panel  */
+
         JButton refreshButton = new JButton("Refresh");
         refreshButton.addActionListener(e -> refreshPanel());
         JPanel buttonPanel = new JPanel();
@@ -142,7 +139,7 @@ public class DropTrackerPanel extends PluginPanel
         dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
         JLabel descText;
         String playerName = plugin.getPlayerName();
-        // If the server ID is empty OR the player has not entered an authentication key:
+
         if(config.serverId().equals("") || !config.authKey().equals("")) {
             descText = new JLabel("<html><center><h1>Welcome to the DropTracker!</h1><br>" +
                     "<span>It appears that you do not have a server ID configured or that your auth token has been left blank.<br></span>" +
@@ -150,12 +147,9 @@ public class DropTrackerPanel extends PluginPanel
                     "<br />Try using /gettoken inside the discord server to retrieve your token if it's been lost.</html>");
             dropsPanel.add(descText);
         } else {
-            // If they entered a server ID, check if the auth key is empty
-            // We also handle if the auth key does not match the expected value here.
+
             if(localAuthKey != null && localPlayerName == plugin.getLocalPlayerName()) {
-                // do nothing if they have a localAuthKey stored with the correct playername
-            //if they have entered nothing for their auth token
-                //todo: insert a message if their account was not found?
+                // do nothing
             } else if (config.authKey().equals("")) {
                 descText = new JLabel("<html>You do not have an authentication token in your plugin configuration!<br>" +
                         "This should have been provided to you when you registered in the Discord.<br>" +
@@ -165,7 +159,6 @@ public class DropTrackerPanel extends PluginPanel
                 descTextBox.add(descText);
                 descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
                 dropsPanel.add(descTextBox);
-            //invalid authentication token entered
             } else if (config.authKey().equals(checkAuthKey(playerName, config.serverId(), config.authKey()))) {
                 descText = new JLabel("<html><center>The authentication token you entered is invalid.<br><br>" +
                         "If you play multiple accounts, ensure that the account you registered with is entered" +
@@ -174,7 +167,7 @@ public class DropTrackerPanel extends PluginPanel
                 descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                 Box descTextBox = Box.createHorizontalBox();
                 descTextBox.add(descText);
-                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                descTextBox.add(Box.createHorizontalGlue());
                 dropsPanel.add(descTextBox);
             } else {
                 String serverName = plugin.getServerName(config.serverId());
@@ -191,11 +184,9 @@ public class DropTrackerPanel extends PluginPanel
                             if (lootData != null) {
                                 if (lootData.containsKey("player_total")) {
                                     playerLoot.set(formatNumber(Double.parseDouble(lootData.get("playerLoot"))));
-                                    // refresh the panel or perform other updates for player loot
                                 }
                                 if (lootData.containsKey("server_total")) {
                                     serverLootTotal.set(formatNumber(Double.parseDouble(lootData.get("serverLoot"))));
-                                    // refresh the panel or perform other updates for server loot
                                 }
                             }
                         });
@@ -215,7 +206,6 @@ public class DropTrackerPanel extends PluginPanel
                 DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                     @Override
                     public boolean isCellEditable(int row, int column) {
-                        // This causes all cells to be not editable
                         return false;
                     }
                 };
@@ -243,7 +233,6 @@ public class DropTrackerPanel extends PluginPanel
                             "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
                             "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
                             "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
-                    // to place the text in the correct location
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                     Box descTextBox = Box.createHorizontalBox();
                     descTextBox.add(descText);
@@ -294,21 +283,14 @@ public class DropTrackerPanel extends PluginPanel
 
     void refreshPanel() {
         SwingUtilities.invokeLater(() -> {
-            // Clear the panel
             dropsPanel.removeAll();
-            //re-set the layout and styles
             String playerName = plugin.getLocalPlayerName();
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
             AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
             String formattedServerTotal = "0";
-            //if they have a playerName assigned:
             AtomicBoolean isAllItemsBoxAdded = new AtomicBoolean(false);
             if (playerName != null) {
-                // if the localAuthKey is stored; and the playerName is still the same, don't update.
-//                if(localAuthKey != null && localAuthKey.equals(config.authKey())) {
-//                    // do not perform an authentication check if the auth key is validated & stored, and their name is correct.
-//                } else {
                 if(config.serverId().equals("")) {
                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                     messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
@@ -350,7 +332,6 @@ public class DropTrackerPanel extends PluginPanel
                                     .runeLiteFormattedMessage(registrationMemberResponse.build())
                                     .build());
                         } else if (authRes.equals("Invalid auth token")) {
-                            // in any other case, if the response doesn't say "yes", the auth key is invalid
                             ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                             messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
                                     .append("DropTracker")
@@ -362,12 +343,10 @@ public class DropTrackerPanel extends PluginPanel
                                     .runeLiteFormattedMessage(messageResponse.build())
                                     .build());
                         } else if (authRes.equals("yes")) {
-                            // authentication has succeeded, proceed.
                             localAuthKey = config.authKey();
                             if(plugin.getLocalPlayerName() != null) {
                                 localPlayerName = plugin.getLocalPlayerName();
                             }
-                            //Grab server loot total + personal loot total
                             CompletableFuture.runAsync(() -> {
                                 if(!config.permPlayerName().equals("")) {
                                     localPlayerName = config.permPlayerName();
@@ -399,44 +378,38 @@ public class DropTrackerPanel extends PluginPanel
                                                     .sorted((a, b) -> Integer.compare(b.getInt("value"), a.getInt("value")))
                                                     .collect(Collectors.toList());
                                             List<JSONObject> topDrops = dropList.stream().limit(3).collect(Collectors.toList());
-                                            Box allItemsBox = Box.createHorizontalBox(); // This will hold all item boxes
+                                            Box allItemsBox = Box.createHorizontalBox();
 
                                             for (JSONObject drop : topDrops) {
-                                                Box entryItemBox = Box.createVerticalBox(); // Vertical box for each item
+                                                Box entryItemBox = Box.createVerticalBox();
                                                 entryItemBox.setAlignmentX(Component.CENTER_ALIGNMENT);
 
                                                 int itemId = drop.getInt("item_id");
                                                 String dropPlayerName = drop.optString("player_name", "Unknown");
                                                 String timeReceived = drop.optString("time");
                                                 String itemName = drop.optString("item_name");
-
-                                                // Fetch image for the item
                                                 BufferedImage itemImage = itemManager.getImage(itemId);
                                                 JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
-                                                imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Center align the image
+                                                imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-                                                // Create labels for other details
                                                 JLabel itemNameLabel = new JLabel("<html><b>" + itemName + "</b></html>");
-                                                itemNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Center align the item name
+                                                itemNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
                                                 JLabel playerLabel = new JLabel(dropPlayerName);
-                                                playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Center align the player name
+                                                playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
                                                 JLabel timeLabel = new JLabel("<html><em>" + timeReceived + "</em></html>");
-                                                timeLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Center align the time received
+                                                timeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-                                                // Add components to the item box
                                                 entryItemBox.add(itemNameLabel);
                                                 entryItemBox.add(imageLabel);
                                                 entryItemBox.add(playerLabel);
                                                 entryItemBox.add(timeLabel);
 
-                                                // Add some spacing between item boxes
                                                 allItemsBox.add(Box.createHorizontalStrut(10));
 
-                                                // Add the item box to the main horizontal box
                                                 allItemsBox.add(entryItemBox);
                                             }
 
-                                            // Add the main horizontal box to the dropsPanel
+
                                             if (!isAllItemsBoxAdded.get()) {
                                                 dropsPanel.add(allItemsBox);
                                                 isAllItemsBoxAdded.set(true);
@@ -446,11 +419,11 @@ public class DropTrackerPanel extends PluginPanel
                                         dropsPanel.repaint();
                                         if (entries.isEmpty()) {
                                             JLabel descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
-                                            // to place the text in the correct location
+
                                             descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                                             Box descTextBox = Box.createHorizontalBox();
                                             descTextBox.add(descText);
-                                            descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                                            descTextBox.add(Box.createHorizontalGlue());
                                             dropsPanel.add(descTextBox);
                                         }
                                     });
@@ -492,7 +465,6 @@ public class DropTrackerPanel extends PluginPanel
             dropsPanel.add(topPanel, BorderLayout.NORTH);
             dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
             JLabel descText;
-            // If the server ID is empty OR the player has not entered an authentication key:
             if(config.serverId().equals("") || config.authKey().equals("")) {
                 descText = new JLabel("<html><br><br>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
                         "your server must be added<br> to our database, and you must configure the plugin from settings panel -><br> Contact a member of your clan's staff team to get set up, or obtain your ServerID!</html>");
@@ -524,7 +496,6 @@ public class DropTrackerPanel extends PluginPanel
                 table.setModel(model);
                 table.setPreferredScrollableViewportSize(new Dimension(500, 70));
                 table.setFillsViewportHeight(true);
-                // Set custom renderer to bold the keys in the table (is there a better way to do this?)
                 if (table.getColumnModel().getColumnCount() > 0) {
                     table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
                         Font originalFont = null;
@@ -542,7 +513,6 @@ public class DropTrackerPanel extends PluginPanel
                 }
 
                 dropsPanel.add(table);
-                //dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                 if (config.showHelpText()) {
                     descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
                             "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
@@ -558,13 +528,11 @@ public class DropTrackerPanel extends PluginPanel
                 }
 
             }
-            /* Initialize the membersComboBox prior to each drop, so that we don't try to pull data for each drop received */
 
             if (!entries.isEmpty()) {
                 for (DropEntry entry : entries) {
                     dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
                     Box entryItemBox = Box.createHorizontalBox();
-                    // Fetch image for the item
                     BufferedImage itemImage = itemManager.getImage(entry.getItemId());
                     JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
                     String itemName = entry.getItemName();
@@ -581,7 +549,7 @@ public class DropTrackerPanel extends PluginPanel
 
                     Integer[] nonMemberOptions = new Integer[21];
                     for (int i = 0; i <= 20; i++) {
-                        nonMemberOptions[i] = i; // Fill array with numbers 0-20
+                        nonMemberOptions[i] = i; \
                     }
 
                     JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
@@ -597,11 +565,10 @@ public class DropTrackerPanel extends PluginPanel
                     JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
 
                     submitButton.addActionListener(e -> {
-                        // Get values from combo box and other field
-                        List<String> selectedMembersList = membersComboBox.getSelectedItems();  // Get selected names from MembersComboBox
+                        List<String> selectedMembersList = membersComboBox.getSelectedItems();
                         String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
 
-                        int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();  // Get non-member count from dropdown
+                        int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();
 
                         entry.setClanMembers(selectedMembersString);  // Set the selected names
                         entry.setNonMemberCount(nonMemberCount);
@@ -615,7 +582,6 @@ public class DropTrackerPanel extends PluginPanel
                     nameMemberPanel.add(nameFieldPanel);
                     nameMemberPanel.add(nonMemberDropdownPanel);
 
-                    //Panels for each entry
                     JPanel entryPanel = new JPanel();
                     entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
                     entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -624,10 +590,8 @@ public class DropTrackerPanel extends PluginPanel
                     Border innerBorder = new EmptyBorder(0, 0, 10, 0);
                     CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
                     entryPanel.setBorder(compoundBorder);
-                    // Place the item, value, and loot inside an object together
                     JPanel itemContainer = new JPanel();
                     itemContainer.add(imageLabel);
-                    // Change the alignment of objects inside the itemContainer
                     imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                     itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
                     itemContainer.add(itemTextLabel);
@@ -649,16 +613,15 @@ public class DropTrackerPanel extends PluginPanel
             return "0";
         }
         String[] units = new String[] { "", "K", "M", "B", "T" };
-        int unit = (int) Math.floor((Math.log10(number) / 3)); // Determine the unit (K, M, B, etc.)
+        int unit = (int) Math.floor((Math.log10(number) / 3));
 
-        if (unit >= units.length) unit = units.length - 1; // Prevent array index out of bounds error
+        if (unit >= units.length) unit = units.length - 1;
 
         double num = number / Math.pow(1000, unit);
         DecimalFormat df = new DecimalFormat("#.#");
         String formattedNum = df.format(num);
         return formattedNum + units[unit];
     }
-    //send an update to the table on the panel once the data has returned from the php script
     private void updateTable(String playerLoot, String serverTotal) {
         SwingUtilities.invokeLater(() -> {
             String serverName = plugin.getServerName(config.serverId());
@@ -684,14 +647,12 @@ public class DropTrackerPanel extends PluginPanel
             DefaultTableModel model = new DefaultTableModel(data, columnNames) {
                 @Override
                 public boolean isCellEditable(int row, int column) {
-                    // This causes all cells to be not editable
                     return false;
                 }
             };
             table.setModel(model);
             table.setPreferredScrollableViewportSize(new Dimension(500, 70));
             table.setFillsViewportHeight(true);
-            // Set custom renderer to bold the keys in the table (is there a better way to do this?)
             if (table.getColumnModel().getColumnCount() > 0) {
                 table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
                     Font originalFont = null;
@@ -733,7 +694,7 @@ public class DropTrackerPanel extends PluginPanel
                 if (result.equals("Authenticated")) {
                     callback.accept("yes");
                 } else {
-                    callback.accept(result); // Pass the exact error message for handling
+                    callback.accept(result);
                 }
             } else {
                 callback.accept("invalid parameters");
@@ -760,12 +721,11 @@ public class DropTrackerPanel extends PluginPanel
             reader.close();
             connection.disconnect();
 
-            // Parse the JSON response
             JSONObject jsonResponse = new JSONObject(response.toString());
             if (jsonResponse.has("success")) {
                 return "Authenticated";
             } else if (jsonResponse.has("error")) {
-                return jsonResponse.getString("error"); // Returns the exact error message
+                return jsonResponse.getString("error");
             } else {
                 return "Unknown response";
             }

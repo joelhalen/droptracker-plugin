@@ -185,26 +185,26 @@ public class DropTrackerEventPanel extends PluginPanel {
                 {"<html><b>Members</b>:</html>", "1"}
         };
 
-        // Team info table
+
         infoTable = new JTable(data, columnNames);
         infoTable.setPreferredScrollableViewportSize(new Dimension(250, 100));
         infoTable.setFillsViewportHeight(true);
-        infoTable.setEnabled(false); // Make the table non-editable
+        infoTable.setEnabled(false);
 
         infoTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                if (column == 0) { // If first column (keys), set foreground to white
+                if (column == 0) {
                     c.setForeground(Color.WHITE);
-                } else { // Else, set foreground to default color
+                } else {
                     c.setForeground(table.getForeground());
                 }
                 return c;
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(infoTable); // Add table to a scroll pane
+        JScrollPane scrollPane = new JScrollPane(infoTable);
         panel.add(scrollPane, BorderLayout.CENTER);
 
         return panel;
