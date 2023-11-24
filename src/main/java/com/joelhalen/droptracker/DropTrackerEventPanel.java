@@ -217,7 +217,7 @@ public class DropTrackerEventPanel extends PluginPanel {
                 String playerName = plugin.getPlayerName();
 
                 playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("https://www.droptrackerdroptracker.io/admin/api/events/get_current_status.php?" + discordServerId + "&player_name=" + playerName);
+                URL url = new URL("https://www.droptracker.io/admin/api/events/get_current_status.php?" + discordServerId + "&player_name=" + playerName);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 

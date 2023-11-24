@@ -548,7 +548,7 @@ public class DropTrackerPlugin extends Plugin {
 					"auth_token=" + config.authKey() + "&player_name=" + playerName);
 
 			Request request = new Request.Builder()
-					.url("https://www.droptrackerdroptracker.io/admin/api/runelite_client_settings.php") // Update this URL
+					.url("https://www.droptracker.io/admin/api/runelite_client_settings.php") // Update this URL
 					.post(body)
 					.addHeader("Content-Type", "application/x-www-form-urlencoded")
 					.build();
@@ -689,7 +689,7 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 							.build();
 						executor.submit(() -> {
 							Request request = new Request.Builder()
-									.url("https://www.droptrackerdroptracker.io/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
+									.url("https://www.droptracker.io/upload/upload.php") // PHP upload script for screenshots (temporary implementation)
 									.post(requestBody)
 									.build();
 							try (Response response = httpClient.newCall(request).execute()) {
