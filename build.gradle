@@ -21,7 +21,6 @@ dependencies {
 	testImplementation 'junit:junit:4.12'
 	testImplementation group: 'net.runelite', name:'client', version: 'latest.release'
 	testImplementation group: 'net.runelite', name:'jshell', version: 'latest.release'
-	implementation 'org.json:json:20200518'
 }
 
 group = 'com.joelhalen.droptracker'
