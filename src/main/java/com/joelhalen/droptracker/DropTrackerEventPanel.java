@@ -24,13 +24,13 @@
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
 package com.joelhalen.droptracker;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import javax.inject.Inject;
 import javax.swing.*;
@@ -230,25 +230,27 @@ public class DropTrackerEventPanel extends PluginPanel {
                 }
 
                 reader.close();
-                JSONObject jsonResponse = new JSONObject(builder.toString());
+                JsonParser parser = new JsonParser();
+                JsonObject jsonResponse = parser.parse(builder.toString()).getAsJsonObject();
+                String value = jsonResponse.get("key").getAsString();
                 // TODO: Build a response on the server containing all of the relevant data for the current game status
-                eventData.put("currentTile", jsonResponse.getString("team_current_tile"));
-                eventData.put("teamName", jsonResponse.getString("team_name"));
-                eventData.put("currentPoints", jsonResponse.getString("team_current_points"));
-                eventData.put("currentTask", jsonResponse.getString("current_task_string"));
-                eventData.put("currentTaskDescription", jsonResponse.getString("current_task_description"));
-                eventData.put("currentPlayerPoints", jsonResponse.getString("current_player_points"));
-                eventData.put("teamMembers", jsonResponse.getString("current_team_members"));
-                eventData.put("currentTaskAmt", jsonResponse.getString("current_task_quantity_required"));
-                eventData.put("currentTaskProgress", jsonResponse.getString("current_task_progress"));
-                eventData.put("currentTaskItemsObtained", jsonResponse.getString("current_task_items_obtained"));
-                eventData.put("currentTurnNumber", jsonResponse.getString("current_turn_number"));
-                eventData.put("teamRank", jsonResponse.getString("team_current_placement"));
-                eventData.put("allTeamLocations", jsonResponse.getString("all_team_locations"));
-                eventData.put("currentEffects", jsonResponse.getString("current_effects"));
-                eventData.put("currentTaskImage", jsonResponse.getString("current_task_image"));
+                eventData.put("currentTile", jsonResponse.get("team_current_tile").getAsString());
+                eventData.put("teamName", jsonResponse.get("team_name").getAsString());
+                eventData.put("currentPoints", jsonResponse.get("team_current_points").getAsString());
+                eventData.put("currentTask", jsonResponse.get("current_task_string").getAsString());
+                eventData.put("currentTaskDescription", jsonResponse.get("current_task_description").getAsString());
+                eventData.put("currentPlayerPoints", jsonResponse.get("current_player_points").getAsString());
+                eventData.put("teamMembers", jsonResponse.get("current_team_members").getAsString());
+                eventData.put("currentTaskAmt", jsonResponse.get("current_task_quantity_required").getAsString());
+                eventData.put("currentTaskProgress", jsonResponse.get("current_task_progress").getAsString());
+                eventData.put("currentTaskItemsObtained", jsonResponse.get("current_task_items_obtained").getAsString());
+                eventData.put("currentTurnNumber", jsonResponse.get("current_turn_number").getAsString());
+                eventData.put("teamRank", jsonResponse.get("team_current_placement").getAsString());
+                eventData.put("allTeamLocations", jsonResponse.get("all_team_locations").getAsString());
+                eventData.put("currentEffects", jsonResponse.get("current_effects").getAsString());
+                eventData.put("currentTaskImage", jsonResponse.get("current_task_image").getAsString());
 
-            } catch (IOException | JSONException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
             return eventData;

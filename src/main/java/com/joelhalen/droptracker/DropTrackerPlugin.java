@@ -24,6 +24,8 @@
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
 package com.joelhalen.droptracker;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.inject.Provides;
 
 import com.joelhalen.droptracker.ui.DropEntryOverlay;
@@ -51,8 +53,6 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
 
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import okhttp3.OkHttpClient;
@@ -542,6 +542,7 @@ public class DropTrackerPlugin extends Plugin {
 			} else {
 				playerName = config.permPlayerName();
 			}
+
 			// Prepare the POST request with authToken and playerName
 			MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
 			RequestBody body = RequestBody.create(mediaType,
@@ -552,55 +553,47 @@ public class DropTrackerPlugin extends Plugin {
 					.post(body)
 					.addHeader("Content-Type", "application/x-www-form-urlencoded")
 					.build();
+
 			try {
 				Response response = httpClient.newCall(request).execute();
 				String jsonData = response.body().string();
-				JSONObject jsonObject = new JSONObject(jsonData);
+				JsonParser parser = new JsonParser();
+				JsonObject jsonObject = parser.parse(jsonData).getAsJsonObject();
 				serverIdToClanNameMap = new HashMap<>();
 				serverMinimumLootVarMap = new HashMap<>();
 				serverIdToConfirmedOnlyMap = new HashMap<>();
 				clanEventActiveMap = new HashMap<>();
 
 				// Extract server name directly
-				String serverName = jsonObject.optString("server_name");
+				String serverName = jsonObject.has("server_name") ? jsonObject.get("server_name").getAsString() : "";
 
 				// Assuming 'serverId' is provided some other way
 				String serverId = config.serverId(); // This needs to be set appropriately
 
-				// Parse the config field, which is a JSON string, into a JSONObject
-				JSONObject configObject = new JSONObject(jsonObject.optString("config"));
-				String isEventActiveStr = configObject.optString("is_event_currently_active");
-				String storeOnlyConfirmed = configObject.optString("store_only_confirmed_drops");
+				// Parse the config field, which is a JSON string, into a JsonObject
+				JsonObject configObject = jsonObject.has("config") ? jsonObject.get("config").getAsJsonObject() : new JsonObject();
+				String isEventActiveStr = configObject.has("is_event_currently_active") ? configObject.get("is_event_currently_active").getAsString() : "";
+				String storeOnlyConfirmed = configObject.has("store_only_confirmed_drops") ? configObject.get("store_only_confirmed_drops").getAsString() : "";
 				boolean isEventActive = "1".equals(isEventActiveStr);
 				boolean storeOnlyConfirmedDrops = "1".equals(storeOnlyConfirmed);
+
 				// Now extract data from the configObject
-				serverIdToClanNameMap.put(
-						serverId,
-						serverName
-				);
+				serverIdToClanNameMap.put(serverId, serverName);
 				serverMinimumLootVarMap.put(
 						serverId,
-						configObject.optInt("minimum_loot_for_notifications",1000000)
+						configObject.has("minimum_loot_for_notifications") ? configObject.get("minimum_loot_for_notifications").getAsInt() : 1000000
 				);
-				serverIdToConfirmedOnlyMap.put(
-						serverId,
-						storeOnlyConfirmedDrops
-				);
-				clanEventActiveMap.put(
-						serverId,
-						isEventActive
-				);
+				serverIdToConfirmedOnlyMap.put(serverId, storeOnlyConfirmedDrops);
+				clanEventActiveMap.put(serverId, isEventActive);
 				// Add other mappings as needed...
 
-			} catch (JSONException e) {
-				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		});
 	}
 
-public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
+	public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
 		HttpUrl url = HttpUrl.parse("https://droptracker.io/admin/api/store_drop_data.php"); // Replace with your PHP script URL
 		String serverId = config.serverId();
 		String notified_str = "1";
@@ -611,7 +604,8 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 		} else {
 			send_msg = false;
 		}
-	FormBody.Builder formBuilder = new FormBody.Builder()
+
+		FormBody.Builder formBuilder = new FormBody.Builder()
 				.add("auth_token", authKey) // Use "auth_token" if using authToken
 				.add("item_name", itemName)
 				.add("item_id", String.valueOf(itemId))
@@ -635,29 +629,24 @@ public CompletableFuture<Void> sendDropData(String playerName, String npcName, i
 				if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
 				// Handle response
 				String responseData = response.body().string();
-				try {
-					Integer realValue = (quantity * geValue);
-					JSONObject jsonObj = new JSONObject(responseData);
-					if (jsonObj.has("success") && (send_msg == true)) {
-						String playerTotalLoot = jsonObj.optString("totalLootValue");
-						ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-						NumberFormat playerLootFormat = NumberFormat.getNumberInstance();
-						String playerLootString = formatNumber(Double.parseDouble(playerTotalLoot));
-						messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-								.append("DropTracker")
-								.append(ChatColorType.NORMAL)
-								.append("] ")
-								.append("Your drop has been submitted! You now have a total of " + playerLootString);
-						chatMessageManager.queue(QueuedMessage.builder()
-								.type(ChatMessageType.CONSOLE)
-								.runeLiteFormattedMessage(messageResponse.build())
-								.build());
-					} else {
-
-					}
-				} catch (Exception e) {
-					// Handle parsing errors
-					e.printStackTrace();
+				JsonParser parser = new JsonParser();
+				JsonObject jsonObj = parser.parse(responseData).getAsJsonObject();
+				if (jsonObj.has("success") && send_msg) {
+					String playerTotalLoot = jsonObj.has("totalLootValue") ? jsonObj.get("totalLootValue").getAsString() : "0";
+					ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+					NumberFormat playerLootFormat = NumberFormat.getNumberInstance();
+					String playerLootString = formatNumber(Double.parseDouble(playerTotalLoot));
+					messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+							.append("DropTracker")
+							.append(ChatColorType.NORMAL)
+							.append("] ")
+							.append("Your drop has been submitted! You now have a total of " + playerLootString);
+					chatMessageManager.queue(QueuedMessage.builder()
+							.type(ChatMessageType.CONSOLE)
+							.runeLiteFormattedMessage(messageResponse.build())
+							.build());
+				} else {
+					// Handle the case where the response does not have a "success" field or send_msg is false
 				}
 			} catch (IOException e) {
 				e.printStackTrace();

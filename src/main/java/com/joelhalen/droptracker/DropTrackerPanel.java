@@ -25,6 +25,10 @@
 
 package com.joelhalen.droptracker;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.joelhalen.droptracker.ui.DropEntryOverlay;
 import com.joelhalen.droptracker.ui.MembersComboBox;
 import net.runelite.api.ChatMessageType;
@@ -38,9 +42,6 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +73,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 
 public class DropTrackerPanel extends PluginPanel
@@ -266,14 +266,15 @@ public class DropTrackerPanel extends PluginPanel
                     builder.append(line);
                 }
                 reader.close();
-                JSONObject jsonResponse = new JSONObject(builder.toString());
+                JsonParser parser = new JsonParser();
+                JsonObject jsonResponse = parser.parse(builder.toString()).getAsJsonObject();
                 System.out.println("JSONResponse: " + jsonResponse);
-                lootData.put("playerLoot", jsonResponse.getString("player_total"));
-                lootData.put("serverLoot", jsonResponse.getString("server_total"));
-                JSONArray recentDropsArray = jsonResponse.getJSONArray("recent_drops");
+                lootData.put("playerLoot", jsonResponse.has("player_total") ? jsonResponse.get("player_total").getAsString() : "");
+                lootData.put("serverLoot", jsonResponse.has("server_total") ? jsonResponse.get("server_total").getAsString() : "");
+                JsonArray recentDropsArray = jsonResponse.has("recent_drops") ? jsonResponse.get("recent_drops").getAsJsonArray() : new JsonArray();
                 lootData.put("recentDrops", recentDropsArray.toString());
 
-            } catch (IOException | JSONException e) {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
             return lootData;
@@ -372,22 +373,26 @@ public class DropTrackerPanel extends PluginPanel
                                             descTextBox.add(descText);
                                             descTextBox.add(Box.createHorizontalGlue());
                                             dropsPanel.add(descTextBox, BorderLayout.NORTH);
-                                            JSONArray recentDropsArray = new JSONArray(lootData.get("recentDrops"));
-                                            List<JSONObject> dropList = IntStream.range(0, recentDropsArray.length())
-                                                    .mapToObj(recentDropsArray::getJSONObject)
-                                                    .sorted((a, b) -> Integer.compare(b.getInt("value"), a.getInt("value")))
-                                                    .collect(Collectors.toList());
-                                            List<JSONObject> topDrops = dropList.stream().limit(3).collect(Collectors.toList());
+                                            JsonParser parser = new JsonParser();
+                                            JsonArray recentDropsArray = parser.parse(lootData.get("recentDrops")).getAsJsonArray();
+                                            List<JsonObject> dropList = new ArrayList<>();
+
+                                            for (JsonElement element : recentDropsArray) {
+                                                dropList.add(element.getAsJsonObject());
+                                            }
+
+                                            dropList.sort((a, b) -> Integer.compare(b.get("value").getAsInt(), a.get("value").getAsInt()));
+                                            List<JsonObject> topDrops = dropList.stream().limit(3).collect(Collectors.toList());
                                             Box allItemsBox = Box.createHorizontalBox();
 
-                                            for (JSONObject drop : topDrops) {
+                                            for (JsonObject drop : topDrops) {
                                                 Box entryItemBox = Box.createVerticalBox();
                                                 entryItemBox.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-                                                int itemId = drop.getInt("item_id");
-                                                String dropPlayerName = drop.optString("player_name", "Unknown");
-                                                String timeReceived = drop.optString("time");
-                                                String itemName = drop.optString("item_name");
+                                                int itemId = drop.get("item_id").getAsInt();
+                                                String dropPlayerName = drop.has("player_name") ? drop.get("player_name").getAsString() : "Unknown";
+                                                String timeReceived = drop.has("time") ? drop.get("time").getAsString() : "";
+                                                String itemName = drop.has("item_name") ? drop.get("item_name").getAsString() : "";
                                                 BufferedImage itemImage = itemManager.getImage(itemId);
                                                 JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
                                                 imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -405,10 +410,8 @@ public class DropTrackerPanel extends PluginPanel
                                                 entryItemBox.add(timeLabel);
 
                                                 allItemsBox.add(Box.createHorizontalStrut(10));
-
                                                 allItemsBox.add(entryItemBox);
                                             }
-
 
                                             if (!isAllItemsBoxAdded.get()) {
                                                 dropsPanel.add(allItemsBox);
@@ -709,7 +712,7 @@ public class DropTrackerPanel extends PluginPanel
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             connection.setDoOutput(true);
 
-            String message = String.format("player_name=%s&server_id=%s&auth_key=%s", playerName, serverId, authKey);
+            String message = String.format("player_name=%s&server_id=%s&auth_key=%s", URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString()), URLEncoder.encode(serverId, StandardCharsets.UTF_8.toString()), URLEncoder.encode(authKey, StandardCharsets.UTF_8.toString()));
             connection.getOutputStream().write(message.getBytes(StandardCharsets.UTF_8));
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
@@ -721,11 +724,12 @@ public class DropTrackerPanel extends PluginPanel
             reader.close();
             connection.disconnect();
 
-            JSONObject jsonResponse = new JSONObject(response.toString());
+            JsonParser parser = new JsonParser();
+            JsonObject jsonResponse = parser.parse(response.toString()).getAsJsonObject();
             if (jsonResponse.has("success")) {
                 return "Authenticated";
             } else if (jsonResponse.has("error")) {
-                return jsonResponse.getString("error");
+                return jsonResponse.get("error").getAsString();
             } else {
                 return "Unknown response";
             }
@@ -734,7 +738,6 @@ public class DropTrackerPanel extends PluginPanel
             return "error: " + e.getMessage();
         }
     }
-
 
     private void submitDrop(DropEntry entry) {
         SwingUtilities.invokeLater(() -> {

@@ -33,8 +33,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import org.json.JSONArray;
-import org.json.JSONObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import javax.inject.Inject;
 
@@ -46,20 +48,22 @@ public class GroupMemberClient {
         String groupUrl = "https://droptracker.io/admin/api/get_users_by_server_id.php?server_id=" + serverId;
         Request request = new Request.Builder().url(groupUrl).build();
 
-        Response response = client.newCall(request).execute();
-        String responseBody = Objects.requireNonNull(response.body()).string();
+        try (Response response = client.newCall(request).execute()) {
+            String responseBody = Objects.requireNonNull(response.body()).string();
 
-        JSONArray users = new JSONArray(responseBody);
+            JsonParser parser = new JsonParser();
+            JsonArray users = parser.parse(responseBody).getAsJsonArray();
 
-        List<String> usernames = new ArrayList<>();
-        for (int i = 0; i < users.length(); i++) {
-            JSONObject user = users.getJSONObject(i);
-            String rsn = user.getString("rsn");
-            if (!rsn.equalsIgnoreCase(playerName)) {
-                usernames.add(user.getString("rsn"));
+            List<String> usernames = new ArrayList<>();
+            for (JsonElement element : users) {
+                JsonObject user = element.getAsJsonObject();
+                String rsn = user.get("rsn").getAsString();
+                if (!rsn.equalsIgnoreCase(playerName)) {
+                    usernames.add(rsn);
+                }
             }
-        }
 
-        return usernames.toArray(new String[0]);
+            return usernames.toArray(new String[0]);
+        }
     }
 }
