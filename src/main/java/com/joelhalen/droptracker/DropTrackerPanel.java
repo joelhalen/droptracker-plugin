@@ -268,7 +268,6 @@ public class DropTrackerPanel extends PluginPanel
                 reader.close();
                 JsonParser parser = new JsonParser();
                 JsonObject jsonResponse = parser.parse(builder.toString()).getAsJsonObject();
-                System.out.println("JSONResponse: " + jsonResponse);
                 lootData.put("playerLoot", jsonResponse.has("player_total") ? jsonResponse.get("player_total").getAsString() : "");
                 lootData.put("serverLoot", jsonResponse.has("server_total") ? jsonResponse.get("server_total").getAsString() : "");
                 JsonArray recentDropsArray = jsonResponse.has("recent_drops") ? jsonResponse.get("recent_drops").getAsJsonArray() : new JsonArray();
