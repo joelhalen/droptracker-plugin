@@ -81,50 +81,39 @@ public class DropTrackerEventPanel extends PluginPanel {
 
     private void initializePanel() {
         SwingUtilities.invokeLater(() -> {
-            // Clear the panel
             this.removeAll();
 
-            // Set layout for this panel
             this.setLayout(new BorderLayout());
 
-            // Logo panel setup
             JPanel logoPanel = new JPanel();
             logoPanel.setLayout(new BoxLayout(logoPanel, BoxLayout.X_AXIS));
             logoPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-            // Create an ImageIcon from the TOP_LOGO BufferedImage
             ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
             JLabel logoLabel = new JLabel(logoIcon);
 
-            // Center the logo label in the logo panel
             logoPanel.add(Box.createHorizontalGlue());
             logoPanel.add(logoLabel);
             logoPanel.add(Box.createHorizontalGlue());
 
-            // Add the logo panel to the top of this panel
             this.add(logoPanel, BorderLayout.NORTH);
 
-            // Main content panel
             JPanel mainContentPanel = new JPanel();
             mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
             mainContentPanel.setBorder(new EmptyBorder(15, 0, 10, 0));
             mainContentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-            // Add team information and tile section panels
             JPanel teamInfoPanel = createTeamInfoPanel();
             JPanel tileSectionPanel = createTileSectionPanel();
             mainContentPanel.add(teamInfoPanel);
             mainContentPanel.add(tileSectionPanel);
 
-            // Refresh button
             JButton refreshButton = new JButton("Refresh");
             refreshButton.addActionListener(e -> refreshPanel());
 
-            // Add main content and refresh button to this panel
             this.add(mainContentPanel, BorderLayout.CENTER);
             this.add(refreshButton, BorderLayout.SOUTH);
 
-            // Revalidate and repaint this panel
             this.revalidate();
             this.repaint();
         });
@@ -164,18 +153,17 @@ public class DropTrackerEventPanel extends PluginPanel {
         fetchEventStatus().thenAccept(eventData -> SwingUtilities.invokeLater(() -> {
             updateTeamInfoTable(eventData);
             updateTileSectionPanel(eventData);
-            // Update other UI components here as needed
         }));
     }
     private JPanel createTeamInfoPanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10)); // Adds padding around the panel
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Team icon
-        JLabel teamIconLabel = new JLabel(new ImageIcon("path/to/team/icon")); // Replace with actual icon path
+
+        JLabel teamIconLabel = new JLabel(new ImageIcon("path/to/team/icon"));
         panel.add(teamIconLabel, BorderLayout.WEST);
 
-        // Data for the table
+
         String[] columnNames = {"Info", "Value"};
         Object[][] data = {
                 {"<html><b>Your Team</b>:</html>", "Zaros"},
@@ -265,18 +253,15 @@ public class DropTrackerEventPanel extends PluginPanel {
         imageLabel = new JLabel(new ImageIcon(itemImage));
         JPanel tilePanel = createTilePanel(imageLabel);
         panel.add(tilePanel, BorderLayout.WEST);
-        JLabel currentTaskTitleLabel = new JLabel("Current Task"); // Update class field
+        JLabel currentTaskTitleLabel = new JLabel("Current Task");
         progressLabel = new JLabel("<html><b>Status</b>: 0/1</html>");
         JPanel currentTaskTextPanel = new JPanel();
         currentTaskTextPanel.setLayout(new BoxLayout(currentTaskTextPanel, BoxLayout.Y_AXIS));
         currentTaskTextPanel.add(currentTaskTitleLabel, BorderLayout.CENTER);
         panel.add(currentTaskTextPanel, BorderLayout.CENTER);
-        // Create a panel for the text
         JPanel textPanel = new JPanel();
         textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
-        textPanel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Optional padding
-
-        // Add labels
+        textPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         currentTaskLabel = new JLabel("Unknown...");
         currentTaskLabel.setFont(new Font("Arial", Font.PLAIN, 12));
 
@@ -287,15 +272,12 @@ public class DropTrackerEventPanel extends PluginPanel {
         progressLabel = new JLabel("<html>Please try again later.</html>");
         progressLabel.setFont(new Font("Arial", Font.PLAIN, 11));
 
-
-        // Add labels to the text panel
         textPanel.add(currentTaskLabel);
-        textPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing between labels
+        textPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         textPanel.add(descriptionLabel);
-        textPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing between labels
+        textPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         textPanel.add(progressLabel);
 
-        // Add the text panel to the main panel
         panel.add(textPanel, BorderLayout.CENTER);
 
         return panel;
@@ -322,13 +304,13 @@ public class DropTrackerEventPanel extends PluginPanel {
     void refreshPanel() {
         SwingUtilities.invokeLater(() -> {
             refreshEventStatus();
-            mainPanel.removeAll(); // Clear all components from mainPanel
+            mainPanel.removeAll();
             remove(mainPanel);
 
-            initializePanel(); // Reinitialize the components and add them back to mainPanel
+            initializePanel();
 
-            mainPanel.revalidate(); // Revalidate the layout of the mainPanel
-            mainPanel.repaint(); // Repaint the mainPanel to reflect changes
+            mainPanel.revalidate();
+            mainPanel.repaint();
         });
     }
 }
