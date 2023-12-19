@@ -261,7 +261,7 @@ public class DropTrackerPanel extends PluginPanel
                 String playerName = plugin.getPlayerName();
 
                 playerName = URLEncoder.encode(playerName, StandardCharsets.UTF_8.toString());
-                URL url = new URL("https://www.droptracker.io/admin/api/fetch_drop_data.php?server_id=" + config.serverId() + "&player_name=" + playerName);
+                URL url = new URL("http://api.droptracker.io/api/get_drop_data?server_id=" + config.serverId() + "&player_name=" + playerName + "&auth=" + config.authKey());
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
 

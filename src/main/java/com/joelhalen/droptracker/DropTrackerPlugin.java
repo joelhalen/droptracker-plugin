@@ -174,17 +174,12 @@ public class DropTrackerPlugin extends Plugin {
 		NPC npc = npcLootReceived.getNpc();
 		String npcName = npc.getName();
 		int npcCombatLevel = npc.getCombatLevel();
-		String playerName;
-		if(config.permPlayerName().equals("")) {
-			playerName = client.getLocalPlayer().getName();
-		} else {
-			playerName = config.permPlayerName();
-		}
+		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
 		Collection<ItemStack> items = npcLootReceived.getItems();
+
 		for (ItemStack item : items) {
 			int itemId = item.getId();
 			int quantity = item.getQuantity();
-			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
 
 			int geValue = itemManager.getItemPrice(itemId);
 			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
@@ -202,7 +197,7 @@ public class DropTrackerPlugin extends Plugin {
 							}
 						} else {
 							/* Create the screenshot object so that we can upload it, saving the url to the drop object */
-							CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId);
+							CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId, npcName);
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -233,7 +228,7 @@ public class DropTrackerPlugin extends Plugin {
 							entry.setItemId(itemId);
 							entry.setQuantity(quantity);
 							if (config.sendScreenshots()) {
-								getScreenshot(playerName, itemId).thenAccept(imageUrl -> {
+								getScreenshot(playerName, itemId, npcName).thenAccept(imageUrl -> {
 									SwingUtilities.invokeLater(() -> {
 										entry.setImageLink(imageUrl);
 									});
@@ -303,7 +298,7 @@ public class DropTrackerPlugin extends Plugin {
 							if (quantity > 1) {
 								return;
 							}
-							CompletableFuture<String> uploadFuture = getScreenshot(submissionPlayer, itemId);
+							CompletableFuture<String> uploadFuture = getScreenshot(submissionPlayer, itemId, lootReceived.getName());
 							if (config.sendChatMessages()) {
 								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
 								addedDropToPanelMessage.append("[")
@@ -490,7 +485,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		lastSentItemData = new HashMap<>(itemData);
 
-		HttpUrl url = HttpUrl.parse("https://droptracker.io/admin/api/store_rank_gear.php");
+		HttpUrl url = HttpUrl.parse("http://api.droptracker.io/api/players/update");
 		String serverId = config.serverId();
 
 		Gson gson = new Gson();
@@ -669,7 +664,7 @@ public class DropTrackerPlugin extends Plugin {
 					"auth_token=" + config.authKey() + "&player_name=" + playerName);
 
 			Request request = new Request.Builder()
-					.url("https://www.droptracker.io/admin/api/runelite_client_settings.php")
+					.url("http://api.droptracker.io/api/server_settings")
 					.post(body)
 					.addHeader("Content-Type", "application/x-www-form-urlencoded")
 					.build();
@@ -777,7 +772,7 @@ public class DropTrackerPlugin extends Plugin {
 		});
 	}
 
-	private CompletableFuture<String> getScreenshot(String playerName, int itemId) {
+	private CompletableFuture<String> getScreenshot(String playerName, int itemId, String npcName) {
 		CompletableFuture<String> future = new CompletableFuture<>();
 
 		try {
@@ -793,12 +788,15 @@ public class DropTrackerPlugin extends Plugin {
 
 					RequestBody requestBody = new MultipartBody.Builder()
 							.setType(MultipartBody.FORM)
-							.addFormDataPart("file", nicePlayerName + "_" + itemName + ".png",
+							.addFormDataPart("file", itemName + ".png",
 									RequestBody.create(MediaType.parse("image/png"), imageData))
+							.addFormDataPart("server_name", serverIdToClanNameMap.get(config.serverId()))
+							.addFormDataPart("player_name", playerName)
+							.addFormDataPart("npc", npcName)
 							.build();
 						executor.submit(() -> {
 							Request request = new Request.Builder()
-									.url("https://www.droptracker.io/upload/upload.php")
+									.url("http://api.droptracker.io/api/upload_image")
 									.post(requestBody)
 									.build();
 							try (Response response = httpClient.newCall(request).execute()) {

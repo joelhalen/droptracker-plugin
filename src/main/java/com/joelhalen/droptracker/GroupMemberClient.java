@@ -45,7 +45,7 @@ public class GroupMemberClient {
     private OkHttpClient client;
 
     public String[] getGroupMembers(Long serverId, String playerName) throws IOException {
-        String groupUrl = "https://droptracker.io/admin/api/get_users_by_server_id.php?server_id=" + serverId;
+        String groupUrl = "http://api.droptracker.io/api/get_usernames?server_id=" + serverId;
         Request request = new Request.Builder().url(groupUrl).build();
 
         try (Response response = client.newCall(request).execute()) {
