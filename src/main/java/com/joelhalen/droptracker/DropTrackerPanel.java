@@ -91,6 +91,7 @@ public class DropTrackerPanel extends PluginPanel
     private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
     public final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
+    public boolean isRefreshing = false;
     @Inject
     private DropEntryOverlay overlay;
     public String localAuthKey = null;
@@ -124,7 +125,13 @@ public class DropTrackerPanel extends PluginPanel
         dropsPanel.add(logoLabel);
 
         JButton refreshButton = new JButton("Refresh");
-        refreshButton.addActionListener(e -> refreshPanel());
+        refreshButton.addActionListener(e -> {
+                    if (!isRefreshing) {
+                        isRefreshing = true;
+                        refreshPanel();
+                        isRefreshing = false;
+                    }
+                });
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
         buttonPanel.add(Box.createHorizontalGlue());
@@ -282,332 +289,342 @@ public class DropTrackerPanel extends PluginPanel
 
 
     void refreshPanel() {
-        SwingUtilities.invokeLater(() -> {
-            dropsPanel.removeAll();
-            String playerName = plugin.getLocalPlayerName();
-            dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
-            AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
-            AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
-            String formattedServerTotal = "0";
-            AtomicBoolean isAllItemsBoxAdded = new AtomicBoolean(false);
-            if (playerName != null) {
-                if(config.serverId().equals("")) {
-                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                    messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-                            .append("DropTracker")
-                            .append(ChatColorType.NORMAL)
-                            .append("]")
-                            .append("You have not configured a serverID in the plugin config! If your server is not part of the DropTracker, the plugin will not work!");
-                    plugin.chatMessageManager.queue(QueuedMessage.builder()
-                            .type(ChatMessageType.CONSOLE)
-                            .runeLiteFormattedMessage(messageResponse.build())
-                            .build());
-                    playerLoot.set("<em>...</em>");
-                    try {
-                        plugin.shutDown();
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
+            SwingUtilities.invokeLater(() -> {
+                dropsPanel.removeAll();
+                dropsPanel.validate();
+                dropsPanel.repaint();
+                String playerName = plugin.getLocalPlayerName();
+                dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
+                AtomicReference<String> playerLoot = new AtomicReference<>("loading...");
+                AtomicReference<String> formattedServerTotalRef = new AtomicReference<>("loading...");
+                String formattedServerTotal = "0";
+                AtomicBoolean isAllItemsBoxAdded = new AtomicBoolean(false);
+                if (playerName != null) {
+                    if (config.serverId().equals("")) {
+                        ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                        messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                                .append("DropTracker")
+                                .append(ChatColorType.NORMAL)
+                                .append("]")
+                                .append("You have not configured a serverID in the plugin config! If your server is not part of the DropTracker, the plugin will not work!");
+                        plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                .type(ChatMessageType.CONSOLE)
+                                .runeLiteFormattedMessage(messageResponse.build())
+                                .build());
+                        playerLoot.set("<em>...</em>");
+                        try {
+                            plugin.shutDown();
+                        } catch (Exception e) {
+                            throw new RuntimeException(e);
+                        }
+                        return;
                     }
-                    return;
-                }
 
-                checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
-                    SwingUtilities.invokeLater(() -> {
-                        if (authRes.equals("User not found")) {
-                            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                    .append("DropTracker")
-                                    .append("] Your account was not found in " + plugin.getServerName(config.serverId()))
-                                    .append("'s database!");
-                            ChatMessageBuilder registrationMemberResponse = new ChatMessageBuilder();
-                            messageResponse.append(ChatColorType.HIGHLIGHT).append("In order to register, type your")
-                                    .append("RSN inside of your clan's designated discord channel.");
-                            playerLoot.set("<em>unregistered</em>");
-                            plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                    .type(ChatMessageType.CONSOLE)
-                                    .runeLiteFormattedMessage(messageResponse.build())
-                                    .build());
-                            plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                    .type(ChatMessageType.CONSOLE)
-                                    .runeLiteFormattedMessage(registrationMemberResponse.build())
-                                    .build());
-                        } else if (authRes.equals("Invalid auth token")) {
-                            ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                            messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
-                                    .append("DropTracker")
-                                    .append("] You have entered an invalid authentication")
-                                    .append(" token in the configuration for DropTracker.");
-                            playerLoot.set("<em>unregistered</em>");
-                            plugin.chatMessageManager.queue(QueuedMessage.builder()
-                                    .type(ChatMessageType.CONSOLE)
-                                    .runeLiteFormattedMessage(messageResponse.build())
-                                    .build());
-                        } else if (authRes.equals("yes")) {
-                            localAuthKey = config.authKey();
-                            if(plugin.getLocalPlayerName() != null) {
-                                localPlayerName = plugin.getLocalPlayerName();
-                            }
-                            CompletableFuture.runAsync(() -> {
-                                if(!config.permPlayerName().equals("")) {
-                                    localPlayerName = config.permPlayerName();
+                    checkAuthKeyAsync(playerName, config.serverId(), config.authKey(), (authRes) -> {
+                        SwingUtilities.invokeLater(() -> {
+                            if (authRes.equals("User not found")) {
+                                ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+                                        .append("DropTracker")
+                                        .append("] Your account was not found in " + plugin.getServerName(config.serverId()))
+                                        .append("'s database!");
+                                ChatMessageBuilder registrationMemberResponse = new ChatMessageBuilder();
+                                messageResponse.append(ChatColorType.HIGHLIGHT).append("In order to register, type your")
+                                        .append("RSN inside of your clan's designated discord channel.");
+                                playerLoot.set("<em>unregistered</em>");
+                                plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                        .type(ChatMessageType.CONSOLE)
+                                        .runeLiteFormattedMessage(messageResponse.build())
+                                        .build());
+                                plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                        .type(ChatMessageType.CONSOLE)
+                                        .runeLiteFormattedMessage(registrationMemberResponse.build())
+                                        .build());
+                            } else if (authRes.equals("Invalid auth token")) {
+                                ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                                messageResponse.append(ChatColorType.HIGHLIGHT).append("[")
+                                        .append("DropTracker")
+                                        .append("] You have entered an invalid authentication")
+                                        .append(" token in the configuration for DropTracker.");
+                                playerLoot.set("<em>unregistered</em>");
+                                plugin.chatMessageManager.queue(QueuedMessage.builder()
+                                        .type(ChatMessageType.CONSOLE)
+                                        .runeLiteFormattedMessage(messageResponse.build())
+                                        .build());
+                            } else if (authRes.equals("yes")) {
+                                localAuthKey = config.authKey();
+                                if (plugin.getLocalPlayerName() != null) {
+                                    localPlayerName = plugin.getLocalPlayerName();
                                 }
-                                fetchLootFromServer().thenAccept(lootData -> {
-                                    SwingUtilities.invokeLater(() -> {
-                                        if (lootData != null) {
-                                            if (lootData.containsKey("playerLoot")) {
-                                                playerLoot.set(formatNumber(Double.parseDouble(lootData.get("playerLoot"))));
+                                CompletableFuture.runAsync(() -> {
+                                    if (!config.permPlayerName().equals("")) {
+                                        localPlayerName = config.permPlayerName();
+                                    }
+                                    fetchLootFromServer().thenAccept(lootData -> {
+                                        SwingUtilities.invokeLater(() -> {
+                                            if (lootData != null) {
+                                                if (lootData.containsKey("playerLoot")) {
+                                                    playerLoot.set(formatNumber(Double.parseDouble(lootData.get("playerLoot"))));
+                                                }
+                                                if (lootData.containsKey("serverLoot")) {
+                                                    formattedServerTotalRef.set(formatNumber(Double.parseDouble(lootData.get("serverLoot"))));
+                                                }
+                                            } else {
+                                                playerLoot.set("unregistered");
                                             }
-                                            if (lootData.containsKey("serverLoot")) {
-                                                formattedServerTotalRef.set(formatNumber(Double.parseDouble(lootData.get("serverLoot"))));
+                                            updateTable(playerLoot.get(), formattedServerTotalRef.get());
+                                            if (lootData.containsKey("recentDrops")) {
+                                                JLabel descText = new JLabel("<html><h3><b>" + plugin.getServerName(config.serverId()) + "'s Recent Submissions:</b></h3></html>");
+                                                descText.setAlignmentX(Component.CENTER_ALIGNMENT);
+                                                Box descTextBox = Box.createHorizontalBox();
+                                                descTextBox.add(Box.createHorizontalGlue());
+                                                descTextBox.add(descText);
+                                                descTextBox.add(Box.createHorizontalGlue());
+                                                dropsPanel.add(descTextBox, BorderLayout.NORTH);
+                                                JsonParser parser = new JsonParser();
+                                                JsonArray recentDropsArray = parser.parse(lootData.get("recentDrops")).getAsJsonArray();
+                                                List<JsonObject> dropList = new ArrayList<>();
+
+                                                for (JsonElement element : recentDropsArray) {
+                                                    dropList.add(element.getAsJsonObject());
+                                                }
+
+                                                dropList.sort((a, b) -> Integer.compare(b.get("value").getAsInt(), a.get("value").getAsInt()));
+                                                List<JsonObject> topDrops = dropList.stream().limit(3).collect(Collectors.toList());
+                                                Box allItemsBox = Box.createHorizontalBox();
+
+                                                for (JsonObject drop : topDrops) {
+                                                    Box entryItemBox = Box.createVerticalBox();
+                                                    entryItemBox.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+                                                    int itemId = drop.get("item_id").getAsInt();
+                                                    String dropPlayerName = drop.has("player_name") ? drop.get("player_name").getAsString() : "Unknown";
+                                                    String timeReceived = drop.has("time") ? drop.get("time").getAsString() : "";
+                                                    String itemName = drop.has("item_name") ? drop.get("item_name").getAsString() : "";
+                                                    BufferedImage itemImage = itemManager.getImage(itemId);
+                                                    JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
+                                                    imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+                                                    JLabel itemNameLabel = new JLabel("<html><b>" + itemName + "</b></html>");
+                                                    itemNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                                                    JLabel playerLabel = new JLabel(dropPlayerName);
+                                                    playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                                                    JLabel timeLabel = new JLabel("<html><em>" + timeReceived + "</em></html>");
+                                                    timeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+                                                    entryItemBox.add(itemNameLabel);
+                                                    entryItemBox.add(imageLabel);
+                                                    entryItemBox.add(playerLabel);
+                                                    entryItemBox.add(timeLabel);
+
+                                                    allItemsBox.add(Box.createHorizontalStrut(10));
+                                                    allItemsBox.add(entryItemBox);
+                                                }
+
+                                                if (!isAllItemsBoxAdded.get()) {
+                                                    dropsPanel.add(allItemsBox);
+                                                    isAllItemsBoxAdded.set(true);
+                                                }
                                             }
-                                        } else {
-                                            playerLoot.set("unregistered");
-                                        }
-                                        updateTable(playerLoot.get(), formattedServerTotalRef.get());
-                                        if (lootData.containsKey("recentDrops")) {
-                                            JLabel descText = new JLabel("<html><h3><b>" + plugin.getServerName(config.serverId()) + "'s Recent Submissions:</b></h3></html>");
-                                            descText.setAlignmentX(Component.CENTER_ALIGNMENT);
-                                            Box descTextBox = Box.createHorizontalBox();
-                                            descTextBox.add(Box.createHorizontalGlue());
-                                            descTextBox.add(descText);
-                                            descTextBox.add(Box.createHorizontalGlue());
-                                            dropsPanel.add(descTextBox, BorderLayout.NORTH);
-                                            JsonParser parser = new JsonParser();
-                                            JsonArray recentDropsArray = parser.parse(lootData.get("recentDrops")).getAsJsonArray();
-                                            List<JsonObject> dropList = new ArrayList<>();
+                                            // dropsPanel.revalidate();
+                                            // dropsPanel.repaint();
+                                            if (entries.isEmpty()) {
+                                                JLabel descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
 
-                                            for (JsonElement element : recentDropsArray) {
-                                                dropList.add(element.getAsJsonObject());
+                                                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                                                Box descTextBox = Box.createHorizontalBox();
+                                                descTextBox.add(descText);
+                                                descTextBox.add(Box.createHorizontalGlue());
+                                                dropsPanel.add(descTextBox);
                                             }
-
-                                            dropList.sort((a, b) -> Integer.compare(b.get("value").getAsInt(), a.get("value").getAsInt()));
-                                            List<JsonObject> topDrops = dropList.stream().limit(3).collect(Collectors.toList());
-                                            Box allItemsBox = Box.createHorizontalBox();
-
-                                            for (JsonObject drop : topDrops) {
-                                                Box entryItemBox = Box.createVerticalBox();
-                                                entryItemBox.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-                                                int itemId = drop.get("item_id").getAsInt();
-                                                String dropPlayerName = drop.has("player_name") ? drop.get("player_name").getAsString() : "Unknown";
-                                                String timeReceived = drop.has("time") ? drop.get("time").getAsString() : "";
-                                                String itemName = drop.has("item_name") ? drop.get("item_name").getAsString() : "";
-                                                BufferedImage itemImage = itemManager.getImage(itemId);
-                                                JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
-                                                imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-                                                JLabel itemNameLabel = new JLabel("<html><b>" + itemName + "</b></html>");
-                                                itemNameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-                                                JLabel playerLabel = new JLabel(dropPlayerName);
-                                                playerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-                                                JLabel timeLabel = new JLabel("<html><em>" + timeReceived + "</em></html>");
-                                                timeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-                                                entryItemBox.add(itemNameLabel);
-                                                entryItemBox.add(imageLabel);
-                                                entryItemBox.add(playerLabel);
-                                                entryItemBox.add(timeLabel);
-
-                                                allItemsBox.add(Box.createHorizontalStrut(10));
-                                                allItemsBox.add(entryItemBox);
-                                            }
-
-                                            if (!isAllItemsBoxAdded.get()) {
-                                                dropsPanel.add(allItemsBox);
-                                                isAllItemsBoxAdded.set(true);
-                                            }
-                                        }
-                                        dropsPanel.revalidate();
-                                        dropsPanel.repaint();
-                                        if (entries.isEmpty()) {
-                                            JLabel descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
-
-                                            descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                                            Box descTextBox = Box.createHorizontalBox();
-                                            descTextBox.add(descText);
-                                            descTextBox.add(Box.createHorizontalGlue());
-                                            dropsPanel.add(descTextBox);
-                                        }
+                                        });
                                     });
                                 });
-                            });
-                        } else {
-                            log.debug("Some type of error occurred authenticating with the DropTracker database.");
-                        }
-                    });
-                });
-
-            } else {
-                playerLoot.set("not signed in!");
-            }
-            if(config.authKey().equals("")) {
-                return;
-            }
-            dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
-            dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-
-            ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
-            JLabel logoLabel = new JLabel(logoIcon);
-
-            dropsPanel.add(logoLabel);
-
-            /* Add a button to refresh the panel */
-            JButton refreshButton = new JButton("Refresh");
-            refreshButton.addActionListener(e -> refreshPanel());
-            JPanel buttonPanel = new JPanel();
-            buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
-            buttonPanel.add(Box.createHorizontalGlue());
-            buttonPanel.add(refreshButton);
-            buttonPanel.add(Box.createHorizontalGlue());
-            JPanel topPanel = new JPanel(new BorderLayout());
-            topPanel.add(buttonPanel);
-            topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-            topPanel.add(logoLabel, BorderLayout.NORTH);
-            topPanel.add(buttonPanel, BorderLayout.CENTER);
-            dropsPanel.add(topPanel, BorderLayout.NORTH);
-            dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
-            JLabel descText;
-            if(config.serverId().equals("") || config.authKey().equals("")) {
-                descText = new JLabel("<html><br><br>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
-                        "your server must be added<br> to our database, and you must configure the plugin from settings panel -><br> Contact a member of your clan's staff team to get set up, or obtain your ServerID!</html>");
-                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                Box descTextBox = Box.createHorizontalBox();
-                descTextBox.add(descText);
-                descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
-                dropsPanel.add(descTextBox);
-            } else {
-
-                String serverName = plugin.getServerName(config.serverId());
-                int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
-                NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
-                String minimumLootString = clanLootFormat.format(minimumClanLoot);
-                String[][] data = {
-                        {"Your Clan: ", serverName},
-                        {"Minimum Value: ", minimumLootString + " gp"},
-                        {"Your total loot: ", playerLoot.get(), ""},
-                        {"Clan Total: ", formattedServerTotalRef.get() + ""},
-                };
-                String[] columnNames = {"Key", "Value"};
-                DefaultTableModel model = new DefaultTableModel(data, columnNames) {
-                    @Override
-                    public boolean isCellEditable(int row, int column) {
-                        // This causes all cells to be not editable
-                        return false;
-                    }
-                };
-                table.setModel(model);
-                table.setPreferredScrollableViewportSize(new Dimension(500, 70));
-                table.setFillsViewportHeight(true);
-                if (table.getColumnModel().getColumnCount() > 0) {
-                    table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
-                        Font originalFont = null;
-
-                        @Override
-                        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-                            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-                            if (originalFont == null) {
-                                originalFont = c.getFont();
+                            } else {
+                                log.debug("Some type of error occurred authenticating with the DropTracker database.");
                             }
-                            c.setFont(originalFont.deriveFont(Font.BOLD));
-                            return c;
-                        }
+                        });
                     });
-                }
 
-                dropsPanel.add(table);
-                if (config.showHelpText()) {
-                    descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
-                            "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
-                            "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
-                            "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
-                            "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
-                    // to place the text in the correct location
+                } else {
+                    playerLoot.set("not signed in!");
+                }
+                if (config.authKey().equals("")) {
+                    return;
+                }
+                dropsPanel.setBorder(new EmptyBorder(15, 0, 100, 0));
+                dropsPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+                ImageIcon logoIcon = new ImageIcon(TOP_LOGO);
+                JLabel logoLabel = new JLabel(logoIcon);
+
+                dropsPanel.add(logoLabel);
+
+                /* Add a button to refresh the panel */
+                JButton refreshButton = new JButton("Refresh");
+                refreshButton.addActionListener(e -> {
+                            if (!isRefreshing) {
+                                isRefreshing = true;
+                                refreshPanel();
+                                isRefreshing = false;
+                            }
+                        });
+                JPanel buttonPanel = new JPanel();
+                buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+                buttonPanel.add(Box.createHorizontalGlue());
+                buttonPanel.add(refreshButton);
+                buttonPanel.add(Box.createHorizontalGlue());
+                JPanel topPanel = new JPanel(new BorderLayout());
+                topPanel.add(buttonPanel);
+                topPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                topPanel.add(logoLabel, BorderLayout.NORTH);
+                topPanel.add(buttonPanel, BorderLayout.CENTER);
+                dropsPanel.add(topPanel, BorderLayout.NORTH);
+                dropsPanel.setLayout(new BoxLayout(dropsPanel, BoxLayout.Y_AXIS));
+                JLabel descText;
+                if (config.serverId().equals("") || config.authKey().equals("")) {
+                    descText = new JLabel("<html><br><br>Welcome to the DropTracker!<br><br>In order to start tracking drops,<br>" +
+                            "your server must be added<br> to our database, and you must configure the plugin from settings panel -><br> Contact a member of your clan's staff team to get set up, or obtain your ServerID!</html>");
                     descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                     Box descTextBox = Box.createHorizontalBox();
                     descTextBox.add(descText);
                     descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
                     dropsPanel.add(descTextBox);
-                }
+                } else {
 
-            }
+                    String serverName = plugin.getServerName(config.serverId());
+                    int minimumClanLoot = plugin.getServerMinimumLoot(config.serverId());
+                    NumberFormat clanLootFormat = NumberFormat.getNumberInstance();
+                    String minimumLootString = clanLootFormat.format(minimumClanLoot);
+                    String[][] data = {
+                            {"Your Clan: ", serverName},
+                            {"Minimum Value: ", minimumLootString + " gp"},
+                            {"Your total loot: ", playerLoot.get(), ""},
+                            {"Clan Total: ", formattedServerTotalRef.get() + ""},
+                    };
+                    String[] columnNames = {"Key", "Value"};
+                    DefaultTableModel model = new DefaultTableModel(data, columnNames) {
+                        @Override
+                        public boolean isCellEditable(int row, int column) {
+                            // This causes all cells to be not editable
+                            return false;
+                        }
+                    };
+                    table.setModel(model);
+                    table.setPreferredScrollableViewportSize(new Dimension(500, 70));
+                    table.setFillsViewportHeight(true);
+                    if (table.getColumnModel().getColumnCount() > 0) {
+                        table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
+                            Font originalFont = null;
 
-            if (!entries.isEmpty()) {
-                for (DropEntry entry : entries) {
-                    dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    Box entryItemBox = Box.createHorizontalBox();
-                    BufferedImage itemImage = itemManager.getImage(entry.getItemId());
-                    JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
-                    String itemName = entry.getItemName();
-                    int geValue = entry.getGeValue();
-
-                    JLabel itemTextLabel = new JLabel("<html>Item: " + itemName + "<br>Value: " + String.valueOf(geValue) + "gp</html>");
-
-                    JPanel nameFieldPanel = new JPanel(new BorderLayout());
-                    JLabel nameLabel = new JLabel("Select Members:");
-                    nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
-                    MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
-                    membersComboBox.setPreferredSize(new Dimension(75, 25));
-                    nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
-
-                    Integer[] nonMemberOptions = new Integer[21];
-                    for (int i = 0; i <= 20; i++) {
-                        nonMemberOptions[i] = i;
+                            @Override
+                            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                                if (originalFont == null) {
+                                    originalFont = c.getFont();
+                                }
+                                c.setFont(originalFont.deriveFont(Font.BOLD));
+                                return c;
+                            }
+                        });
                     }
 
-                    JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
-                    JLabel nonMemberLabel = new JLabel("Non-members:");
-                    nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
+                    dropsPanel.add(table);
+                    if (config.showHelpText()) {
+                        descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
+                                "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
+                                "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
+                                "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
+                                "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
+                        // to place the text in the correct location
+                        descText.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        Box descTextBox = Box.createHorizontalBox();
+                        descTextBox.add(descText);
+                        descTextBox.add(Box.createHorizontalGlue());  // Pushes the descText to the left
+                        dropsPanel.add(descTextBox);
+                    }
 
-                    JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
-                    nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
-                    nonMemberDropdown.setPreferredSize((new Dimension(45, 25)));
-                    nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
-
-                    JButton submitButton = new JButton("Submit");
-                    JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
-
-                    submitButton.addActionListener(e -> {
-                        List<String> selectedMembersList = membersComboBox.getSelectedItems();
-                        String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
-
-                        int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();
-
-                        entry.setClanMembers(selectedMembersString);  // Set the selected names
-                        entry.setNonMemberCount(nonMemberCount);
-
-                        submitDrop(entry);
-                    });
-                    submitButton.setPreferredSize(new Dimension(90, 20));
-                    submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-                    submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
-                    JPanel nameMemberPanel = new JPanel();
-                    nameMemberPanel.add(nameFieldPanel);
-                    nameMemberPanel.add(nonMemberDropdownPanel);
-
-                    JPanel entryPanel = new JPanel();
-                    entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
-                    entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    entryPanel.setBackground(Color.DARK_GRAY);
-                    Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
-                    Border innerBorder = new EmptyBorder(0, 0, 10, 0);
-                    CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
-                    entryPanel.setBorder(compoundBorder);
-                    JPanel itemContainer = new JPanel();
-                    itemContainer.add(imageLabel);
-                    imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    itemContainer.add(itemTextLabel);
-                    entryPanel.add(itemContainer);
-                    entryPanel.add(nameMemberPanel);
-                    entryPanel.add(submitButton);
-                    entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                    entryItemBox.add(entryPanel);
-                    dropsPanel.add(entryItemBox);
                 }
-            }
-            dropsPanel.revalidate();
-            dropsPanel.repaint();
-        });
+
+                if (!entries.isEmpty()) {
+                    for (DropEntry entry : entries) {
+                        dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        Box entryItemBox = Box.createHorizontalBox();
+                        BufferedImage itemImage = itemManager.getImage(entry.getItemId());
+                        JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
+                        String itemName = entry.getItemName();
+                        int geValue = entry.getGeValue();
+
+                        JLabel itemTextLabel = new JLabel("<html>Item: " + itemName + "<br>Value: " + String.valueOf(geValue) + "gp</html>");
+
+                        JPanel nameFieldPanel = new JPanel(new BorderLayout());
+                        JLabel nameLabel = new JLabel("Select Members:");
+                        nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
+                        MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
+                        membersComboBox.setPreferredSize(new Dimension(75, 25));
+                        nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
+
+                        Integer[] nonMemberOptions = new Integer[21];
+                        for (int i = 0; i <= 20; i++) {
+                            nonMemberOptions[i] = i;
+                        }
+
+                        JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
+                        JLabel nonMemberLabel = new JLabel("Non-members:");
+                        nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
+
+                        JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
+                        nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
+                        nonMemberDropdown.setPreferredSize((new Dimension(45, 25)));
+                        nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
+
+                        JButton submitButton = new JButton("Submit");
+                        JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
+
+                        submitButton.addActionListener(e -> {
+                            List<String> selectedMembersList = membersComboBox.getSelectedItems();
+                            String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
+
+                            int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();
+
+                            entry.setClanMembers(selectedMembersString);  // Set the selected names
+                            entry.setNonMemberCount(nonMemberCount);
+
+                            submitDrop(entry);
+                        });
+                        submitButton.setPreferredSize(new Dimension(90, 20));
+                        submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+                        submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
+                        JPanel nameMemberPanel = new JPanel();
+                        nameMemberPanel.add(nameFieldPanel);
+                        nameMemberPanel.add(nonMemberDropdownPanel);
+
+                        JPanel entryPanel = new JPanel();
+                        entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
+                        entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        entryPanel.setBackground(Color.DARK_GRAY);
+                        Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
+                        Border innerBorder = new EmptyBorder(0, 0, 10, 0);
+                        CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
+                        entryPanel.setBorder(compoundBorder);
+                        JPanel itemContainer = new JPanel();
+                        itemContainer.add(imageLabel);
+                        imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        itemContainer.add(itemTextLabel);
+                        entryPanel.add(itemContainer);
+                        entryPanel.add(nameMemberPanel);
+                        entryPanel.add(submitButton);
+                        entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                        entryItemBox.add(entryPanel);
+                        dropsPanel.add(entryItemBox);
+                    }
+                }
+                dropsPanel.revalidate();
+                dropsPanel.repaint();
+                isRefreshing = false;
+            });
+
     }
 
     public static String formatNumber(double number) {
@@ -705,7 +722,7 @@ public class DropTrackerPanel extends PluginPanel
     }
     public String checkAuthKey(String playerName, String serverId, String authKey) {
         try {
-            URL url = new URL("https://www.droptracker.io/admin/api/authenticate.php");
+            URL url = new URL("http://api.droptracker.io/api/authenticate");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");

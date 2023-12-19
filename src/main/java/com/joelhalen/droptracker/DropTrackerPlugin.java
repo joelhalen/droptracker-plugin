@@ -24,6 +24,7 @@
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
 package com.joelhalen.droptracker;
 
+import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -49,6 +50,7 @@ import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
+import net.runelite.client.chat.ChatClient;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
@@ -69,6 +71,7 @@ import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import javax.imageio.ImageIO;
+import javax.inject.Named;
 import javax.swing.*;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Array;
@@ -94,7 +97,6 @@ public class DropTrackerPlugin extends Plugin {
 	private OverlayManager overlayManager;
 	private DropEntryOverlay overlay;
 	public DropTrackerPlugin() {
-
 	}
 	//* For sending collection log entry slots to the server *//
 	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log:.*");
@@ -356,18 +358,6 @@ public class DropTrackerPlugin extends Plugin {
 		/* Refresh the panel every time the game state changes, or the player's local name changes */
 		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
 			currentPlayerName = client.getLocalPlayer().getName();
-			if (isFakeWorld() && config.sendChatMessages()) {
-				ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-				messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-						.append("DropTracker")
-						.append(ChatColorType.NORMAL)
-						.append("] ")
-						.append("Warning: Leagues drops are tracked separately, and will not appear in the side panel (yet) ...");
-				chatMessageManager.queue(QueuedMessage.builder()
-						.type(ChatMessageType.CONSOLE)
-						.runeLiteFormattedMessage(messageResponse.build())
-						.build());
-			}
 			if (!panelRefreshed) {
 				log.debug("[DropTracker] Updating panel due to a new player state");
 				panel.refreshPanel();
@@ -408,7 +398,8 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	public boolean isFakeWorld() {
 		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			return client.getWorldType().contains(WorldType.SEASONAL);
+			boolean isFake = client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.BETA_WORLD) || client.getWorldType().contains(WorldType.FRESH_START_WORLD) || client.getWorldType().contains(WorldType.DEADMAN);
+			return isFake;
 		} else {
 			return true;
 		}
@@ -430,6 +421,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		}
 	}
+
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
 		if (isFakeWorld()) {
@@ -716,9 +708,14 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
-		HttpUrl url = HttpUrl.parse("https://droptracker.io/admin/api/store_drop_data.php");
+		HttpUrl url = HttpUrl.parse("http://api.droptracker.io/api/drops/submit");
+		String dropType = "normal";
 		if (isFakeWorld()) {
-			url = HttpUrl.parse("https://droptracker.io/admin/api/store_fake_drop_data.php");
+			if (client.getWorldType().contains(WorldType.SEASONAL)) {
+				dropType = "league";
+			} else {
+				dropType = "other";
+			}
 		}
 		String serverId = config.serverId();
 		String notified_str = "1";
@@ -731,6 +728,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		FormBody.Builder formBuilder = new FormBody.Builder()
+				.add("drop_type", dropType)
 				.add("auth_token", authKey)
 				.add("item_name", itemName)
 				.add("item_id", String.valueOf(itemId))
