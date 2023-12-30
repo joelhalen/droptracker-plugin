@@ -108,7 +108,6 @@ public class DropTrackerPlugin extends Plugin {
 	private DropTrackerEventPanel eventPanel;
 	@Inject
 	public ChatMessageManager chatMessageManager;
-	public List<String> itemsOfInterest;
 	List<DropEntryStream> storedDrops = new CopyOnWriteArrayList<>();
 	@Inject
 	private ClientThread clientThread;
@@ -389,7 +388,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
 		if ((isFakeWorld()) || (!config.useApi()) || (!config.sendAccountData())) {
-			/* If the world is not a 'real world' (leagues, etc), or
+			/* If the world is not a 'real world' (leagues, etc.), or
 			the API is disabled, don't bother processing the data */
 			return;
 		}
