@@ -116,6 +116,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DrawManager drawManager;
 	private long accountHash = -1;
+	@Inject
+	private Gson gson = new Gson();
 	private int MINIMUM_FOR_SCREENSHOTS = 1000000;
 	public Integer totalLogSlots = 0;
 	private Map<String, Integer> serverMinimumLootVarMap;
@@ -462,7 +464,6 @@ public class DropTrackerPlugin extends Plugin {
 		HttpUrl url = HttpUrl.parse(apiBase + "/api/players/update");
 		String serverId = config.serverId();
 
-		Gson gson = new Gson();
 		String itemDataJson = gson.toJson(itemData);
 
 		FormBody.Builder formBuilder = new FormBody.Builder()
