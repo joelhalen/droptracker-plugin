@@ -117,7 +117,7 @@ public class DropTrackerPlugin extends Plugin {
 	private DrawManager drawManager;
 	private long accountHash = -1;
 	@Inject
-	private Gson gson = new Gson();
+	private Gson gson;
 	private int MINIMUM_FOR_SCREENSHOTS = 1000000;
 	public Integer totalLogSlots = 0;
 	private Map<String, Integer> serverMinimumLootVarMap;
