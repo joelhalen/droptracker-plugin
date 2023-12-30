@@ -392,16 +392,28 @@ public class DropTrackerPlugin extends Plugin {
 			/* Don't do anything! */
 			return;
 		}
-		Widget colLogTitleWig = client.getWidget(621, 1);
-		/* The most simplistic collection log tracking possible, for now */
-		if (colLogTitleWig != null) {
-			colLogTitleWig = colLogTitleWig.getChild(1);
-			Integer new_slots = Integer.parseInt(colLogTitleWig.getText().split("- ")[1].split("/")[0]);
-			if(new_slots > totalLogSlots){
-				/* Player now has slots stored than we previously knew */
-				log.debug("[DropTracker] Updating log slots to" + new_slots + " from " + totalLogSlots);
-				totalLogSlots = new_slots;
+		try {
+			Widget colLogTitleWig = client.getWidget(621, 1);
+
+			// Check if the widget is not null and its child is also not null
+			if (colLogTitleWig != null && colLogTitleWig.getChild(1) != null) {
+				colLogTitleWig = colLogTitleWig.getChild(1);
+				String text = colLogTitleWig.getText();
+
+				// Further check if the text is not null and contains the expected format
+				if (text != null && text.contains("- ")) {
+					Integer new_slots = Integer.parseInt(text.split("- ")[1].split("/")[0]);
+					if (new_slots > totalLogSlots) {
+						// Player now has more slots stored than we previously knew
+						log.debug("[DropTracker] Updating log slots to " + new_slots + " from " + totalLogSlots);
+						totalLogSlots = new_slots;
+					}
+				}
 			}
+		} catch (NumberFormatException e) {
+			log.error("Error parsing the number of slots", e);
+		} catch (Exception e) {
+			log.error("Unexpected error occurred", e);
 		}
 	}
 
