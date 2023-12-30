@@ -1,9 +1,17 @@
 # DropTracker
 
-This plugin is intended to be used in tandem with the DropTracker discord bot to maintain loot leaderboards and drop metrics for members of your clan.
-There is also planned functionality for fully-automated events based off of the Discord bot/RuneLite plugin.
+There are two ways to use the DropTracker:
+**Using the API**
+1. Sign up for the DropTracker via Discord, inside of a clan using the lootboard system!
+2. Enter your authentication key and server ID into the plugin config
+3. Start tracking drops!
+**Using Google Sheets**
+1. Visit https://www.droptracker.io/sheets/
+2. Find an available sheet template
+3. Copy the 'ID' field and place it in the plugin config
+4. Your drops are tracked!
 
-**Features**:
+**Features (with api toggled on)**:
 1. Real-time monthly loot tallies for players and for your clan:
 
 ![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/ed087120-2636-4bd6-89e7-8140ee834f74)
@@ -12,9 +20,7 @@ There is also planned functionality for fully-automated events based off of the 
 
 ![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/cd6f71d2-e612-4c4d-9956-b4778d5736c3)
 
-3. A website with an Administration Panel for clan owners to modify their servers, enable events, view drop metrics, etc.
-
-![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/a6195671-b51e-47d5-8b5e-cf272efd6c99)
+3. A website with global metrics and per-player stats, etc (with loads of expansion coming...)
 
 
 Authentication keys that are unique to each player, to prevent users from submitting bogus drops for your events/leaderboard:
