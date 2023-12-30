@@ -547,12 +547,7 @@ public class DropTrackerPlugin extends Plugin {
 				{
 					switch (client.getGameState()) {
 						case LOGGED_IN:
-							if (config.serverId().equals("")) {
-								//TODO: Send a chat message letting the user know the plugin is not yet set up
-
-							} else if (config.authKey().equals("")) {
-								//TODO: Message the user that their auth key has been left empty
-							} else {
+							if (!config.serverId().equals("") && !config.authKey().equals("")) {
 								prepared = true;
 							}
 						case LOGIN_SCREEN:
@@ -748,7 +743,6 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			} catch (IOException e) {
 				log.error("DropTracker -> sendDropData Exception occurred: " + e.getMessage());
-				e.printStackTrace();
 			}
 		});
 	}
@@ -758,6 +752,7 @@ public class DropTrackerPlugin extends Plugin {
 		webhook.setContent(playerName + " received some drops:");
 		webhook.setUsername("DropTracker.io (Lite)");
 		webhook.setAvatarUrl("https://www.droptracker.io/img/dt-logo.png");
+		Integer embedFields = 0;
 		for (ItemStack item : items) {
 			DiscordWebhook.EmbedObject itemEmbed = new DiscordWebhook.EmbedObject();
 			int itemId = item.getId();
@@ -797,9 +792,20 @@ public class DropTrackerPlugin extends Plugin {
 					.setFooter("https://www.droptracker.io","https://www.droptracker.io/img/favicon.png");
 
 			if (imageUrl != "none") {
+				/* Directly embed the image, if one was taken */
 				itemEmbed.setImage(imageUrl);
 			}
+			if (embedFields >= 8) {
+				/* Send a webhook and generate a new one if the items ArrayList is > 8 items, for discord limitations */
+				webhook.execute();
+				webhook = new DiscordWebhook(webhookUrl);
+				webhook.setContent(playerName + " received some drops:");
+				webhook.setUsername("DropTracker.io (Lite)");
+				webhook.setAvatarUrl("https://www.droptracker.io/img/dt-logo.png");
+				embedFields = 0;
+			}
 			webhook.addEmbed(itemEmbed);
+			embedFields++;
 		}
 		webhook.execute();
 	}
