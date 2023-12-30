@@ -272,14 +272,32 @@ public class DropTrackerPlugin extends Plugin {
 			/* No API enabled */
 			if (config.sendScreenshots()) {
 				SwingUtilities.invokeLater(() -> {
-					getScreenshot(playerName, 0, receivedFrom).thenAccept(imageUrl -> {
+					boolean shouldTakeScreenshot = false;
+					for (ItemStack item : items) {
+						int geValue = itemManager.getItemPrice(item.getId());
+						/* Prevent screenshots from being taken for ALL drops if the player
+						is not using the API, but is using the screenshot feature */
+						if (geValue >= MINIMUM_FOR_SCREENSHOTS) {
+							shouldTakeScreenshot = true;
+						}
+					}
+					if (shouldTakeScreenshot) {
+						getScreenshot(playerName, 0, receivedFrom).thenAccept(imageUrl -> {
+							try {
+								sendWebhookDropData(playerName, receivedFrom, imageUrl, items);
+							} catch (IOException e) {
+								log.error("Unable to send webhook:" + e);
+								throw new RuntimeException(e);
+							}
+						});
+					} else {
 						try {
-							sendWebhookDropData(playerName, receivedFrom, imageUrl, items);
+							sendWebhookDropData(playerName, receivedFrom, "none", items);
 						} catch (IOException e) {
 							log.error("Unable to send webhook:" + e);
 							throw new RuntimeException(e);
 						}
-					});
+					}
 				});
 			} else {
 				try {
