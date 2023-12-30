@@ -29,8 +29,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.joelhalen.droptracker.ui.DropEntryOverlay;
-import com.joelhalen.droptracker.ui.MembersComboBox;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.client.chat.ChatColorType;
@@ -40,7 +38,6 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,27 +81,14 @@ public class DropTrackerPanel extends PluginPanel
     private final ItemManager itemManager;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     @Inject
-    private OverlayManager overlayManager;
-    @Inject
     private Client client;
     private JTable table = new JTable();
     private static final Logger log = LoggerFactory.getLogger(DropTrackerPlugin.class);
-    public final List<DropEntry> entries = new ArrayList<>();
     private final JPanel dropsPanel;
     public boolean isRefreshing = false;
-    @Inject
-    private DropEntryOverlay overlay;
     public String localAuthKey = null;
     public String localPlayerName = null;
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
-
-    public List<DropEntry> getEntries() {
-        if (entries != null && !entries.isEmpty()) {
-            return this.entries;
-        } else {
-            return null;
-        }
-    }
 
     public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager, ChatMessageManager chatMessageManager) {
         super();
@@ -203,10 +187,10 @@ public class DropTrackerPanel extends PluginPanel
                     formattedServerTotal = "0";
                 }
                 String[][] data = {
-                        {"Your Clan", serverName},
-                        {"Minimum value", minimumLootString + " gp"},
-                        {"Your total loot", "loading..."},
-                        {"Clan Total:", "loading..."},
+                        {"Clan:", serverName},
+                        {"Discord pings:", ">" + minimumLootString + " gp"},
+                        {"Your total:", "loading..."},
+                        {"Clan Total", "loading..."},
                 };
                 updateTable("load", "load");
                 String[] columnNames = {"Key", "Value"};
@@ -426,17 +410,6 @@ public class DropTrackerPanel extends PluginPanel
                                                     isAllItemsBoxAdded.set(true);
                                                 }
                                             }
-                                            // dropsPanel.revalidate();
-                                            // dropsPanel.repaint();
-                                            if (entries.isEmpty()) {
-                                                JLabel descText = new JLabel("<html><i>You have not yet received any drops to submit.</i></html>");
-
-                                                descText.setAlignmentX(Component.LEFT_ALIGNMENT);
-                                                Box descTextBox = Box.createHorizontalBox();
-                                                descTextBox.add(descText);
-                                                descTextBox.add(Box.createHorizontalGlue());
-                                                dropsPanel.add(descTextBox);
-                                            }
                                         });
                                     });
                                 });
@@ -531,11 +504,11 @@ public class DropTrackerPanel extends PluginPanel
 
                     dropsPanel.add(table);
                     if (config.showHelpText()) {
-                        descText = new JLabel("<html>The database will automatically track all drops you receive.<br><br>" +
-                                "Any item above your clan's minimum, <b>" + minimumLootString + " gp</b>, will appear below.<br><br>" +
-                                "You can select any clan members involved in the drop from the left-side dropdown list to credit them for their split.<br>" +
-                                "The non-member dropdown allows you to specify the split-size if any players from outside of your clan were involved with the drop.<br>" +
-                                "<br><b>You can prevent this information from re-appearing in the plugin config!</b></html>");
+                        descText = new JLabel("<html>The DropTracker will automatically track all drops you receive.<br><br>" +
+                                "You can visit https://www.droptracker.io/ to view metrics and leaderboards.<br><br>" +
+                                "Items received above the 'minimum value' displayed above will be sent to your clan's Discord server<br><br>" +
+                                "<em>Note: You can turn this helper text off in the plugin config!</em><br>" +
+                                "</html>");
                         // to place the text in the correct location
                         descText.setAlignmentX(Component.LEFT_ALIGNMENT);
                         Box descTextBox = Box.createHorizontalBox();
@@ -546,80 +519,7 @@ public class DropTrackerPanel extends PluginPanel
 
                 }
 
-                if (!entries.isEmpty()) {
-                    for (DropEntry entry : entries) {
-                        dropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        Box entryItemBox = Box.createHorizontalBox();
-                        BufferedImage itemImage = itemManager.getImage(entry.getItemId());
-                        JLabel imageLabel = new JLabel(new ImageIcon(itemImage));
-                        String itemName = entry.getItemName();
-                        int geValue = entry.getGeValue();
 
-                        JLabel itemTextLabel = new JLabel("<html>Item: " + itemName + "<br>Value: " + String.valueOf(geValue) + "gp</html>");
-
-                        JPanel nameFieldPanel = new JPanel(new BorderLayout());
-                        JLabel nameLabel = new JLabel("Select Members:");
-                        nameFieldPanel.add(nameLabel, BorderLayout.NORTH);
-                        MembersComboBox membersComboBox = new MembersComboBox(plugin, config);
-                        membersComboBox.setPreferredSize(new Dimension(75, 25));
-                        nameFieldPanel.add(membersComboBox, BorderLayout.CENTER);
-
-                        Integer[] nonMemberOptions = new Integer[21];
-                        for (int i = 0; i <= 20; i++) {
-                            nonMemberOptions[i] = i;
-                        }
-
-                        JPanel nonMemberDropdownPanel = new JPanel(new BorderLayout());
-                        JLabel nonMemberLabel = new JLabel("Non-members:");
-                        nonMemberDropdownPanel.add(nonMemberLabel, BorderLayout.NORTH);
-
-                        JComboBox<Integer> nonMemberDropdown = new JComboBox<>(nonMemberOptions);
-                        nonMemberDropdown.setToolTipText("Select # of non-members involved in the drop.");
-                        nonMemberDropdown.setPreferredSize((new Dimension(45, 25)));
-                        nonMemberDropdownPanel.add(nonMemberDropdown, BorderLayout.CENTER);
-
-                        JButton submitButton = new JButton("Submit");
-                        JComboBox<Integer> finalNonMemberDropdown = nonMemberDropdown;
-
-                        submitButton.addActionListener(e -> {
-                            List<String> selectedMembersList = membersComboBox.getSelectedItems();
-                            String selectedMembersString = String.join(", ", selectedMembersList);  // Join the names into a single string with comma separators
-
-                            int nonMemberCount = (Integer) finalNonMemberDropdown.getSelectedItem();
-
-                            entry.setClanMembers(selectedMembersString);  // Set the selected names
-                            entry.setNonMemberCount(nonMemberCount);
-
-                            submitDrop(entry);
-                        });
-                        submitButton.setPreferredSize(new Dimension(90, 20));
-                        submitButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-                        submitButton.setAlignmentY(Component.CENTER_ALIGNMENT);
-                        JPanel nameMemberPanel = new JPanel();
-                        nameMemberPanel.add(nameFieldPanel);
-                        nameMemberPanel.add(nonMemberDropdownPanel);
-
-                        JPanel entryPanel = new JPanel();
-                        entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
-                        entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        entryPanel.setBackground(Color.DARK_GRAY);
-                        Border outerBorder = new MatteBorder(1, 1, 1, 1, Color.BLACK);
-                        Border innerBorder = new EmptyBorder(0, 0, 10, 0);
-                        CompoundBorder compoundBorder = new CompoundBorder(outerBorder, innerBorder);
-                        entryPanel.setBorder(compoundBorder);
-                        JPanel itemContainer = new JPanel();
-                        itemContainer.add(imageLabel);
-                        imageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        itemTextLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        itemContainer.add(itemTextLabel);
-                        entryPanel.add(itemContainer);
-                        entryPanel.add(nameMemberPanel);
-                        entryPanel.add(submitButton);
-                        entryPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-                        entryItemBox.add(entryPanel);
-                        dropsPanel.add(entryItemBox);
-                    }
-                }
                 dropsPanel.revalidate();
                 dropsPanel.repaint();
                 isRefreshing = false;
@@ -693,18 +593,6 @@ public class DropTrackerPanel extends PluginPanel
         });
     }
 
-    public void addDrop(DropEntry entry) {
-        SwingUtilities.invokeLater(() -> {
-            // Add the entry to the list
-            entries.add(entry);
-            // Update the panel
-            if (config.showOverlay()) {
-                plugin.addOverlay();
-            }
-            refreshPanel();
-        });
-    }
-
     public void checkAuthKeyAsync(String playerName, String serverId, String authKey, Consumer<String> callback) {
         executorService.submit(() -> {
             String finalPlayerName = !config.permPlayerName().equals("") ? config.permPlayerName() : playerName;
@@ -753,33 +641,6 @@ public class DropTrackerPanel extends PluginPanel
             e.printStackTrace();
             return "error: " + e.getMessage();
         }
-    }
-
-    private void submitDrop(DropEntry entry) {
-        SwingUtilities.invokeLater(() -> {
-            String itemName = entry.getItemName();
-            String playerName = entry.getPlayerName();
-            String npcName = entry.getNpcOrEventName();
-            int value = entry.getGeValue();
-            int itemId = entry.getItemId();
-            int npcLevel = entry.getNpcCombatLevel();
-            int quantity = entry.getQuantity();
-            int nonMembers = entry.getNonMemberCount();
-            String imageUrl = entry.getImageLink();
-            String memberList = entry.getClanMembers();
-            String authKey = config.authKey();
-            try {
-                plugin.sendDropData(playerName, npcName, itemId, itemName, memberList, quantity, value, nonMembers, authKey, imageUrl);
-            } catch (Exception e) {
-
-            }
-            entries.remove(entry);
-            if (entries.isEmpty()) {
-                plugin.removeOverlay();
-
-            }
-            refreshPanel();
-        });
     }
 
 }

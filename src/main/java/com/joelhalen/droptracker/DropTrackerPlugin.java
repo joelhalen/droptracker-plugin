@@ -24,19 +24,18 @@
 		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.     */
 package com.joelhalen.droptracker;
 
-import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.inject.Provides;
 
-import com.joelhalen.droptracker.ui.DropEntryOverlay;
+import com.joelhalen.droptracker.discord.*;
 import net.runelite.api.*;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
@@ -50,12 +49,10 @@ import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
-import net.runelite.client.chat.ChatClient;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
-import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
@@ -71,18 +68,14 @@ import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import javax.imageio.ImageIO;
-import javax.inject.Named;
 import javax.swing.*;
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Array;
 import java.text.NumberFormat;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 
@@ -94,8 +87,6 @@ import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 )
 
 public class DropTrackerPlugin extends Plugin {
-	private OverlayManager overlayManager;
-	private DropEntryOverlay overlay;
 	public DropTrackerPlugin() {
 	}
 	//* For sending collection log entry slots to the server *//
@@ -126,6 +117,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DrawManager drawManager;
 	private long accountHash = -1;
+	private int MINIMUM_FOR_SCREENSHOTS = 1000000;
 	public Integer totalLogSlots = 0;
 	private Map<String, Integer> serverMinimumLootVarMap;
 	private Map<String, Long> clanServerDiscordIDMap;
@@ -145,106 +137,22 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private GroupMemberClient groupMemberClient;
 
-	public void removeOverlay() {
-		setOverlayManager(overlayManager);
-		setDropEntryOverlay(overlay);
-		if (this.overlay != null) {
-			this.overlayManager.remove(overlay);
+	public String getApiUrl() {
+		/* if, somehow, a player still reaches a call to the API with the API disabled, this
+		should prevent any cases where their IP would still potentially be shared...
+		 */
+		if (config.useApi()) {
+			return "https://www.droptracker.io/";
 		}
-	}
-	public void addOverlay() {
-		setOverlayManager(overlayManager);
-		setDropEntryOverlay(overlay);
-		if (this.overlay != null) {
-			this.overlayManager.add(overlay);
-		}
-	}
-	@Inject
-	public void setOverlayManager(OverlayManager overlayManager) {
-		this.overlayManager = overlayManager;
-	}
+		else {
 
-	@Inject
-	public void setDropEntryOverlay(DropEntryOverlay overlay) {
-		this.overlay = overlay;
-	}
-
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
-		NPC npc = npcLootReceived.getNpc();
-		String npcName = npc.getName();
-		int npcCombatLevel = npc.getCombatLevel();
-		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
-		Collection<ItemStack> items = npcLootReceived.getItems();
-
-		for (ItemStack item : items) {
-			int itemId = item.getId();
-			int quantity = item.getQuantity();
-
-			int geValue = itemManager.getItemPrice(itemId);
-			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
-			if(geValue == 0 && haValue == 0) {
-				continue;
-			}
-			ItemComposition itemComp = itemManager.getItemComposition(itemId);
-			String itemName = itemComp.getName();
-			boolean ignoreDrops = config.ignoreDrops();
-			SwingUtilities.invokeLater(() -> {
-				if (geValue < serverMinimumLootVarMap.get(config.serverId())) {
-					String serverId = config.serverId();
-							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								sendDropData(playerName, npcName, itemId, itemName, "", quantity, geValue, 0, config.authKey(), "");
-							}
-						} else {
-							/* Create the screenshot object so that we can upload it, saving the url to the drop object */
-							CompletableFuture<String> uploadFuture = getScreenshot(playerName, itemId, npcName);
-							if (config.sendChatMessages()) {
-								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
-								addedDropToPanelMessage.append("[")
-										.append(ChatColorType.HIGHLIGHT)
-										.append("DropTracker")
-										.append(ChatColorType.NORMAL)
-										.append("] Added ")
-										.append(ChatColorType.HIGHLIGHT)
-										.append(itemName)
-										.append(ChatColorType.NORMAL)
-										.append(" to the RuneLite side panel for review");
-								chatMessageManager.queue(QueuedMessage.builder()
-										.type(ChatMessageType.CONSOLE)
-										.runeLiteFormattedMessage(addedDropToPanelMessage.build())
-										.build());
-							}
-							DropEntry entry = new DropEntry();
-							if(config.permPlayerName().equals("")) {
-								entry.setPlayerName(playerName);
-							} else {
-								entry.setPlayerName(config.permPlayerName());
-							}
-							entry.setNpcOrEventName(npcName);
-							entry.setNpcCombatLevel(npcCombatLevel);
-							entry.setGeValue(geValue);
-							entry.setHaValue(haValue);
-							entry.setItemName(itemName);
-							entry.setItemId(itemId);
-							entry.setQuantity(quantity);
-							if (config.sendScreenshots()) {
-								getScreenshot(playerName, itemId, npcName).thenAccept(imageUrl -> {
-									SwingUtilities.invokeLater(() -> {
-										entry.setImageLink(imageUrl);
-									});
-								});
-							} else {
-								entry.setImageLink("none");
-							}
-							panel.addDrop(entry);
-							if (config.showOverlay() && panel.getEntries() != null) {
-								addOverlay();
-							}
-						}
-			});
+			return "null.com";
 		}
 	}
 	public void loadGroupMembersAsync() {
+		if (!config.useApi()) {
+			return;
+		}
 		executor.execute(() -> {
 			while (true) {
 				try {
@@ -259,110 +167,170 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
+	public void onChatMessage(ChatMessage chatMessage) {
+		if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE && chatMessage.getType() != ChatMessageType.SPAM) {
+			return;
+		}
+		if (isFakeWorld()) {
+			return;
+		}
+		/* Update totalLogSlots on new entries */
+		if (COLLECTION_LOG_ITEM_REGEX.matcher(chatMessage.getMessage()).matches()) {
+			++totalLogSlots;
+		}
+	}
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
-		//ignore regular NPC drops; since onNpcLootReceived contains more data on the source of the drop
+		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
 		if (lootReceived.getType() == LootRecordType.NPC) {
-			//if the drop was an NPC, it's already been handled in onNpcLootReceived
+			//if the drop was an NPC, it should've already been handled in onNpcLootReceived
 			return;
 		}
 		Collection<ItemStack> items = lootReceived.getItems();
-		for (ItemStack item : items) {
-			int itemId = item.getId();
-			int quantity = item.getQuantity();
-			List<CompletableFuture<Boolean>> futures = new ArrayList<>();
-			//If quantity < 1 and geValue > clanValue, then we can assume the drop will be trackable.
-			int geValue = itemManager.getItemPrice(itemId);
-			int haValue = itemManager.getItemComposition(itemId).getHaPrice();
-			if(geValue == 0 && haValue == 0) {
-				return;
-			}
-			ItemComposition itemComp = itemManager.getItemComposition(itemId);
-			String itemName = itemComp.getName();
-			boolean ignoreDrops = config.ignoreDrops();
-			SwingUtilities.invokeLater(() -> {
-					String serverId = config.serverId();
-					Integer clanMinimumLoot = serverMinimumLootVarMap.get(serverId);
-					String submissionPlayer = "";
-					if(!config.permPlayerName().equals("")) {
-						submissionPlayer = config.permPlayerName();
-					} else {
-						submissionPlayer = client.getLocalPlayer().getName();
-					}
-					if (geValue < clanMinimumLoot) {
-							if (serverIdToConfirmedOnlyMap.get(serverId) != true) {
-								sendDropData(submissionPlayer, lootReceived.getName(), itemId, itemName, "", quantity, geValue, 0, config.authKey(), "");
-							}
-						} else {
-
-							if (quantity > 1) {
-								return;
-							}
-							CompletableFuture<String> uploadFuture = getScreenshot(submissionPlayer, itemId, lootReceived.getName());
-							if (config.sendChatMessages()) {
-								ChatMessageBuilder addedDropToPanelMessage = new ChatMessageBuilder();
-								addedDropToPanelMessage.append("[")
-										.append(ChatColorType.HIGHLIGHT)
-										.append("DropTracker")
-										.append(ChatColorType.NORMAL)
-										.append("] Added ")
-										.append(ChatColorType.HIGHLIGHT)
-										.append(itemName)
-										.append(ChatColorType.NORMAL)
-										.append(" to the RuneLite side panel for review");
-								chatMessageManager.queue(QueuedMessage.builder()
-										.type(ChatMessageType.CONSOLE)
-										.runeLiteFormattedMessage(addedDropToPanelMessage.build())
-										.build());
-							}
-							DropEntry entry = new DropEntry();
-							if(config.permPlayerName().equals("")) {
-								entry.setPlayerName(submissionPlayer);
-							} else {
-								entry.setPlayerName(config.permPlayerName());
-							}
-							entry.setNpcOrEventName(lootReceived.getName());
-							entry.setNpcCombatLevel(0);
-							entry.setGeValue(geValue);
-							entry.setHaValue(haValue);
-							entry.setItemName(itemName);
-							entry.setItemId(itemId);
-							entry.setQuantity(quantity);
-							if (config.sendScreenshots()) {
-								uploadFuture.thenAccept(imageUrl -> {
-									SwingUtilities.invokeLater(() -> {
-										entry.setImageLink(imageUrl);
-									});
-								}).exceptionally(ex -> {
-									log.error("Failed to get screenshot", ex);
-									return null;
-								});
-							} else {
-								entry.setImageLink("none");
-							}
-							panel.addDrop(entry);
+		String receivedFrom = lootReceived.getName();
+		if (!config.useApi()) {
+			/* No API enabled */
+			if (config.sendScreenshots()) {
+				SwingUtilities.invokeLater(() -> {
+					boolean shouldTakeScreenshot = false;
+					for (ItemStack item : items) {
+						int geValue = itemManager.getItemPrice(item.getId());
+						/* Prevent screenshots from being taken for ALL drops if the player
+						is not using the API, but is using the screenshot feature */
+						if (geValue >= MINIMUM_FOR_SCREENSHOTS) {
+							shouldTakeScreenshot = true;
 						}
+					}
+					if (shouldTakeScreenshot) {
+						getScreenshot(playerName, 0, receivedFrom).thenAccept(imageUrl -> {
+							try {
+								sendWebhookDropData(playerName, receivedFrom, imageUrl, items);
+							} catch (IOException e) {
+								log.error("Unable to send webhook:" + e);
+								throw new RuntimeException(e);
+							}
+						});
+					} else {
+						try {
+							sendWebhookDropData(playerName, receivedFrom, "none", items);
+						} catch (IOException e) {
+							log.error("Unable to send webhook:" + e);
+							throw new RuntimeException(e);
+						}
+					}
 				});
+			} else {
+				try {
+					sendWebhookDropData(playerName, receivedFrom, "none", items);
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		} else {
+			for (ItemStack item : items) {
+				int itemId = item.getId();
+				int quantity = item.getQuantity();
+
+				int geValue = itemManager.getItemPrice(itemId);
+				int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+				if (geValue == 0 && haValue == 0) {
+					continue;
+				}
+				ItemComposition itemComp = itemManager.getItemComposition(itemId);
+				String itemName = itemComp.getName();
+				SwingUtilities.invokeLater(() -> {
+					if (config.useApi()) {
+						String serverId = config.serverId();
+						if (geValue < serverMinimumLootVarMap.get(config.serverId())) {
+							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), "");
+						} else {
+							AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
+							getScreenshot(playerName, itemId, receivedFrom).thenAccept(imageUrl -> {
+								SwingUtilities.invokeLater(() -> {
+									this_imageUrl.set(imageUrl);
+								});
+							});
+							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
+
+						}
+					}
+				});
+
+			}
 		}
 	}
 
-	//There is probably a better way of doing this, but this will work for now.
+	@Subscribe
+	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		NPC npc = npcLootReceived.getNpc();
+		String receivedFrom = npc.getName();
+		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
+		Collection<ItemStack> items = npcLootReceived.getItems();
+
+		if (!config.useApi()) {
+			/* No API enabled */
+			if (config.sendScreenshots()) {
+				SwingUtilities.invokeLater(() -> {
+					getScreenshot(playerName, 0, receivedFrom).thenAccept(imageUrl -> {
+						try {
+							sendWebhookDropData(playerName, receivedFrom, imageUrl, items);
+						} catch (IOException e) {
+							log.error("Unable to send webhook:" + e);
+							throw new RuntimeException(e);
+						}
+					});
+				});
+			} else {
+				try {
+					sendWebhookDropData(playerName, receivedFrom, "none", items);
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		} else {
+			for (ItemStack item : items) {
+				int itemId = item.getId();
+				int quantity = item.getQuantity();
+
+				int geValue = itemManager.getItemPrice(itemId);
+				int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+				if (geValue == 0 && haValue == 0) {
+					continue;
+				}
+				ItemComposition itemComp = itemManager.getItemComposition(itemId);
+				String itemName = itemComp.getName();
+				SwingUtilities.invokeLater(() -> {
+					if (config.useApi()) {
+						String serverId = config.serverId();
+						if (geValue < serverMinimumLootVarMap.get(config.serverId())) {
+							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), "");
+						} else {
+							AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
+							getScreenshot(playerName, itemId, receivedFrom).thenAccept(imageUrl -> {
+								SwingUtilities.invokeLater(() -> {
+									this_imageUrl.set(imageUrl);
+								});
+							});
+							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
+
+						}
+					}
+				});
+
+			}
+		}
+	}
+
 	@Subscribe
 	public void onGameTick(GameTick event) {
 
 		/* Refresh the panel every time the game state changes, or the player's local name changes */
 		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
 			currentPlayerName = client.getLocalPlayer().getName();
-			if (!panelRefreshed) {
+			if (!panelRefreshed && config.useApi()) {
 				log.debug("[DropTracker] Updating panel due to a new player state");
 				panel.refreshPanel();
 				panelRefreshed = true;
-			}
-			if (panel.getEntries() == null && overlay != null) {
-				removeOverlay();
-			}
-			if (config.showOverlay() && panel.getEntries() != null) {
-				addOverlay();
 			}
 			if (client.getGameState() == GameState.LOGGED_IN && !eventPanelRefreshed) {
 				initializeEventPanel();
@@ -379,15 +347,15 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
-		panel.refreshPanel();
-		if (config.showEventPanel() && clanEventActiveMap.get(config.serverId()) && this.eventPanel != null) {
-			eventPanel.refreshPanel();
-		}
-		if (overlay != null) {
-			if (!config.showOverlay()) {
-				removeOverlay();
-			} else if (config.showOverlay() && panel.getEntries() != null) {
-				addOverlay();
+		if (config.useApi()) {
+			if (this.panel != null) {
+				panel.refreshPanel();
+				if (config.showEventPanel() && clanEventActiveMap.get(config.serverId()) && this.eventPanel != null) {
+					eventPanel.refreshPanel();
+				}
+			} else {
+				grabServerConfiguration();
+				createSidePanel();
 			}
 		}
 	}
@@ -401,17 +369,18 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event) {
-
+		if (!config.useApi() || !config.sendAccountData()) {
+			/* Don't do anything! */
+			return;
+		}
 		Widget colLogTitleWig = client.getWidget(621, 1);
-
+		/* The most simplistic collection log tracking possible, for now */
 		if (colLogTitleWig != null) {
 			colLogTitleWig = colLogTitleWig.getChild(1);
-			// Added closing parenthesis and semicolon here
 			Integer new_slots = Integer.parseInt(colLogTitleWig.getText().split("- ")[1].split("/")[0]);
-			if(new_slots != totalLogSlots){
-				/* Player has more slots stored than we previously knew? */
+			if(new_slots > totalLogSlots){
+				/* Player now has slots stored than we previously knew */
 				log.debug("[DropTracker] Updating log slots to" + new_slots + " from " + totalLogSlots);
-				System.out.println("[DropTracker] Updating log slots to" + new_slots + " from " + totalLogSlots);
 				totalLogSlots = new_slots;
 			}
 		}
@@ -419,7 +388,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
-		if (isFakeWorld()) {
+		if ((isFakeWorld()) || (!config.useApi()) || (!config.sendAccountData())) {
+			/* If the world is not a 'real world' (leagues, etc), or
+			the API is disabled, don't bother processing the data */
 			return;
 		}
 		if (event.getContainerId() == InventoryID.BANK.getId() ||
@@ -479,13 +450,17 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendBankItemsToServer(Map<String, Boolean> itemData) {
-
+		if (isFakeWorld() || !config.useApi() || !config.sendAccountData()) {
+			/* Null if API/send data disabled/fake world... */
+			return CompletableFuture.completedFuture(null);
+		}
 		if (itemData.equals(lastSentItemData)) {
+			/* Prevent sending the same data twice */
 			return CompletableFuture.completedFuture(null);
 		}
 		lastSentItemData = new HashMap<>(itemData);
-
-		HttpUrl url = HttpUrl.parse("http://api.droptracker.io/api/players/update");
+		String apiBase = getApiUrl();
+		HttpUrl url = HttpUrl.parse(apiBase + "/api/players/update");
 		String serverId = config.serverId();
 
 		Gson gson = new Gson();
@@ -507,6 +482,7 @@ public class DropTrackerPlugin extends Plugin {
 		return CompletableFuture.runAsync(() -> {
 			try (Response response = httpClient.newCall(request).execute()) {
 				if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+				log.debug("Unable to send player data to the DropTracker API: " + response);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -532,12 +508,9 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() throws Exception {
 		clientToolbar.removeNavigation(navButton);
 		clientToolbar.removeNavigation(eventNavButton);
-		removeOverlay();
 		panel = null;
 		eventPanel = null;
 		navButton = null;
-		overlayManager = null;
-		overlay = null;
 		accountHash = -1;
 	}
 	public String getPlayerName() {
@@ -547,12 +520,8 @@ public class DropTrackerPlugin extends Plugin {
 			return config.permPlayerName();
 		}
 	}
-	@Override
-	protected void startUp() {
-		initializeEventPanel();
-		loadGroupMembersAsync();
 
-		accountHash = client.getAccountHash();
+	public void createSidePanel() {
 		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
 
 		navButton = NavigationButton.builder()
@@ -562,61 +531,79 @@ public class DropTrackerPlugin extends Plugin {
 				.panel(panel)
 				.build();
 		clientToolbar.addNavigation(navButton);
+	}
 
-		if (!prepared) {
-			clientThread.invoke(() ->
-			{
-				switch (client.getGameState()) {
-					case LOGGED_IN:
-						if (config.serverId().equals("")) {
-							//TODO: Send a chat message letting the user know the plugin is not yet set up
+	@Override
+	protected void startUp() {
+		initializeEventPanel();
+		loadGroupMembersAsync();
 
-						} else if (config.authKey().equals("")) {
-							//TODO: Message the user that their auth key has been left empty
-						} else {
-							prepared = true;
-						}
-					case LOGIN_SCREEN:
-					case LOGIN_SCREEN_AUTHENTICATOR:
-					case LOGGING_IN:
-					case LOADING:
-					case CONNECTION_LOST:
-					case HOPPING:
-						prepared = false;
-						return false;
-					default:
-						return false;
-				}
-			});
+		accountHash = client.getAccountHash();
+		if (config.useApi()) {
+			createSidePanel();
+
+			if (!prepared) {
+				clientThread.invoke(() ->
+				{
+					switch (client.getGameState()) {
+						case LOGGED_IN:
+							if (config.serverId().equals("")) {
+								//TODO: Send a chat message letting the user know the plugin is not yet set up
+
+							} else if (config.authKey().equals("")) {
+								//TODO: Message the user that their auth key has been left empty
+							} else {
+								prepared = true;
+							}
+						case LOGIN_SCREEN:
+						case LOGIN_SCREEN_AUTHENTICATOR:
+						case LOGGING_IN:
+						case LOADING:
+						case CONNECTION_LOST:
+						case HOPPING:
+							prepared = false;
+							return false;
+						default:
+							return false;
+					}
+				});
+			}
+		} else {
+			log.debug("DropTracker v2.2 has started. API is disabled, using webhook endpoint.");
 		}
 	}
 	private void initializeEventPanel() {
-		grabServerConfiguration()
-				.thenRun(() -> {
-					if (client.getGameState() == GameState.LOGGED_IN && config.showEventPanel()) {
-						String serverId = config.serverId();
-						Boolean isEventActive = clanEventActiveMap.getOrDefault(serverId, false);
-						// -- The event panel includes plugin implementation for fully-automated events later on
-						if (isEventActive && eventPanel == null) {
-							SwingUtilities.invokeLater(() -> {
-								eventPanel = new DropTrackerEventPanel(this, config, itemManager, chatMessageManager);
-								eventNavButton = NavigationButton.builder()
-										.tooltip("DropTracker - Events")
-										.icon(EVENT_ICON)
-										.priority(3)
-										.panel(eventPanel)
-										.build();
-								clientToolbar.addNavigation(eventNavButton);
-							});
+		if (config.useApi()) {
+			grabServerConfiguration()
+					.thenRun(() -> {
+						if (client.getGameState() == GameState.LOGGED_IN && config.showEventPanel()) {
+							String serverId = config.serverId();
+							Boolean isEventActive = clanEventActiveMap.getOrDefault(serverId, false);
+							// -- The event panel includes plugin implementation for fully-automated events later on
+							if (isEventActive && eventPanel == null) {
+								SwingUtilities.invokeLater(() -> {
+									eventPanel = new DropTrackerEventPanel(this, config, itemManager, chatMessageManager);
+									eventNavButton = NavigationButton.builder()
+											.tooltip("DropTracker - Events")
+											.icon(EVENT_ICON)
+											.priority(3)
+											.panel(eventPanel)
+											.build();
+									clientToolbar.addNavigation(eventNavButton);
+								});
+							}
 						}
-					}
-				})
-				.exceptionally(ex -> {
-					log.error("Error fetching server configuration", ex);
-					return null;
-				});
+					})
+					.exceptionally(ex -> {
+						log.error("Error fetching server configuration", ex);
+						return null;
+					});
+		}
 	}
 	public String getServerName(String serverId) {
+		if (this.serverIdToClanNameMap == null) {
+			grabServerConfiguration();
+		}
 		if (serverId == "" || !serverIdToClanNameMap.containsKey(serverId)) {
 			return "None!";
 		}
@@ -630,13 +617,6 @@ public class DropTrackerPlugin extends Plugin {
 		return serverMinimumLootVarMap.get(serverId);
 	}
 
-	public long getClanDiscordServerID(String serverId) {
-		if (serverId == "" || !clanServerDiscordIDMap.containsKey(serverId)) {
-			return 0;
-		}
-		return clanServerDiscordIDMap.get(serverId);
-	}
-
 	public Boolean clanEventActive(String serverId) {
 		if (serverId == "" | !clanEventActiveMap.containsKey(serverId)) {
 			return false;
@@ -647,63 +627,64 @@ public class DropTrackerPlugin extends Plugin {
 		return String.format("https://static.runelite.net/cache/item/icon/%d.png", id);
 	}
 
-	public ItemComposition getItemComposition(int itemId) {
-		return itemManager.getItemComposition(itemId);
-	}
 	private CompletableFuture<Void> grabServerConfiguration() {
-		return CompletableFuture.runAsync(() -> {
-			String playerName = "";
-			if(config.permPlayerName().equals("")) {
-				playerName = client.getLocalPlayer().getName();
-			} else {
-				playerName = config.permPlayerName();
-			}
+		if (config.useApi()) {
+			return CompletableFuture.runAsync(() -> {
+				String playerName = "";
+				if (config.permPlayerName().equals("")) {
+					playerName = client.getLocalPlayer().getName();
+				} else {
+					playerName = config.permPlayerName();
+				}
 
-			MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
-			RequestBody body = RequestBody.create(mediaType,
-					"auth_token=" + config.authKey() + "&player_name=" + playerName);
+				MediaType mediaType = MediaType.parse("application/x-www-form-urlencoded");
+				RequestBody body = RequestBody.create(mediaType,
+						"auth_token=" + config.authKey() + "&player_name=" + playerName);
+				String apiBase = getApiUrl();
+				Request request = new Request.Builder()
+						.url(apiBase + "/api/server_settings")
+						.post(body)
+						.addHeader("Content-Type", "application/x-www-form-urlencoded")
+						.build();
 
-			Request request = new Request.Builder()
-					.url("http://api.droptracker.io/api/server_settings")
-					.post(body)
-					.addHeader("Content-Type", "application/x-www-form-urlencoded")
-					.build();
+				try {
+					Response response = httpClient.newCall(request).execute();
+					String jsonData = response.body().string();
+					JsonParser parser = new JsonParser();
+					JsonObject jsonObject = parser.parse(jsonData).getAsJsonObject();
+					serverIdToClanNameMap = new HashMap<>();
+					serverMinimumLootVarMap = new HashMap<>();
+					serverIdToConfirmedOnlyMap = new HashMap<>();
+					clanEventActiveMap = new HashMap<>();
 
-			try {
-				Response response = httpClient.newCall(request).execute();
-				String jsonData = response.body().string();
-				JsonParser parser = new JsonParser();
-				JsonObject jsonObject = parser.parse(jsonData).getAsJsonObject();
-				serverIdToClanNameMap = new HashMap<>();
-				serverMinimumLootVarMap = new HashMap<>();
-				serverIdToConfirmedOnlyMap = new HashMap<>();
-				clanEventActiveMap = new HashMap<>();
+					String serverName = jsonObject.has("server_name") ? jsonObject.get("server_name").getAsString() : "";
 
-				String serverName = jsonObject.has("server_name") ? jsonObject.get("server_name").getAsString() : "";
+					String serverId = config.serverId();
 
-				String serverId = config.serverId();
+					JsonObject configObject = jsonObject.has("config") ? jsonObject.get("config").getAsJsonObject() : new JsonObject();
+					String isEventActiveStr = configObject.has("is_event_currently_active") ? configObject.get("is_event_currently_active").getAsString() : "";
+					String storeOnlyConfirmed = configObject.has("store_only_confirmed_drops") ? configObject.get("store_only_confirmed_drops").getAsString() : "";
+					boolean isEventActive = "1".equals(isEventActiveStr);
+					boolean storeOnlyConfirmedDrops = "1".equals(storeOnlyConfirmed);
+					serverIdToClanNameMap.put(serverId, serverName);
+					serverMinimumLootVarMap.put(
+							serverId,
+							configObject.has("minimum_loot_for_notifications") ? configObject.get("minimum_loot_for_notifications").getAsInt() : 1000000
+					);
+					serverIdToConfirmedOnlyMap.put(serverId, storeOnlyConfirmedDrops);
+					clanEventActiveMap.put(serverId, isEventActive);
 
-				JsonObject configObject = jsonObject.has("config") ? jsonObject.get("config").getAsJsonObject() : new JsonObject();
-				String isEventActiveStr = configObject.has("is_event_currently_active") ? configObject.get("is_event_currently_active").getAsString() : "";
-				String storeOnlyConfirmed = configObject.has("store_only_confirmed_drops") ? configObject.get("store_only_confirmed_drops").getAsString() : "";
-				boolean isEventActive = "1".equals(isEventActiveStr);
-				boolean storeOnlyConfirmedDrops = "1".equals(storeOnlyConfirmed);
-				serverIdToClanNameMap.put(serverId, serverName);
-				serverMinimumLootVarMap.put(
-						serverId,
-						configObject.has("minimum_loot_for_notifications") ? configObject.get("minimum_loot_for_notifications").getAsInt() : 1000000
-				);
-				serverIdToConfirmedOnlyMap.put(serverId, storeOnlyConfirmedDrops);
-				clanEventActiveMap.put(serverId, isEventActive);
-
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		});
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			});
+		}
+		/* If API is disabled, we return nothing here */
+		return null;
 	}
 
 	public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
-		HttpUrl url = HttpUrl.parse("http://api.droptracker.io/api/drops/submit");
+		HttpUrl url = HttpUrl.parse("https://www.droptracker.io/api/drops/submit");
 		String dropType = "normal";
 		if (isFakeWorld()) {
 			if (client.getWorldType().contains(WorldType.SEASONAL)) {
@@ -766,37 +747,100 @@ public class DropTrackerPlugin extends Plugin {
 				} else {
 				}
 			} catch (IOException e) {
-				System.out.println("Exception occurred: " + e.getMessage());
+				log.error("DropTracker -> sendDropData Exception occurred: " + e.getMessage());
 				e.printStackTrace();
 			}
 		});
 	}
+	public void sendWebhookDropData(String playerName, String npcName, String imageUrl, Collection<ItemStack> items) throws IOException {
+		String webhookUrl = "https://discord.com/api/webhooks/1190401158527844382/MQ8d-3c5uGW_oZWDfbmeFx9u82ZgrafHTFyrgH00l4qz2fjMv8tRJXDpC01riiIEVHSf";
+		DiscordWebhook webhook = new DiscordWebhook(webhookUrl);
+		webhook.setContent(playerName + " received some drops:");
+		webhook.setUsername("DropTracker.io (Lite)");
+		webhook.setAvatarUrl("https://www.droptracker.io/img/dt-logo.png");
+		for (ItemStack item : items) {
+			DiscordWebhook.EmbedObject itemEmbed = new DiscordWebhook.EmbedObject();
+			int itemId = item.getId();
+			int quantity = item.getQuantity();
+			AtomicInteger geValue = new AtomicInteger(0);
+			AtomicInteger haValue = new AtomicInteger(0);
+			AtomicReference<ItemComposition> itemComp = new AtomicReference<>();
+			CountDownLatch latch = new CountDownLatch(1);
+			clientThread.invoke(() -> {
+				try {
+					geValue.set(itemManager.getItemPrice(itemId));
+					haValue.set(itemManager.getItemComposition(itemId).getHaPrice());
+					itemComp.set(itemManager.getItemComposition(itemId));
+				} finally {
+					latch.countDown();
+				}
+			});
+			try {
+				latch.await();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				continue;
+			}
+			if (itemComp.get() == null) {
+				continue;
+			}
+			String itemName = itemComp.get().getName();
+					itemEmbed.setTitle("Drop received:")
+					.setDescription(itemName)
+					.addField("player",getLocalPlayerName(),true)
+					.addField("item",itemName,true)
+					.addField("id", String.valueOf(itemId),true)
+					.addField("source", npcName, true)
+							.addField("quantity", String.valueOf(quantity), true)
+					.addField("value", String.valueOf(geValue.get()), true)
+					.addField("sheet", config.sheetURL(), true)
+					.setFooter("https://www.droptracker.io","https://www.droptracker.io/img/favicon.png");
+
+			if (imageUrl != "none") {
+				itemEmbed.setImage(imageUrl);
+			}
+			webhook.addEmbed(itemEmbed);
+		}
+		webhook.execute();
+	}
 
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId, String npcName) {
 		CompletableFuture<String> future = new CompletableFuture<>();
-
-		try {
-			String serverId = config.serverId();
-			drawManager.requestNextFrameListener(image -> {
-				try {
-					ItemComposition itemComp = itemManager.getItemComposition(itemId);
-					String itemName = itemComp.getName();
-					ByteArrayOutputStream baos = new ByteArrayOutputStream();
-					ImageIO.write((RenderedImage) image, "png", baos);
-					byte[] imageData = baos.toByteArray();
-					String nicePlayerName = playerName.replace(" ", "_");
-
-					RequestBody requestBody = new MultipartBody.Builder()
-							.setType(MultipartBody.FORM)
-							.addFormDataPart("file", itemName + ".png",
-									RequestBody.create(MediaType.parse("image/png"), imageData))
-							.addFormDataPart("server_name", serverIdToClanNameMap.get(config.serverId()))
-							.addFormDataPart("player_name", playerName)
-							.addFormDataPart("npc", npcName)
-							.build();
+		if (config.useApi() || config.sendScreenshots()) {
+			try {
+				String serverId = config.serverId();
+				drawManager.requestNextFrameListener(image -> {
+					try {
+						ItemComposition itemComp = itemManager.getItemComposition(itemId);
+						String itemName = itemComp.getName();
+						ByteArrayOutputStream baos = new ByteArrayOutputStream();
+						ImageIO.write((RenderedImage) image, "png", baos);
+						byte[] imageData = baos.toByteArray();
+						String nicePlayerName = playerName.replace(" ", "_");
+						String apiBase;
+						if (!config.sendScreenshots()) {
+							apiBase = null;
+						} else {
+							apiBase = "https://www.droptracker.io";
+						}
+						String serverName;
+						if (this.serverIdToClanNameMap != null) {
+							serverName = serverIdToClanNameMap.get(config.serverId());
+						} else {
+							serverName = "global";
+						}
+						RequestBody requestBody = new MultipartBody.Builder()
+								.setType(MultipartBody.FORM)
+								.addFormDataPart("file", itemName + ".png",
+										RequestBody.create(MediaType.parse("image/png"), imageData))
+								.addFormDataPart("server_name", serverName)
+								.addFormDataPart("player_name", playerName)
+								.addFormDataPart("npc", npcName)
+								.build();
 						executor.submit(() -> {
+
 							Request request = new Request.Builder()
-									.url("http://api.droptracker.io/api/upload_image")
+									.url(apiBase + "/api/upload_image")
 									.post(requestBody)
 									.build();
 							try (Response response = httpClient.newCall(request).execute()) {
@@ -814,9 +858,11 @@ public class DropTrackerPlugin extends Plugin {
 						future.completeExceptionally(e);
 					}
 				});
-		} catch (Exception e) {
-			future.completeExceptionally(e);
-			executor.shutdown();
+			} catch (Exception e) {
+				future.completeExceptionally(e);
+				executor.shutdown();
+			}
+			return future;
 		}
 		return future;
 	}
