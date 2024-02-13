@@ -249,9 +249,9 @@ public class DropTrackerPlugin extends Plugin {
 							getScreenshot(playerName, itemId, receivedFrom).thenAccept(imageUrl -> {
 								SwingUtilities.invokeLater(() -> {
 									this_imageUrl.set(imageUrl);
+									sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
 								});
 							});
-							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
 
 						}
 					}
@@ -328,9 +328,9 @@ public class DropTrackerPlugin extends Plugin {
 							getScreenshot(playerName, itemId, receivedFrom).thenAccept(imageUrl -> {
 								SwingUtilities.invokeLater(() -> {
 									this_imageUrl.set(imageUrl);
+									sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
 								});
 							});
-							sendDropData(playerName, receivedFrom, itemId, itemName, "", quantity, geValue, 0, config.authKey(), this_imageUrl.get());
 
 						}
 					}
@@ -885,6 +885,7 @@ public class DropTrackerPlugin extends Plugin {
 								}
 
 								String responseBody = response.body().string();
+								System.out.println("responseBody: " + responseBody);
 								future.complete(responseBody.trim());
 							} catch (IOException e) {
 								future.completeExceptionally(e);
