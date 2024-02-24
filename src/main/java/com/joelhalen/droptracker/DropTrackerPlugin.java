@@ -192,8 +192,10 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage) {
+		if(!config.useApi()) {
+			return;
+		}
 		if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE && chatMessage.getType() != ChatMessageType.SPAM) {
-
 			return;
 		}
 		if (isFakeWorld()) {
