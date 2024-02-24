@@ -62,6 +62,8 @@ import org.slf4j.LoggerFactory;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
 
 import javax.inject.Inject;
 import java.awt.image.BufferedImage;
@@ -75,7 +77,12 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 
@@ -89,8 +96,23 @@ import static com.joelhalen.droptracker.DropTrackerPanel.formatNumber;
 public class DropTrackerPlugin extends Plugin {
 	public DropTrackerPlugin() {
 	}
-	//* For sending collection log entry slots to the server *//
+	//* Regexes for detecting kills on particular bosses and PBs *//
+	//* Source: ChatCommandsPlugin.java | net.runelite.client.plugins.chatcommands *//
 	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log:.*");
+	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (?<pre>completion count for |subdued |completed )?(?<boss>.+?) (?<post>(?:(?:kill|harvest|lap|completion) )?(?:count )?)is: <col=ff0000>(?<kc>\\d+)</col>");
+	private static final String TEAM_SIZES = "(?<teamsize>\\d+(?:\\+|-\\d+)? players?|Solo)";
+	private static final Pattern RAIDS_PB_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col> \\(new personal best\\)</col>");
+	private static final Pattern RAIDS_DURATION_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<current>[0-9:.]+)</col> Personal best: </col><col=ff0000>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col>");
+	private static final Pattern KILL_DURATION_PATTERN = Pattern.compile("(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:) <col=[0-9a-f]{6}>(?<current>[0-9:.]+)</col>\\. Personal best: (?:<col=ff0000>)?(?<pb>[0-9:]+(?:\\.[0-9]+)?)");
+	private static final Pattern NEW_PB_PATTERN = Pattern.compile("(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:) <col=[0-9a-f]{6}>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col> \\(new personal best\\)");
+	private String currentKillTime = "";
+	private String currentPbTime = "";
+	private String currentNpcName = "";
+	private boolean readyToSendPb = false; // Flag to indicate when all data is ready
+
+	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+	private ScheduledFuture<?> skillDataResetTask = null;
+	private final Object lock = new Object();
 	public static final String CONFIG_GROUP = "droptracker";
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	@Inject
@@ -168,18 +190,69 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
+	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage) {
 		if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE && chatMessage.getType() != ChatMessageType.SPAM) {
+
 			return;
 		}
 		if (isFakeWorld()) {
 			return;
 		}
-		/* Update totalLogSlots on new entries */
-		if (COLLECTION_LOG_ITEM_REGEX.matcher(chatMessage.getMessage()).matches()) {
-			++totalLogSlots;
+
+		synchronized (lock) {
+			String message = chatMessage.getMessage();
+			Matcher matcher;
+
+			if (COLLECTION_LOG_ITEM_REGEX.matcher(message).matches()) {
+				++totalLogSlots;
+			}
+
+			Matcher npcMatcher = KILLCOUNT_PATTERN.matcher(message);
+			if (npcMatcher.find()) {
+				currentNpcName = npcMatcher.group("boss");
+				scheduleSkillDataReset();
+			}
+
+			if ((matcher = RAIDS_PB_PATTERN.matcher(message)).find()) {
+				currentKillTime = matcher.group("pb");
+				currentPbTime = currentKillTime;
+				readyToSendPb = true;
+				scheduleSkillDataReset();
+			} else if ((matcher = RAIDS_DURATION_PATTERN.matcher(message)).find() || (matcher = KILL_DURATION_PATTERN.matcher(message)).find()) {
+				currentKillTime = matcher.group("current");
+				currentPbTime = matcher.group("pb");
+				readyToSendPb = !currentNpcName.isEmpty();
+				scheduleSkillDataReset();
+			}
+
+			if (readyToSendPb) {
+				String playerName = client.getLocalPlayer().getName();
+				sendKillTimeData(playerName, currentNpcName, currentKillTime, currentPbTime);
+				resetState();
+			}
 		}
 	}
+
+	private void scheduleSkillDataReset() {
+		if (skillDataResetTask != null) {
+			skillDataResetTask.cancel(false);
+		}
+		skillDataResetTask = scheduler.schedule(this::resetState, 500, TimeUnit.MILLISECONDS);
+	}
+
+	private void resetState() {
+		synchronized (lock) {
+			currentKillTime = "";
+			currentPbTime = "";
+			currentNpcName = "";
+			readyToSendPb = false;
+		}
+	}
+
+
+
+
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
@@ -709,7 +782,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, String memberList, int quantity, int geValue, int nonMembers, String authKey, String imageUrl) {
-		HttpUrl url = HttpUrl.parse("https://www.droptracker.io/api/drops/submit");
+		HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
 		String dropType = "normal";
 		if (isFakeWorld()) {
 			if (client.getWorldType().contains(WorldType.SEASONAL)) {
@@ -744,7 +817,7 @@ public class DropTrackerPlugin extends Plugin {
 				.add("notified", notified_str);
 
 		Request request = new Request.Builder()
-				.url(url)
+				.url( url)
 				.header("Content-Type", "application/x-www-form-urlencoded")
 				.post(formBuilder.build())
 				.build();
@@ -772,7 +845,50 @@ public class DropTrackerPlugin extends Plugin {
 				} else {
 				}
 			} catch (IOException e) {
-				log.error("DropTracker -> sendDropData Exception occurred: " + e.getMessage());
+				// Don't bother logging connection errors to the server; it's likely due to downtime
+				// Or a false alarm due to server load
+			}
+		});
+	}
+	public void sendKillTimeData(String playerName, String npcName, String currentPb, String currentTime) {
+		String apiUrl = getApiUrl(); // Ensure this URL is correct
+		HttpUrl url = HttpUrl.parse(apiUrl + "/api/kills/pb"); // Ensure apiUrl ends with a slash
+
+		String serverId = config.serverId();
+		String authKey = config.authKey();
+
+		// Creating a map to hold your JSON data
+		Map<String, Object> data = new HashMap<>();
+		data.put("player_name", playerName);
+		data.put("npc_name", npcName);
+		data.put("current_pb", currentPb);
+		data.put("current_time", currentTime);
+		data.put("server_id", serverId);
+		data.put("auth_token", authKey);
+
+		// Convert map to JSON string
+		Gson gson = new Gson();
+		String json = gson.toJson(data);
+
+		// Create RequestBody
+		RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
+
+		Request request = new Request.Builder()
+				.url(url)
+				.post(body)
+				.build();
+
+		CompletableFuture.runAsync(() -> {
+			try (Response response = httpClient.newCall(request).execute()) {
+				if (!response.isSuccessful()) {
+					throw new IOException("Unexpected code " + response);
+				}
+				// Important: Close the response body to avoid resource leaks
+				if (response.body() != null) {
+					response.body().close();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 		});
 	}
@@ -885,7 +1001,6 @@ public class DropTrackerPlugin extends Plugin {
 								}
 
 								String responseBody = response.body().string();
-								System.out.println("responseBody: " + responseBody);
 								future.complete(responseBody.trim());
 							} catch (IOException e) {
 								future.completeExceptionally(e);
