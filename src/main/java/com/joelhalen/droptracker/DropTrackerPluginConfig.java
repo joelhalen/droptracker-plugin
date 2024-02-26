@@ -150,6 +150,13 @@ public interface DropTrackerPluginConfig extends Config
 				return false;
 		}
 		@ConfigItem(
+				keyName = "sendReminders",
+				name = "Receive Reminders",
+				description="<html></html>",
+				position = 2
+		)
+		default boolean sendReminders() { return true; }
+		@ConfigItem(
 				keyName = "sheetURL",
 				name = "Spreadsheet URL",
 				description = "<html>If your clan/group is using the Google Sheets functionality,<br>" +
@@ -159,4 +166,6 @@ public interface DropTrackerPluginConfig extends Config
 		default String sheetURL() {
 			return "";
 		}
+
+
 	}

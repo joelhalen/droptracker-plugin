@@ -88,6 +88,7 @@ public class DropTrackerPanel extends PluginPanel
     public boolean isRefreshing = false;
     public String localAuthKey = null;
     public String localPlayerName = null;
+
     private static final BufferedImage TOP_LOGO = ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png");
 
     public DropTrackerPanel(DropTrackerPlugin plugin, DropTrackerPluginConfig config, ItemManager itemManager, ChatMessageManager chatMessageManager) {

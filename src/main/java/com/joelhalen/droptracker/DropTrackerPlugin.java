@@ -31,16 +31,10 @@ import com.google.inject.Provides;
 
 import com.joelhalen.droptracker.discord.*;
 import net.runelite.api.*;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.ItemContainerChanged;
-import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
@@ -54,6 +48,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.LinkBrowser;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
 
@@ -77,6 +72,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.Executors;
@@ -159,6 +155,10 @@ public class DropTrackerPlugin extends Plugin {
 	private final Object groupMembersLock = new Object();
 	@Inject
 	private GroupMemberClient groupMemberClient;
+	private boolean hasSentDiscordMsg;
+
+	@Inject
+	private ChatCommandManager chatCommandManager;
 
 	public String getApiUrl() {
 		/* if, somehow, a player still reaches a call to the API with the API disabled, this
@@ -414,10 +414,37 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		}
 	}
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event) {
+		if (event.getGameState().equals(GameState.LOGGED_IN)) {
+			if (config.sendReminders() && !hasSentDiscordMsg) {
+				final String firstMessage = new ChatMessageBuilder()
+						.append(ChatColorType.HIGHLIGHT)
+						.append("[DropTracker]")
+						.append(ChatColorType.NORMAL)
+						.append(" Did you know you are automatically competing on the DropTracker's Loot Leaderboards by using the plugin?")
+						.build();
+				final String secondMessage = new ChatMessageBuilder()
+						.append(ChatColorType.NORMAL)
+						.append("- Join the discord or visit our site to learn more: !droptracker")
+						.build();
+				chatMessageManager.queue(
+						QueuedMessage.builder()
+								.type(ChatMessageType.GAMEMESSAGE)
+								.runeLiteFormattedMessage(firstMessage)
+								.build());
+				chatMessageManager.queue(
+						QueuedMessage.builder()
+								.type(ChatMessageType.GAMEMESSAGE)
+								.runeLiteFormattedMessage(secondMessage)
+								.build());
 
+				hasSentDiscordMsg = true;
+			}
+		}
+	}
 	@Subscribe
 	public void onGameTick(GameTick event) {
-
 		/* Refresh the panel every time the game state changes, or the player's local name changes */
 		if ((client.getGameState() == GameState.LOGGED_IN) && (client.getLocalPlayer().getName() != null) && (!client.getLocalPlayer().getName().equals(currentPlayerName))) {
 			currentPlayerName = client.getLocalPlayer().getName();
@@ -671,6 +698,24 @@ public class DropTrackerPlugin extends Plugin {
 		} else {
 			log.debug("DropTracker v2.2 has started. API is disabled, using webhook endpoint.");
 		}
+		// recommend the user to join our Discord and register in the database
+		if(config.sendReminders()) {
+			hasSentDiscordMsg = false;
+		}
+		final HttpUrl discordUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
+		HttpUrl.Builder urlBuilder = discordUrl.newBuilder();
+		HttpUrl url = urlBuilder.build();
+		chatCommandManager.registerCommand("!droptracker", openLink("discord"));
+	}
+	private BiConsumer<ChatMessage, String> openLink(String destination) {
+		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
+		if (destination == "website" && config.useApi()) {
+			webUrl = HttpUrl.parse(getApiUrl());
+		}
+		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
+		HttpUrl url = urlBuilder.build();
+		LinkBrowser.browse(url.toString());
+		return null;
 	}
 	private void initializeEventPanel() {
 		if (config.useApi()) {
