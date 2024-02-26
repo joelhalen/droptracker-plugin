@@ -208,12 +208,14 @@ public class DropTrackerPlugin extends Plugin {
 
 			if (COLLECTION_LOG_ITEM_REGEX.matcher(message).matches()) {
 				++totalLogSlots;
+				hasUpdatedStoredItems = false;
 			}
 
 			Matcher npcMatcher = KILLCOUNT_PATTERN.matcher(message);
 			if (npcMatcher.find()) {
 				currentNpcName = npcMatcher.group("boss");
 				scheduleKillTimeReset();
+				hasUpdatedStoredItems = false;
 			}
 
 			if ((matcher = RAIDS_PB_PATTERN.matcher(message)).find()) {
@@ -221,11 +223,13 @@ public class DropTrackerPlugin extends Plugin {
 				currentPbTime = currentKillTime;
 				readyToSendPb = true;
 				scheduleKillTimeReset();
+				hasUpdatedStoredItems = false;
 			} else if ((matcher = RAIDS_DURATION_PATTERN.matcher(message)).find() || (matcher = KILL_DURATION_PATTERN.matcher(message)).find()) {
 				currentKillTime = matcher.group("current");
 				currentPbTime = matcher.group("pb");
 				readyToSendPb = !currentNpcName.isEmpty();
 				scheduleKillTimeReset();
+				hasUpdatedStoredItems = false;
 			}
 
 			if (readyToSendPb) {
@@ -427,16 +431,8 @@ public class DropTrackerPlugin extends Plugin {
 						.append(ChatColorType.NORMAL)
 						.append("- Join the discord or visit our site to learn more: !droptracker")
 						.build();
-				chatMessageManager.queue(
-						QueuedMessage.builder()
-								.type(ChatMessageType.GAMEMESSAGE)
-								.runeLiteFormattedMessage(firstMessage)
-								.build());
-				chatMessageManager.queue(
-						QueuedMessage.builder()
-								.type(ChatMessageType.GAMEMESSAGE)
-								.runeLiteFormattedMessage(secondMessage)
-								.build());
+				scheduler.schedule(sendChatMessage(firstMessage), 5, TimeUnit.SECONDS);
+				scheduler.schedule(sendChatMessage(secondMessage), 5, TimeUnit.SECONDS);
 
 				hasSentDiscordMsg = true;
 			}
@@ -511,6 +507,7 @@ public class DropTrackerPlugin extends Plugin {
 		} catch (Exception e) {
 			log.error("Unexpected error occurred", e);
 		}
+		hasUpdatedStoredItems = false;
 	}
 
 	@Subscribe
@@ -998,6 +995,16 @@ public class DropTrackerPlugin extends Plugin {
 			embedFields++;
 		}
 		webhook.execute();
+	}
+
+	public Runnable sendChatMessage(String chatMessage) {
+
+		chatMessageManager.queue(
+				QueuedMessage.builder()
+						.type(ChatMessageType.GAMEMESSAGE)
+						.runeLiteFormattedMessage(chatMessage)
+						.build());
+		return null;
 	}
 
 	private CompletableFuture<String> getScreenshot(String playerName, int itemId, String npcName) {
