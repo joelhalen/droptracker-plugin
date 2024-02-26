@@ -2,6 +2,7 @@
 # DropTracker
 
 Shares your drops with the [DropTracker](https://www.droptracker.io/) database.
+
 [Website](https://www.droptracker.io/) | [Discord](https://www.droptracker.io/discord) | [Docs](https://www.droptracker.io/docs)
 ![image](https://github.com/joelhalen/droptracker-plugin/assets/128320003/b1c0ddb1-fab8-47a4-8af6-df6ab220060c)
 
