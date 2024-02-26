@@ -155,8 +155,8 @@ public class DropTrackerPlugin extends Plugin {
 	private final Object groupMembersLock = new Object();
 	@Inject
 	private GroupMemberClient groupMemberClient;
-	private boolean hasSentDiscordMsg;
-
+	private boolean hasSentDiscordMsg; // only send a message one time to the user per client session
+	private boolean hasUpdatedStoredItems; // prevent spamming the API with gear updates
 	@Inject
 	private ChatCommandManager chatCommandManager;
 
@@ -213,19 +213,19 @@ public class DropTrackerPlugin extends Plugin {
 			Matcher npcMatcher = KILLCOUNT_PATTERN.matcher(message);
 			if (npcMatcher.find()) {
 				currentNpcName = npcMatcher.group("boss");
-				scheduleSkillDataReset();
+				scheduleKillTimeReset();
 			}
 
 			if ((matcher = RAIDS_PB_PATTERN.matcher(message)).find()) {
 				currentKillTime = matcher.group("pb");
 				currentPbTime = currentKillTime;
 				readyToSendPb = true;
-				scheduleSkillDataReset();
+				scheduleKillTimeReset();
 			} else if ((matcher = RAIDS_DURATION_PATTERN.matcher(message)).find() || (matcher = KILL_DURATION_PATTERN.matcher(message)).find()) {
 				currentKillTime = matcher.group("current");
 				currentPbTime = matcher.group("pb");
 				readyToSendPb = !currentNpcName.isEmpty();
-				scheduleSkillDataReset();
+				scheduleKillTimeReset();
 			}
 
 			if (readyToSendPb) {
@@ -236,7 +236,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	private void scheduleSkillDataReset() {
+	private void scheduleKillTimeReset() {
 		if (skillDataResetTask != null) {
 			skillDataResetTask.cancel(false);
 		}
@@ -259,7 +259,6 @@ public class DropTrackerPlugin extends Plugin {
 	public void onLootReceived(LootReceived lootReceived) {
 		String playerName = config.permPlayerName().isEmpty() ? client.getLocalPlayer().getName() : config.permPlayerName();
 		if (lootReceived.getType() == LootRecordType.NPC) {
-			//if the drop was an NPC, it should've already been handled in onNpcLootReceived
 			return;
 		}
 		Collection<ItemStack> items = lootReceived.getItems();
@@ -496,18 +495,13 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		try {
 			Widget colLogTitleWig = client.getWidget(621, 1);
-
-			// Check if the widget is not null and its child is also not null
 			if (colLogTitleWig != null && colLogTitleWig.getChild(1) != null) {
 				colLogTitleWig = colLogTitleWig.getChild(1);
 				String text = colLogTitleWig.getText();
-
-				// Further check if the text is not null and contains the expected format
 				if (text != null && text.contains("- ")) {
 					Integer new_slots = Integer.parseInt(text.split("- ")[1].split("/")[0]);
 					if (new_slots > totalLogSlots) {
-						// Player now has more slots stored than we previously knew
-						log.debug("[DropTracker] Updating log slots to " + new_slots + " from " + totalLogSlots);
+						//log.debug("[DropTracker] Updating log slots to " + new_slots + " from " + totalLogSlots);
 						totalLogSlots = new_slots;
 					}
 				}
@@ -524,6 +518,9 @@ public class DropTrackerPlugin extends Plugin {
 		if ((isFakeWorld()) || (!config.useApi()) || (!config.sendAccountData())) {
 			/* If the world is not a 'real world' (leagues, etc.), or
 			the API is disabled, don't bother processing the data */
+			return;
+		}
+		if(hasUpdatedStoredItems) {
 			return;
 		}
 		if (event.getContainerId() == InventoryID.BANK.getId() ||
@@ -580,6 +577,7 @@ public class DropTrackerPlugin extends Plugin {
 
 			sendBankItemsToServer(itemPresence);
 		}
+		hasUpdatedStoredItems = true;
 	}
 
 	public CompletableFuture<Void> sendBankItemsToServer(Map<String, Boolean> itemData) {
@@ -624,11 +622,6 @@ public class DropTrackerPlugin extends Plugin {
 	DropTrackerPluginConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(DropTrackerPluginConfig.class);
 	}
-	public String[] getGroupMembers() {
-		synchronized (groupMembersLock) {
-			return groupMembers;
-		}
-	}
 	public String getLocalPlayerName() {
 		if (client != null && client.getLocalPlayer() != null) {
 			return client.getLocalPlayer().getName();
@@ -655,7 +648,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void createSidePanel() {
 		panel = new DropTrackerPanel(this, config, itemManager, chatMessageManager);
-
 		navButton = NavigationButton.builder()
 				.tooltip("Drop Tracker")
 				.icon(ICON)
@@ -702,10 +694,21 @@ public class DropTrackerPlugin extends Plugin {
 		if(config.sendReminders()) {
 			hasSentDiscordMsg = false;
 		}
-		final HttpUrl discordUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
-		HttpUrl.Builder urlBuilder = discordUrl.newBuilder();
-		HttpUrl url = urlBuilder.build();
-		chatCommandManager.registerCommand("!droptracker", openLink("discord"));
+
+		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
+			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
+			if (linkOpener != null) {
+				linkOpener.accept(chatMessage, s);
+			}
+		});
+		if (config.useApi()) {
+			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
+				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
+				if (linkOpener != null) {
+					linkOpener.accept(chatMessage, s);
+				}
+			});
+		}
 	}
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
@@ -904,7 +907,6 @@ public class DropTrackerPlugin extends Plugin {
 		String serverId = config.serverId();
 		String authKey = config.authKey();
 
-		// Creating a map to hold your JSON data
 		Map<String, Object> data = new HashMap<>();
 		data.put("player_name", playerName);
 		data.put("npc_name", npcName);
@@ -913,11 +915,9 @@ public class DropTrackerPlugin extends Plugin {
 		data.put("server_id", serverId);
 		data.put("auth_token", authKey);
 
-		// Convert map to JSON string
 		Gson gson = new Gson();
 		String json = gson.toJson(data);
 
-		// Create RequestBody
 		RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
 
 		Request request = new Request.Builder()
@@ -930,7 +930,6 @@ public class DropTrackerPlugin extends Plugin {
 				if (!response.isSuccessful()) {
 					throw new IOException("Unexpected code " + response);
 				}
-				// Important: Close the response body to avoid resource leaks
 				if (response.body() != null) {
 					response.body().close();
 				}
@@ -985,11 +984,9 @@ public class DropTrackerPlugin extends Plugin {
 					.setFooter("https://www.droptracker.io","https://www.droptracker.io/img/favicon.png");
 
 			if (imageUrl != "none") {
-				/* Directly embed the image, if one was taken */
 				itemEmbed.setImage(imageUrl);
 			}
 			if (embedFields >= 8) {
-				/* Send a webhook and generate a new one if the items ArrayList is > 8 items, for discord limitations */
 				webhook.execute();
 				webhook = new DiscordWebhook(webhookUrl);
 				webhook.setContent(playerName + " received some drops:");
@@ -1015,7 +1012,6 @@ public class DropTrackerPlugin extends Plugin {
 						ByteArrayOutputStream baos = new ByteArrayOutputStream();
 						ImageIO.write((RenderedImage) image, "png", baos);
 						byte[] imageData = baos.toByteArray();
-						String nicePlayerName = playerName.replace(" ", "_");
 						String apiBase;
 						if (!config.sendScreenshots()) {
 							apiBase = null;
