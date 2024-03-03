@@ -355,6 +355,7 @@ public class DropTrackerPlugin extends Plugin {
 					}
 					if (!Objects.equals(config.webhook(), "")) {
 						itemEmbed.addField("webhook", String.valueOf(config.webhook()), true);
+						itemEmbed.addField("webhookValue", String.valueOf(config.webhookValue()), true);
 					}
 					itemEmbed.title = getLocalPlayerName() + " received some drops:";
 					customWebhookBody.getEmbeds().add(itemEmbed);

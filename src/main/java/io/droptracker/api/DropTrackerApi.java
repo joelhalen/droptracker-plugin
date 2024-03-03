@@ -108,6 +108,7 @@ public class DropTrackerApi {
                 .add("image_url", imageUrl)
                 .add("npc_name", npcName)
                 .add("webhook", config.webhook())
+                .add("webhookValue", String.valueOf(config.webhookValue()))
                 .add("sheet", config.sheetID())
                 .add("notified", notified_str);
         Request request = new Request.Builder()

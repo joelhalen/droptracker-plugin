@@ -125,12 +125,20 @@ public interface DropTrackerConfig extends Config
 	)
 	default String webhook() { return ""; };
 	@ConfigItem(
+			keyName = "webhookValue",
+			name = "Minimum Webhook Value",
+			description = "Set a minimum value before Discord webhooks <br>are sent to the configured URL (above).",
+			section = personalSection,
+			position = 2
+	)
+	default int webhookValue() { return 1000000; }
+	@ConfigItem(
 			keyName = "sheet",
 			name = "Google Spreadsheet",
 			description = "If you want your drops to also be inserted into a Google Sheet, enter the <b>SHEET ID</b> here.<br/>" +
 					"Join our Discord for help.",
 			section = personalSection,
-			position = 2
+			position = 3
 	)
 	default String sheetID() { return ""; };
 	@ConfigItem(
@@ -142,7 +150,7 @@ public interface DropTrackerConfig extends Config
 					"<b>Note</b>: To update the stored log slots you have in our database, <br>" +
 					"open the Collection Log once with the plugin enabled.</html>",
 			section = personalSection,
-			position = 3
+			position = 4
 	)
 	default boolean collectionLogWebhooks() { return false; }
 
