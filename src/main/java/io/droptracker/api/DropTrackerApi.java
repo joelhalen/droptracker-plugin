@@ -122,7 +122,8 @@ public class DropTrackerApi {
                 String responseData = response.body().string();
                 JsonParser parser = new JsonParser();
                 JsonObject jsonObj = parser.parse(responseData).getAsJsonObject();
-                if (jsonObj.has("success") && config.chatMessages()) {
+                // Only send chat messages for drops > 1M when configured
+                if (jsonObj.has("success") && config.chatMessages() && geValue >= 1000000) {
                     String playerTotalLoot = jsonObj.has("totalLootValue") ? jsonObj.get("totalLootValue").getAsString() : "0";
                     ChatMessageBuilder messageResponse = new ChatMessageBuilder();
                     NumberFormat playerLootFormat = NumberFormat.getNumberInstance();
