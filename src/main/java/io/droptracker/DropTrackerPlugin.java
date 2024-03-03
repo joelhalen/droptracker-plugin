@@ -460,7 +460,15 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				response.close();
+				try {
+					if (response.code() == 429) { // HTTP 429 Too Many Requests
+						log.info("Webhook rate limit detected, retrying with a new webhook URL...");
+						sendDropTrackerWebhook(customWebhookBody, screenshot);
+					} else {
+					}
+				} finally {
+					response.close();
+				}
 			}
 		});
 
