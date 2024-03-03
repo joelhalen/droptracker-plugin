@@ -5,7 +5,7 @@ import java.util.List;
 import lombok.Data;
 
 @Data
-class WebhookBody
+class CustomWebhookBody
 {
 	private String content;
 	private List<Embed> embeds = new ArrayList<>();

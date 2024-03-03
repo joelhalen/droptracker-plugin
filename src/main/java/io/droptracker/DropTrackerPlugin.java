@@ -67,7 +67,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	public DropTrackerPlugin() {
 	}
-
+	@Inject
+	private Gson gson;
 	@Inject
 	private ItemManager itemManager;
 
@@ -143,7 +144,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, new Gson(), httpClient);
+		api = new DropTrackerApi(config, msgManager, gson, httpClient);
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
 			if (linkOpener != null) {
@@ -233,16 +234,16 @@ public class DropTrackerPlugin extends Plugin {
 			hasUpdatedStoredItems = false;
 			if (config.collectionLogWebhooks() && !Objects.equals(config.webhook(), "") && config.webhook().length() > 5){
 				clientThread.invokeLater(() -> {
-					WebhookBody webhookBody = new WebhookBody();
+					CustomWebhookBody customWebhookBody = new CustomWebhookBody();
 					logItemReceived = Text.removeTags(m.group(1));
-					WebhookBody.Embed logSlotEmbed = new WebhookBody.Embed(new WebhookBody.UrlEmbed("https://www.droptracker.io/img/droptracker-small.gif"));
+					CustomWebhookBody.Embed logSlotEmbed = new CustomWebhookBody.Embed(new CustomWebhookBody.UrlEmbed("https://www.droptracker.io/img/droptracker-small.gif"));
 					logSlotEmbed.title = getLocalPlayerName() + " received a new Collection Log item";
 					logSlotEmbed.addField("item", logItemReceived, false);
-					webhookBody.setContent("Collection Log Slot update");
+					customWebhookBody.setContent("Collection Log Slot update");
 					logSlotEmbed.addField("webhook", config.webhook(), false);
 					// For now, we'll just call the webhook method with a value of 50m to ensure screenshot is sent
 					// As long as screenshots are enabled. Probably should re-work this later.
-					sendDropTrackerWebhook(webhookBody, 50000000);
+					sendDropTrackerWebhook(customWebhookBody, 50000000);
 					sendChatReminder();
 				});
 			}
@@ -324,7 +325,7 @@ public class DropTrackerPlugin extends Plugin {
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
 		if (!config.useApi()) {
 			AtomicReference<Integer> finalValue = new AtomicReference<>(0);
-			WebhookBody webhookBody = new WebhookBody();
+			CustomWebhookBody customWebhookBody = new CustomWebhookBody();
 			clientThread.invokeLater(() -> {
 				for (ItemStack item : stack(items)) {
 					int itemId = item.getId();
@@ -333,7 +334,7 @@ public class DropTrackerPlugin extends Plugin {
 					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
 					finalValue.set(qty * price);
 					// Create a new embed for each item
-					WebhookBody.Embed itemEmbed = new WebhookBody.Embed(new WebhookBody.UrlEmbed(itemImageUrl(itemId)));
+					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed(new CustomWebhookBody.UrlEmbed(itemImageUrl(itemId)));
 
 					// Add fields to the embed
 					itemEmbed.addField("item", itemComposition.getName(), true);
@@ -356,12 +357,12 @@ public class DropTrackerPlugin extends Plugin {
 						itemEmbed.addField("webhook", String.valueOf(config.webhook()), true);
 					}
 					itemEmbed.title = getLocalPlayerName() + " received some drops:";
-					webhookBody.getEmbeds().add(itemEmbed);
+					customWebhookBody.getEmbeds().add(itemEmbed);
 				}
 
-				webhookBody.setContent(getLocalPlayerName() + " received some drops:");
+				customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
 			});
-			sendDropTrackerWebhook(webhookBody, finalValue.get());
+			sendDropTrackerWebhook(customWebhookBody, finalValue.get());
 		} else {
 			for (ItemStack item : items) {
 				int itemId = item.getId();
@@ -406,7 +407,7 @@ public class DropTrackerPlugin extends Plugin {
 		return client.getLocalPlayer().getName();
 	}
 
-	private void sendDropTrackerWebhook(WebhookBody webhookBody, int totalValue) {
+	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		if (config.sendScreenshot() && totalValue > config.screenshotValue()) {
 			drawManager.requestNextFrameListener(image ->
 			{
@@ -417,16 +418,16 @@ public class DropTrackerPlugin extends Plugin {
 				} catch (IOException e) {
 					log.error("Error converting image to byte array", e);
 				}
-				sendDropTrackerWebhook(webhookBody, imageBytes);
+				sendDropTrackerWebhook(customWebhookBody, imageBytes);
 			});
 		} else {
-			sendDropTrackerWebhook(webhookBody, null);
+			sendDropTrackerWebhook(customWebhookBody, null);
 		}
 	}
-	private void sendDropTrackerWebhook(WebhookBody webhookBody, byte[] screenshot) {
+	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
-				.addFormDataPart("payload_json", GSON.toJson(webhookBody));
+				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
 
 		if (screenshot != null) {
 			requestBodyBuilder.addFormDataPart("file", "image.png",
