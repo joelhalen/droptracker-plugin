@@ -9,18 +9,16 @@ class WebhookBody
 {
 	private String content;
 	private List<Embed> embeds = new ArrayList<>();
-	private Author DropTracker = new Author("https://www.droptracker.io/",
+	private static Author DropTracker = new Author("https://www.droptracker.io/",
 			"DropTracker",
 			"https://www.droptracker.io/img/droptracker-small.gif");
 
 	@Data
 	static class Embed
 	{
-		final String title = "Drop received:";
+		public String title = "";
 		final UrlEmbed image;
-		final Author author = new Author("https://www.droptracker.io/",
-				"DropTracker",
-				"https://www.droptracker.io/img/droptracker-small.gif");
+		final Author author = DropTracker;
 		final List<Field> fields = new ArrayList<>();
 		public void addField(String name, String value, boolean inline) {
 			this.fields.add(new Field(name, value, inline));
@@ -37,7 +35,7 @@ class WebhookBody
 	{
 		final String url;
 		final String name;
-		final String avatar;
+		final String icon_url;
 	}
 	@Data
 	static class Field

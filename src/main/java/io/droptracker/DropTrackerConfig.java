@@ -81,7 +81,7 @@ public interface DropTrackerConfig extends Config
 			section = apiSection
 	)
 	default String registeredName() { return ""; }
-//	@ConfigItem( -- side panel will be added at some later date
+	//	@ConfigItem( -- side panel will be added at some later date
 //			name = "Use Side Panel",
 //			keyName = "useSidePanel",
 //			description = "Do you want the DropTracker side panel to be rendered, showing<br />" +
@@ -91,7 +91,7 @@ public interface DropTrackerConfig extends Config
 //	)
 //	default boolean useSidePanel() { return true; }
 	@ConfigItem(
-		name = "Track Account Data",
+			name = "Track Account Data",
 			keyName = "trackAccData",
 			description = "Store information about your account like your log " +
 					"<br />slots and personal bests in our database.",
@@ -115,12 +115,12 @@ public interface DropTrackerConfig extends Config
 	)
 
 	/* Personal settings (personal webhook, google sheets, etc) */
-	String personalSection = "Personal Config";
+			String personalSection = "Personal Config";
 	@ConfigItem(
-		keyName = "webhook",
-		name = "Custom Webhook",
-		description = "If you want to specify your own custom webhook URL to send your drops, you can do so here",
-		section = personalSection,
+			keyName = "webhook",
+			name = "Custom Webhook",
+			description = "If you want to specify your own custom webhook URL to send your drops, you can do so here",
+			section = personalSection,
 			position = 1
 	)
 	default String webhook() { return ""; };
@@ -133,5 +133,17 @@ public interface DropTrackerConfig extends Config
 			position = 2
 	)
 	default String sheetID() { return ""; };
+	@ConfigItem(
+			keyName = "colLogWebhooks",
+			name = "Collection Log Webhooks",
+			description = "<html>Do you want to send webhooks to your <br>" +
+					"personally-configured URL for new <br>" +
+					"collection log items?<br>" +
+					"<b>Note</b>: To update the stored log slots you have in our database, <br>" +
+					"open the Collection Log once with the plugin enabled.</html>",
+			section = personalSection,
+			position = 3
+	)
+	default boolean collectionLogWebhooks() { return false; }
 
 }

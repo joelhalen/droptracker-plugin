@@ -23,7 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatColorType;
+import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -38,6 +41,8 @@ import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.ImageCapture;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
+
+import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -92,7 +97,7 @@ public class DropTrackerPlugin extends Plugin {
 	private int MINIMUM_FOR_SCREENSHOTS = 2500000;
 	//^overwrites the user's input value if it's below 2.5M for API submissions to prevent overfilling our webserver
 
-	/* Memory storage for details about the current npc being killed and it's kill time */
+	/* Memory storage for details about the current npc being killed, and it's kill time */
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 	private String currentKillTime = "";
 	private String currentPbTime = "";
@@ -102,12 +107,12 @@ public class DropTrackerPlugin extends Plugin {
 	private boolean hasUpdatedStoredItems; // prevent spamming the API with gear updates
 	private ScheduledFuture<?> skillDataResetTask = null;
 	private final Object lock = new Object();
-
-	/* Get a random webhook from the GitHub endpoint (cycled in/out the Discord Bot regularly)
-	 */
+	// Remind users they can register and track their drops when they receive some for the first time
+	private boolean hasReminded = false;
 	public static List<String> webhookUrls = new ArrayList<>();
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
+	private String logItemReceived;
 
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
@@ -152,7 +157,11 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
-
+			if (!config.useApi()) {
+				// Reset webhook list on config change
+				webhookUrls = new ArrayList<>();
+			}
+			sendChatReminder();
 		}
 	}
 
@@ -161,12 +170,14 @@ public class DropTrackerPlugin extends Plugin {
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		processDropEvent(npc.getName(), "npc", items);
+		sendChatReminder();
 	}
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "player", items);
+		sendChatReminder();
 	}
 
 	@Subscribe
@@ -175,10 +186,13 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		processDropEvent(lootReceived.getName(), "other", lootReceived.getItems());
+		sendChatReminder();
 	}
 
 	@Subscribe
 	public void onChatMessage(ChatMessage chatMessage) {
+		String message = chatMessage.getMessage();
+		Matcher matcher;
 		if (!config.useApi()) {
 			return;
 		}
@@ -188,15 +202,28 @@ public class DropTrackerPlugin extends Plugin {
 		if (isFakeWorld()) {
 			return;
 		}
-
-		synchronized (lock) {
-			String message = chatMessage.getMessage();
-			Matcher matcher;
-
-			if (COLLECTION_LOG_ITEM_REGEX.matcher(message).matches()) {
-				++totalLogSlots;
-				hasUpdatedStoredItems = false;
+		Matcher m = COLLECTION_LOG_ITEM_REGEX.matcher(message);
+		if (m.matches()) {
+			++totalLogSlots;
+			hasUpdatedStoredItems = false;
+			if (config.collectionLogWebhooks() && !Objects.equals(config.webhook(), "") && config.webhook().length() > 5){
+				clientThread.invokeLater(() -> {
+					WebhookBody webhookBody = new WebhookBody();
+					logItemReceived = Text.removeTags(m.group(1));
+					WebhookBody.Embed logSlotEmbed = new WebhookBody.Embed(new WebhookBody.UrlEmbed("https://www.droptracker.io/img/droptracker-small.gif"));
+					logSlotEmbed.title = getLocalPlayerName() + " received a new Collection Log item";
+					logSlotEmbed.addField("item", logItemReceived, false);
+					webhookBody.setContent("Collection Log Slot update");
+					logSlotEmbed.addField("webhook", config.webhook(), false);
+					// For now, we'll just call the webhook method with a value of 50m to ensure screenshot is sent
+					// As long as screenshots are enabled. Probably should re-work this later.
+					sendDropTrackerWebhook(webhookBody, 50000000);
+					sendChatReminder();
+				});
 			}
+			logItemReceived = "";
+		}
+		synchronized (lock) {
 
 			Matcher npcMatcher = KILLCOUNT_PATTERN.matcher(message);
 			if (npcMatcher.find()) {
@@ -226,6 +253,32 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		}
 	}
+	private void sendChatReminder() {
+		if (!hasReminded) {
+			ChatMessageBuilder messageOne = new ChatMessageBuilder();
+			messageOne.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+					.append("DropTracker")
+					.append(ChatColorType.NORMAL)
+					.append("] ")
+					.append("Did you know your drops are automatically being tracked by the DropTracker?");
+			ChatMessageBuilder messageTwo = new ChatMessageBuilder();
+			messageTwo.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+					.append("DropTracker")
+					.append(ChatColorType.NORMAL)
+					.append("] join our Discord server to learn more: ")
+					.append(ChatColorType.HIGHLIGHT)
+					.append("!droptracker");
+			msgManager.queue(QueuedMessage.builder()
+					.type(ChatMessageType.CONSOLE)
+					.runeLiteFormattedMessage(messageOne.build())
+					.build());
+			msgManager.queue(QueuedMessage.builder()
+					.type(ChatMessageType.CONSOLE)
+					.runeLiteFormattedMessage(messageTwo.build())
+					.build());
+			hasReminded = true;
+		}
+	}
 
 	private void scheduleKillTimeReset() {
 		if (skillDataResetTask != null) {
@@ -241,10 +294,6 @@ public class DropTrackerPlugin extends Plugin {
 			currentNpcName = "";
 			readyToSendPb = false;
 		}
-	}
-
-	private String getPlayerName() {
-		return client.getLocalPlayer().getName();
 	}
 
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
@@ -264,7 +313,7 @@ public class DropTrackerPlugin extends Plugin {
 					// Add fields to the embed
 					itemEmbed.addField("item", itemComposition.getName(), true);
 					itemEmbed.addField("player", client.getLocalPlayer().getName(), true);
-					if (config.authKey() != "") {
+					if (!Objects.equals(config.authKey(), "")) {
 						itemEmbed.addField("auth_token", config.authKey(), true);
 					}
 					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
@@ -272,16 +321,17 @@ public class DropTrackerPlugin extends Plugin {
 					itemEmbed.addField("value", String.valueOf(price), true);
 					itemEmbed.addField("source", npcName, true);
 					itemEmbed.addField("type", sourceType, true);
-					if (config.sheetID() != "") {
+					if (!Objects.equals(config.sheetID(), "")) {
 						itemEmbed.addField("sheet", String.valueOf(config.sheetID()), true);
 					}
-					if (config.webhook() != "") {
+					if (!Objects.equals(config.webhook(), "")) {
 						itemEmbed.addField("webhook", String.valueOf(config.webhook()), true);
 					}
+					itemEmbed.title = getLocalPlayerName() + " received some drops:";
 					webhookBody.getEmbeds().add(itemEmbed);
 				}
 
-				webhookBody.setContent(getPlayerName() + " received some drops:");
+				webhookBody.setContent(getLocalPlayerName() + " received some drops:");
 				sendDropTrackerWebhook(webhookBody, finalValue.get());
 			});
 		} else {
@@ -298,24 +348,23 @@ public class DropTrackerPlugin extends Plugin {
 				String itemName = itemComp.getName();
 				int finalValue = geValue * quantity;
 				SwingUtilities.invokeLater(() -> {
-					if (config.useApi()) {
-						String serverId = config.serverID();
-						if (config.sendScreenshot() && finalValue > config.screenshotValue()) {
-							AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
-							drawManager.requestNextFrameListener(image -> {
-								getApiScreenshot(client.getLocalPlayer().getName(), itemId, npcName).thenAccept(imageUrl -> {
-									SwingUtilities.invokeLater(() -> {
-										this_imageUrl.set(imageUrl);
-										api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get());
-									});
+					String serverId = config.serverID();
+					if (config.sendScreenshot() && finalValue > config.screenshotValue()) {
+						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
+						drawManager.requestNextFrameListener(image -> {
+							getApiScreenshot(client.getLocalPlayer().getName(), itemId, npcName).thenAccept(imageUrl -> {
+								SwingUtilities.invokeLater(() -> {
+									this_imageUrl.set(imageUrl);
+									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get());
 								});
-
 							});
 
-						}
+						});
+
 					} else {
 						api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "");
 					}
+
 				});
 
 			}
@@ -323,7 +372,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private String getLocalPlayerName() {
-		if (config.registeredName() != "") {
+		if (!config.registeredName().equals("")) {
 			return config.registeredName();
 		}
 		return client.getLocalPlayer().getName();
@@ -357,15 +406,15 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
-		String url = "";
+		String url;
 		try {
 			url = getRandomWebhookUrl();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 		HttpUrl u = HttpUrl.parse(url);
-		if (u == null) {
-			log.info("Malformed webhook url {}", url);
+		if (u == null || !isValidDiscordWebhookUrl(u)) {
+			log.info("Invalid or malformed webhook URL: {}", url);
 			return;
 		}
 
@@ -385,6 +434,19 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 
+	}
+	private boolean isValidDiscordWebhookUrl(HttpUrl url) {
+		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks
+		// And not external connections of some sort
+		if (!"discord.com".equals(url.host()) && !url.host().endsWith(".discord.com")) {
+			return false;
+		}
+		List<String> segments = url.pathSegments();
+		if (segments.size() >= 4 && "api".equals(segments.get(0)) && "webhooks".equals(segments.get(1))) {
+			return true;
+		}
+
+		return false;
 	}
 	private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
 		ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
@@ -414,56 +476,55 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	public boolean isFakeWorld() {
 		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			boolean isFake = !client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.DEADMAN);
-			return isFake;
+			return !client.getWorldType().contains(WorldType.SEASONAL) && !client.getWorldType().contains(WorldType.DEADMAN);
 		} else {
 			return true;
 		}
 	}
 	public CompletableFuture<String> getApiScreenshot(String playerName, int itemId, String npcName) {
+		String newItemId = String.valueOf(itemId);
+		return getApiScreenshot(playerName, newItemId, npcName);
+	}
+	public CompletableFuture<String> getApiScreenshot(String playerName, String itemId, String npcName) {
 		log.debug("getApiScreenshot called");
 		CompletableFuture<String> future = new CompletableFuture<>();
-		if (config.useApi() || config.sendScreenshot()) {
+		if (config.useApi() && config.sendScreenshot()) {
 			String serverId = config.serverID();
 			drawManager.requestNextFrameListener(image -> {
 				try {
-					ItemComposition itemComp = itemManager.getItemComposition(itemId);
+					ItemComposition itemComp = itemManager.getItemComposition(Integer.parseInt(itemId));
 					String itemName = itemComp.getName();
 					ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 					ImageIO.write((RenderedImage) image, "png", byteArrayOutputStream);
 					byte[] imageData = byteArrayOutputStream.toByteArray();
 					String apiBase;
-					if (!config.sendScreenshot()) {
-						apiBase = null;
-					} else {
-						apiBase = api.getApiUrl();
-						String serverName;
-						RequestBody requestBody = new MultipartBody.Builder()
-								.setType(MultipartBody.FORM)
-								.addFormDataPart("file", itemName + ".png",
-										RequestBody.create(MediaType.parse("image/png"), imageData))
-								.addFormDataPart("server_id", serverId)
-								.addFormDataPart("player_name", playerName)
-								.addFormDataPart("npc", npcName)
+					apiBase = api.getApiUrl();
+					String serverName;
+					RequestBody requestBody = new MultipartBody.Builder()
+							.setType(MultipartBody.FORM)
+							.addFormDataPart("file", itemName + ".png",
+									RequestBody.create(MediaType.parse("image/png"), imageData))
+							.addFormDataPart("server_id", serverId)
+							.addFormDataPart("player_name", playerName)
+							.addFormDataPart("npc", npcName)
+							.build();
+					executor.submit(() -> {
+
+						Request request = new Request.Builder()
+								.url(apiBase + "/api/upload_image")
+								.post(requestBody)
 								.build();
-						executor.submit(() -> {
-
-							Request request = new Request.Builder()
-									.url(apiBase + "/api/upload_image")
-									.post(requestBody)
-									.build();
-							try (Response response = httpClient.newCall(request).execute()) {
-								if (!response.isSuccessful()) {
-									throw new IOException("Unexpected response code: " + response);
-								}
-
-								String responseBody = response.body().string();
-								future.complete(responseBody.trim());
-							} catch (IOException e) {
-								future.completeExceptionally(e);
+						try (Response response = httpClient.newCall(request).execute()) {
+							if (!response.isSuccessful()) {
+								throw new IOException("Unexpected response code: " + response);
 							}
-						});
-					}
+
+							String responseBody = response.body().string();
+							future.complete(responseBody.trim());
+						} catch (IOException e) {
+							future.completeExceptionally(e);
+						}
+					});
 				} catch (IOException e) {
 					throw new RuntimeException(e);
 				}

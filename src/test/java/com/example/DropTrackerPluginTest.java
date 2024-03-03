@@ -4,7 +4,7 @@ import io.droptracker.DropTrackerPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class ExamplePluginTest
+public class DropTrackerPluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
