@@ -62,7 +62,7 @@ public interface DropTrackerConfig extends Config
 			position = 0,
 			section = apiSection
 	)
-	default String serverID() { return ""; }
+	default String serverId() { return ""; }
 	@ConfigItem(
 			name = "Authentication Key",
 			keyName = "authKey",

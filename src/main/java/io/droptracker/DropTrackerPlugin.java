@@ -12,6 +12,7 @@ import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
@@ -23,10 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
+import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -42,6 +40,7 @@ import net.runelite.client.util.ImageCapture;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
+import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.Call;
@@ -83,6 +82,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private DrawManager drawManager;
+	@Inject
+	private ChatCommandManager chatCommandManager;
 	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
 	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log:.*");
 	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (?<pre>completion count for |subdued |completed )?(?<boss>.+?) (?<post>(?:(?:kill|harvest|lap|completion) )?(?:count )?)is: <col=ff0000>(?<kc>\\d+)</col>");
@@ -142,7 +143,31 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, new Gson());
+		api = new DropTrackerApi(config, msgManager, new Gson(), httpClient);
+		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
+			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
+			if (linkOpener != null) {
+				linkOpener.accept(chatMessage, s);
+			}
+		});
+		if (config.useApi()) {
+			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
+				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
+				if (linkOpener != null) {
+					linkOpener.accept(chatMessage, s);
+				}
+			});
+		}
+	}
+	private BiConsumer<ChatMessage, String> openLink(String destination) {
+		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
+		if (destination == "website" && config.useApi()) {
+			webUrl = HttpUrl.parse(api.getApiUrl());
+		}
+		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
+		HttpUrl url = urlBuilder.build();
+		LinkBrowser.browse(url.toString());
+		return null;
 	}
 
 	@Override
@@ -299,8 +324,8 @@ public class DropTrackerPlugin extends Plugin {
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
 		if (!config.useApi()) {
 			AtomicReference<Integer> finalValue = new AtomicReference<>(0);
+			WebhookBody webhookBody = new WebhookBody();
 			clientThread.invokeLater(() -> {
-				WebhookBody webhookBody = new WebhookBody();
 				for (ItemStack item : stack(items)) {
 					int itemId = item.getId();
 					int qty = item.getQuantity();
@@ -315,6 +340,9 @@ public class DropTrackerPlugin extends Plugin {
 					itemEmbed.addField("player", client.getLocalPlayer().getName(), true);
 					if (!Objects.equals(config.authKey(), "")) {
 						itemEmbed.addField("auth_token", config.authKey(), true);
+					}
+					if (!Objects.equals(config.serverId(), "")) {
+						itemEmbed.addField("server_id", config.serverId(), true);
 					}
 					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
 					itemEmbed.addField("quantity", String.valueOf(qty), true);
@@ -332,8 +360,8 @@ public class DropTrackerPlugin extends Plugin {
 				}
 
 				webhookBody.setContent(getLocalPlayerName() + " received some drops:");
-				sendDropTrackerWebhook(webhookBody, finalValue.get());
 			});
+			sendDropTrackerWebhook(webhookBody, finalValue.get());
 		} else {
 			for (ItemStack item : items) {
 				int itemId = item.getId();
@@ -348,21 +376,21 @@ public class DropTrackerPlugin extends Plugin {
 				String itemName = itemComp.getName();
 				int finalValue = geValue * quantity;
 				SwingUtilities.invokeLater(() -> {
-					String serverId = config.serverID();
+					String serverId = config.serverId();
 					if (config.sendScreenshot() && finalValue > config.screenshotValue()) {
 						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
 						drawManager.requestNextFrameListener(image -> {
 							getApiScreenshot(client.getLocalPlayer().getName(), itemId, npcName).thenAccept(imageUrl -> {
 								SwingUtilities.invokeLater(() -> {
 									this_imageUrl.set(imageUrl);
-									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get());
+									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
 								});
 							});
 
 						});
 
 					} else {
-						api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "");
+						api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
 					}
 
 				});
@@ -489,7 +517,7 @@ public class DropTrackerPlugin extends Plugin {
 		log.debug("getApiScreenshot called");
 		CompletableFuture<String> future = new CompletableFuture<>();
 		if (config.useApi() && config.sendScreenshot()) {
-			String serverId = config.serverID();
+			String serverId = config.serverId();
 			drawManager.requestNextFrameListener(image -> {
 				try {
 					ItemComposition itemComp = itemManager.getItemComposition(Integer.parseInt(itemId));

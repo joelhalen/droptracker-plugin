@@ -4,11 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.WorldType;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
@@ -16,10 +13,7 @@ import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.game.ItemStack;
 import okhttp3.*;
 
-import javax.imageio.ImageIO;
 import javax.inject.Inject;
-import java.awt.image.RenderedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -39,7 +33,7 @@ public class DropTrackerApi {
     private OkHttpClient httpClient;
 
     @Inject
-    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson) {
+    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient) {
         super();
         this.config = config;
         this.msgManager = chatMessageManager;
@@ -59,7 +53,7 @@ public class DropTrackerApi {
         String apiUrl = getApiUrl();
         HttpUrl url = HttpUrl.parse(apiUrl + "/api/kills/pb");
 
-        String serverId = config.serverID();
+        String serverId = config.serverId();
         String authKey = config.authKey();
 
         Map<String, Object> data = new HashMap<>();
@@ -98,7 +92,7 @@ public class DropTrackerApi {
     public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
         HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
         String dropType = "normal";
-        String serverId = config.serverID();
+        String serverId = config.serverId();
         String notified_str = "1";
         FormBody.Builder formBuilder = new FormBody.Builder()
                 .add("drop_type", dropType)
@@ -121,7 +115,6 @@ public class DropTrackerApi {
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .post(formBuilder.build())
                 .build();
-
         return CompletableFuture.runAsync(() -> {
             try (Response response = httpClient.newCall(request).execute()) {
                 if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
