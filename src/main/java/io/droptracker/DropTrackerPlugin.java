@@ -115,6 +115,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	private String logItemReceived;
+	private static final int MAX_RETRIES = 5;
+	private int timesTried = 0;
 
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
@@ -426,6 +428,16 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+		if (timesTried == 0) {
+			this.timesTried = 1; // Starting the first attempt
+		} else {
+			this.timesTried++; // Increment on retry attempts
+		}
+		if (timesTried == 0) {
+			this.timesTried = 1; // Starting the first attempt
+		} else {
+			this.timesTried++; // Increment on retry attempts
+		}
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
 				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
@@ -455,20 +467,25 @@ public class DropTrackerPlugin extends Plugin {
 		okHttpClient.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(Call call, IOException e) {
+				// Skip onFailures?
 				log.debug("Error submitting webhook", e);
+				timesTried = 0;
 			}
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				try {
-					if (response.code() == 429) { // HTTP 429 Too Many Requests
-						log.info("Webhook rate limit detected, retrying with a new webhook URL...");
-						sendDropTrackerWebhook(customWebhookBody, screenshot);
-					} else {
-					}
-				} finally {
-					response.close();
+				if (response.isSuccessful()) {
+					log.info("Webhook sent successfully on attempt {}", timesTried);
+					timesTried = 0;
+				} else if (response.code() == 429) {
+					log.info("Rate limit detected, retrying with new webhook...");
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
+				} else {
+					// Maybe we shouldn't re-try here? only trying 5x anyway though...
+					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}
+				response.close();
 			}
 		});
 
