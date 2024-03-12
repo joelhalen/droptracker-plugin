@@ -10,10 +10,10 @@ import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
-import net.runelite.client.game.ItemStack;
 import okhttp3.*;
 
 import javax.inject.Inject;
+import javax.swing.*;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
@@ -31,6 +31,7 @@ public class DropTrackerApi {
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
+    private PanelDataLoadedCallback dataLoadedCallback;
 
     @Inject
     public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient) {
@@ -39,6 +40,13 @@ public class DropTrackerApi {
         this.msgManager = chatMessageManager;
         this.gson = gson;
         this.httpClient = httpClient;
+    }
+
+    public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
+        this.dataLoadedCallback = callback;
+    }
+    public interface PanelDataLoadedCallback {
+        void onDataLoaded(Map<String, Object> data);
     }
 
     public String getApiUrl() {
@@ -86,9 +94,86 @@ public class DropTrackerApi {
             }
         });
     }
-    public void prepareDropData(ItemStack items) {
+    public void loadPanelData(boolean forced) {
+        if (!config.useApi()) {
+            if (forced) {
+                ChatMessageBuilder messageResponse = new ChatMessageBuilder();
+                messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+                        .append("DropTracker")
+                        .append(ChatColorType.NORMAL)
+                        .append("] ")
+                        .append("You do not have the API enabled in your plugin config! Unable to refresh data.");
+                msgManager.queue(QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(messageResponse.build())
+                        .build());
+            }
+            return;
+        }
 
-    }
+        String apiUrl = getApiUrl(); // Make sure this URL is correctly formed
+        HttpUrl url = HttpUrl.parse(apiUrl + "/api/client_data");
+
+        if (url == null) {
+            System.out.println("Error: Invalid API URL.");
+            return;
+        }
+
+        String serverId = config.serverId();
+        String authKey = config.authKey();
+        String playerName;
+        if (!config.registeredName().equals("")) {
+            playerName = config.registeredName();
+        } else {
+            if (client.getLocalPlayer() != null) {
+                playerName = client.getLocalPlayer().getName();
+            } else {
+                playerName = "Unknown";
+            }
+        }
+            System.out.println("Attempting...");
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("player_name", playerName);
+            data.put("server_id", serverId);
+            data.put("auth_token", authKey);
+
+            Gson gson = new Gson();
+            String json = gson.toJson(data);
+
+            RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .build();
+
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                    SwingUtilities.invokeLater(() -> {
+                    });
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    try (ResponseBody responseBody = response.body()) {
+                        if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+                        String responseData = responseBody.string();
+                        Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+                        System.out.println("response: " + responseData);
+
+                        SwingUtilities.invokeLater(() -> {
+                            if (dataLoadedCallback != null) {
+                                dataLoadedCallback.onDataLoaded(responseMap);
+                                System.out.println("onDataLoaded is called with " + responseData);
+                            }
+                        });
+                    }
+                }
+            });
+        }
     public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
         HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
         String dropType = "normal";
@@ -99,8 +184,11 @@ public class DropTrackerApi {
                 .add("auth_token", authKey)
                 .add("item_name", itemName)
                 .add("item_id", String.valueOf(itemId))
-                .add("player_name", playerName)
-                .add("server_id", serverId)
+                .add("player_name", playerName);
+                if (!config.registeredName().equals("") && (!config.registeredName().equals(client.getLocalPlayer().getName()))) {
+                    formBuilder.add("real_name", client.getLocalPlayer().getName());
+                }
+                formBuilder.add("server_id", serverId)
                 .add("quantity", String.valueOf(quantity))
                 .add("value", String.valueOf(geValue))
                 .add("nonmember", "0")

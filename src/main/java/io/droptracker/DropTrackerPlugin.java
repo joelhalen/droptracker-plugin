@@ -20,6 +20,7 @@ import javax.inject.Inject;
 import javax.swing.*;
 
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.ui.DropTrackerPanel;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -35,11 +36,14 @@ import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
+import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.ImageCapture;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
@@ -63,7 +67,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DropTrackerConfig config;
 	@Inject
-	private DropTrackerApi api;
+	public static DropTrackerApi api;
+	private DropTrackerPanel panel;
+	private NavigationButton navButton;
 
 	public DropTrackerPlugin() {
 	}
@@ -114,9 +120,49 @@ public class DropTrackerPlugin extends Plugin {
 	public static List<String> webhookUrls = new ArrayList<>();
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
+	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	private String logItemReceived;
 	private static final int MAX_RETRIES = 5;
 	private int timesTried = 0;
+
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	@Inject
+	private Client client;
+	@Inject
+	private ClientThread clientThread;
+
+	@Override
+	protected void startUp() {
+		api = new DropTrackerApi(config, msgManager, gson, httpClient);
+		panel = injector.getInstance(DropTrackerPanel.class);
+		panel.init();
+
+
+		navButton = NavigationButton.builder()
+				.tooltip("DropTracker")
+				.icon(PANEL_ICON)
+				.priority(1)
+				.panel(panel)
+				.build();
+
+		clientToolbar.addNavigation(navButton);
+		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
+			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
+			if (linkOpener != null) {
+				linkOpener.accept(chatMessage, s);
+			}
+		});
+		if (config.useApi()) {
+			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
+				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
+				if (linkOpener != null) {
+					linkOpener.accept(chatMessage, s);
+				}
+			});
+		}
+	}
 
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
@@ -138,30 +184,6 @@ public class DropTrackerPlugin extends Plugin {
 	private static String itemImageUrl(int itemId) {
 		return "https://static.runelite.net/cache/item/icon/" + itemId + ".png";
 	}
-
-	@Inject
-	private Client client;
-	@Inject
-	private ClientThread clientThread;
-
-	@Override
-	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, gson, httpClient);
-		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
-			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
-			if (linkOpener != null) {
-				linkOpener.accept(chatMessage, s);
-			}
-		});
-		if (config.useApi()) {
-			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
-				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
-				if (linkOpener != null) {
-					linkOpener.accept(chatMessage, s);
-				}
-			});
-		}
-	}
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
 		if (destination == "website" && config.useApi()) {
@@ -175,6 +197,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
+		clientToolbar.removeNavigation(navButton);
+		panel = null;
 	}
 
 	@Provides
@@ -275,7 +299,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 
 			if (readyToSendPb) {
-				String playerName = client.getLocalPlayer().getName();
+				String playerName = getLocalPlayerName();
 				api.sendKillTimeData(playerName, currentNpcName, currentKillTime, currentPbTime);
 				resetState();
 			}
@@ -340,7 +364,10 @@ public class DropTrackerPlugin extends Plugin {
 
 					// Add fields to the embed
 					itemEmbed.addField("item", itemComposition.getName(), true);
-					itemEmbed.addField("player", client.getLocalPlayer().getName(), true);
+					itemEmbed.addField("player", getLocalPlayerName(), true);
+					if(!Objects.equals(config.registeredName(), "")) {
+						itemEmbed.addField("reg_name", config.registeredName(), true);
+					}
 					if (!Objects.equals(config.authKey(), "")) {
 						itemEmbed.addField("auth_token", config.authKey(), true);
 					}
@@ -384,7 +411,7 @@ public class DropTrackerPlugin extends Plugin {
 					if (config.sendScreenshot() && finalValue > config.screenshotValue()) {
 						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
 						drawManager.requestNextFrameListener(image -> {
-							getApiScreenshot(client.getLocalPlayer().getName(), itemId, npcName).thenAccept(imageUrl -> {
+							getApiScreenshot(getLocalPlayerName(), itemId, npcName).thenAccept(imageUrl -> {
 								SwingUtilities.invokeLater(() -> {
 									this_imageUrl.set(imageUrl);
 									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
@@ -403,11 +430,12 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	private String getLocalPlayerName() {
-		if (!config.registeredName().equals("")) {
-			return config.registeredName();
+	public String getLocalPlayerName() {
+		if (client.getLocalPlayer() != null) {
+			return client.getLocalPlayer().getName();
+		} else {
+			return "";
 		}
-		return client.getLocalPlayer().getName();
 	}
 
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
