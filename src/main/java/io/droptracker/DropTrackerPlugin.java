@@ -202,10 +202,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
-		if(config.useApi() && config.showSidePanel() && navButton != null) {
+		if(navButton != null) {
 			clientToolbar.removeNavigation(navButton);
-			panel = null;
 		}
+		panel = null;
 	}
 
 	@Provides
@@ -219,15 +219,19 @@ public class DropTrackerPlugin extends Plugin {
 			if (!config.useApi()) {
 				webhookUrls = new ArrayList<>();
 			}
+			if(config.useApi()) {
+				panel.refreshData();
+				panel.repaint();
+				panel.revalidate();
+			}
 			if(!config.showSidePanel()) {
 				clientToolbar.removeNavigation(navButton);
 				panel = null;
 			}
-			if (config.useApi()) {
-				if(config.showSidePanel() && panel == null) {
-					createSidePanel();
-				}
+			if(config.showSidePanel() && panel == null) {
+				createSidePanel();
 			}
+
 			sendChatReminder();
 		}
 	}
@@ -327,12 +331,12 @@ public class DropTrackerPlugin extends Plugin {
 					.append("DropTracker")
 					.append(ChatColorType.NORMAL)
 					.append("] ")
-					.append("Did you know your drops are automatically being tracked by the DropTracker?");
+					.append("Did you know your drops are automatically being tracked with the DropTracker plugin?");
 			ChatMessageBuilder messageTwo = new ChatMessageBuilder();
 			messageTwo.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
 					.append("DropTracker")
 					.append(ChatColorType.NORMAL)
-					.append("] join our Discord server to learn more: ")
+					.append("] Join our Discord server to learn more: ")
 					.append(ChatColorType.HIGHLIGHT)
 					.append("!droptracker");
 			msgManager.queue(QueuedMessage.builder()

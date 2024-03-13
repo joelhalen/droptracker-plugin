@@ -147,10 +147,10 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                     isRefreshing = false;
                 }
             });
-
-            logoPanel.add(logoLabel, BorderLayout.NORTH);
             logoPanel.add(refreshButton, BorderLayout.SOUTH);
         }
+
+        logoPanel.add(logoLabel, BorderLayout.NORTH);
         logoPanel.add(Box.createRigidArea(new Dimension(0, 5))); // spacer
         mainContentPanel = new JPanel();
         mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
@@ -158,6 +158,17 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         if(config.useApi()) {
             this.api.setDataLoadedCallback(this);
             api.loadPanelData(false);
+        } else {
+
+            JLabel noApiLabel = new JLabel("<html><h3>Welcome to the DropTracker</h3><br>" +
+                    "An all-in-one loot tracking system with support for Discord Webhooks, Google Sheets and more.<br>" +
+                    "<br>" +
+                    "Learn more about the project by clicking below.<br>" +
+                    "<br>&#9432; If you enable external connections in the " +
+                    "plugin configuration, you can view more info & event data here!<br><br>" +
+                    "If you don't see the panel after enabling the API, restart the DropTracker plugin.</html>");
+            noApiLabel.setAlignmentX(RIGHT_ALIGNMENT);
+            mainContentPanel.add(noApiLabel);
         }
         actionsContainer = new JPanel();
         actionsContainer.setBorder(new EmptyBorder(10, 0, 0, 0));
