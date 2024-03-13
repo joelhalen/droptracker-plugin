@@ -136,8 +136,6 @@ public class DropTrackerApi {
             data.put("player_name", playerName);
             data.put("server_id", serverId);
             data.put("auth_token", authKey);
-
-            Gson gson = new Gson();
             String json = gson.toJson(data);
 
             RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
