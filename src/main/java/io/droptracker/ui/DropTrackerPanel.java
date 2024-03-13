@@ -340,7 +340,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 mainContentPanel.add(buttonPanel);
             }
         } else {
-            mainContentPanel.add(new JLabel("No current events."));
+            JLabel noEventLabel = new JLabel("No current events.");
+            noEventLabel.setAlignmentX(RIGHT_ALIGNMENT);
+            mainContentPanel.add(noEventLabel, BorderLayout.WEST);
         }
         eventCardsPanel.setLayout(new CardLayout());
         mainContentPanel.add(eventCardsPanel);
