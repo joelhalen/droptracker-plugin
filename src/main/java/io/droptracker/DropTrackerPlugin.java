@@ -469,11 +469,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
-		if (timesTried == 0) {
-			this.timesTried = 1;
-		} else {
-			this.timesTried++;
-		}
+		this.timesTried++;
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
 				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
@@ -511,14 +507,11 @@ public class DropTrackerPlugin extends Plugin {
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
 				if (response.isSuccessful()) {
-					log.info("Webhook sent successfully on attempt {}", timesTried);
+					//log.info("Webhook sent successfully on attempt {}", timesTried);
 					timesTried = 0;
-				} else if (response.code() == 429) {
-					log.info("Rate limit detected, retrying with new webhook...");
+				} else if (response.code() == 429 || response.code() == 400) {
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				} else {
-					// Maybe we shouldn't re-try here? only trying 5x anyway though...
-					System.out.println(response.toString());
 					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}

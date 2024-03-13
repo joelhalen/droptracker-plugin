@@ -116,7 +116,6 @@ public class DropTrackerApi {
         HttpUrl url = HttpUrl.parse(apiUrl + "/api/client_data");
 
         if (url == null) {
-            System.out.println("Error: Invalid API URL.");
             return;
         }
 
@@ -132,7 +131,6 @@ public class DropTrackerApi {
                 playerName = "Unknown";
             }
         }
-            System.out.println("Attempting...");
 
             Map<String, Object> data = new HashMap<>();
             data.put("player_name", playerName);
