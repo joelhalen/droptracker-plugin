@@ -135,19 +135,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, gson, httpClient);
-		panel = injector.getInstance(DropTrackerPanel.class);
-		panel.init();
-
-
-		navButton = NavigationButton.builder()
-				.tooltip("DropTracker")
-				.icon(PANEL_ICON)
-				.priority(1)
-				.panel(panel)
-				.build();
-
-		clientToolbar.addNavigation(navButton);
+		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
+		if(config.showSidePanel()) {
+			createSidePanel();
+		}
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
 			if (linkOpener != null) {
@@ -162,6 +153,20 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			});
 		}
+	}
+	public void createSidePanel() {
+		panel = injector.getInstance(DropTrackerPanel.class);
+		panel.init();
+
+
+		navButton = NavigationButton.builder()
+				.tooltip("DropTracker")
+				.icon(PANEL_ICON)
+				.priority(1)
+				.panel(panel)
+				.build();
+
+		clientToolbar.addNavigation(navButton);
 	}
 
 	public static String getRandomWebhookUrl() throws Exception {
@@ -197,8 +202,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
-		clientToolbar.removeNavigation(navButton);
-		panel = null;
+		if(config.useApi() && config.showSidePanel() && navButton != null) {
+			clientToolbar.removeNavigation(navButton);
+			panel = null;
+		}
 	}
 
 	@Provides
@@ -210,8 +217,16 @@ public class DropTrackerPlugin extends Plugin {
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (!config.useApi()) {
-				// Reset webhook list on config change
 				webhookUrls = new ArrayList<>();
+			}
+			if(!config.showSidePanel()) {
+				clientToolbar.removeNavigation(navButton);
+				panel = null;
+			}
+			if (config.useApi()) {
+				if(config.showSidePanel() && panel == null) {
+					createSidePanel();
+				}
 			}
 			sendChatReminder();
 		}
@@ -394,7 +409,7 @@ public class DropTrackerPlugin extends Plugin {
 			});
 			sendDropTrackerWebhook(customWebhookBody, finalValue.get());
 		} else {
-			for (ItemStack item : items) {
+			for (ItemStack item : stack(items)) {
 				int itemId = item.getId();
 				int quantity = item.getQuantity();
 
@@ -412,16 +427,14 @@ public class DropTrackerPlugin extends Plugin {
 						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
 						drawManager.requestNextFrameListener(image -> {
 							getApiScreenshot(getLocalPlayerName(), itemId, npcName).thenAccept(imageUrl -> {
-								SwingUtilities.invokeLater(() -> {
 									this_imageUrl.set(imageUrl);
 									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
-								});
 							});
 
 						});
 
 					} else {
-						api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
+							api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
 					}
 
 				});
@@ -457,14 +470,9 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
 		if (timesTried == 0) {
-			this.timesTried = 1; // Starting the first attempt
+			this.timesTried = 1;
 		} else {
-			this.timesTried++; // Increment on retry attempts
-		}
-		if (timesTried == 0) {
-			this.timesTried = 1; // Starting the first attempt
-		} else {
-			this.timesTried++; // Increment on retry attempts
+			this.timesTried++;
 		}
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
@@ -510,6 +518,7 @@ public class DropTrackerPlugin extends Plugin {
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				} else {
 					// Maybe we shouldn't re-try here? only trying 5x anyway though...
+					System.out.println(response.toString());
 					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}

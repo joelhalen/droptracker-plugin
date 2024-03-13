@@ -137,23 +137,28 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         JPanel logoPanel = new JPanel(new BorderLayout());
         ImageIcon logoIcon = TOP_LOGO;
         JLabel logoLabel = new JLabel(logoIcon);
-        JButton refreshButton = new JButton("Refresh");
-        refreshButton.addActionListener(e -> {
-            if (!isRefreshing) {
-                if(!config.useApi())
-                isRefreshing = true;
-                refreshData();
-                isRefreshing = false;
-            }
-        });
-        logoPanel.add(logoLabel, BorderLayout.NORTH);
-        logoPanel.add(refreshButton, BorderLayout.SOUTH);
+        if(config.useApi()) {
+            JButton refreshButton = new JButton("Refresh");
+            refreshButton.addActionListener(e -> {
+                if (!isRefreshing) {
+                    if (!config.useApi())
+                        isRefreshing = true;
+                    refreshData();
+                    isRefreshing = false;
+                }
+            });
+
+            logoPanel.add(logoLabel, BorderLayout.NORTH);
+            logoPanel.add(refreshButton, BorderLayout.SOUTH);
+        }
         logoPanel.add(Box.createRigidArea(new Dimension(0, 5))); // spacer
         mainContentPanel = new JPanel();
         mainContentPanel.setLayout(new BoxLayout(mainContentPanel, BoxLayout.Y_AXIS));
         add(mainContentPanel, BorderLayout.CENTER);
-        this.api.setDataLoadedCallback(this);
-        api.loadPanelData(false);
+        if(config.useApi()) {
+            this.api.setDataLoadedCallback(this);
+            api.loadPanelData(false);
+        }
         actionsContainer = new JPanel();
         actionsContainer.setBorder(new EmptyBorder(10, 0, 0, 0));
         actionsContainer.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0)); // Adjust spacing as needed
@@ -203,6 +208,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 gbc.gridy++;
             }
         }
+        lootInfoPanel.setAlignmentX(RIGHT_ALIGNMENT);
         lootInfoPanel.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY), "Loot Statistics"));
         return lootInfoPanel;
     }
@@ -230,7 +236,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 BasicStroke stroke = new BasicStroke();
                 String imageUrl = (String) eventData.get("imageUrl");
 
-                // Creating a placeholder panel for the image
                 JPanel imagePanel = new JPanel();
                 JLabel imageLabel = new JLabel("Loading image...");
                 imagePanel.add(imageLabel);
@@ -247,7 +252,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                         imageLabel.setPreferredSize(new Dimension(50, 50));
                     } catch (Exception e) {
                         e.printStackTrace();
-                        // Handle error (e.g., show a default image or error text)
                         SwingUtilities.invokeLater(() -> {
                             imageLabel.setText("Image load failed");
                         });
@@ -256,13 +260,13 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 JPanel eventInfoPanel = new JPanel();
                 eventInfoPanel.setLayout(new BoxLayout(eventInfoPanel, BoxLayout.Y_AXIS));
 
-                JLabel eventLabel = new JLabel("Event Type: " + eventData.get("type"));
-                JLabel eventTypeLabel;
+                JLabel eventLabel = new JLabel(eventData.get("type").toString());
+                JLabel eventStartLabel;
                 try {
                     Date startDate = dateFormat.parse(eventData.get("startDate").toString());
-                    eventTypeLabel = new JLabel("Starts: " + outputFormat.format(startDate));
+                    eventStartLabel = new JLabel("Starts: " + outputFormat.format(startDate));
                 } catch (Exception e) {
-                    eventTypeLabel = new JLabel("Start date parsing failed");
+                    eventStartLabel = new JLabel("Start date parsing failed");
                 }
 
                 JLabel participatingLabel = null;
@@ -271,15 +275,15 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                     participatingLabel = new JLabel("Points: " + playerStatus.get("points") + ", Rank: " + playerStatus.get("rank"));
                 }
 
-                JLabel eventContentLabel = new JLabel("Content: " + eventData.get("content"));
+                JLabel eventContentLabel = new JLabel(eventData.get("content").toString());
 
                 eventInfoPanel.add(eventLabel);
-                eventInfoPanel.add(eventTypeLabel);
+                eventInfoPanel.add(eventContentLabel);
+                eventInfoPanel.add(eventStartLabel);
                 if (participatingLabel != null) {
                     eventInfoPanel.add(participatingLabel);
                 }
-                eventInfoPanel.add(eventContentLabel);
-                // Assume buildRoundedPanel is correctly implemented to add the "Learn More" link
+
 
                 individualEventPanel.add(eventInfoPanel, BorderLayout.CENTER);
                 TitledBorder titleBorder = BorderFactory.createTitledBorder(BorderFactory.createStrokeBorder(stroke), "Events (" + eventEntry.getKey() + "/" + totalEvents + ")");
@@ -288,13 +292,11 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 titleBorder.setTitleColor(titleColor);
                 individualEventPanel.setBorder(titleBorder);
 
-
-                eventCardsPanel.add(individualEventPanel, eventId);
-                JLabel learnMoreLink = new JLabel("Click to learn more");
+                JLabel learnMoreLink = new JLabel("<html>&#9432; Click to learn more</html>");
                 learnMoreLink.createToolTip();
                 learnMoreLink.setToolTipText("View this event on our website");
                 learnMoreLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
-                learnMoreLink.addMouseListener(new MouseAdapter() {
+                eventInfoPanel.addMouseListener(new MouseAdapter() {
                     @Override
                     public void mouseClicked(MouseEvent e) {
                         try {
@@ -306,14 +308,19 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 
                     @Override
                     public void mouseEntered(MouseEvent e) {
-                        learnMoreLink.setText("<html>Click to learn more</html>"); // Change text color on hover
+                        learnMoreLink.setText("<html>&#9432; Click to learn more</html>");
+                        eventInfoPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
                     }
 
                     @Override
                     public void mouseExited(MouseEvent e) {
-                        learnMoreLink.setText("<html>Click to learn more</html>"); // Revert to original text color
+                        learnMoreLink.setText("<html>&#9432; Click to learn more</html>");
+                        eventInfoPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
                     }
-                }); // handle button presses inside the event panel
+                });
+
+                eventCardsPanel.add(individualEventPanel, eventId);
+
                 individualEventPanel.add(learnMoreLink, BorderLayout.SOUTH);
                 eventCount++;
             }
@@ -342,11 +349,11 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         mainContentPanel.repaint();
     }
     private void updateEventDisplay() throws MalformedURLException {
-        eventPanel.removeAll(); // Clear previous event details
+        eventPanel.removeAll();
         eventPanel.setLayout(new BoxLayout(eventPanel, BoxLayout.Y_AXIS));
 
         if (currentEvents.size() > 0) {
-            String eventId = String.valueOf(currentEventIndex + 1); // Assuming event IDs are 1-indexed strings
+            String eventId = String.valueOf(currentEventIndex + 1);
             Map<String, Object> eventDetails = (Map<String, Object>) currentEvents.get(eventId);
 
             if (eventDetails != null) {
@@ -498,17 +505,10 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
     }
 
     public void refreshData() {
-
-        String playerName;
-        if(!config.registeredName().equals("")) {
-            playerName = config.registeredName();
-        } else {
-            if (client.getLocalPlayer() != null) {
-                playerName = client.getLocalPlayer().getName();
-            }
+        if(!config.useApi()) {
+            return;
         }
         this.api.loadPanelData(true);
-        System.out.println("Loaded panel data?");
 
     }
 

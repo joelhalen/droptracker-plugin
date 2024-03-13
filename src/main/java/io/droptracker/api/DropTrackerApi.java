@@ -34,12 +34,13 @@ public class DropTrackerApi {
     private PanelDataLoadedCallback dataLoadedCallback;
 
     @Inject
-    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient) {
+    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient, Client client) {
         super();
         this.config = config;
         this.msgManager = chatMessageManager;
         this.gson = gson;
         this.httpClient = httpClient;
+        this.client = client;
     }
 
     public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
@@ -162,12 +163,10 @@ public class DropTrackerApi {
                         if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
                         String responseData = responseBody.string();
                         Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-                        System.out.println("response: " + responseData);
 
                         SwingUtilities.invokeLater(() -> {
                             if (dataLoadedCallback != null) {
                                 dataLoadedCallback.onDataLoaded(responseMap);
-                                System.out.println("onDataLoaded is called with " + responseData);
                             }
                         });
                     }
@@ -175,62 +174,52 @@ public class DropTrackerApi {
             });
         }
     public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
-        String dropType = "normal";
-        String serverId = config.serverId();
-        String notified_str = "1";
-        FormBody.Builder formBuilder = new FormBody.Builder()
-                .add("drop_type", dropType)
-                .add("auth_token", authKey)
-                .add("item_name", itemName)
-                .add("item_id", String.valueOf(itemId))
-                .add("player_name", playerName);
-                if (!config.registeredName().equals("") && (!config.registeredName().equals(client.getLocalPlayer().getName()))) {
-                    formBuilder.add("real_name", client.getLocalPlayer().getName());
-                }
-                formBuilder.add("server_id", serverId)
-                .add("quantity", String.valueOf(quantity))
-                .add("value", String.valueOf(geValue))
-                .add("nonmember", "0")
-                .add("member_list", "")
-                .add("image_url", imageUrl)
-                .add("npc_name", npcName)
-                .add("webhook", config.webhook())
-                .add("webhookValue", String.valueOf(config.webhookValue()))
-                .add("sheet", config.sheetID())
-                .add("notified", notified_str);
-        Request request = new Request.Builder()
-                .url(url)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .post(formBuilder.build())
-                .build();
-        return CompletableFuture.runAsync(() -> {
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-                String responseData = response.body().string();
-                JsonParser parser = new JsonParser();
-                JsonObject jsonObj = parser.parse(responseData).getAsJsonObject();
-                // Only send chat messages for drops > 1M when configured
-                if (jsonObj.has("success") && config.chatMessages() && geValue >= 1000000) {
-                    String playerTotalLoot = jsonObj.has("totalLootValue") ? jsonObj.get("totalLootValue").getAsString() : "0";
-                    ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                    NumberFormat playerLootFormat = NumberFormat.getNumberInstance();
-                    String playerLootString = formatNumber(Double.parseDouble(playerTotalLoot));
-                    messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-                            .append("DropTracker")
-                            .append(ChatColorType.NORMAL)
-                            .append("] ")
-                            .append("Your drop has been submitted! You now have a total of " + playerLootString);
-                    msgManager.queue(QueuedMessage.builder()
-                            .type(ChatMessageType.CONSOLE)
-                            .runeLiteFormattedMessage(messageResponse.build())
-                            .build());
-                } else {
-                }
-            } catch (IOException e) {
-            }
-        });
+            HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
+            String dropType = "normal";
+            String serverId = config.serverId();
+            String notified_str = "1";
 
+            FormBody.Builder formBuilder = new FormBody.Builder()
+                    .add("drop_type", dropType)
+                    .add("auth_token", authKey)
+                    .add("item_name", itemName)
+                    .add("item_id", String.valueOf(itemId))
+                    .add("player_name", playerName);
+                    if (!config.registeredName().equals("") && (!config.registeredName().equals(client.getLocalPlayer().getName()))) {
+                        formBuilder.add("real_name", client.getLocalPlayer().getName());
+                    }
+                    formBuilder.add("server_id", serverId)
+                    .add("quantity", String.valueOf(quantity))
+                    .add("value", String.valueOf(geValue))
+                    .add("nonmember", "0")
+                    .add("member_list", "")
+                    .add("image_url", imageUrl)
+                    .add("npc_name", npcName)
+                    .add("webhook", config.webhook())
+                    .add("webhookValue", String.valueOf(config.webhookValue()))
+                    .add("sheet", config.sheetID())
+                    .add("notified", notified_str);
+            Request request = new Request.Builder()
+                    .url(url)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .post(formBuilder.build())
+                    .build();
+        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    if (!response.isSuccessful()) {
+                    }
+                    response.close();
+                }
+            });
+        });
+        return future;
     }
     public static String formatNumber(double number) {
         if (number == 0) {

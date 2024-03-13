@@ -34,6 +34,14 @@ public interface DropTrackerConfig extends Config
 			position = 1
 	)
 	default boolean sendReminders() { return false; }
+	@ConfigItem(
+			name = "Show Side Panel",
+			keyName = "sidePanel",
+			description = "<html>Do you want to render the <br>side-panel for events, etc?<br>" +
+					"<b>Note</b>: Requires the API to be enabled.</html>",
+			position = 2
+	)
+	default boolean showSidePanel() { return false; }
 	@ConfigSection(
 			name = "DropTracker API",
 			description = "Configure your account settings for the DropTracker API/Discord Bot.",
