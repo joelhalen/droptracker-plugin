@@ -55,7 +55,7 @@ public class DropTrackerApi {
             return "https://www.droptracker.io/";
         }
         else {
-            return "http://null.com";
+            return "";
         }
     }
     public void sendKillTimeData(String playerName, String npcName, String currentPb, String currentTime) {
@@ -125,9 +125,17 @@ public class DropTrackerApi {
         if (!config.registeredName().equals("")) {
             playerName = config.registeredName();
         } else {
-            if (client.getLocalPlayer() != null) {
-                playerName = client.getLocalPlayer().getName();
-            } else {
+            try {
+                if (client.getLocalPlayer() != null) {
+                    try {
+                        playerName = client.getLocalPlayer().getName();
+                    } catch (NullPointerException e) {
+                        playerName = "Unknown";
+                    }
+                } else {
+                    playerName = "Unknown";
+                }
+            } catch (NullPointerException e) {
                 playerName = "Unknown";
             }
         }

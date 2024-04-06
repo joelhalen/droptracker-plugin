@@ -172,7 +172,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         }
         actionsContainer = new JPanel();
         actionsContainer.setBorder(new EmptyBorder(10, 0, 0, 0));
-        actionsContainer.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0)); // Adjust spacing as needed
+        actionsContainer.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
         actionsContainer.add(buildRoundedPanel(DISCORD_ICON, "Discord", discordInvite));
         actionsContainer.add(buildRoundedPanel(WIKI_ICON, "Docs", docsLink));
         add(logoPanel, BorderLayout.NORTH);
@@ -277,13 +277,13 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                     Date startDate = dateFormat.parse(eventData.get("startDate").toString());
                     eventStartLabel = new JLabel("Starts: " + outputFormat.format(startDate));
                 } catch (Exception e) {
-                    eventStartLabel = new JLabel("Start date parsing failed");
+                    eventStartLabel = new JLabel("Starts: Unknown");
                 }
 
                 JLabel participatingLabel = null;
                 if ((boolean) eventData.get("participating")) {
                     Map<String, Object> playerStatus = (Map<String, Object>) eventData.get("playerStatus");
-                    participatingLabel = new JLabel("Points: " + playerStatus.get("points") + ", Rank: " + playerStatus.get("rank"));
+                    participatingLabel = new JLabel("You have " + playerStatus.get("points") + " points. (Rank" + playerStatus.get("rank") + ")");
                 }
 
                 JLabel eventContentLabel = new JLabel(eventData.get("content").toString());
@@ -304,9 +304,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                 individualEventPanel.setBorder(titleBorder);
 
                 JLabel learnMoreLink = new JLabel("<html>&#9432; Click to learn more</html>");
-                learnMoreLink.createToolTip();
-                learnMoreLink.setToolTipText("View this event on our website");
-                learnMoreLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                eventInfoPanel.createToolTip();
+                eventInfoPanel.setToolTipText("View this event on our website");
+                eventInfoPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
                 eventInfoPanel.addMouseListener(new MouseAdapter() {
                     @Override
                     public void mouseClicked(MouseEvent e) {
@@ -470,7 +470,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         // Main container for the icon and text
         JPanel mainContainer = new JPanel();
         mainContainer.setLayout(new BoxLayout(mainContainer, BoxLayout.Y_AXIS));
-        mainContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR); // Adjust background color if necessary
+        mainContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         mainContainer.add(roundedContainer);
         mainContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Space between icon and text
         mainContainer.add(textPanel);

@@ -91,6 +91,7 @@ public class DropTrackerPlugin extends Plugin {
 	private DrawManager drawManager;
 	@Inject
 	private ChatCommandManager chatCommandManager;
+
 	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
 	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log:.*");
 	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (?<pre>completion count for |subdued |completed )?(?<boss>.+?) (?<post>(?:(?:kill|harvest|lap|completion) )?(?:count )?)is: <col=ff0000>(?<kc>\\d+)</col>");
@@ -168,6 +169,10 @@ public class DropTrackerPlugin extends Plugin {
 
 		clientToolbar.addNavigation(navButton);
 	}
+	private void removeSidePanel() {
+		clientToolbar.removeNavigation(navButton);
+		panel = null;
+	}
 
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
@@ -205,6 +210,8 @@ public class DropTrackerPlugin extends Plugin {
 		if(navButton != null) {
 			clientToolbar.removeNavigation(navButton);
 		}
+		chatCommandManager.unregisterCommand("!droptracker");
+		chatCommandManager.unregisterCommand("!loot");
 		panel = null;
 	}
 
