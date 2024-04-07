@@ -424,7 +424,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         updateEventDisplay();
     }
 
-    void deinit()
+    public void deinit()
     {
         eventBus.unregister(this);
     }
