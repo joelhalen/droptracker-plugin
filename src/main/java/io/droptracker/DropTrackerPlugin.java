@@ -212,8 +212,8 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		chatCommandManager.unregisterCommand("!droptracker");
 		chatCommandManager.unregisterCommand("!loot");
-		panel = null;
 		panel.deinit();
+		panel = null;
 	}
 
 	@Provides
