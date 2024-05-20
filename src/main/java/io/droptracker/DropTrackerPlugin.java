@@ -142,14 +142,14 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
-			if (linkOpener != null) {
+			if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
 				linkOpener.accept(chatMessage, s);
 			}
 		});
 		if (config.useApi()) {
 			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
 				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
-				if (linkOpener != null) {
+				if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
 					linkOpener.accept(chatMessage, s);
 				}
 			});
@@ -333,29 +333,31 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendChatReminder() {
-		if (!hasReminded) {
-			ChatMessageBuilder messageOne = new ChatMessageBuilder();
-			messageOne.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-					.append("DropTracker")
-					.append(ChatColorType.NORMAL)
-					.append("] ")
-					.append("Did you know your drops are automatically being tracked with the DropTracker plugin?");
-			ChatMessageBuilder messageTwo = new ChatMessageBuilder();
-			messageTwo.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-					.append("DropTracker")
-					.append(ChatColorType.NORMAL)
-					.append("] Join our Discord server to learn more: ")
-					.append(ChatColorType.HIGHLIGHT)
-					.append("!droptracker");
-			msgManager.queue(QueuedMessage.builder()
-					.type(ChatMessageType.CONSOLE)
-					.runeLiteFormattedMessage(messageOne.build())
-					.build());
-			msgManager.queue(QueuedMessage.builder()
-					.type(ChatMessageType.CONSOLE)
-					.runeLiteFormattedMessage(messageTwo.build())
-					.build());
-			hasReminded = true;
+		if (config.sendReminders()) {
+			if (!hasReminded) {
+				ChatMessageBuilder messageOne = new ChatMessageBuilder();
+				messageOne.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+						.append("DropTracker")
+						.append(ChatColorType.NORMAL)
+						.append("] ")
+						.append("Did you know your drops are automatically being tracked with the DropTracker plugin?");
+				ChatMessageBuilder messageTwo = new ChatMessageBuilder();
+				messageTwo.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
+						.append("DropTracker")
+						.append(ChatColorType.NORMAL)
+						.append("] Join our Discord server to learn more: ")
+						.append(ChatColorType.HIGHLIGHT)
+						.append("!droptracker");
+				msgManager.queue(QueuedMessage.builder()
+						.type(ChatMessageType.CONSOLE)
+						.runeLiteFormattedMessage(messageOne.build())
+						.build());
+				msgManager.queue(QueuedMessage.builder()
+						.type(ChatMessageType.CONSOLE)
+						.runeLiteFormattedMessage(messageTwo.build())
+						.build());
+				hasReminded = true;
+			}
 		}
 	}
 
@@ -440,13 +442,13 @@ public class DropTrackerPlugin extends Plugin {
 						drawManager.requestNextFrameListener(image -> {
 							getApiScreenshot(getLocalPlayerName(), itemId, npcName).thenAccept(imageUrl -> {
 									this_imageUrl.set(imageUrl);
-									api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
+									api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
 							});
 
 						});
 
 					} else {
-							api.sendDropData(getLocalPlayerName(), npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
+							api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
 					}
 
 				});

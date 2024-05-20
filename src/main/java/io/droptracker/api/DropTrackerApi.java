@@ -112,7 +112,7 @@ public class DropTrackerApi {
             return;
         }
 
-        String apiUrl = getApiUrl(); // Make sure this URL is correctly formed
+        String apiUrl = getApiUrl();
         HttpUrl url = HttpUrl.parse(apiUrl + "/api/client_data");
 
         if (url == null) {
@@ -177,14 +177,13 @@ public class DropTrackerApi {
                 }
             });
         }
-    public CompletableFuture<Void> sendDropData(String playerName, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
+    public CompletableFuture<Void> sendDropData(String playerName, String dropType, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
             HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
-            String dropType = "normal";
             String serverId = config.serverId();
             String notified_str = "1";
-
+            String formDropType = dropType.equals("player") ? "pvp" : "normal";
             FormBody.Builder formBuilder = new FormBody.Builder()
-                    .add("drop_type", dropType)
+                    .add("drop_type", formDropType)
                     .add("auth_token", authKey)
                     .add("item_name", itemName)
                     .add("item_id", String.valueOf(itemId))
