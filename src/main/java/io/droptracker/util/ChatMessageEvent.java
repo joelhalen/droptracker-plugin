@@ -177,7 +177,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
-            combatWebhook.setEmbeds((List<CustomWebhookBody.Embed>) combatAchievementEmbed);
+            combatWebhook.getEmbeds().add(combatAchievementEmbed);
             plugin.sendDropTrackerWebhook(combatWebhook, "combat_achievement");
         });
     }
@@ -217,7 +217,7 @@ public class ChatMessageEvent {
         killEmbed.addField("kill_time", time, true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
 
-        killWebhook.setEmbeds(Collections.singletonList(killEmbed));
+        killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         // Call webhook or whatever method to send the notification
     }
