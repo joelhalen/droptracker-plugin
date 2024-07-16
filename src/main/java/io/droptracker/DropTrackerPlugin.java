@@ -20,6 +20,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
+import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -69,7 +70,6 @@ public class DropTrackerPlugin extends Plugin {
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
 	private NavigationButton navButton;
-
 	@Inject
 	private Gson gson;
 	@Inject

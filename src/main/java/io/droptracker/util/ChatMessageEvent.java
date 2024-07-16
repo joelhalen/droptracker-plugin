@@ -7,16 +7,20 @@ import io.droptracker.models.BossNotification;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.Drop;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
+import net.runelite.api.annotations.Varp;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
 import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
+import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -25,9 +29,11 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.Temporal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -45,8 +51,12 @@ public class ChatMessageEvent {
     protected Client client;
     @Inject
     private ClientThread clientThread;
+    private ItemIDSearch itemIDFinder;
+    private final AtomicInteger completed = new AtomicInteger(-1);
+    private final AtomicBoolean popupStarted = new AtomicBoolean(false);
+    public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
 
-
+    private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
     public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config) {
         this.plugin = plugin;
@@ -74,10 +84,12 @@ public class ChatMessageEvent {
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>\\d+)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>\\d+)\\b");
     private static final Pattern TIME_REGEX = Pattern.compile("(?:Duration|time|Subdued in):? (?<time>[\\d:]+(.\\d+)?)\\.?", Pattern.CASE_INSENSITIVE);
-
     private static final String BA_BOSS_NAME = "Penance Queen";
-
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
+
+    static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (?<itemName>(.*))");
+    public static final String ADDITION_WARNING = "Collection notifier will not fire unless you enable the game setting: Collection log - New addition notification";
+    private static final int POPUP_PREFIX_LENGTH = "New item:".length();
     public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
     private static final String TOA = "Tombs of Amascut";
     private static final String TOB = "Theatre of Blood";
@@ -108,6 +120,18 @@ public class ChatMessageEvent {
             parseBossKill(message).ifPresent(this::updateData);
             parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
+    public void onChatMessage(String chatMessage) {
+        if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
+            // require notifier enabled without popup mode to use chat event
+            return;
+        }
+        Matcher collectionMatcher = COLLECTION_LOG_REGEX.matcher(chatMessage);
+        if (collectionMatcher.find()) {
+            String itemName = collectionMatcher.group("itemName");
+            clientThread.invokeLater(() -> processCollection(itemName));
+        }
+    }
+
 
     public void onFriendsChatNotification(String message) {
         /* Chambers of Xeric completions are sent in the Friends chat channel */
@@ -144,9 +168,22 @@ public class ChatMessageEvent {
         if (cumulativeUnlockPoints.size() < CUM_POINTS_VARBIT_BY_TIER.size())
             initThresholds();
     }
+    private void processCollection(String itemName) {
+        int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
+        int total = client.getVarpValue(TOTAL_VARP);
+        boolean varpValid = total > 0 && completed > 0;
+        if (!varpValid) {
+            // This occurs if the player doesn't have the character summary tab selected
+            log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
+        }
+        Integer itemId = itemIDFinder.findItemId(itemName);
+        Drop loot = itemId != null ? getLootSource(itemId) : null;
+        Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
+    }
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
         // delay notification for varbits to be updated
+        System.out.println("Processing Combat Achievement (tier: " + tier.getDisplayName() + ", task: " + task + ")");
         clientThread.invokeAtTickEnd(() -> {
             int taskPoints = tier.getPoints();
             int totalPoints = client.getVarbitValue(TOTAL_POINTS_ID);
@@ -177,6 +214,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
+            System.out.println("Ready to send a webhook for a CA: " + combatWebhook);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
             plugin.sendDropTrackerWebhook(combatWebhook, "combat_achievement");
         });
@@ -267,7 +305,7 @@ public class ChatMessageEvent {
         return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getRight()));
     }
 
-    private static Optional<Pair<String, Integer>> parseBoss(String message) {
+    static Optional<Pair<String, Integer>> parseBoss(String message) {
         Matcher primary = PRIMARY_REGEX.matcher(message);
         Matcher secondary;
         if (primary.find()) {
@@ -407,5 +445,17 @@ public class ChatMessageEvent {
                 .put(CombatAchievement.MASTER, 14813) // 1465 = 820 + 129 * 5
                 .put(CombatAchievement.GRANDMASTER, GRANDMASTER_TOTAL_POINTS_ID) // 2005 = 1465 + 90 * 6
                 .build();
+    }
+    @Nullable
+    private Drop getLootSource(int itemId) {
+        Drop drop = KCService.getLastDrop();
+        if (drop == null) return null;
+        if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) return null;
+        for (ItemStack item : drop.getItems()) {
+            if (item.getId() == itemId) {
+                return drop;
+            }
+        }
+        return null;
     }
 }
