@@ -50,6 +50,8 @@ public class ChatMessageEvent {
     @Inject
     protected Client client;
     @Inject
+    private Rarity rarity;
+    @Inject
     private ClientThread clientThread;
     private ItemIDSearch itemIDFinder;
     private final AtomicInteger completed = new AtomicInteger(-1);
@@ -179,6 +181,18 @@ public class ChatMessageEvent {
         Integer itemId = itemIDFinder.findItemId(itemName);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
         Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
+        OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
+                rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
+        CustomWebhookBody collectionLogBody = new CustomWebhookBody();
+        CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
+        collEmbed.addField("type", "collection_log",true);
+        collEmbed.addField("source", loot.getSource(),true);
+        collEmbed.addField("kc", String.valueOf(killCount),true);
+        collEmbed.addField("rarity", String.valueOf(itemRarity),true);
+        collEmbed.addField("item_id", String.valueOf(itemId),true);
+        collectionLogBody.getEmbeds().add(collEmbed);
+        System.out.println("Sending a collection log embed: " + collectionLogBody);
+        plugin.sendDropTrackerWebhook(collectionLogBody, "2");
     }
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
@@ -216,7 +230,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("completed", completedTierName,true);
             System.out.println("Ready to send a webhook for a CA: " + combatWebhook);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
-            plugin.sendDropTrackerWebhook(combatWebhook, "combat_achievement");
+            plugin.sendDropTrackerWebhook(combatWebhook, "3");
         });
     }
 
@@ -256,6 +270,7 @@ public class ChatMessageEvent {
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
 
         killWebhook.getEmbeds().add(killEmbed);
+        System.out.println("Sending a kc/pb embed: " + killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         // Call webhook or whatever method to send the notification
     }

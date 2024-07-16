@@ -405,6 +405,7 @@ public class DropTrackerPlugin extends Plugin {
 		/* Requires a type ID to be passed
 		* "1" = a "Kill Time" or "KC" submission
 		* "2" = a "Collection Log" submission
+		* "3" = a "Combat Achievement" submission
 		*  */
 		switch (type) {
 			case "1":
