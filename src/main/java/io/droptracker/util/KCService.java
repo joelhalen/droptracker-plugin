@@ -221,7 +221,7 @@ public class KCService {
      * @return the kill count stored by base runelite plugins
      */
     @Nullable
-    private Integer getStoredKillCount(@NotNull LootRecordType type, @NotNull String sourceName) {
+    private static Integer getStoredKillCount(@NotNull LootRecordType type, @NotNull String sourceName) {
         // get kc from base runelite chat commands plugin (if enabled)
         if (!ConfigUtilities.isPluginDisabled(configManager, RL_CHAT_CMD_PLUGIN_NAME)) {
             Integer kc = configManager.getRSProfileConfiguration("killcount", cleanBossName(sourceName), int.class);
