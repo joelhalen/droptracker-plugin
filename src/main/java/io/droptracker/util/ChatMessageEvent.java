@@ -113,14 +113,14 @@ public class ChatMessageEvent {
 
     public boolean isEnabled() {
         return true;
-        // Todo: add config option for enabling
-        //  return config.notifyKillCount(); // Add the appropriate condition for enabling
     }
 
     public void onGameMessage(String message) {
         if (isEnabled())
+            System.out.println("Data currently: " + bossData);
             parseBossKill(message).ifPresent(this::updateData);
             parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
+            System.out.println("Data after parsing: " + bossData);
     }
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
@@ -315,8 +315,10 @@ public class ChatMessageEvent {
         if (boss.isPresent()) {
             System.out.println("Boss returned as " + boss);
         }
-        if (boss.isPresent())
+        if (boss.isPresent()) {
+            System.out.println("Boss is present");
             return boss.map(pair -> new BossNotification(pair.getLeft(), pair.getRight(), message, null, null));
+        }
         return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getRight()));
     }
 
@@ -387,9 +389,12 @@ public class ChatMessageEvent {
 
     private static Optional<Pair<Duration, Boolean>> parseKillTime(String message) {
         Matcher matcher = TIME_REGEX.matcher(message);
+        System.out.println("parseKillTime called");
         if (matcher.find()) {
+            System.out.println("found match");
             Duration duration = parseTime(matcher.group("time"));
             boolean pb = message.toLowerCase().contains("(new personal best)");
+            System.out.println("Located duration: " + duration + " and is pb: " + pb);
             return Optional.of(Pair.of(duration, pb));
         }
         return Optional.empty();
