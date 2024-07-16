@@ -1,5 +1,6 @@
 package io.droptracker.util;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.BossNotification;
@@ -59,7 +60,7 @@ public class ChatMessageEvent {
      * @see <a href="https://github.com/Joshua-F/cs2-scripts/blob/master/scripts/%5Bproc,ca_tasks_progress_bar%5D.cs2#L6-L11">CS2 Reference</a>
      */
     @VisibleForTesting
-    public static final Map<CombatAchievement, Integer> CUM_POINTS_VARBIT_BY_TIER = null;
+    public static final Map<CombatAchievement, Integer> CUM_POINTS_VARBIT_BY_TIER;
 
     /**
      * The cumulative points needed to unlock rewards for each tier, in a Red-Black tree.
@@ -85,7 +86,6 @@ public class ChatMessageEvent {
     private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
     @Varbit
     public static final int TOTAL_POINTS_ID = 14815;
-
     @Varbit
     public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
     @VisibleForTesting
@@ -396,5 +396,16 @@ public class ChatMessageEvent {
             if (cumulativePoints > 0)
                 cumulativeUnlockPoints.put(cumulativePoints, tier);
         });
+    }
+    static {
+        // noinspection UnstableApiUsage (builderWithExpectedSize is no longer @Beta in snapshot guava)
+        CUM_POINTS_VARBIT_BY_TIER = ImmutableMap.<CombatAchievement, Integer>builderWithExpectedSize(6)
+                .put(CombatAchievement.EASY, 4132) // 33 = 33 * 1
+                .put(CombatAchievement.MEDIUM, 10660) // 115 = 33 + 41 * 2
+                .put(CombatAchievement.HARD, 10661) // 304 = 115 + 63 * 3
+                .put(CombatAchievement.ELITE, 14812) // 820 = 304 + 129 * 4
+                .put(CombatAchievement.MASTER, 14813) // 1465 = 820 + 129 * 5
+                .put(CombatAchievement.GRANDMASTER, GRANDMASTER_TOTAL_POINTS_ID) // 2005 = 1465 + 90 * 6
+                .build();
     }
 }
