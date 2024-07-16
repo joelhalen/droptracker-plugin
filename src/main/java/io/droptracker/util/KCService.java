@@ -51,20 +51,20 @@ public class KCService {
     private static final Pattern CLUE_SCROLL_REGEX = Pattern.compile("You have completed (?<scrollCount>\\d+) (?<scrollType>\\w+) Treasure Trails\\.");
 
     @Inject
-    private ConfigManager configManager;
+    private static ConfigManager configManager;
 
     private ChatMessageEvent chatMessageEventHandler;
 
     @Inject
-    private Gson gson;
+    private static Gson gson;
 
     @Inject
     private ScheduledExecutorService executor;
 
     @Inject
-    private Rarity rarityService;
+    private static Rarity rarityService;
 
-    private final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
+    private static final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .maximumSize(64L)
             .build();
