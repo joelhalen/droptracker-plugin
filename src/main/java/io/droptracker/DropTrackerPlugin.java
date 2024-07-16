@@ -277,7 +277,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
 		String chatMessage = sanitize(message.getMessage());
-		String source = message.getName() != null && !message.getName().isEmpty() ? message.getName() : message.getSender();
 		switch (message.getType()) {
 			case GAMEMESSAGE:
 				chatMessageEventHandler.onGameMessage(chatMessage);

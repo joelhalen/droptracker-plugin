@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.BossNotification;
 import io.droptracker.DropTrackerPlugin;
+import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -12,6 +13,7 @@ import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
 import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
 import org.apache.commons.lang3.ObjectUtils;
@@ -35,17 +37,38 @@ import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 @Slf4j
 public class ChatMessageEvent {
-
+    @Inject
     private final DropTrackerPlugin plugin;
     private final DropTrackerConfig config;
     @Inject
     protected Client client;
+    @Inject
+    private ClientThread clientThread;
+
 
     @Inject
     public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config) {
         this.plugin = plugin;
         this.config = config;
     }
+    private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
+    private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
+    @Varbit
+    public static final int COMBAT_TASK_REPEAT_POPUP = 12456;
+    /**
+     * @see <a href="https://github.com/Joshua-F/cs2-scripts/blob/master/scripts/%5Bproc,ca_tasks_progress_bar%5D.cs2#L6-L11">CS2 Reference</a>
+     */
+    @VisibleForTesting
+    public static final Map<CombatAchievement, Integer> CUM_POINTS_VARBIT_BY_TIER = null;
+
+    /**
+     * The cumulative points needed to unlock rewards for each tier, in a Red-Black tree.
+     * <p>
+     * This is populated by {@link #initThresholds()} based on {@link #CUM_POINTS_VARBIT_BY_TIER}.
+     *
+     * @see <a href="https://gachi.gay/01CAv">Rewards Thresholds at the launch of the points-based system</a>
+     */
+    private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>\\d+)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>\\d+)\\b");
@@ -60,7 +83,11 @@ public class ChatMessageEvent {
     private static final String COX = "Chambers of Xeric";
     private static final String RL_CHAT_CMD_PLUGIN_NAME = ChatCommandsPlugin.class.getSimpleName().toLowerCase();
     private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
+    @Varbit
+    public static final int TOTAL_POINTS_ID = 14815;
 
+    @Varbit
+    public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
     @VisibleForTesting
     static final int MAX_BAD_TICKS = 10;
 
@@ -78,8 +105,8 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (isEnabled())
-            System.out.println("Chat message is a game message");
-            parse(message).ifPresent(this::updateData);
+            parseBossKill(message).ifPresent(this::updateData);
+            parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
 
     public void onFriendsChatNotification(String message) {
@@ -114,7 +141,47 @@ public class ChatMessageEvent {
                 reset();
             }
         }
+        if (cumulativeUnlockPoints.size() < CUM_POINTS_VARBIT_BY_TIER.size())
+            initThresholds();
     }
+
+    private void processCombatAchievement(CombatAchievement tier, String task) {
+        // delay notification for varbits to be updated
+        clientThread.invokeAtTickEnd(() -> {
+            int taskPoints = tier.getPoints();
+            int totalPoints = client.getVarbitValue(TOTAL_POINTS_ID);
+
+            Integer nextUnlockPointsThreshold = cumulativeUnlockPoints.ceilingKey(totalPoints + 1);
+            Map.Entry<Integer, CombatAchievement> prev = cumulativeUnlockPoints.floorEntry(totalPoints);
+            int prevThreshold = prev != null ? prev.getKey() : 0;
+
+            Integer tierProgress, tierTotalPoints;
+            if (nextUnlockPointsThreshold != null) {
+                tierProgress = totalPoints - prevThreshold;
+                tierTotalPoints = nextUnlockPointsThreshold - prevThreshold;
+            } else {
+                tierProgress = tierTotalPoints = null;
+            }
+
+            boolean crossedThreshold = prevThreshold > 0 && totalPoints - taskPoints < prevThreshold;
+            CombatAchievement completedTier = crossedThreshold ? prev.getValue() : null;
+            String completedTierName = completedTier != null ? completedTier.getDisplayName() : "N/A";
+
+            String player = client.getLocalPlayer().getName();
+            CustomWebhookBody combatWebhook = new CustomWebhookBody();
+            combatWebhook.setContent(player + " has completed a new combat task:");
+            CustomWebhookBody.Embed combatAchievementEmbed = new CustomWebhookBody.Embed();
+            combatAchievementEmbed.addField("type", "combat_achievement",true);
+            combatAchievementEmbed.addField("tier", tier.toString(),true);
+            combatAchievementEmbed.addField("task", task,true);
+            combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
+            combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
+            combatAchievementEmbed.addField("completed", completedTierName,true);
+            combatWebhook.setEmbeds((List<CustomWebhookBody.Embed>) combatAchievementEmbed);
+            plugin.sendDropTrackerWebhook(combatWebhook, "combat_achievement");
+        });
+    }
+
 
     private void processKill(BossNotification data) {
         if (data.getBoss() == null || data.getCount() == null)
@@ -175,8 +242,21 @@ public class ChatMessageEvent {
         bossData.set(null);
         badTicks.set(0);
     }
+    @VisibleForTesting
+    static Optional<Pair<CombatAchievement, String>> parseCombatAchievement(String message) {
+        Matcher matcher = ACHIEVEMENT_PATTERN.matcher(message);
+        if (!matcher.find()) return Optional.empty();
+        return Optional.of(matcher.group("tier"))
+                .map(CombatAchievement.TIER_BY_LOWER_NAME::get)
+                .map(tier -> Pair.of(
+                        tier,
+                        TASK_POINTS.matcher(
+                                matcher.group("task")
+                        ).replaceFirst("") // remove points suffix
+                ));
+    }
 
-    private static Optional<BossNotification> parse(String message) {
+    private static Optional<BossNotification> parseBossKill(String message) {
         System.out.println("Parsing message" + message);
         Optional<Pair<String, Integer>> boss = parseBoss(message);
         if (boss.isPresent()) {
@@ -308,5 +388,13 @@ public class ChatMessageEvent {
     public boolean isPreciseTiming(@NotNull Client client) {
         @Varbit int ENABLE_PRECISE_TIMING = 11866;
         return client.getVarbitValue(ENABLE_PRECISE_TIMING) > 0;
+    }
+
+    private void initThresholds() {
+        CUM_POINTS_VARBIT_BY_TIER.forEach((tier, varbitId) -> {
+            int cumulativePoints = client.getVarbitValue(varbitId);
+            if (cumulativePoints > 0)
+                cumulativeUnlockPoints.put(cumulativePoints, tier);
+        });
     }
 }
