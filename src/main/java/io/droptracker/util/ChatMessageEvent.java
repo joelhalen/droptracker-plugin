@@ -47,12 +47,16 @@ public class ChatMessageEvent {
     @Inject
     private final DropTrackerPlugin plugin;
     private final DropTrackerConfig config;
+
     @Inject
     protected Client client;
+
     @Inject
     private Rarity rarity;
+
     @Inject
     private ClientThread clientThread;
+
     private ItemIDSearch itemIDFinder;
     private final AtomicInteger completed = new AtomicInteger(-1);
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
@@ -122,6 +126,7 @@ public class ChatMessageEvent {
             parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
             System.out.println("Data after parsing: " + bossData);
     }
+
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
             // require notifier enabled without popup mode to use chat event
@@ -154,13 +159,13 @@ public class ChatMessageEvent {
             }
         }
     }
-
     public void onTick() {
         BossNotification data = this.bossData.get();
         if (data != null) {
             System.out.println("Data is not null");
             if (data.getBoss() != null) {
                 if (isEnabled()) {
+                    System.out.println("Boss is not null");
                     processKill(data);
                 }
                 reset();

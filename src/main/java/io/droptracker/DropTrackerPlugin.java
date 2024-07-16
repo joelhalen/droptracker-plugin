@@ -24,6 +24,7 @@ import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameTick;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
@@ -280,12 +281,13 @@ public class DropTrackerPlugin extends Plugin {
 		switch (message.getType()) {
 			case GAMEMESSAGE:
 				chatMessageEventHandler.onGameMessage(chatMessage);
+				chatMessageEventHandler.onChatMessage(chatMessage);
 			case FRIENDSCHATNOTIFICATION:
 				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
 		}
 	}
-	@Subscribe()
-	public void onTick() {
+	@Subscribe
+	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
 	}
 	private void sendChatReminder() {
@@ -411,45 +413,50 @@ public class DropTrackerPlugin extends Plugin {
 		* "2" = a "Collection Log" submission
 		* "3" = a "Combat Achievement" submission
 		*  */
-		switch (type) {
-			case "1":
-				// Kc / kill time
-				List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
-				Boolean requiredScreenshot = false;
-				if (config.screenshotPBs()) {
-					for (CustomWebhookBody.Embed embed : embeds) {
-						for (CustomWebhookBody.Field field : embed.getFields()) {
-							if (field.getName().equalsIgnoreCase("is_pb")) {
-								if (field.getValue().equalsIgnoreCase("true")) {
-									requiredScreenshot = true;
-								}
+		Boolean requiredScreenshot = false;
+		if (type.equalsIgnoreCase("1")) {
+			// Kc / kill time
+			List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
+			if (config.screenshotPBs()) {
+				for (CustomWebhookBody.Embed embed : embeds) {
+					for (CustomWebhookBody.Field field : embed.getFields()) {
+						if (field.getName().equalsIgnoreCase("is_pb")) {
+							if (field.getValue().equalsIgnoreCase("true")) {
+								requiredScreenshot = true;
 							}
 						}
 					}
 				}
-				if (requiredScreenshot) {
-					drawManager.requestNextFrameListener(image ->
-					{
-						BufferedImage bufferedImage = (BufferedImage) image;
-						byte[] imageBytes = null;
-						try {
-							imageBytes = convertImageToByteArray(bufferedImage);
-						} catch (IOException e) {
-							log.error("Error converting image to byte array", e);
-						}
-						sendDropTrackerWebhook(webhook, imageBytes);
-					});
-				} else {
-					byte[] screenshot = null;
-					sendDropTrackerWebhook(webhook, screenshot);
-				}
-				break;
-			case "2":
-				// TODO
-				break;
-		}
+			}
 
+		}
+		else if (type.equalsIgnoreCase("2")) // clogs {
+			if (config.screenshotNewClogs()) {
+				requiredScreenshot = true;
+		}
+		else { // combat achievements
+			if (config.screenshotCAs()) {
+				requiredScreenshot = true;
+			}
+			}
+		if (requiredScreenshot) {
+			drawManager.requestNextFrameListener(image ->
+			{
+				BufferedImage bufferedImage = (BufferedImage) image;
+				byte[] imageBytes = null;
+				try {
+					imageBytes = convertImageToByteArray(bufferedImage);
+				} catch (IOException e) {
+					log.error("Error converting image to byte array", e);
+				}
+				sendDropTrackerWebhook(webhook, imageBytes);
+			});
+		} else {
+			byte[] screenshot = null;
+			sendDropTrackerWebhook(webhook, screenshot);
+		}
 	}
+
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		if (config.sendScreenshot() && totalValue > config.screenshotValue()) {
 			drawManager.requestNextFrameListener(image ->
