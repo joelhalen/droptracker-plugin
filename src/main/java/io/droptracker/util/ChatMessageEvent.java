@@ -158,6 +158,7 @@ public class ChatMessageEvent {
     public void onTick() {
         BossNotification data = this.bossData.get();
         if (data != null) {
+            System.out.println("Data is not null");
             if (data.getBoss() != null) {
                 if (isEnabled()) {
                     processKill(data);
@@ -238,6 +239,7 @@ public class ChatMessageEvent {
     private void processKill(BossNotification data) {
         if (data.getBoss() == null || data.getCount() == null)
             return;
+        System.out.println("processKill called with" + data);
         boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
         String player = plugin.getLocalPlayerName();
@@ -262,6 +264,7 @@ public class ChatMessageEvent {
                 killEmbed.setImage(ItemUtilities.getNpcImageUrl(npcId));
             }
         }
+        System.out.println("Passed if (ba)");
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);

@@ -284,6 +284,10 @@ public class DropTrackerPlugin extends Plugin {
 				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
 		}
 	}
+	@Subscribe()
+	public void onTick() {
+		chatMessageEventHandler.onTick();
+	}
 	private void sendChatReminder() {
 		if (config.sendReminders()) {
 			if (!hasReminded) {
