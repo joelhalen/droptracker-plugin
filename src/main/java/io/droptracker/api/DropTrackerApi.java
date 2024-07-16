@@ -1,8 +1,6 @@
 package io.droptracker.api;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import io.droptracker.DropTrackerConfig;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
@@ -16,7 +14,6 @@ import javax.inject.Inject;
 import javax.swing.*;
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.text.NumberFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -52,7 +49,7 @@ public class DropTrackerApi {
 
     public String getApiUrl() {
         if (config.useApi()) {
-            return "https://www.droptracker.io/";
+            return "http://www.droptracker.io:21220/";
         }
         else {
             return "";
@@ -198,7 +195,7 @@ public class DropTrackerApi {
                     .add("member_list", "")
                     .add("image_url", imageUrl)
                     .add("npc_name", npcName)
-                    .add("webhook", config.webhook())
+                    .add("webhook", config.webhookUrl())
                     .add("webhookValue", String.valueOf(config.webhookValue()))
                     .add("sheet", config.sheetID())
                     .add("notified", notified_str);
@@ -207,6 +204,33 @@ public class DropTrackerApi {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .post(formBuilder.build())
                     .build();
+        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    e.printStackTrace();
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    if (!response.isSuccessful()) {
+                    }
+                    response.close();
+                }
+            });
+        });
+        return future;
+    }
+    public CompletableFuture<Void> sendExtra(String key, String extraData) {
+
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "api/extra");
+        FormBody.Builder formBuilder = new FormBody.Builder()
+                .add(key, extraData);
+        Request request = new Request.Builder()
+                .url(url)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .post(formBuilder.build())
+                .build();
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             httpClient.newCall(request).enqueue(new Callback() {
                 @Override

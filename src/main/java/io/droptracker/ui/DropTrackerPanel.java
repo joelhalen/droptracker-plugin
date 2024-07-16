@@ -95,7 +95,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
     private EventBus eventBus;
     @Inject
     private ScheduledExecutorService executor;
-    private String discordInvite = "https://discord.gg/droptracker";
+    private String discordInvite = "https://www.droptracker.io/discord";
     private String docsLink = "https://www.droptracker.io/docs";
 
     static

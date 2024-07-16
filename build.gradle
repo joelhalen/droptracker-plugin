@@ -16,6 +16,7 @@ dependencies {
     compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
 
     compileOnly 'org.projectlombok:lombok:1.18.20'
+	compileOnly 'org.jetbrains:annotations:23.0.0'
     annotationProcessor 'org.projectlombok:lombok:1.18.20'
 
     testImplementation 'junit:junit:4.12'

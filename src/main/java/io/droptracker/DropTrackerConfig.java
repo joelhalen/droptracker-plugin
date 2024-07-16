@@ -7,8 +7,71 @@ import net.runelite.client.config.ConfigSection;
 
 @ConfigGroup(DropTrackerConfig.GROUP)
 public interface DropTrackerConfig extends Config
+	/* Section Positions:
+	1 (0) - General Settings
+	2 (1) - Values
+	2 (2) - Screenshots
+	 */
 {
 	String GROUP = "droptracker";
+	@ConfigSection(
+			name = "Screenshots",
+			description = "Define what events you want to send screenshots for",
+			position = 2,
+			closedByDefault = false
+	)
+	String screenshotSection = "Screenshots";
+	/* Screenshot Section Items */
+	@ConfigItem(
+			keyName = "valueableDrops",
+			name = "Valueable Drops",
+			description = "Minimum value for a drop to have a \n" +
+					"screenshot taken/uploaded automatically \n" +
+					"(0 to take none)",
+			position = 0
+	)
+	default Integer minimumDropScreenshotValue() { return 1000000; }
+	@ConfigItem(
+			keyName = "screenshotCLog",
+			name = "Collection Logs",
+			description = "Do you want screenshots to be sent when you\n" +
+					"receive new collection log items?",
+			position = 1
+	)
+	default boolean screenshotNewClogs() { return true; }
+	@ConfigItem(
+			keyName = "screenshotPB",
+			name = "Personal Bests",
+			description = "Do you want a screenshot to be sent\n" +
+					"when you acquire a new Personal Best?",
+			position = 1
+	)
+	default boolean screenshotPBs() { return true; }
+	@ConfigItem(
+			keyName = "screenshotCAs",
+			name = "Combat Tasks",
+			description = "Do you want a screenshot to be sent\n" +
+					"when you complete a Combat Task?",
+			position = 1
+	)
+	default boolean screenshotCAs() { return true; }
+	@ConfigItem(
+			keyName = "screenshotPKs",
+			name = "Player vs Player",
+			description = "Do you want a screenshot to be sent\n" +
+					"when you kill another player?",
+			position = 1
+	)
+	default boolean screenshotPKs() { return true; }
+	@ConfigItem(
+			keyName = "screenshotPets",
+			name = "Pets",
+			description = "Do you want a screenshot to be sent\n" +
+					"when you acquire a new pet?",
+			position = 1
+	)
+	default boolean screenshotPets() { return true; }
+
 	@ConfigItem(
 			keyName = "sendScreenshot",
 			name = "Send Screenshots",
@@ -45,7 +108,7 @@ public interface DropTrackerConfig extends Config
 	@ConfigSection(
 			name = "DropTracker API",
 			description = "Configure your account settings for the DropTracker API/Discord Bot.",
-			position= 2 ,
+			position= 5 ,
 			closedByDefault = true
 	)
 	String apiSection = "DropTracker API";
@@ -89,15 +152,6 @@ public interface DropTrackerConfig extends Config
 			section = apiSection
 	)
 	default String registeredName() { return ""; }
-	//	@ConfigItem( -- side panel will be added at some later date
-//			name = "Use Side Panel",
-//			keyName = "useSidePanel",
-//			description = "Do you want the DropTracker side panel to be rendered, showing<br />" +
-//					"recent submissions, total loot counters, etc?",
-//			position = 3,
-//			section = apiSection
-//	)
-//	default boolean useSidePanel() { return true; }
 	@ConfigItem(
 			name = "Track Account Data",
 			keyName = "trackAccData",
@@ -131,7 +185,7 @@ public interface DropTrackerConfig extends Config
 			section = personalSection,
 			position = 1
 	)
-	default String webhook() { return ""; };
+	default String webhookUrl() { return ""; };
 	@ConfigItem(
 			keyName = "webhookValue",
 			name = "Minimum Webhook Value",

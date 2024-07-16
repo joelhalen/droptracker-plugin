@@ -1,11 +1,11 @@
-package io.droptracker;
+package io.droptracker.models;
 
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Data;
 
 @Data
-class CustomWebhookBody
+public class CustomWebhookBody
 {
 	private String content;
 	private List<Embed> embeds = new ArrayList<>();
@@ -14,31 +14,34 @@ class CustomWebhookBody
 			"https://www.droptracker.io/img/droptracker-small.gif");
 
 	@Data
-	static class Embed
+	public static class Embed
 	{
 		public String title = "";
-		final UrlEmbed image;
+		UrlEmbed image = null;
 		final Author author = DropTracker;
 		final List<Field> fields = new ArrayList<>();
 		public void addField(String name, String value, boolean inline) {
 			this.fields.add(new Field(name, value, inline));
 		}
+		public void setImage(String imageUrl) {
+			this.image = new UrlEmbed(imageUrl);
+		}
 	}
 
 	@Data
-	static class UrlEmbed
+	public static class UrlEmbed
 	{
 		final String url;
 	}
 	@Data
-	static class Author
+	public static class Author
 	{
 		final String url;
 		final String name;
 		final String icon_url;
 	}
 	@Data
-	static class Field
+	public static class Field
 	{
 		final String name;
 		final String value;

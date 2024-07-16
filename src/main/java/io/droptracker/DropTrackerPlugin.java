@@ -4,11 +4,8 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,7 +17,9 @@ import javax.inject.Inject;
 import javax.swing.*;
 
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.util.ChatMessageEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -71,8 +70,6 @@ public class DropTrackerPlugin extends Plugin {
 	private DropTrackerPanel panel;
 	private NavigationButton navButton;
 
-	public DropTrackerPlugin() {
-	}
 	@Inject
 	private Gson gson;
 	@Inject
@@ -93,7 +90,7 @@ public class DropTrackerPlugin extends Plugin {
 	private ChatCommandManager chatCommandManager;
 
 	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
-	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log:.*");
+	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log: (.*)");
 	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (?<pre>completion count for |subdued |completed )?(?<boss>.+?) (?<post>(?:(?:kill|harvest|lap|completion) )?(?:count )?)is: <col=ff0000>(?<kc>\\d+)</col>");
 	private static final String TEAM_SIZES = "(?<teamsize>\\d+(?:\\+|-\\d+)? players?|Solo)";
 	private static final Pattern RAIDS_PB_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col> \\(new personal best\\)</col>");
@@ -125,6 +122,8 @@ public class DropTrackerPlugin extends Plugin {
 	private String logItemReceived;
 	private static final int MAX_RETRIES = 5;
 	private int timesTried = 0;
+	@Inject
+	private ChatMessageEvent chatMessageEventHandler;
 
 	@Inject
 	private ClientToolbar clientToolbar;
@@ -146,6 +145,9 @@ public class DropTrackerPlugin extends Plugin {
 				linkOpener.accept(chatMessage, s);
 			}
 		});
+		chatCommandManager.registerCommandAsync("!dtcode", (chatMessage, s) ->  {
+
+		});
 		if (config.useApi()) {
 			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
 				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
@@ -155,7 +157,7 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 	}
-	public void createSidePanel() {
+	private void createSidePanel() {
 		panel = injector.getInstance(DropTrackerPanel.class);
 		panel.init();
 
@@ -175,20 +177,21 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public static String getRandomWebhookUrl() throws Exception {
-		if (webhookUrls.isEmpty()) {
-			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
-			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-			String input;
-			while ((input = in.readLine()) != null) {
-				// Remove double quotes and commas from the input string
-				input = input.replace("\"", "").replace(",", "")
-						.replace("[", "").replace("]", "");
-				webhookUrls.add(input);
-			}
-			in.close();
-		}
-		Random randomP = new Random();
-		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+////		if (webhookUrls.isEmpty()) {
+////			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
+////			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+////			String input;
+////			while ((input = in.readLine()) != null) {
+////				// Remove double quotes and commas from the input string
+////				input = input.replace("\"", "").replace(",", "")
+////						.replace("[", "").replace("]", "");
+////				webhookUrls.add(input);
+////			}
+////			in.close();
+////		}
+//		Random randomP = new Random();
+//		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		return "https://discord.com/api/webhooks/1262137324410769460/qHFx1SH9rxfiO9jhCSoj54FmYXR_FAhaPXf8tCjDp5sjqqGy3C7Nf40a9w2W6cmymDfH";
 	}
 
 	private static String itemImageUrl(int itemId) {
@@ -267,69 +270,19 @@ public class DropTrackerPlugin extends Plugin {
 		processDropEvent(lootReceived.getName(), "other", lootReceived.getItems());
 		sendChatReminder();
 	}
-
-	@Subscribe
-	public void onChatMessage(ChatMessage chatMessage) {
-		String message = chatMessage.getMessage();
-		Matcher matcher;
-		if (!config.useApi()) {
-			return;
-		}
-		if (chatMessage.getType() != ChatMessageType.GAMEMESSAGE && chatMessage.getType() != ChatMessageType.SPAM) {
-			return;
-		}
-		if (isFakeWorld()) {
-			return;
-		}
-		Matcher m = COLLECTION_LOG_ITEM_REGEX.matcher(message);
-		if (m.matches()) {
-			++totalLogSlots;
-			hasUpdatedStoredItems = false;
-			if (config.collectionLogWebhooks() && !Objects.equals(config.webhook(), "") && config.webhook().length() > 5){
-				clientThread.invokeLater(() -> {
-					CustomWebhookBody customWebhookBody = new CustomWebhookBody();
-					logItemReceived = Text.removeTags(m.group(1));
-					CustomWebhookBody.Embed logSlotEmbed = new CustomWebhookBody.Embed(new CustomWebhookBody.UrlEmbed("https://www.droptracker.io/img/droptracker-small.gif"));
-					logSlotEmbed.title = getLocalPlayerName() + " received a new Collection Log item";
-					logSlotEmbed.addField("item", logItemReceived, false);
-					customWebhookBody.setContent("Collection Log Slot update");
-					logSlotEmbed.addField("webhook", config.webhook(), false);
-					// For now, we'll just call the webhook method with a value of 50m to ensure screenshot is sent
-					// As long as screenshots are enabled. Probably should re-work this later.
-					sendDropTrackerWebhook(customWebhookBody, 50000000);
-					sendChatReminder();
-				});
-			}
-			logItemReceived = "";
-		}
-		synchronized (lock) {
-
-			Matcher npcMatcher = KILLCOUNT_PATTERN.matcher(message);
-			if (npcMatcher.find()) {
-				currentNpcName = npcMatcher.group("boss");
-				scheduleKillTimeReset();
-				hasUpdatedStoredItems = false;
-			}
-
-			if ((matcher = RAIDS_PB_PATTERN.matcher(message)).find()) {
-				currentKillTime = matcher.group("pb");
-				currentPbTime = currentKillTime;
-				readyToSendPb = true;
-				scheduleKillTimeReset();
-				hasUpdatedStoredItems = false;
-			} else if ((matcher = RAIDS_DURATION_PATTERN.matcher(message)).find() || (matcher = KILL_DURATION_PATTERN.matcher(message)).find()) {
-				currentKillTime = matcher.group("current");
-				currentPbTime = matcher.group("pb");
-				readyToSendPb = !currentNpcName.isEmpty();
-				scheduleKillTimeReset();
-				hasUpdatedStoredItems = false;
-			}
-
-			if (readyToSendPb) {
-				String playerName = getLocalPlayerName();
-				api.sendKillTimeData(playerName, currentNpcName, currentKillTime, currentPbTime);
-				resetState();
-			}
+	public String sanitize(String str) {
+		if (str == null || str.isEmpty()) return "";
+		return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
+	}
+	@Subscribe(priority = 1)
+	public void onChatMessage(ChatMessage message) {
+		String chatMessage = sanitize(message.getMessage());
+		String source = message.getName() != null && !message.getName().isEmpty() ? message.getName() : message.getSender();
+		switch (message.getType()) {
+			case GAMEMESSAGE:
+				chatMessageEventHandler.onGameMessage(chatMessage);
+			case FRIENDSCHATNOTIFICATION:
+				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
 		}
 	}
 	private void sendChatReminder() {
@@ -389,32 +342,17 @@ public class DropTrackerPlugin extends Plugin {
 					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
 					finalValue.set(qty * price);
 					// Create a new embed for each item
-					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed(new CustomWebhookBody.UrlEmbed(itemImageUrl(itemId)));
-
+					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
+					itemEmbed.setImage(itemImageUrl(itemId));
 					// Add fields to the embed
+					itemEmbed.addField("type", "drop", true);
 					itemEmbed.addField("item", itemComposition.getName(), true);
 					itemEmbed.addField("player", getLocalPlayerName(), true);
-					if(!Objects.equals(config.registeredName(), "")) {
-						itemEmbed.addField("reg_name", config.registeredName(), true);
-					}
-					if (!Objects.equals(config.authKey(), "")) {
-						itemEmbed.addField("auth_token", config.authKey(), true);
-					}
-					if (!Objects.equals(config.serverId(), "")) {
-						itemEmbed.addField("server_id", config.serverId(), true);
-					}
 					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
 					itemEmbed.addField("quantity", String.valueOf(qty), true);
 					itemEmbed.addField("value", String.valueOf(price), true);
 					itemEmbed.addField("source", npcName, true);
 					itemEmbed.addField("type", sourceType, true);
-					if (!Objects.equals(config.sheetID(), "")) {
-						itemEmbed.addField("sheet", String.valueOf(config.sheetID()), true);
-					}
-					if (!Objects.equals(config.webhook(), "")) {
-						itemEmbed.addField("webhook", String.valueOf(config.webhook()), true);
-						itemEmbed.addField("webhookValue", String.valueOf(config.webhookValue()), true);
-					}
 					itemEmbed.title = getLocalPlayerName() + " received some drops:";
 					customWebhookBody.getEmbeds().add(itemEmbed);
 				}
@@ -464,8 +402,51 @@ public class DropTrackerPlugin extends Plugin {
 			return "";
 		}
 	}
+	public void sendDropTrackerWebhook(CustomWebhookBody webhook, String type) {
+		/* Requires a type ID to be passed
+		* "1" = a "Kill Time" or "KC" submission
+		* "2" = a "Collection Log" submission
+		*  */
+		switch (type) {
+			case "1":
+				// Kc / kill time
+				List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
+				Boolean requiredScreenshot = false;
+				if (config.screenshotPBs()) {
+					for (CustomWebhookBody.Embed embed : embeds) {
+						for (CustomWebhookBody.Field field : embed.getFields()) {
+							if (field.getName().equalsIgnoreCase("is_pb")) {
+								if (field.getValue().equalsIgnoreCase("true")) {
+									requiredScreenshot = true;
+								}
+							}
+						}
+					}
+				}
+				if (requiredScreenshot) {
+					drawManager.requestNextFrameListener(image ->
+					{
+						BufferedImage bufferedImage = (BufferedImage) image;
+						byte[] imageBytes = null;
+						try {
+							imageBytes = convertImageToByteArray(bufferedImage);
+						} catch (IOException e) {
+							log.error("Error converting image to byte array", e);
+						}
+						sendDropTrackerWebhook(webhook, imageBytes);
+					});
+				} else {
+					byte[] screenshot = null;
+					sendDropTrackerWebhook(webhook, screenshot);
+				}
+				break;
+			case "2":
+				// TODO
+				break;
+		}
 
-	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
+	}
+	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		if (config.sendScreenshot() && totalValue > config.screenshotValue()) {
 			drawManager.requestNextFrameListener(image ->
 			{
@@ -479,7 +460,8 @@ public class DropTrackerPlugin extends Plugin {
 				sendDropTrackerWebhook(customWebhookBody, imageBytes);
 			});
 		} else {
-			sendDropTrackerWebhook(customWebhookBody, null);
+			byte[] screenshot = null;
+			sendDropTrackerWebhook(customWebhookBody, screenshot);
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
