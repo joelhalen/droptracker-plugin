@@ -25,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.ScriptPreFired;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
@@ -271,10 +272,17 @@ public class DropTrackerPlugin extends Plugin {
 		processDropEvent(lootReceived.getName(), "other", lootReceived.getItems());
 		sendChatReminder();
 	}
+
 	public String sanitize(String str) {
 		if (str == null || str.isEmpty()) return "";
 		return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
 	}
+
+	@Subscribe
+	public void onScriptPreFired(ScriptPreFired event) {
+		chatMessageEventHandler.onScript(event.getScriptId());
+	}
+
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
 		String chatMessage = sanitize(message.getMessage());
@@ -456,6 +464,7 @@ public class DropTrackerPlugin extends Plugin {
 			sendDropTrackerWebhook(webhook, screenshot);
 		}
 	}
+
 
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		if (config.sendScreenshot() && totalValue > config.screenshotValue()) {

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
 import net.runelite.api.annotations.Varp;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
@@ -64,9 +65,10 @@ public class ChatMessageEvent {
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
-    public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config) {
+    public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder) {
         this.plugin = plugin;
         this.config = config;
+        this.itemIDFinder = itemIDFinder;
     }
     private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
     private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
@@ -128,6 +130,7 @@ public class ChatMessageEvent {
     }
 
     public void onChatMessage(String chatMessage) {
+        System.out.println("onChatMessage (collection log)");
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
             // require notifier enabled without popup mode to use chat event
             return;
@@ -137,6 +140,18 @@ public class ChatMessageEvent {
             System.out.println("Found a Collection Log match");
             String itemName = collectionMatcher.group("itemName");
             clientThread.invokeLater(() -> processCollection(itemName));
+        }
+    }
+
+    public void onScript(int scriptId) {
+        if (scriptId == ScriptID.NOTIFICATION_START) {
+            popupStarted.set(true);
+        } else if (scriptId == ScriptID.NOTIFICATION_DELAY) {
+            String topText = client.getVarcStrValue(VarClientStr.NOTIFICATION_TOP_TEXT);
+            if (popupStarted.getAndSet(false) && "Collection log".equalsIgnoreCase(topText) && isEnabled()) {
+                String bottomText = plugin.sanitize(client.getVarcStrValue(VarClientStr.NOTIFICATION_BOTTOM_TEXT));
+                processCollection(bottomText.substring(POPUP_PREFIX_LENGTH).trim());
+            }
         }
     }
 
@@ -195,10 +210,11 @@ public class ChatMessageEvent {
         Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
+
         CustomWebhookBody collectionLogBody = new CustomWebhookBody();
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
-        collEmbed.addField("source", loot.getSource(),true);
+        collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
         collEmbed.addField("kc", String.valueOf(killCount),true);
         collEmbed.addField("rarity", String.valueOf(itemRarity),true);
         collEmbed.addField("item_id", String.valueOf(itemId),true);
