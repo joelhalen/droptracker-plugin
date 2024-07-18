@@ -134,6 +134,7 @@ public class ChatMessageEvent {
         }
         Matcher collectionMatcher = COLLECTION_LOG_REGEX.matcher(chatMessage);
         if (collectionMatcher.find()) {
+            System.out.println("Found a Collection Log match");
             String itemName = collectionMatcher.group("itemName");
             clientThread.invokeLater(() -> processCollection(itemName));
         }
@@ -177,14 +178,19 @@ public class ChatMessageEvent {
             initThresholds();
     }
     private void processCollection(String itemName) {
+        System.out.println("processCollection called");
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
+        System.out.println("completed = " + completed);
         int total = client.getVarpValue(TOTAL_VARP);
+        System.out.println("total = " + completed);
         boolean varpValid = total > 0 && completed > 0;
+        System.out.println("varpValid = " + varpValid);
         if (!varpValid) {
             // This occurs if the player doesn't have the character summary tab selected
             log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
         }
         Integer itemId = itemIDFinder.findItemId(itemName);
+        System.out.println("Item ID: " + itemId);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
         Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
@@ -198,6 +204,7 @@ public class ChatMessageEvent {
         collEmbed.addField("item_id", String.valueOf(itemId),true);
         collectionLogBody.getEmbeds().add(collEmbed);
         System.out.println("Sending a collection log embed: " + collectionLogBody);
+
         plugin.sendDropTrackerWebhook(collectionLogBody, "2");
     }
 
