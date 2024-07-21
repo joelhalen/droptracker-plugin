@@ -4,8 +4,11 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.awt.image.RenderedImage;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -179,21 +182,21 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public static String getRandomWebhookUrl() throws Exception {
-////		if (webhookUrls.isEmpty()) {
-////			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
-////			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-////			String input;
-////			while ((input = in.readLine()) != null) {
-////				// Remove double quotes and commas from the input string
-////				input = input.replace("\"", "").replace(",", "")
-////						.replace("[", "").replace("]", "");
-////				webhookUrls.add(input);
-////			}
-////			in.close();
-////		}
-//		Random randomP = new Random();
-//		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		return "https://discord.com/api/webhooks/1262137324410769460/qHFx1SH9rxfiO9jhCSoj54FmYXR_FAhaPXf8tCjDp5sjqqGy3C7Nf40a9w2W6cmymDfH";
+		if (webhookUrls.isEmpty()) {
+			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
+			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+			String input;
+			while ((input = in.readLine()) != null) {
+				// Remove double quotes and commas from the input string
+				input = input.replace("\"", "").replace(",", "")
+						.replace("[", "").replace("]", "");
+				webhookUrls.add(input);
+			}
+			in.close();
+		}
+		Random randomP = new Random();
+		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		// return "https://discord.com/api/webhooks/1262137324410769460/qHFx1SH9rxfiO9jhCSoj54FmYXR_FAhaPXf8tCjDp5sjqqGy3C7Nf40a9w2W6cmymDfH";
 	}
 
 	private static String itemImageUrl(int itemId) {
@@ -344,7 +347,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
-		if (!config.useApi()) {
+		// if (!config.useApi()) {
 			AtomicReference<Integer> finalValue = new AtomicReference<>(0);
 			CustomWebhookBody customWebhookBody = new CustomWebhookBody();
 			clientThread.invokeLater(() -> {
@@ -373,39 +376,39 @@ public class DropTrackerPlugin extends Plugin {
 				customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
 			});
 			sendDropTrackerWebhook(customWebhookBody, finalValue.get());
-		} else {
-			for (ItemStack item : stack(items)) {
-				int itemId = item.getId();
-				int quantity = item.getQuantity();
-
-				int geValue = itemManager.getItemPrice(itemId);
-				int haValue = itemManager.getItemComposition(itemId).getHaPrice();
-				if (geValue == 0 && haValue == 0) {
-					continue;
-				}
-				ItemComposition itemComp = itemManager.getItemComposition(itemId);
-				String itemName = itemComp.getName();
-				int finalValue = geValue * quantity;
-				SwingUtilities.invokeLater(() -> {
-					String serverId = config.serverId();
-					if (config.sendScreenshot() && finalValue > config.screenshotValue()) {
-						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
-						drawManager.requestNextFrameListener(image -> {
-							getApiScreenshot(getLocalPlayerName(), itemId, npcName).thenAccept(imageUrl -> {
-									this_imageUrl.set(imageUrl);
-									api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
-							});
-
-						});
-
-					} else {
-							api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
-					}
-
-				});
-
-			}
-		}
+//		} else {
+//			for (ItemStack item : stack(items)) {
+//				int itemId = item.getId();
+//				int quantity = item.getQuantity();
+//
+//				int geValue = itemManager.getItemPrice(itemId);
+//				int haValue = itemManager.getItemComposition(itemId).getHaPrice();
+//				if (geValue == 0 && haValue == 0) {
+//					continue;
+//				}
+//				ItemComposition itemComp = itemManager.getItemComposition(itemId);
+//				String itemName = itemComp.getName();
+//				int finalValue = geValue * quantity;
+//				SwingUtilities.invokeLater(() -> {
+//					String serverId = config.serverId();
+//					if (config.screenshotDrops() && finalValue > config.screenshotValue()) {
+//						AtomicReference<String> this_imageUrl = new AtomicReference<>("null");
+//						drawManager.requestNextFrameListener(image -> {
+//							getApiScreenshot(getLocalPlayerName(), itemId, npcName).thenAccept(imageUrl -> {
+//									this_imageUrl.set(imageUrl);
+//									api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), this_imageUrl.get()).join();
+//							});
+//
+//						});
+//
+//					} else {
+//							api.sendDropData(getLocalPlayerName(), sourceType, npcName, itemId, itemName, quantity, geValue, config.authKey(), "").join();
+//					}
+//
+//				});
+//
+//			}
+//		}
 	}
 
 	public String getLocalPlayerName() {
@@ -467,7 +470,8 @@ public class DropTrackerPlugin extends Plugin {
 
 
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
-		if (config.sendScreenshot() && totalValue > config.screenshotValue()) {
+		// Handles sending drops exclusively
+		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
 			drawManager.requestNextFrameListener(image ->
 			{
 				BufferedImage bufferedImage = (BufferedImage) image;
@@ -515,15 +519,13 @@ public class DropTrackerPlugin extends Plugin {
 		okHttpClient.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(Call call, IOException e) {
-				// Skip onFailures?
-				log.debug("Error submitting webhook", e);
+				log.error("Error submitting: ", e);
 				timesTried = 0;
 			}
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
 				if (response.isSuccessful()) {
-					//log.info("Webhook sent successfully on attempt {}", timesTried);
 					timesTried = 0;
 				} else if (response.code() == 429 || response.code() == 400) {
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
@@ -589,7 +591,7 @@ public class DropTrackerPlugin extends Plugin {
 	public CompletableFuture<String> getApiScreenshot(String playerName, String itemId, String npcName) {
 		log.debug("getApiScreenshot called");
 		CompletableFuture<String> future = new CompletableFuture<>();
-		if (config.useApi() && config.sendScreenshot()) {
+		if (config.useApi() && config.screenshotDrops()) {
 			String serverId = config.serverId();
 			drawManager.requestNextFrameListener(image -> {
 				try {

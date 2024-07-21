@@ -123,21 +123,17 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (isEnabled())
-            System.out.println("Data currently: " + bossData);
             parseBossKill(message).ifPresent(this::updateData);
             parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
-            System.out.println("Data after parsing: " + bossData);
     }
 
     public void onChatMessage(String chatMessage) {
-        System.out.println("onChatMessage (collection log)");
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
             // require notifier enabled without popup mode to use chat event
             return;
         }
         Matcher collectionMatcher = COLLECTION_LOG_REGEX.matcher(chatMessage);
         if (collectionMatcher.find()) {
-            System.out.println("Found a Collection Log match");
             String itemName = collectionMatcher.group("itemName");
             clientThread.invokeLater(() -> processCollection(itemName));
         }
@@ -178,10 +174,8 @@ public class ChatMessageEvent {
     public void onTick() {
         BossNotification data = this.bossData.get();
         if (data != null) {
-            System.out.println("Data is not null");
             if (data.getBoss() != null) {
                 if (isEnabled()) {
-                    System.out.println("Boss is not null");
                     processKill(data);
                 }
                 reset();
@@ -193,19 +187,14 @@ public class ChatMessageEvent {
             initThresholds();
     }
     private void processCollection(String itemName) {
-        System.out.println("processCollection called");
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
-        System.out.println("completed = " + completed);
         int total = client.getVarpValue(TOTAL_VARP);
-        System.out.println("total = " + completed);
         boolean varpValid = total > 0 && completed > 0;
-        System.out.println("varpValid = " + varpValid);
         if (!varpValid) {
             // This occurs if the player doesn't have the character summary tab selected
             log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
         }
         Integer itemId = itemIDFinder.findItemId(itemName);
-        System.out.println("Item ID: " + itemId);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
         Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
@@ -215,18 +204,18 @@ public class ChatMessageEvent {
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
         collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
+        collEmbed.addField("item", itemName, true);
         collEmbed.addField("kc", String.valueOf(killCount),true);
         collEmbed.addField("rarity", String.valueOf(itemRarity),true);
         collEmbed.addField("item_id", String.valueOf(itemId),true);
+        collEmbed.addField("player", client.getLocalPlayer().getName(), true);
         collectionLogBody.getEmbeds().add(collEmbed);
-        System.out.println("Sending a collection log embed: " + collectionLogBody);
 
         plugin.sendDropTrackerWebhook(collectionLogBody, "2");
     }
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
         // delay notification for varbits to be updated
-        System.out.println("Processing Combat Achievement (tier: " + tier.getDisplayName() + ", task: " + task + ")");
         clientThread.invokeAtTickEnd(() -> {
             int taskPoints = tier.getPoints();
             int totalPoints = client.getVarbitValue(TOTAL_POINTS_ID);
@@ -257,7 +246,6 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
-            System.out.println("Ready to send a webhook for a CA: " + combatWebhook);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
             plugin.sendDropTrackerWebhook(combatWebhook, "3");
         });
@@ -267,7 +255,6 @@ public class ChatMessageEvent {
     private void processKill(BossNotification data) {
         if (data.getBoss() == null || data.getCount() == null)
             return;
-        System.out.println("processKill called with" + data);
         boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
         String player = plugin.getLocalPlayerName();
@@ -292,7 +279,6 @@ public class ChatMessageEvent {
                 killEmbed.setImage(ItemUtilities.getNpcImageUrl(npcId));
             }
         }
-        System.out.println("Passed if (ba)");
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
@@ -301,7 +287,6 @@ public class ChatMessageEvent {
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
 
         killWebhook.getEmbeds().add(killEmbed);
-        System.out.println("Sending a kc/pb embed: " + killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         // Call webhook or whatever method to send the notification
     }
@@ -341,13 +326,10 @@ public class ChatMessageEvent {
     }
 
     private static Optional<BossNotification> parseBossKill(String message) {
-        System.out.println("Parsing message" + message);
         Optional<Pair<String, Integer>> boss = parseBoss(message);
         if (boss.isPresent()) {
-            System.out.println("Boss returned as " + boss);
         }
         if (boss.isPresent()) {
-            System.out.println("Boss is present");
             return boss.map(pair -> new BossNotification(pair.getLeft(), pair.getRight(), message, null, null));
         }
         return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getRight()));
@@ -420,12 +402,9 @@ public class ChatMessageEvent {
 
     private static Optional<Pair<Duration, Boolean>> parseKillTime(String message) {
         Matcher matcher = TIME_REGEX.matcher(message);
-        System.out.println("parseKillTime called");
         if (matcher.find()) {
-            System.out.println("found match");
             Duration duration = parseTime(matcher.group("time"));
             boolean pb = message.toLowerCase().contains("(new personal best)");
-            System.out.println("Located duration: " + duration + " and is pb: " + pb);
             return Optional.of(Pair.of(duration, pb));
         }
         return Optional.empty();
