@@ -178,20 +178,22 @@ public class DropTrackerPlugin extends Plugin {
 	 * Grabs a random webhook URL from a GitHub sites page that is cycled by the server
 	 * */
 	public static String getRandomWebhookUrl() throws Exception {
-		if (webhookUrls.isEmpty()) {
-			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
-			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-			String input;
-			while ((input = in.readLine()) != null) {
-				// Remove double quotes and commas from the input string
-				input = input.replace("\"", "").replace(",", "")
-						.replace("[", "").replace("]", "");
-				webhookUrls.add(input);
-			}
-			in.close();
-		}
-		Random randomP = new Random();
-		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+//		if (webhookUrls.isEmpty()) {
+//			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
+//			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+//			String input;
+//			while ((input = in.readLine()) != null) {
+//				// Remove double quotes and commas from the input string
+//				input = input.replace("\"", "").replace(",", "")
+//						.replace("[", "").replace("]", "");
+//				webhookUrls.add(input);
+//			}
+//			in.close();
+//		}
+//		Random randomP = new Random();
+		// TODO ::: USE RANDOM URLS
+		return "https://discord.com/api/webhooks/1211062622343004180/36w6RNMaUApU6Tz1ApQ_eoIGM3OCmJRen0NwyGoDll946I7ic190bxuoEGOqZpMEJeDn";
+		//return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
 	}
 
 	private static String itemImageUrl(int itemId) {
