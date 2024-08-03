@@ -25,6 +25,7 @@ import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -91,7 +92,10 @@ public class ChatMessageEvent {
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>\\d+)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>\\d+)\\b");
-    private static final Pattern TIME_REGEX = Pattern.compile("(?:Duration|time|Subdued in):? (?<time>[\\d:]+(.\\d+)?)\\.?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TIME_REGEX = Pattern.compile(
+            "(?:Duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
+            Pattern.CASE_INSENSITIVE
+    );
     private static final String BA_BOSS_NAME = "Penance Queen";
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
 
@@ -166,7 +170,7 @@ public class ChatMessageEvent {
             Widget widget = client.getWidget(ComponentID.BA_REWARD_REWARD_TEXT);
             if (widget != null && widget.getText().contains("80 ") && widget.getText().contains("5 ")) {
                 int gambleCount = client.getVarbitValue(Varbits.BA_GC);
-                BossNotification notification = new BossNotification(BA_BOSS_NAME, gambleCount, "The Queen is dead!", null, null);
+                BossNotification notification = new BossNotification(BA_BOSS_NAME, gambleCount, "The Queen is dead!", null, null,null);
                 bossData.set(notification);
             }
         }
@@ -301,6 +305,7 @@ public class ChatMessageEvent {
                         defaultIfNull(updated.getCount(), old.getCount()),
                         defaultIfNull(updated.getGameMessage(), old.getGameMessage()),
                         defaultIfNull(updated.getTime(), old.getTime()),
+                        defaultIfNull(updated.getBestTime(), old.getBestTime()),
                         defaultIfNull(updated.isPersonalBest(), old.isPersonalBest())
                 );
             }
@@ -327,12 +332,45 @@ public class ChatMessageEvent {
 
     private static Optional<BossNotification> parseBossKill(String message) {
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-        if (boss.isPresent()) {
+        if (!boss.isPresent()) {
+            return boss.map(pair -> new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null));
         }
-        if (boss.isPresent()) {
-            return boss.map(pair -> new BossNotification(pair.getLeft(), pair.getRight(), message, null, null));
+        return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getMiddle(), t.getRight()));
+    }
+    private static Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
+        Matcher matcher = TIME_REGEX.matcher(message);
+        if (matcher.find()) {
+            Duration duration = parseTime(matcher.group("time"));
+            Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
+            boolean pb = message.toLowerCase().contains("(new personal best)");
+            return Optional.of(Triple.of(duration, bestTime, pb));
         }
-        return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getRight()));
+        return Optional.empty();
+    }
+
+    @NotNull
+    public static Duration parseTime(@NotNull String in) {
+        Pattern TIME_PATTERN = Pattern.compile("\\b(?:(?<hours>\\d+):)?(?<minutes>\\d+):(?<seconds>\\d{2})(?:\\.(?<fractional>\\d{2}))?\\b");
+        Matcher m = TIME_PATTERN.matcher(in);
+        if (!m.find()) return Duration.ZERO;
+
+        int minutes = Integer.parseInt(m.group("minutes"));
+        int seconds = Integer.parseInt(m.group("seconds"));
+
+        Duration d = Duration.ofMinutes(minutes).plusSeconds(seconds);
+
+        String hours = m.group("hours");
+        if (hours != null) {
+            d = d.plusHours(Integer.parseInt(hours));
+        }
+
+        String fractional = m.group("fractional");
+        if (fractional != null) {
+            String f = fractional.length() < 3 ? StringUtils.rightPad(fractional, 3, '0') : fractional.substring(0, 3);
+            d = d.plusMillis(Integer.parseInt(f));
+        }
+
+        return d;
     }
 
     static Optional<Pair<String, Integer>> parseBoss(String message) {
@@ -400,40 +438,7 @@ public class ChatMessageEvent {
         return null;
     }
 
-    private static Optional<Pair<Duration, Boolean>> parseKillTime(String message) {
-        Matcher matcher = TIME_REGEX.matcher(message);
-        if (matcher.find()) {
-            Duration duration = parseTime(matcher.group("time"));
-            boolean pb = message.toLowerCase().contains("(new personal best)");
-            return Optional.of(Pair.of(duration, pb));
-        }
-        return Optional.empty();
-    }
 
-    @NotNull
-    public static Duration parseTime(@NotNull String in) {
-        Pattern TIME_PATTERN = Pattern.compile("\\b(?:(?<hours>\\d+):)?(?<minutes>\\d+):(?<seconds>\\d{2})(?:\\.(?<fractional>\\d{2}))?\\b");
-        Matcher m = TIME_PATTERN.matcher(in);
-        if (!m.find()) return Duration.ZERO;
-
-        int minutes = Integer.parseInt(m.group("minutes"));
-        int seconds = Integer.parseInt(m.group("seconds"));
-
-        Duration d = Duration.ofMinutes(minutes).plusSeconds(seconds);
-
-        String hours = m.group("hours");
-        if (hours != null) {
-            d = d.plusHours(Integer.parseInt(hours));
-        }
-
-        String fractional = m.group("fractional");
-        if (fractional != null) {
-            String f = fractional.length() < 3 ? StringUtils.rightPad(fractional, 3, '0') : fractional.substring(0, 3);
-            d = d.plusMillis(Integer.parseInt(f));
-        }
-
-        return d;
-    }
 
     @NotNull
     public String formatTime(@Nullable Duration duration, boolean precise) {

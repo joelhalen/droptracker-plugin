@@ -106,17 +106,17 @@ public interface DropTrackerConfig extends Config
 			position= 5 ,
 			closedByDefault = false
 	)
-	String apiSection = "DropTracker API";
+	String apiSection = "DropTracker Account";
 	@ConfigItem(
 			name="Use API Connections",
 			keyName = "useApi",
-			description = "Enables external connections to the DropTracker database.<br />" +
-					"<b>Note</b>: The API is <em>currently</em> <b>required</b> for participation in events!",
+			description = "Enables external connections to the DropTracker database, for panel data.<br />" +
+					"<b>Note</b>: The API is currently <b>required</b> for participation in events!",
 			position = -1,
 			section = apiSection,
-			warning = "<html><b>WARNING</b>: Using this feature sends your IP address to a 3rd party server<br>" +
-					"that is not verified by the RuneLite Developers.<br>" +
-					"<b>Are you sure you want to toggle 'Use API Connections'?</b><br></html>"
+			warning = "<html><b>WARNING</b>: Enabling API Connections will send external connections<br>to a server" +
+					"that can not be verified by the RuneLite Developers.<br>" +
+					"<b>Are you sure that you want to enable external connections?</b><br></html>"
 	)
 	default boolean useApi() { return false; }
 	@ConfigItem(
@@ -137,7 +137,8 @@ public interface DropTrackerConfig extends Config
 			section = apiSection,
 			secret = true
 	)
-	default String authKey() { return ""; }
+	default String token() { return ""; }
+
 	@ConfigItem(
 			name = "Track Account Data",
 			keyName = "trackAccData",
@@ -179,7 +180,7 @@ public interface DropTrackerConfig extends Config
 			section = personalSection,
 			position = 1
 	)
-	default Integer webhookMinValue() { return 250000; };
+	default int minWebhookValue() { return 250000; }
 
 	@ConfigItem(
 			keyName = "sheet",

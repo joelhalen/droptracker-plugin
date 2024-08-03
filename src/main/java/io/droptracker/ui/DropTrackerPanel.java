@@ -502,10 +502,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 
         return mainContainer;
     }
-    private static String htmlLabel(String key, String value)
-    {
-        return "<html><body style = 'color:#a5a5a5'>" + key + "<span style = 'color:white'>" + value + "</span></body></html>";
-    }
+
 
     @Subscribe
     public void onSessionOpen(SessionOpen sessionOpen)

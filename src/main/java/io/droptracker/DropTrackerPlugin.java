@@ -13,17 +13,14 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
-import javax.swing.*;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
-import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -150,9 +147,6 @@ public class DropTrackerPlugin extends Plugin {
 				linkOpener.accept(chatMessage, s);
 			}
 		});
-		chatCommandManager.registerCommandAsync("!dtcode", (chatMessage, s) ->  {
-
-		});
 		if (config.useApi()) {
 			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
 				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
@@ -180,7 +174,9 @@ public class DropTrackerPlugin extends Plugin {
 		clientToolbar.removeNavigation(navButton);
 		panel = null;
 	}
-
+	/**
+	 * Grabs a random webhook URL from a GitHub sites page that is cycled by the server
+	 * */
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
 			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
@@ -196,12 +192,12 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		Random randomP = new Random();
 		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		// return "https://discord.com/api/webhooks/1262137324410769460/qHFx1SH9rxfiO9jhCSoj54FmYXR_FAhaPXf8tCjDp5sjqqGy3C7Nf40a9w2W6cmymDfH";
 	}
 
 	private static String itemImageUrl(int itemId) {
 		return "https://static.runelite.net/cache/item/icon/" + itemId + ".png";
 	}
+
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
 		if (destination == "website" && config.useApi()) {
@@ -263,7 +259,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		Collection<ItemStack> items = playerLootReceived.getItems();
-		processDropEvent(playerLootReceived.getPlayer().getName(), "player", items);
+		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
 		sendChatReminder();
 	}
 
@@ -350,32 +346,77 @@ public class DropTrackerPlugin extends Plugin {
 		// if (!config.useApi()) {
 			AtomicReference<Integer> finalValue = new AtomicReference<>(0);
 			CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+			AtomicReference<StringBuilder> itemListBuilder = new AtomicReference<>(new StringBuilder());
 			clientThread.invokeLater(() -> {
-				for (ItemStack item : stack(items)) {
-					int itemId = item.getId();
-					int qty = item.getQuantity();
-					int price = itemManager.getItemPrice(itemId);
-					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-					finalValue.set(qty * price);
-					// Create a new embed for each item
-					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
-					itemEmbed.setImage(itemImageUrl(itemId));
-					// Add fields to the embed
-					itemEmbed.addField("type", "drop", true);
-					itemEmbed.addField("item", itemComposition.getName(), true);
-					itemEmbed.addField("player", getLocalPlayerName(), true);
-					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
-					itemEmbed.addField("quantity", String.valueOf(qty), true);
-					itemEmbed.addField("value", String.valueOf(price), true);
-					itemEmbed.addField("source", npcName, true);
-					itemEmbed.addField("type", sourceType, true);
-					itemEmbed.title = getLocalPlayerName() + " received some drops:";
-					customWebhookBody.getEmbeds().add(itemEmbed);
-				}
+				if (sourceType != "pvp") {
+					for (ItemStack item : stack(items)) {
+						int itemId = item.getId();
+						int qty = item.getQuantity();
+						int price = itemManager.getItemPrice(itemId);
+						ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+						finalValue.set(qty * price);
+						// Create a new embed for each item
+						CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
+						itemEmbed.setImage(itemImageUrl(itemId));
+						// Add fields to the embed
+						itemEmbed.addField("type", "drop", true);
+						itemEmbed.addField("source_type", sourceType, true);
+						itemEmbed.addField("item", itemComposition.getName(), true);
+						itemEmbed.addField("player", getLocalPlayerName(), true);
+						itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
+						itemEmbed.addField("quantity", String.valueOf(qty), true);
+						itemEmbed.addField("value", String.valueOf(price), true);
+						itemEmbed.addField("source", npcName, true);
+						itemEmbed.addField("type", sourceType, true);
+						itemEmbed.title = getLocalPlayerName() + " received some drops:";
+						customWebhookBody.getEmbeds().add(itemEmbed);
+					}
+					customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
+				} else {
+					// Try to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
+					itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
+					Integer totalValue = 0;
+					boolean isFirstPart = true;
 
-				customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
+					for (ItemStack item : stack(items)) {
+						int itemId = item.getId();
+						int qty = item.getQuantity();
+						int price = itemManager.getItemPrice(itemId);
+						ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+						totalValue = totalValue + (qty * price);
+
+						String itemDetails = "Item: " + itemComposition.getName()
+								+ ", Quantity: " + qty
+								+ ", Value: " + price
+								+ ", Item ID: " + itemId + "\n";
+
+						if (itemListBuilder.get().length() + itemDetails.length() >= 1800) {
+							if (isFirstPart) {
+								itemListBuilder.get().append("\np1");
+								isFirstPart = false;
+							} else {
+								itemListBuilder.get().append("\np2");
+							}
+							itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
+							customWebhookBody.setContent(itemListBuilder.toString());
+							sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+
+							itemListBuilder.set(new StringBuilder());
+							itemListBuilder.get().append(isFirstPart ? "\np1\n\n" : "\np2\n\n").append(getLocalPlayerName()).append(" received a PvP kill:\n");
+						}
+
+						itemListBuilder.get().append(itemDetails);
+					}
+
+					finalValue.set(totalValue);
+					itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
+					customWebhookBody.setContent(itemListBuilder.toString());
+					sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+				}
 			});
-			sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+			if (!customWebhookBody.getEmbeds().isEmpty()) {
+				sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+			}
 //		} else {
 //			for (ItemStack item : stack(items)) {
 //				int itemId = item.getId();
@@ -409,7 +450,7 @@ public class DropTrackerPlugin extends Plugin {
 //
 //			}
 //		}
-	}
+	} // removal of api sends
 
 	public String getLocalPlayerName() {
 		if (client.getLocalPlayer() != null) {

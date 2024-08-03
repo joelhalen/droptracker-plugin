@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 public class DropTrackerApi {
     private final DropTrackerConfig config;
@@ -80,7 +79,7 @@ public class DropTrackerApi {
         }
 
         String serverId = config.serverId();
-        String authKey = config.authKey();
+        String userToken = config.token();
         String playerName;
         if (client.getLocalPlayer() != null) {
             try {
@@ -95,7 +94,7 @@ public class DropTrackerApi {
             Map<String, Object> data = new HashMap<>();
             data.put("player_name", playerName);
             data.put("server_id", serverId);
-            data.put("auth_token", authKey);
+            data.put("auth_token", userToken);
             String json = gson.toJson(data);
 
             RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
@@ -129,103 +128,6 @@ public class DropTrackerApi {
                 }
             });
         }
-//    public CompletableFuture<Void> sendDropData(String playerName, String dropType, String npcName, int itemId, String itemName, int quantity, int geValue, String authKey, String imageUrl) {
-//            HttpUrl url = HttpUrl.parse(getApiUrl() + "api/drops/submit");
-//            String serverId = config.serverId();
-//            String notified_str = "1";
-//            String formDropType = dropType.equals("player") ? "pvp" : "normal";
-//            FormBody.Builder formBuilder = new FormBody.Builder()
-//                    .add("drop_type", formDropType)
-//                    .add("auth_token", authKey)
-//                    .add("item_name", itemName)
-//                    .add("item_id", String.valueOf(itemId))
-//                    .add("player_name", playerName);
-//                    formBuilder.add("server_id", serverId)
-//                    .add("quantity", String.valueOf(quantity))
-//                    .add("value", String.valueOf(geValue))
-//                    .add("nonmember", "0")
-//                    .add("member_list", "")
-//                    .add("image_url", imageUrl)
-//                    .add("npc_name", npcName)
-//                    .add("webhook", config.webhookUrl())
-//                    .add("webhookValue", String.valueOf(config.webhookMinValue()))
-//                    .add("sheet", config.sheetID())
-//                    .add("notified", notified_str);
-//            Request request = new Request.Builder()
-//                    .url(url)
-//                    .header("Content-Type", "application/x-www-form-urlencoded")
-//                    .post(formBuilder.build())
-//                    .build();
-//        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-//            httpClient.newCall(request).enqueue(new Callback() {
-//                @Override
-//                public void onFailure(Call call, IOException e) {
-//                    e.printStackTrace();
-//                }
-//
-//                @Override
-//                public void onResponse(Call call, Response response) throws IOException {
-//                    if (!response.isSuccessful()) {
-//                    }
-//                    response.close();
-//                }
-//            });
-//        });
-//        return future;
-//    }
-//    public CompletableFuture<Void> sendExtra(String key, String extraData) {
-//
-//        HttpUrl url = HttpUrl.parse(getApiUrl() + "api/extra");
-//        FormBody.Builder formBuilder = new FormBody.Builder()
-//                .add(key, extraData);
-//        Request request = new Request.Builder()
-//                .url(url)
-//                .header("Content-Type", "application/x-www-form-urlencoded")
-//                .post(formBuilder.build())
-//                .build();
-//        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-//            httpClient.newCall(request).enqueue(new Callback() {
-//                @Override
-//                public void onFailure(Call call, IOException e) {
-//                    e.printStackTrace();
-//                }
-//
-//                @Override
-//                public void onResponse(Call call, Response response) throws IOException {
-//                    if (!response.isSuccessful()) {
-//                    }
-//                    response.close();
-//                }
-//            });
-//        });
-//        return future;
-//    }    public CompletableFuture<Void> sendExtra(String key, String extraData) {
-//
-//        HttpUrl url = HttpUrl.parse(getApiUrl() + "api/extra");
-//        FormBody.Builder formBuilder = new FormBody.Builder()
-//                .add(key, extraData);
-//        Request request = new Request.Builder()
-//                .url(url)
-//                .header("Content-Type", "application/x-www-form-urlencoded")
-//                .post(formBuilder.build())
-//                .build();
-//        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-//            httpClient.newCall(request).enqueue(new Callback() {
-//                @Override
-//                public void onFailure(Call call, IOException e) {
-//                    e.printStackTrace();
-//                }
-//
-//                @Override
-//                public void onResponse(Call call, Response response) throws IOException {
-//                    if (!response.isSuccessful()) {
-//                    }
-//                    response.close();
-//                }
-//            });
-//        });
-//        return future;
-//    }
     public static String formatNumber(double number) {
         if (number == 0) {
             return "0";

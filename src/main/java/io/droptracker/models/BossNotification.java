@@ -26,6 +26,8 @@ public class BossNotification {
     String gameMessage;
     @JsonAdapter(DurationAdapter.class)
     Duration time;
+    @JsonAdapter(DurationAdapter.class)
+    Duration bestTime;
     @Accessors(fluent = true)
     Boolean isPersonalBest;
 }
