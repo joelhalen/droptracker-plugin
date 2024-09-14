@@ -118,6 +118,10 @@ public class ChatMessageEvent {
     private final AtomicInteger badTicks = new AtomicInteger();
     private final AtomicReference<BossNotification> bossData = new AtomicReference<>();
 
+    private static Pair<String, Integer> mostRecentNpcData = null;
+
+    private static Integer ticksSinceNpcDataUpdate = 0;
+
     @Varbit
     public static final int KILL_COUNT_SPAM_FILTER = 4930;
 
@@ -185,6 +189,13 @@ public class ChatMessageEvent {
                 reset();
             } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
+            }
+        }
+        if (mostRecentNpcData != null) {
+            ticksSinceNpcDataUpdate += 1;
+        } else {
+            if (ticksSinceNpcDataUpdate > 1)  {
+                ticksSinceNpcDataUpdate = 0;
             }
         }
         if (cumulativeUnlockPoints.size() < CUM_POINTS_VARBIT_BY_TIER.size())
@@ -263,31 +274,17 @@ public class ChatMessageEvent {
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
         String player = plugin.getLocalPlayerName();
         String time = formatTime(data.getTime(), isPreciseTiming(client));
+        String bestTime = formatTime(data.getBestTime(), isPreciseTiming(client));
         CustomWebhookBody.Embed killEmbed = null;
         CustomWebhookBody killWebhook = new CustomWebhookBody();
         killEmbed = new CustomWebhookBody.Embed();
-        Integer npcId = null;
-
-        if (ba) {
-            npcId = NpcID.PENANCE_QUEEN;
-            killEmbed.setImage(ItemUtilities.getNpcImageUrl(npcId));
-        } else {
-            Optional<NPC> npcOptional = Arrays.stream(client.getCachedNPCs())
-                    .filter(Objects::nonNull)
-                    .filter(npc -> data.getBoss().equalsIgnoreCase(npc.getName()))
-                    .findAny();
-
-            if (npcOptional.isPresent()) {
-                NPC npc = npcOptional.get();
-                npcId = npc.getId();
-                killEmbed.setImage(ItemUtilities.getNpcImageUrl(npcId));
-            }
-        }
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
-        killEmbed.addField("npc_id", npcId.toString(), true);
+        killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
+        //killEmbed.addField("npc_id", npcId.toString(), true);
         killEmbed.addField("kill_time", time, true);
+        killEmbed.addField("best_time", bestTime, true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
 
         killWebhook.getEmbeds().add(killEmbed);
@@ -330,21 +327,46 @@ public class ChatMessageEvent {
                 ));
     }
 
-    private static Optional<BossNotification> parseBossKill(String message) {
+    private Optional<BossNotification> parseBossKill(String message) {
+        System.out.println("Got parseBossKill call");
         Optional<Pair<String, Integer>> boss = parseBoss(message);
+        System.out.println("boss: " + boss);
         if (!boss.isPresent()) {
-            return boss.map(pair -> new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null));
+            System.out.println("boss is not present");
+            parseKillTime(message);
         }
-        return parseKillTime(message).map(t -> new BossNotification(null, null, message, t.getLeft(), t.getMiddle(), t.getRight()));
+        Optional<Object> tempBossData = boss.map(pair -> {
+            // Create a new BossNotification object
+            BossNotification notification = new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null);
+            // Put pair.getLeft() and pair.getRight() into the mostRecentNpcData map
+            mostRecentNpcData = Pair.of(pair.getLeft(), pair.getRight());
+            return notification;
+        });
+
+        System.out.println("boss pair" + boss);
+        if (mostRecentNpcData != null && ticksSinceNpcDataUpdate < 2) {
+            String npcName = mostRecentNpcData.getKey();
+            return parseKillTime(message).map(t -> new BossNotification(mostRecentNpcData.getKey(), mostRecentNpcData.getValue(), message, t.getLeft(), t.getMiddle(), t.getRight()));
+        }
+        return Optional.empty();
     }
     private static Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
+        System.out.println("ParseKillTime" + message);
         Matcher matcher = TIME_REGEX.matcher(message);
+        // private static final Pattern TIME_REGEX = Pattern.compile(
+        //        "(?:Duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
+        //        Pattern.CASE_INSENSITIVE
+        // );
+        System.out.println("Matcher" + matcher);
         if (matcher.find()) {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
             boolean pb = message.toLowerCase().contains("(new personal best)");
+            System.out.println("found time: " + duration + " best time: " + bestTime + " is best? " + pb);
             return Optional.of(Triple.of(duration, bestTime, pb));
         }
+
+        System.out.println("Returning empty...");
         return Optional.empty();
     }
 
@@ -385,6 +407,7 @@ public class ChatMessageEvent {
             String value = secondary.group("value");
             return result(key, value);
         }
+        System.out.println("Returning empty on parseBoss...");
         return Optional.empty();
     }
 
