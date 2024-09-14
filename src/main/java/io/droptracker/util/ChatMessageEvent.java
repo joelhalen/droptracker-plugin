@@ -272,6 +272,7 @@ public class ChatMessageEvent {
             return;
         boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
+        System.out.println("processKill...");
         String player = plugin.getLocalPlayerName();
         String time = formatTime(data.getTime(), isPreciseTiming(client));
         String bestTime = formatTime(data.getBestTime(), isPreciseTiming(client));
@@ -328,11 +329,11 @@ public class ChatMessageEvent {
     }
 
     private Optional<BossNotification> parseBossKill(String message) {
-        System.out.println("Got parseBossKill call");
+        //System.out.println("Got parseBossKill call");
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-        System.out.println("boss: " + boss);
+        //System.out.println("boss: " + boss);
         if (!boss.isPresent()) {
-            System.out.println("boss is not present");
+            //System.out.println("boss is not present");
             parseKillTime(message);
         }
         Optional<Object> tempBossData = boss.map(pair -> {
@@ -343,7 +344,7 @@ public class ChatMessageEvent {
             return notification;
         });
 
-        System.out.println("boss pair" + boss);
+        //System.out.println("boss pair" + boss);
         if (mostRecentNpcData != null && ticksSinceNpcDataUpdate < 2) {
             String npcName = mostRecentNpcData.getKey();
             return parseKillTime(message).map(t -> new BossNotification(mostRecentNpcData.getKey(), mostRecentNpcData.getValue(), message, t.getLeft(), t.getMiddle(), t.getRight()));
@@ -357,7 +358,7 @@ public class ChatMessageEvent {
         //        "(?:Duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
         //        Pattern.CASE_INSENSITIVE
         // );
-        System.out.println("Matcher" + matcher);
+        //System.out.println("Matcher" + matcher);
         if (matcher.find()) {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;

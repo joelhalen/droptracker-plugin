@@ -352,9 +352,9 @@ public class DropTrackerPlugin extends Plugin {
 			AtomicReference<StringBuilder> itemListBuilder = new AtomicReference<>(new StringBuilder());
 			clientThread.invokeLater(() -> {
 				if (sourceType != "pvp") {
-					System.out.println("Not pvp");
+					//System.out.println("Not pvp");
 					for (ItemStack item : stack(items)) {
-						System.out.println("For item");
+						//System.out.println("For item");
 						int itemId = item.getId();
 						int qty = item.getQuantity();
 						int price = itemManager.getItemPrice(itemId);
