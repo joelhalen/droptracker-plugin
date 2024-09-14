@@ -200,6 +200,9 @@ public class ChatMessageEvent {
         }
         if (cumulativeUnlockPoints.size() < CUM_POINTS_VARBIT_BY_TIER.size())
             initThresholds();
+        if (ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
+            mostRecentNpcData = null;
+        }
     }
     private void processCollection(String itemName) {
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
@@ -291,6 +294,7 @@ public class ChatMessageEvent {
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         // Call webhook or whatever method to send the notification
+        mostRecentNpcData = null;
     }
 
     private void updateData(BossNotification updated) {
@@ -352,13 +356,7 @@ public class ChatMessageEvent {
         return Optional.empty();
     }
     private static Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
-        System.out.println("ParseKillTime" + message);
         Matcher matcher = TIME_REGEX.matcher(message);
-        // private static final Pattern TIME_REGEX = Pattern.compile(
-        //        "(?:Duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
-        //        Pattern.CASE_INSENSITIVE
-        // );
-        //System.out.println("Matcher" + matcher);
         if (matcher.find()) {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
