@@ -365,8 +365,10 @@ public class DropTrackerPlugin extends Plugin {
 						finalValue.set(qty * price);
 						CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
 						itemEmbed.setImage(itemImageUrl(itemId));
+						String accountHash = String.valueOf(client.getAccountHash());
 						itemEmbed.addField("type", "drop", true);
 						itemEmbed.addField("source_type", sourceType, true);
+						itemEmbed.addField("", accountHash, true);
 						itemEmbed.addField("item", itemComposition.getName(), true);
 						itemEmbed.addField("player", getLocalPlayerName(), true);
 						itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
