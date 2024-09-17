@@ -1,4 +1,4 @@
-package com.example;
+package io.droptracker;
 
 import io.droptracker.DropTrackerPlugin;
 import net.runelite.client.RuneLite;

@@ -16,6 +16,8 @@ import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public class DropTrackerApi {
     private final DropTrackerConfig config;
@@ -31,7 +33,6 @@ public class DropTrackerApi {
 
     @Inject
     public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient, Client client) {
-        super();
         this.config = config;
         this.msgManager = chatMessageManager;
         this.gson = gson;
@@ -42,18 +43,58 @@ public class DropTrackerApi {
     public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
         this.dataLoadedCallback = callback;
     }
-    public interface PanelDataLoadedCallback {
-        void onDataLoaded(Map<String, Object> data);
+
+    /**
+     * Sends a request to the API to look up a player’s data and returns a CompletionStage for async handling.
+     */
+    public CompletionStage<Map<String, Object>> lookupPlayer(String playerName) {
+        CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
+
+        // Check if the API is enabled
+        if (!config.useApi()) {
+            future.completeExceptionally(new IllegalStateException("API is not enabled in the plugin config"));
+            return future;
+        }
+
+        String apiUrl = getApiUrl();
+        HttpUrl url = HttpUrl.parse(apiUrl + "/player_lookup/" + playerName);
+
+        if (url == null) {
+            future.completeExceptionally(new IllegalArgumentException("Invalid URL"));
+            return future;
+        }
+
+        Request request = new Request.Builder().url(url).build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                future.completeExceptionally(e);
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        future.completeExceptionally(new IOException("Unexpected code " + response));
+                        return;
+                    }
+
+                    String responseData = responseBody.string();
+                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+                    future.complete(responseMap);
+                }
+            }
+        });
+
+        return future;
     }
 
-    public String getApiUrl() {
-        if (config.useApi()) {
-            return "http://www.droptracker.io:21220/";
-        }
-        else {
-            return "";
-        }
-    }
+    /**
+     * Loads panel data by sending a request to the API and invokes the callback with the loaded data.
+     * If the API is disabled, it sends a message in the chat and does nothing.
+     */
     public void loadPanelData(boolean forced) {
         if (!config.useApi()) {
             if (forced) {
@@ -72,62 +113,60 @@ public class DropTrackerApi {
         }
 
         String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/api/client_data");
+        HttpUrl url = HttpUrl.parse(apiUrl + "/panel_data");  // Example endpoint for panel data
 
         if (url == null) {
             return;
         }
 
-        String serverId = config.serverId();
-        String userToken = config.token();
-        String playerName;
-        if (client.getLocalPlayer() != null) {
-            try {
-                playerName = client.getLocalPlayer().getName();
-            } catch (NullPointerException e) {
-                playerName = "Unknown";
+        String playerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Unknown";
+        Map<String, Object> data = new HashMap<>();
+        data.put("player_name", playerName);
+
+        String json = gson.toJson(data);
+        RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+                SwingUtilities.invokeLater(() -> {
+                });
             }
-        } else {
-            playerName = "Unknown";
-        }
 
-            Map<String, Object> data = new HashMap<>();
-            data.put("player_name", playerName);
-            data.put("server_id", serverId);
-            data.put("auth_token", userToken);
-            String json = gson.toJson(data);
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (ResponseBody responseBody = response.body()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Unexpected code " + response);
+                    }
 
-            RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
+                    String responseData = responseBody.string();
+                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
 
-            Request request = new Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build();
-
-            httpClient.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    e.printStackTrace();
                     SwingUtilities.invokeLater(() -> {
+                        if (dataLoadedCallback != null) {
+                            dataLoadedCallback.onDataLoaded(responseMap);
+                        }
                     });
                 }
+            }
+        });
+    }
 
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    try (ResponseBody responseBody = response.body()) {
-                        if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
-                        String responseData = responseBody.string();
-                        Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+    public String getApiUrl() {
+        return config.useApi() ? "http://new.droptracker.io:8080/api" : "";
+    }
 
-                        SwingUtilities.invokeLater(() -> {
-                            if (dataLoadedCallback != null) {
-                                dataLoadedCallback.onDataLoaded(responseMap);
-                            }
-                        });
-                    }
-                }
-            });
-        }
+    public interface PanelDataLoadedCallback {
+        void onDataLoaded(Map<String, Object> data);
+    }
+
     public static String formatNumber(double number) {
         if (number == 0) {
             return "0";
@@ -142,5 +181,4 @@ public class DropTrackerApi {
         String formattedNum = df.format(num);
         return formattedNum + units[unit];
     }
-
 }

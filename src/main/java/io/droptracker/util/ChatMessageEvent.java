@@ -227,6 +227,9 @@ public class ChatMessageEvent {
         collEmbed.addField("rarity", String.valueOf(itemRarity),true);
         collEmbed.addField("item_id", String.valueOf(itemId),true);
         collEmbed.addField("player", client.getLocalPlayer().getName(), true);
+        collEmbed.addField("slots", total + "/" + completed, true);
+        String accountHash = String.valueOf(client.getAccountHash());
+        collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
 
         plugin.sendDropTrackerWebhook(collectionLogBody, "2");
@@ -264,6 +267,8 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
+            String accountHash = String.valueOf(client.getAccountHash());
+            combatAchievementEmbed.addField("acc_hash", accountHash, true);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
             plugin.sendDropTrackerWebhook(combatWebhook, "3");
         });
@@ -275,13 +280,13 @@ public class ChatMessageEvent {
             return;
         boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
-        System.out.println("processKill...");
         String player = plugin.getLocalPlayerName();
         String time = formatTime(data.getTime(), isPreciseTiming(client));
         String bestTime = formatTime(data.getBestTime(), isPreciseTiming(client));
         CustomWebhookBody.Embed killEmbed = null;
         CustomWebhookBody killWebhook = new CustomWebhookBody();
         killEmbed = new CustomWebhookBody.Embed();
+        // TODO -- take a screenshot here
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
@@ -290,10 +295,11 @@ public class ChatMessageEvent {
         killEmbed.addField("kill_time", time, true);
         killEmbed.addField("best_time", bestTime, true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
+        String accountHash = String.valueOf(client.getAccountHash());
+        killEmbed.addField("acc_hash", accountHash, true);
 
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
-        // Call webhook or whatever method to send the notification
         mostRecentNpcData = null;
     }
 
@@ -333,22 +339,17 @@ public class ChatMessageEvent {
     }
 
     private Optional<BossNotification> parseBossKill(String message) {
-        //System.out.println("Got parseBossKill call");
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-        //System.out.println("boss: " + boss);
         if (!boss.isPresent()) {
-            //System.out.println("boss is not present");
             parseKillTime(message);
         }
         Optional<Object> tempBossData = boss.map(pair -> {
-            // Create a new BossNotification object
             BossNotification notification = new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null);
-            // Put pair.getLeft() and pair.getRight() into the mostRecentNpcData map
+
             mostRecentNpcData = Pair.of(pair.getLeft(), pair.getRight());
             return notification;
         });
 
-        //System.out.println("boss pair" + boss);
         if (mostRecentNpcData != null && ticksSinceNpcDataUpdate < 2) {
             String npcName = mostRecentNpcData.getKey();
             return parseKillTime(message).map(t -> new BossNotification(mostRecentNpcData.getKey(), mostRecentNpcData.getValue(), message, t.getLeft(), t.getMiddle(), t.getRight()));
@@ -361,11 +362,9 @@ public class ChatMessageEvent {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
             boolean pb = message.toLowerCase().contains("(new personal best)");
-            System.out.println("found time: " + duration + " best time: " + bestTime + " is best? " + pb);
             return Optional.of(Triple.of(duration, bestTime, pb));
         }
 
-        System.out.println("Returning empty...");
         return Optional.empty();
     }
 
@@ -406,7 +405,6 @@ public class ChatMessageEvent {
             String value = secondary.group("value");
             return result(key, value);
         }
-        System.out.println("Returning empty on parseBoss...");
         return Optional.empty();
     }
 
@@ -493,7 +491,6 @@ public class ChatMessageEvent {
         });
     }
     static {
-        // noinspection UnstableApiUsage (builderWithExpectedSize is no longer @Beta in snapshot guava)
         CUM_POINTS_VARBIT_BY_TIER = ImmutableMap.<CombatAchievement, Integer>builderWithExpectedSize(6)
                 .put(CombatAchievement.EASY, 4132) // 33 = 33 * 1
                 .put(CombatAchievement.MEDIUM, 10660) // 115 = 33 + 41 * 2

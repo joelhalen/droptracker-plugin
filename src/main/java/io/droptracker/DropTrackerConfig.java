@@ -67,24 +67,27 @@ public interface DropTrackerConfig extends Config
 			section = screenshotSection
 	)
 	default boolean screenshotCAs() { return true; }
+	/* PvP is pretty much completely ignored by the server
 	@ConfigItem(
+
 			keyName = "screenshotPKs",
 			name = "Player vs Player",
 			description = "Do you want a screenshot to be sent\n" +
 					"when you kill another player?",
 			position = 4,
 			section = screenshotSection
-	)
+	)*/
 	default boolean screenshotPKs() { return true; }
-	@ConfigItem(
-			keyName = "screenshotPets",
-			name = "Pets",
-			description = "Do you want a screenshot to be sent\n" +
-					"when you acquire a new pet?",
-			position = 5,
-			section = screenshotSection
-	)
-	default boolean screenshotPets() { return true; }
+	/* We are only going to focus on pets that are new collection log slots, for now... */
+//	@ConfigItem(
+//			keyName = "screenshotPets",
+//			name = "Pets",
+//			description = "Do you want a screenshot to be sent\n" +
+//					"when you acquire a new pet?",
+//			position = 5,
+//			section = screenshotSection
+//	)
+//	default boolean screenshotPets() { return true; }
 	@ConfigItem(
 			name = "Receive Reminders",
 			keyName = "sendReminders",
@@ -94,7 +97,7 @@ public interface DropTrackerConfig extends Config
 	default boolean sendReminders() { return false; }
 	@ConfigItem(
 			name = "Show Side Panel",
-			keyName = "sidePanel",
+			keyName = "showSidePanel",
 			description = "<html>Do you want to render the <br>side-panel for events, etc?<br>" +
 					"<b>Note</b>: Requires the API to be enabled.</html>",
 			position = 2
@@ -114,81 +117,19 @@ public interface DropTrackerConfig extends Config
 					"<b>Note</b>: The API is currently <b>required</b> for participation in events!",
 			position = -1,
 			section = apiSection,
-			warning = "<html><b>WARNING</b>: Enabling API Connections will send external connections<br>to a server" +
-					"that can not be verified by the RuneLite Developers.<br>" +
+			warning = "<html><b>WARNING</b>: Enabling this feature will send external<br>connections" +
+					"to the DropTracker server, which" +
+					"can not<br> be verified by the RuneLite Developers.<br>" +
 					"<b>Are you sure that you want to enable external connections?</b><br></html>"
 	)
 	default boolean useApi() { return false; }
 	@ConfigItem(
-			name="Server ID",
-			keyName = "serverID",
-			description = "Enter your DropTracker server ID here.<br/>" +
-					"Visit the Loot Leaderboard channel in your clan's discord to retrieve this ID.<br />" +
-					"Join our Discord for help: discord.gg/droptracker",
-			position = 0,
-			section = apiSection
-	)
-	default String serverId() { return ""; }
-	@ConfigItem(
 			name = "Token",
 			keyName = "authKey",
-			description = "Enter your token (/token on discord) here<br />to authenticate your submissions, if you have one.",
+			description = "Enter your token (/token on discord) here<br />to authenticate your submissions, if you have an account.",
 			position = 1,
 			section = apiSection,
 			secret = true
 	)
 	default String token() { return ""; }
-
-	@ConfigItem(
-			name = "Track Account Data",
-			keyName = "trackAccData",
-			description = "Store information about your account like your log " +
-					"<br />slots and personal bests in our database.",
-			position = 4,
-			section = apiSection
-	)
-	default boolean trackAccData() { return true; }
-	@ConfigItem(
-			name = "Drop Confirmation Messages",
-			keyName = "chatMessages",
-			description = "Do you want to receive confirmation chat messages for submitted drops?",
-			position = 5,
-			section = apiSection
-	)
-	default boolean chatMessages() { return true; }
-	@ConfigSection(
-			name = "Personal Settings",
-			description = "We allow any user to use our Google Sheets and Discord Webhook integration<br />" +
-					"To learn more, visit our Discord.",
-			position=3,
-			closedByDefault = true
-	)
-			String personalSection = "Personal Config";
-	@ConfigItem(
-			keyName = "webhook",
-			name = "Custom Webhook",
-			description = "If you want to specify your own custom webhook URL to send your drops, you can do so here",
-			section = personalSection,
-			position = 1
-	)
-	default String webhookUrl() { return ""; };
-	@ConfigItem(
-			keyName = "webhookValue",
-			name = "Webhook Value",
-			description = "Drops exceeding this value will<br />" +
-					"be sent to the Discord Webhook URL provided above",
-			section = personalSection,
-			position = 1
-	)
-	default int minWebhookValue() { return 250000; }
-
-	@ConfigItem(
-			keyName = "sheet",
-			name = "Google Spreadsheet",
-			description = "If you want your drops to also be inserted into a Google Sheet, enter the <b>SHEET ID</b> here.<br/>" +
-					"Join our Discord for help.",
-			section = personalSection,
-			position = 3
-	)
-	default String sheetID() { return ""; };
 }
