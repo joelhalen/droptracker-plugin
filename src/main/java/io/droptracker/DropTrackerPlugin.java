@@ -219,6 +219,7 @@ public class DropTrackerPlugin extends Plugin {
 			panel.deinit();
 			panel = null;
 		}
+		executor.shutdown();
 	}
 
 	@Provides
@@ -368,7 +369,7 @@ public class DropTrackerPlugin extends Plugin {
 						String accountHash = String.valueOf(client.getAccountHash());
 						itemEmbed.addField("type", "drop", true);
 						itemEmbed.addField("source_type", sourceType, true);
-						itemEmbed.addField("", accountHash, true);
+						itemEmbed.addField("acc_hash", accountHash, true);
 						itemEmbed.addField("item", itemComposition.getName(), true);
 						itemEmbed.addField("player", getLocalPlayerName(), true);
 						itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
@@ -449,7 +450,7 @@ public class DropTrackerPlugin extends Plugin {
 				for (CustomWebhookBody.Embed embed : embeds) {
 					for (CustomWebhookBody.Field field : embed.getFields()) {
 						if (field.getName().equalsIgnoreCase("is_pb")) {
-							if (field.getValue().equalsIgnoreCase("false")) {
+							if (field.getValue().equalsIgnoreCase("true")) {
 								requiredScreenshot = true;
 							}
 						}
@@ -480,8 +481,7 @@ public class DropTrackerPlugin extends Plugin {
 				sendDropTrackerWebhook(webhook, imageBytes);
 			});
 		} else {
-			byte[] screenshot = null;
-			sendDropTrackerWebhook(webhook, screenshot);
+			sendDropTrackerWebhook(webhook, (byte[]) null);
 		}
 	}
 
@@ -489,20 +489,22 @@ public class DropTrackerPlugin extends Plugin {
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		// Handles sending drops exclusively
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
+
 			drawManager.requestNextFrameListener(image ->
 			{
 				BufferedImage bufferedImage = (BufferedImage) image;
-				byte[] imageBytes = null;
-				try {
-					imageBytes = convertImageToByteArray(bufferedImage);
-				} catch (IOException e) {
-					log.error("Error converting image to byte array", e);
-				}
-				sendDropTrackerWebhook(customWebhookBody, imageBytes);
+				executor.submit(() -> {
+					byte[] imageBytes = null;
+					try {
+						imageBytes = convertImageToByteArray(bufferedImage);
+					} catch (IOException e) {
+						log.error("Error converting image to byte array", e);
+					}
+					sendDropTrackerWebhook(customWebhookBody, imageBytes);
+				});
 			});
 		} else {
-			byte[] screenshot = null;
-			sendDropTrackerWebhook(customWebhookBody, screenshot);
+			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
@@ -595,63 +597,4 @@ public class DropTrackerPlugin extends Plugin {
 
 		return list;
 	}
-	public boolean isFakeWorld() {
-		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			return !client.getWorldType().contains(WorldType.SEASONAL) && !client.getWorldType().contains(WorldType.DEADMAN);
-		} else {
-			return true;
-		}
-	}
-//	public CompletableFuture<String> getApiScreenshot(String playerName, int itemId, String npcName) {
-//		String newItemId = String.valueOf(itemId);
-//		return getApiScreenshot(playerName, newItemId, npcName);
-//	}
-//	public CompletableFuture<String> getApiScreenshot(String playerName, String itemId, String npcName) {
-//		log.debug("getApiScreenshot called");
-//		CompletableFuture<String> future = new CompletableFuture<>();
-//		if (config.useApi() && config.screenshotDrops()) {
-//			drawManager.requestNextFrameListener(image -> {
-//				try {
-//					ItemComposition itemComp = itemManager.getItemComposition(Integer.parseInt(itemId));
-//					String itemName = itemComp.getName();
-//					ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-//					ImageIO.write((RenderedImage) image, "png", byteArrayOutputStream);
-//					byte[] imageData = byteArrayOutputStream.toByteArray();
-//					String apiBase;
-//					apiBase = api.getApiUrl();
-//					String serverName;
-//					RequestBody requestBody = new MultipartBody.Builder()
-//							.setType(MultipartBody.FORM)
-//							.addFormDataPart("file", itemName + ".png",
-//									RequestBody.create(MediaType.parse("image/png"), imageData))
-//							.addFormDataPart("server_id", serverId)
-//							.addFormDataPart("player_name", playerName)
-//							.addFormDataPart("npc", npcName)
-//							.build();
-//					executor.submit(() -> {
-//
-//						Request request = new Request.Builder()
-//								.url(apiBase + "/api/upload_image")
-//								.post(requestBody)
-//								.build();
-//						try (Response response = httpClient.newCall(request).execute()) {
-//							if (!response.isSuccessful()) {
-//								throw new IOException("Unexpected response code: " + response);
-//							}
-//
-//							String responseBody = response.body().string();
-//							future.complete(responseBody.trim());
-//						} catch (IOException e) {
-//							future.completeExceptionally(e);
-//						}
-//					});
-//				} catch (IOException e) {
-//					throw new RuntimeException(e);
-//				}
-//
-//			});
-//			return future;
-//		}
-//		return future;
-//	}
 }
