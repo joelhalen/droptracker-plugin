@@ -88,11 +88,12 @@ public class BossPanel extends JPanel {
         // Re-add the updated table to the panel
         JScrollPane scrollPane = new JScrollPane(bossTable);
         if (rowData.length > 0) {
-            int height = Math.min(bossTable.getRowHeight() * rowData.length, 200); // Limit the height
+            int height = Math.min(bossTable.getRowHeight() * rowData.length, 400); // Limit the height
             scrollPane.setPreferredSize(new Dimension(scrollPane.getPreferredSize().width, height));
         }
         add(scrollPane, BorderLayout.CENTER);
-
+        Dimension preferredSize = new Dimension(220, 100);
+        setPreferredSize(preferredSize);
         // Revalidate and repaint the panel to trigger a layout update
         revalidate();
         repaint();
