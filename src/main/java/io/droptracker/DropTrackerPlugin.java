@@ -489,7 +489,7 @@ public class DropTrackerPlugin extends Plugin {
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		// Handles sending drops exclusively
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
-			executor.submit(() -> {
+
 				drawManager.requestNextFrameListener(image ->
 				{
 					BufferedImage bufferedImage = (BufferedImage) image;
@@ -501,7 +501,7 @@ public class DropTrackerPlugin extends Plugin {
 							log.error("Error converting image to byte array", e);
 						}
 						sendDropTrackerWebhook(customWebhookBody, imageBytes);
-					});
+
 			});
 		} else {
 			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
