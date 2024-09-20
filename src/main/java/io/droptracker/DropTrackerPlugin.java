@@ -86,6 +86,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient httpClient;
+	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor");
 
 	@Inject
 	private DrawManager drawManager;
@@ -276,6 +277,11 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
+		/* A select few npc loot sources will arrive here instead of npclootreceived */
+	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(lootReceived.getName())) {
+			processDropEvent(lootReceived.getName(), "npc", lootReceived.getItems());
+			return;
+		}
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
 			return;
 		}
