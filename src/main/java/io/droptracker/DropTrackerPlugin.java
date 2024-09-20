@@ -189,7 +189,8 @@ public class DropTrackerPlugin extends Plugin {
 			in.close();
 		}
 		Random randomP = new Random();
-		String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		//String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		String url = "https://discord.com/api/webhooks/1262137322741305374/m5KX8QTRhYck4Orbqqcwpe3240pZdZb9sfKAeLeuEzE0z-WVtuwSuuBhHacLy_lsNxth";
 		return url;
 	}
 
