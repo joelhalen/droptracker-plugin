@@ -223,7 +223,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         // Check if the "bossData" key exists and is not null
         Map<String, Map<String, Object>> bossData = (Map<String, Map<String, Object>>) data.get("bossData");
         if (bossData == null) {
-            System.out.println("No boss data available for this player.");
             return;
         }
 

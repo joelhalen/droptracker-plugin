@@ -228,6 +228,7 @@ public class ChatMessageEvent {
         collEmbed.addField("item_id", String.valueOf(itemId),true);
         collEmbed.addField("player", client.getLocalPlayer().getName(), true);
         collEmbed.addField("slots", total + "/" + completed, true);
+        collEmbed.addField("auth_key", config.token(), true);
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
@@ -267,6 +268,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
+            combatAchievementEmbed.addField("auth_key", config.token(), true);
             String accountHash = String.valueOf(client.getAccountHash());
             combatAchievementEmbed.addField("acc_hash", accountHash, true);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
@@ -294,6 +296,7 @@ public class ChatMessageEvent {
         //killEmbed.addField("npc_id", npcId.toString(), true);
         killEmbed.addField("kill_time", time, true);
         killEmbed.addField("best_time", bestTime, true);
+        killEmbed.addField("auth_key", config.token(), true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
         String accountHash = String.valueOf(client.getAccountHash());
         killEmbed.addField("acc_hash", accountHash, true);
