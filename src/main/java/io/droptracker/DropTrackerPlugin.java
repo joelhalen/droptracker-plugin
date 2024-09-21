@@ -238,7 +238,14 @@ public class DropTrackerPlugin extends Plugin {
 					clientToolbar.removeNavigation(navButton);
 				}
 				createSidePanel();
-				panel.refreshData();
+				// panel.refreshData();
+				if (client.getAccountHash() != -1) {
+					try {
+						api.lookupPlayer(client.getLocalPlayer().getName());
+					} catch (Exception e) {
+						System.out.println("Couldn't lookup the current player in the database:" + e);
+					}
+				}
 				panel.repaint();
 				panel.revalidate();
 			} else if (configChanged.getKey().equals("showSidePanel")) {

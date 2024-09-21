@@ -37,7 +37,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
     private final BossPanel bossPanel;
     @Inject
     private EventBus eventBus;
-    private boolean isRefreshing = false;
+
 
     @Inject
     public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
@@ -55,7 +55,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         setBackground(ColorScheme.DARK_GRAY_COLOR);
         setBorder(new EmptyBorder(10, 10, 10, 10));
 
-        // Logo and refresh button panel
+
         JPanel logoPanel = new JPanel(new BorderLayout());
         JLabel logoLabel = new JLabel(TOP_LOGO);
         logoLabel.setHorizontalAlignment(SwingConstants.CENTER); // Center the logo
@@ -117,10 +117,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         actionsContainer.add(buildRoundedPanel("Docs", "https://www.droptracker.io/docs"));
         add(actionsContainer, BorderLayout.SOUTH);
 
-        // If API is enabled, load the data
+
         if (config.useApi()) {
             this.api.setDataLoadedCallback(this);
-            api.loadPanelData(false);
         }
 
         revalidate();
@@ -210,12 +209,40 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         SwingUtilities.invokeLater(() -> {
             if (ex != null || result == null) {
                 searchBar.setIcon(IconTextField.Icon.ERROR);
+                JLabel errorMessage = new JLabel("An error occurred: " + ex.getMessage());
+                bossPanel.add(errorMessage, BorderLayout.CENTER);
+                mainContentPanel.add(bossPanel);
+                revalidate();
+                repaint();
                 return;
             }
+
             searchBar.setIcon(IconTextField.Icon.SEARCH);
-            applySearchResult(result);
+            System.out.println("Got response:" + result);
+
+            String message = (String) result.get("message");
+            if (result.get("bossData") != null) {
+                System.out.println("Boss data is not null");
+                applySearchResult(result);
+                return;
+            }
+
+            // If there is a message from the server, display it
+            JLabel errorMessage;
+            if (message != null) {
+                errorMessage = new JLabel(message);
+            } else {
+                errorMessage = new JLabel("Couldn't search for this player...");
+            }
+
+            bossPanel.removeAll();  // Clear previous content
+            bossPanel.add(errorMessage, BorderLayout.CENTER);
+            mainContentPanel.add(bossPanel);
+            revalidate();
+            repaint();
         });
     }
+
 
     private void applySearchResult(Map<String, Object> data) {
         mainContentPanel.remove(bossPanel);  // Clear previous content if necessary
@@ -249,10 +276,5 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         applySearchResult(data);
     }
 
-    public void refreshData() {
-        if (!config.useApi()) {
-            return;
-        }
-        this.api.loadPanelData(true);
-    }
+
 }

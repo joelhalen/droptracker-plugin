@@ -76,13 +76,16 @@ public class DropTrackerApi {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
+                    String responseData = responseBody.string();
+                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+
                     if (!response.isSuccessful()) {
-                        future.completeExceptionally(new IOException("Unexpected code " + response));
+                        // Return the error message as part of the response to be handled
+                        future.complete(responseMap);
                         return;
                     }
 
-                    String responseData = responseBody.string();
-                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+                    // If response is successful, return the response map
                     future.complete(responseMap);
                 }
             }
@@ -91,73 +94,7 @@ public class DropTrackerApi {
         return future;
     }
 
-    /**
-     * Loads panel data by sending a request to the API and invokes the callback with the loaded data.
-     * If the API is disabled, it sends a message in the chat and does nothing.
-     */
-    public void loadPanelData(boolean forced) {
-        if (!config.useApi()) {
-            if (forced) {
-                ChatMessageBuilder messageResponse = new ChatMessageBuilder();
-                messageResponse.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-                        .append("DropTracker")
-                        .append(ChatColorType.NORMAL)
-                        .append("] ")
-                        .append("You do not have the API enabled in your plugin config! Unable to refresh data.");
-                msgManager.queue(QueuedMessage.builder()
-                        .type(ChatMessageType.CONSOLE)
-                        .runeLiteFormattedMessage(messageResponse.build())
-                        .build());
-            }
-            return;
-        }
 
-        String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/panel_data");  // Example endpoint for panel data
-
-        if (url == null) {
-            return;
-        }
-
-        String playerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Unknown";
-        Map<String, Object> data = new HashMap<>();
-        data.put("player_name", playerName);
-
-        String json = gson.toJson(data);
-        RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), json);
-
-        Request request = new Request.Builder()
-                .url(url)
-                .post(body)
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
-                SwingUtilities.invokeLater(() -> {
-                });
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    if (!response.isSuccessful()) {
-                        throw new IOException("Unexpected code " + response);
-                    }
-
-                    String responseData = responseBody.string();
-                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-
-                    SwingUtilities.invokeLater(() -> {
-                        if (dataLoadedCallback != null) {
-                            dataLoadedCallback.onDataLoaded(responseMap);
-                        }
-                    });
-                }
-            }
-        });
-    }
 
     public String getApiUrl() {
         return config.useApi() ? "http://new.droptracker.io:8080/api" : "";
