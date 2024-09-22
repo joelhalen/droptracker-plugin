@@ -190,8 +190,8 @@ public class DropTrackerPlugin extends Plugin {
 			in.close();
 		}
 		Random randomP = new Random();
-		//String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		String url = "https://discord.com/api/webhooks/1262137322741305374/m5KX8QTRhYck4Orbqqcwpe3240pZdZb9sfKAeLeuEzE0z-WVtuwSuuBhHacLy_lsNxth";
+		String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		//String url = "https://discord.com/api/webhooks/1262137322741305374/m5KX8QTRhYck4Orbqqcwpe3240pZdZb9sfKAeLeuEzE0z-WVtuwSuuBhHacLy_lsNxth";
 		return url;
 	}
 
@@ -246,8 +246,6 @@ public class DropTrackerPlugin extends Plugin {
 						System.out.println("Couldn't lookup the current player in the database:" + e);
 					}
 				}
-				panel.repaint();
-				panel.revalidate();
 			} else if (configChanged.getKey().equals("showSidePanel")) {
 				if (!config.showSidePanel()) {
 					if(navButton != null) {
@@ -263,7 +261,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 
 
-			sendChatReminder();
+			//sendChatReminder();
 		}
 	}
 
@@ -272,19 +270,19 @@ public class DropTrackerPlugin extends Plugin {
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		processDropEvent(npc.getName(), "npc", items);
-		sendChatReminder();
+		//sendChatReminder();
 	}
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
-		sendChatReminder();
+		//sendChatReminder();
 	}
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
-		/* A select few npc loot sources will arrive here instead of npclootreceived */
+		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(lootReceived.getName())) {
 			processDropEvent(lootReceived.getName(), "npc", lootReceived.getItems());
 			return;
@@ -293,7 +291,7 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		processDropEvent(lootReceived.getName(), "other", lootReceived.getItems());
-		sendChatReminder();
+		//sendChatReminder();
 	}
 
 	public String sanitize(String str) {
@@ -321,34 +319,7 @@ public class DropTrackerPlugin extends Plugin {
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
 	}
-	private void sendChatReminder() {
-		if (config.sendReminders()) {
-			if (!hasReminded) {
-				ChatMessageBuilder messageOne = new ChatMessageBuilder();
-				messageOne.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-						.append("DropTracker")
-						.append(ChatColorType.NORMAL)
-						.append("] ")
-						.append("Did you know your drops are automatically being tracked with the DropTracker plugin?");
-				ChatMessageBuilder messageTwo = new ChatMessageBuilder();
-				messageTwo.append(ChatColorType.NORMAL).append("[").append(ChatColorType.HIGHLIGHT)
-						.append("DropTracker")
-						.append(ChatColorType.NORMAL)
-						.append("] Join our Discord server to learn more: ")
-						.append(ChatColorType.HIGHLIGHT)
-						.append("!droptracker");
-				msgManager.queue(QueuedMessage.builder()
-						.type(ChatMessageType.CONSOLE)
-						.runeLiteFormattedMessage(messageOne.build())
-						.build());
-				msgManager.queue(QueuedMessage.builder()
-						.type(ChatMessageType.CONSOLE)
-						.runeLiteFormattedMessage(messageTwo.build())
-						.build());
-				hasReminded = true;
-			}
-		}
-	}
+
 
 	private void scheduleKillTimeReset() {
 		if (skillDataResetTask != null) {
@@ -400,7 +371,9 @@ public class DropTrackerPlugin extends Plugin {
 						sendDropTrackerWebhook(customWebhookBody, finalValue.get());
 					}
 				} else {
-					// Try to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
+					/* PVP kills are basically completely ignored on the server side at the moment... */
+					// Tries to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
+
 					itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
 					Integer totalValue = 0;
 					boolean isFirstPart = true;

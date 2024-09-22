@@ -12,6 +12,7 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 
 public class BossPanel extends JPanel {
     private static final String[] COLUMNS = {"", "Loot", "Rank"};
@@ -113,6 +114,26 @@ public class BossPanel extends JPanel {
                 imagePath = sanitizeNpcNameForImagePath("barrows chests");
             } else if (lowerName.contains("fortis")) {
                 imagePath = sanitizeNpcNameForImagePath("sol heredit");
+            } else if(lowerName.contains("gauntlet")){
+                imagePath = sanitizeNpcNameForImagePath("gauntlet");
+            } else if(lowerName.contains(("perilous moons"))) {
+                imagePath = sanitizeNpcNameForImagePath("lunar chests");
+            } else if(lowerName.contains("dagannoth kings")) {
+                imagePath = sanitizeNpcNameForImagePath("dagannoth rex");
+            } else if(lowerName.contains(("theatre of blood"))) {
+                imagePath = sanitizeNpcNameForImagePath("theatre of blood");
+            } else if(lowerName.contains("chambers of xeric")) {
+                imagePath = sanitizeNpcNameForImagePath("chambers of xeric");
+            } else if(lowerName.contains("tombs of amascut")){
+                imagePath = sanitizeNpcNameForImagePath("tombs of amascut");
+            } else if(lowerName.contains("vet'ion")){
+                imagePath = sanitizeNpcNameForImagePath("vetion");
+            } else if( lowerName.contains("callisto")){
+                imagePath = sanitizeNpcNameForImagePath("callisto");
+            } else if(lowerName.contains("venenatis")){
+                imagePath = sanitizeNpcNameForImagePath("venenatis");
+            } else if(lowerName.contains("nightmare")){
+                imagePath = sanitizeNpcNameForImagePath("nightmare");
             } else {
                 imagePath = sanitizeNpcNameForImagePath(npcName);
             }
@@ -121,7 +142,7 @@ public class BossPanel extends JPanel {
             ImageIcon npcIcon = new ImageIcon(ImageUtil.loadImageResource(DropTrackerPlugin.class, imagePath));
 
             label.setIcon(npcIcon);
-            label.setText("");  // Hide the NPC name text
+            label.setText("");  // Hides the NPC name text
 
             // Ensure npcDetailsCache is not null and contains the data for npcName
             if (npcDetailsCache != null && npcDetailsCache.containsKey(npcName)) {
@@ -171,8 +192,8 @@ public class BossPanel extends JPanel {
         String globalRank = rank != null && rank.get("global") != null ? rank.get("global").toString() : "--";
 
         String pbTime = pbDetails != null && pbDetails.get("time") != null ? pbDetails.get("time").toString() : "--";
-        //String pbRankGlobal = pbDetails != null && pbDetails.get("rank_global") != null ? pbDetails.get("rank_global").toString() : "--";
-        //String pbRankClan = pbDetails != null && pbDetails.get("rank_clan") != null ? pbDetails.get("rank_clan").toString() : "--";
+        String pbRankGlobal = pbDetails != null && pbDetails.get("rank_global") != null ? pbDetails.get("rank_global").toString() : "--";
+        String pbRankClan = pbDetails != null && pbDetails.get("rank_clan") != null ? pbDetails.get("rank_clan").toString() : "--";
 
         String tooltip = "<html>";
         switch (column) {
@@ -180,7 +201,7 @@ public class BossPanel extends JPanel {
                 tooltip += "All-time: " + allTimeLoot + "<br>This month: " + monthLoot;
                 break;
             case 2: // Rank column
-                if (groupRank != null && groupRank != "0") {
+                if (groupRank != null && !groupRank.equals("0")) {
                     tooltip += "Rank (global): " + globalRank + "<br>Rank (clan): " + groupRank;
                 } else {
                     tooltip += "Rank (global): " + globalRank;
@@ -191,8 +212,12 @@ public class BossPanel extends JPanel {
 //                break;
             default:
                 // show pb time on tooltip for the boss if there is one present in the server response
-                if (pbTime != "--") {
-                    tooltip += npcNames[row] + "<br>" + pbTime;
+                if (!Objects.equals(pbTime, "--")) {
+                    if (!pbRankClan.equals("--") && pbRankClan != null) {
+                        tooltip += npcNames[row] + "<br>PB: " + pbTime + "<br>Global Rank: " + pbRankGlobal + "<br>Clan Rank: " + pbRankClan;
+                    } else {
+                        tooltip += npcNames[row] + "<br>PB: " + pbTime + " (Rank: " + pbRankGlobal + ")";
+                    }
                 } else {
                     tooltip += npcNames[row];
             }
@@ -219,10 +244,6 @@ public class BossPanel extends JPanel {
         rankColumn.setCellRenderer(new AlternatingColorRenderer());
         rankColumn.setPreferredWidth(75);
 
-        // Column 3 (PB) - removed for now
-//        TableColumn pbColumn = columnModel.getColumn(3);
-//        pbColumn.setCellRenderer(new AlternatingColorRenderer());
-//        pbColumn.setPreferredWidth(150);
     }
 
 }

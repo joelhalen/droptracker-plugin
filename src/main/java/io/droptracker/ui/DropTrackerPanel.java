@@ -58,19 +58,19 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 
         JPanel logoPanel = new JPanel(new BorderLayout());
         JLabel logoLabel = new JLabel(TOP_LOGO);
-        logoLabel.setHorizontalAlignment(SwingConstants.CENTER); // Center the logo
-        logoPanel.add(logoLabel, BorderLayout.CENTER);  // Add logo to the center of the panel
+        logoLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        logoPanel.add(logoLabel, BorderLayout.CENTER);
 
         // Create the search panel
         JPanel searchPanel = new JPanel();
         searchPanel.setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0; // Start at the first column
-        gbc.gridy = GridBagConstraints.RELATIVE; // Each component in a new row
-        gbc.anchor = GridBagConstraints.WEST; // Anchor to the west (left side)
-        gbc.fill = GridBagConstraints.HORIZONTAL; // Fill horizontally
-        gbc.weightx = 1; // Use all available horizontal space
-        gbc.insets = new Insets(0, 0, 0, 0); // No margins
+        gbc.gridx = 0;
+        gbc.gridy = GridBagConstraints.RELATIVE;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1;
+        gbc.insets = new Insets(0, 0, 0, 0);
         searchPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
         if (config.useApi()) {
@@ -218,11 +218,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
             }
 
             searchBar.setIcon(IconTextField.Icon.SEARCH);
-            System.out.println("Got response:" + result);
 
             String message = (String) result.get("message");
             if (result.get("bossData") != null) {
-                System.out.println("Boss data is not null");
                 applySearchResult(result);
                 return;
             }
@@ -245,9 +243,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 
 
     private void applySearchResult(Map<String, Object> data) {
-        mainContentPanel.remove(bossPanel);  // Clear previous content if necessary
+        mainContentPanel.remove(bossPanel);
 
-        // Check if the "bossData" key exists and is not null
         Map<String, Map<String, Object>> bossData = (Map<String, Map<String, Object>>) data.get("bossData");
         if (bossData == null) {
             return;
@@ -256,9 +253,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         // Clear the previous content in bossPanel
         bossPanel.removeAll();
 
-        // Create and add the new "Viewing stats for" label
-        JLabel statText = new JLabel("Viewing stats for: " + searchBar.getText());
-        bossPanel.add(statText, BorderLayout.CENTER);
 
         // Update the BossPanel with the new NPC data
         bossPanel.update(bossData);
@@ -266,7 +260,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         // Re-add the BossPanel to the mainContentPanel
         mainContentPanel.add(bossPanel);
 
-        // Revalidate and repaint the main content panel to trigger the layout update
         revalidate();
         repaint();
     }
