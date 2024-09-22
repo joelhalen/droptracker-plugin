@@ -243,7 +243,7 @@ public class DropTrackerPlugin extends Plugin {
 					try {
 						api.lookupPlayer(client.getLocalPlayer().getName());
 					} catch (Exception e) {
-						System.out.println("Couldn't lookup the current player in the database:" + e);
+						log.debug("Couldn't look the current player up in the DropTracker database");
 					}
 				}
 			} else if (configChanged.getKey().equals("showSidePanel")) {

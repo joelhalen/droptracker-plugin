@@ -288,12 +288,10 @@ public class ChatMessageEvent {
         CustomWebhookBody.Embed killEmbed = null;
         CustomWebhookBody killWebhook = new CustomWebhookBody();
         killEmbed = new CustomWebhookBody.Embed();
-        // TODO -- take a screenshot here
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
         killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
-        //killEmbed.addField("npc_id", npcId.toString(), true);
         killEmbed.addField("kill_time", time, true);
         killEmbed.addField("best_time", bestTime, true);
         killEmbed.addField("auth_key", config.token(), true);

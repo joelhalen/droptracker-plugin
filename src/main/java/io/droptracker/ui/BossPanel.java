@@ -47,7 +47,6 @@ public class BossPanel extends JPanel {
         removeAll();
 
         if (npcData == null || npcData.isEmpty()) {
-            System.out.println("No NPC data available to update.");
             revalidate();
             repaint();
             return;
