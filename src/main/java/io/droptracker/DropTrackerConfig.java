@@ -88,24 +88,18 @@ public interface DropTrackerConfig extends Config
 //			section = screenshotSection
 //	)
 //	default boolean screenshotPets() { return true; }
-	@ConfigItem(
-			name = "Receive Reminders",
-			keyName = "sendReminders",
-			description = "Do you want to receive news/updates & reminders in chat messages?",
-			position = 1
-	)
-	default boolean sendReminders() { return false; }
+
 	@ConfigItem(
 			name = "Show Side Panel",
 			keyName = "showSidePanel",
-			description = "<html>Do you want to render the <br>side-panel for events, etc?<br>" +
+			description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>" +
 					"<b>Note</b>: Requires the API to be enabled.</html>",
 			position = 2
 	)
-	default boolean showSidePanel() { return false; }
+	default boolean showSidePanel() { return true; }
 	@ConfigSection(
-			name = "DropTracker API",
-			description = "Configure your account settings for the DropTracker API",
+			name = "DropTracker Account",
+			description = "Configure your client settings for the DropTracker database",
 			position= 5 ,
 			closedByDefault = false
 	)
@@ -126,7 +120,7 @@ public interface DropTrackerConfig extends Config
 	@ConfigItem(
 			name = "Token",
 			keyName = "authKey",
-			description = "Enter your token (/token on discord) here<br />to authenticate your submissions, if you have an account.",
+			description = "<html>If you register on Discord, you can obtain an auth key<br>to enter here, which will allow you to be added<br>to the Global Leaderboards.",
 			position = 1,
 			section = apiSection,
 			secret = true
