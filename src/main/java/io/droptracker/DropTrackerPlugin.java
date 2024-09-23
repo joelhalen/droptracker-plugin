@@ -178,6 +178,7 @@ public class DropTrackerPlugin extends Plugin {
 	 * */
 	public static String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
+			// Grab the current list of webhook URLs from the github-hosted file
 			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
 			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
 			String input;
@@ -185,13 +186,15 @@ public class DropTrackerPlugin extends Plugin {
 				// Remove double quotes and commas from the input string
 				input = input.replace("\"", "").replace(",", "")
 						.replace("[", "").replace("]", "");
-				webhookUrls.add(input);
+				// Ensure the target string contains 'discord'
+				if (input.contains("discord")) {
+					webhookUrls.add(input);
+				}
 			}
 			in.close();
 		}
 		Random randomP = new Random();
 		String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		//String url = "https://discord.com/api/webhooks/1262137322741305374/m5KX8QTRhYck4Orbqqcwpe3240pZdZb9sfKAeLeuEzE0z-WVtuwSuuBhHacLy_lsNxth";
 		return url;
 	}
 
