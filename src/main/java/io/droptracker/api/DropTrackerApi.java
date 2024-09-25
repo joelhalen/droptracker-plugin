@@ -87,6 +87,9 @@ public class DropTrackerApi {
 
                     // If response is successful, return the response map
                     future.complete(responseMap);
+                } catch (IllegalStateException e) {
+                    // If the webserver is down or malfunctioning, this is the likely outcome
+                    future.cancel(true);
                 }
             }
         });
