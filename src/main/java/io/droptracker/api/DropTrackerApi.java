@@ -11,6 +11,7 @@ import net.runelite.client.chat.QueuedMessage;
 import okhttp3.*;
 
 import javax.inject.Inject;
+import javax.inject.Inject;
 import javax.swing.*;
 import java.io.IOException;
 import java.text.DecimalFormat;
@@ -100,7 +101,7 @@ public class DropTrackerApi {
 
 
     public String getApiUrl() {
-        return config.useApi() ? "https://droptracker.io/api/" : "";
+        return config.useApi() ? "http://new.droptracker.io:8080/api/" : "";
     }
 
     public interface PanelDataLoadedCallback {
