@@ -308,9 +308,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
-		if (isFakeWorld()) {
-			return;
-		}
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		processDropEvent(npc.getName(), "npc", items);
@@ -319,9 +316,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
-		if (isFakeWorld()) {
-			return;
-		}
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
 		//sendChatReminder();
@@ -329,9 +323,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
-		if (isFakeWorld()) {
-			return;
-		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
 	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
