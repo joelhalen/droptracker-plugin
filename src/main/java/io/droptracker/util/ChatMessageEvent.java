@@ -1,3 +1,6 @@
+
+
+
 package io.droptracker.util;
 
 import com.google.common.collect.ImmutableMap;
@@ -20,6 +23,7 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
+import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.ObjectUtils;
@@ -38,9 +42,11 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static io.droptracker.util.KCService.lastDrop;
 import static java.time.temporal.ChronoField.*;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
@@ -132,7 +138,7 @@ public class ChatMessageEvent {
     public void onGameMessage(String message) {
         if (isEnabled())
             parseBossKill(message).ifPresent(this::updateData);
-            parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
+        parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
 
     public void onChatMessage(String chatMessage) {
@@ -159,11 +165,31 @@ public class ChatMessageEvent {
         }
     }
 
+    private boolean isCorruptedGauntlet(LootReceived event) {
+        return event.getType() == LootRecordType.EVENT && lastDrop != null && "The Gauntlet".equals(event.getName())
+                && (CG_NAME.equals(lastDrop.getSource()) || CG_BOSS.equals(lastDrop.getSource()));
+    }
 
     public void onFriendsChatNotification(String message) {
         /* Chambers of Xeric completions are sent in the Friends chat channel */
         if (message.startsWith("Congratulations - your raid is complete!"))
             this.onGameMessage(message);
+    }
+
+    public String getStandardizedSource(LootReceived event) {
+        if (isCorruptedGauntlet(event)) {
+            return CG_NAME;
+        } else if (lastDrop != null && shouldUseChatName(event)) {
+            return lastDrop.getSource(); // distinguish entry/expert/challenge modes
+        }
+        return event.getName();
+    }
+
+    private boolean shouldUseChatName(LootReceived event) {
+        assert lastDrop != null;
+        String lastSource = lastDrop.getSource();
+        Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
+        return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
     }
 
     public void onWidget(WidgetLoaded event) {
@@ -217,7 +243,6 @@ public class ChatMessageEvent {
         Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
-
         CustomWebhookBody collectionLogBody = new CustomWebhookBody();
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
@@ -341,9 +366,11 @@ public class ChatMessageEvent {
 
     private Optional<BossNotification> parseBossKill(String message) {
         Optional<Pair<String, Integer>> boss = parseBoss(message);
+
         if (!boss.isPresent()) {
             parseKillTime(message);
         }
+
         Optional<Object> tempBossData = boss.map(pair -> {
             BossNotification notification = new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null);
 
@@ -355,6 +382,7 @@ public class ChatMessageEvent {
             String npcName = mostRecentNpcData.getKey();
             return parseKillTime(message).map(t -> new BossNotification(mostRecentNpcData.getKey(), mostRecentNpcData.getValue(), message, t.getLeft(), t.getMiddle(), t.getRight()));
         }
+
         return Optional.empty();
     }
     private static Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {

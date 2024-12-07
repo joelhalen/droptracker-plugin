@@ -1,3 +1,32 @@
+/*
+BSD 2-Clause License
+
+		Copyright (c) 2022, Jake Barter
+		All rights reserved.
+
+		Copyright (c) 2022, pajlads
+
+		Redistribution and use in source and binary forms, with or without
+		modification, are permitted provided that the following conditions are met:
+
+		1. Redistributions of source code must retain the above copyright notice, this
+		list of conditions and the following disclaimer.
+
+		2. Redistributions in binary form must reproduce the above copyright notice,
+		this list of conditions and the following disclaimer in the documentation
+		and/or other materials provided with the distribution.
+
+		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+		AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+		IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+		DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+		FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+		DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+		SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+		CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+		OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+		OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 package io.droptracker;
 
 import com.google.gson.Gson;
@@ -232,6 +261,15 @@ public class DropTrackerPlugin extends Plugin {
 		return configManager.getConfig(DropTrackerConfig.class);
 	}
 
+	public boolean isFakeWorld() {
+		if (client.getGameState().equals(GameState.LOGGED_IN)) {
+			boolean isFake = client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.BETA_WORLD) || client.getWorldType().contains(WorldType.FRESH_START_WORLD) || client.getWorldType().contains(WorldType.DEADMAN);
+			return isFake;
+		} else {
+			return true;
+		}
+	}
+
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
@@ -270,6 +308,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		if (isFakeWorld()) {
+			return;
+		}
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		processDropEvent(npc.getName(), "npc", items);
@@ -278,6 +319,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
+		if (isFakeWorld()) {
+			return;
+		}
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
 		//sendChatReminder();
@@ -285,15 +329,19 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
+		if (isFakeWorld()) {
+			return;
+		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
-	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(lootReceived.getName())) {
-			processDropEvent(lootReceived.getName(), "npc", lootReceived.getItems());
+		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
+	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
+			processDropEvent(npcName, "npc", lootReceived.getItems());
 			return;
 		}
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
 			return;
 		}
-		processDropEvent(lootReceived.getName(), "other", lootReceived.getItems());
+		processDropEvent(npcName, "other", lootReceived.getItems());
 		//sendChatReminder();
 	}
 
@@ -318,6 +366,7 @@ public class DropTrackerPlugin extends Plugin {
 				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
 		}
 	}
+
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
@@ -376,7 +425,7 @@ public class DropTrackerPlugin extends Plugin {
 				} else {
 					/* PVP kills are basically completely ignored on the server side at the moment... */
 					// Tries to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
-
+					
 					itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
 					Integer totalValue = 0;
 					boolean isFirstPart = true;
@@ -499,6 +548,9 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+		if (isFakeWorld()) {
+			return;
+		}
 		this.timesTried++;
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
