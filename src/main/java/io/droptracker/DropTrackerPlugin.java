@@ -50,6 +50,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
+import io.droptracker.util.ContainerManager;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -121,6 +122,9 @@ public class DropTrackerPlugin extends Plugin {
 	private DrawManager drawManager;
 	@Inject
 	private ChatCommandManager chatCommandManager;
+
+	@Inject
+	private ContainerManager containerManager;
 
 	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
 	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log: (.*)");
@@ -262,9 +266,10 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public boolean isFakeWorld() {
+		boolean isFake = false;
 		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			boolean isFake = client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.BETA_WORLD) || client.getWorldType().contains(WorldType.FRESH_START_WORLD) || client.getWorldType().contains(WorldType.DEADMAN);
-			return isFake;
+			isFake = client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.BETA_WORLD) || client.getWorldType().contains(WorldType.FRESH_START_WORLD) || client.getWorldType().contains(WorldType.DEADMAN);
+
 		} else {
 			return true;
 		}
@@ -361,6 +366,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
+		if (client.getGameState().equals(GameState.LOGGED_IN)) {
+			containerManager.onTick();
+		}
 	}
 
 
@@ -387,6 +395,11 @@ public class DropTrackerPlugin extends Plugin {
 			clientThread.invokeLater(() -> {
 				if (sourceType != "pvp") {
 					for (ItemStack item : stack(items)) {
+						Item tempItem = new Item(item.getId(), item.getQuantity());
+						if (!containerManager.isRealDrop(tempItem)) {
+							// If the item is determined as something that was from their inv/gear, we don't send it.
+							continue;
+						}
 						int itemId = item.getId();
 						int qty = item.getQuantity();
 						int price = itemManager.getItemPrice(itemId);
