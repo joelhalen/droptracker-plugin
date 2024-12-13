@@ -1,6 +1,3 @@
-
-
-
 package io.droptracker.util;
 
 import com.google.common.collect.ImmutableMap;
@@ -45,6 +42,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static io.droptracker.util.KCService.lastDrop;
 import static java.time.temporal.ChronoField.*;
@@ -72,10 +71,12 @@ public class ChatMessageEvent {
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
-    public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder) {
+    public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder, 
+                           ScheduledExecutorService executor) {
         this.plugin = plugin;
         this.config = config;
         this.itemIDFinder = itemIDFinder;
+        this.executor = executor;
     }
     private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
     private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
@@ -130,6 +131,10 @@ public class ChatMessageEvent {
 
     @Varbit
     public static final int KILL_COUNT_SPAM_FILTER = 4930;
+
+    private static final long MESSAGE_LOOT_WINDOW = 15000; // 15 seconds
+    private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
+    private final ScheduledExecutorService executor;
 
     public boolean isEnabled() {
         return true;
@@ -332,6 +337,18 @@ public class ChatMessageEvent {
     private void updateData(BossNotification updated) {
         bossData.getAndUpdate(old -> {
             if (old == null) {
+                // Store pending notification for later processing
+                pendingNotifications.put(updated.getBoss(), updated);
+                
+                // Schedule cleanup task
+                executor.schedule(() -> {
+                    BossNotification pending = pendingNotifications.remove(updated.getBoss());
+                    if (pending != null) {
+                        // If notification wasn't processed by loot event, process it now
+                        processKill(pending);
+                    }
+                }, MESSAGE_LOOT_WINDOW, TimeUnit.MILLISECONDS);
+                
                 return updated;
             } else {
                 return new BossNotification(
@@ -540,5 +557,18 @@ public class ChatMessageEvent {
             }
         }
         return null;
+    }
+
+    public void onLootReceived(LootReceived event) {
+        String source = getStandardizedSource(event);
+        BossNotification pending = pendingNotifications.remove(source);
+        
+        if (pending != null) {
+            // We found a pending notification for this boss, process it now
+            processKill(pending);
+        } else {
+            // Store the loot event info for later matching with chat message
+            lastDrop = new Drop(source, event.getType(), event.getItems());
+        }
     }
 }

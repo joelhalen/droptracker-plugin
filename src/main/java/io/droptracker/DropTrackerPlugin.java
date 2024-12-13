@@ -136,7 +136,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	public ChatMessageManager msgManager;
 
-	/* Memory storage for details about the current npc being killed, and it's kill time */
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 	private String currentKillTime = "";
 	private String currentPbTime = "";
