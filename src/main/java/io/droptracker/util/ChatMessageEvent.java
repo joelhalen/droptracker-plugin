@@ -136,6 +136,10 @@ public class ChatMessageEvent {
     private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
     private final ScheduledExecutorService executor;
 
+    private static final Duration PB_MESSAGE_WINDOW = Duration.ofSeconds(5); // Adjust window as needed
+    private final Map<String, Triple<Duration, Duration, Boolean>> recentTimeMessages = new HashMap<>();
+    private final Map<String, Instant> timeMessageTimestamps = new HashMap<>();
+
     public boolean isEnabled() {
         return true;
     }
@@ -234,6 +238,15 @@ public class ChatMessageEvent {
         if (ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
             mostRecentNpcData = null;
         }
+
+        // Clean up old time messages
+        Instant cutoff = Instant.now().minus(PB_MESSAGE_WINDOW);
+        timeMessageTimestamps.entrySet().removeIf(entry -> 
+            entry.getValue().isBefore(cutoff)
+        );
+        recentTimeMessages.keySet().removeIf(boss -> 
+            !timeMessageTimestamps.containsKey(boss)
+        );
     }
     private void processCollection(String itemName) {
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
@@ -383,34 +396,58 @@ public class ChatMessageEvent {
 
     private Optional<BossNotification> parseBossKill(String message) {
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-
-        if (!boss.isPresent()) {
-            parseKillTime(message);
-        }
-
-        Optional<Object> tempBossData = boss.map(pair -> {
-            BossNotification notification = new BossNotification(pair.getLeft(), pair.getRight(), message, null, null, null);
-
-            mostRecentNpcData = Pair.of(pair.getLeft(), pair.getRight());
-            return notification;
+        
+        return boss.map(pair -> {
+            String bossName = pair.getLeft();
+            
+            // Check for recent time message for this boss
+            Triple<Duration, Duration, Boolean> timeInfo = recentTimeMessages.get(bossName);
+            Instant timeMessageTime = timeMessageTimestamps.get(bossName);
+            
+            if (timeInfo != null && timeMessageTime != null) {
+                Duration timeSinceMessage = Duration.between(timeMessageTime, Instant.now());
+                if (timeSinceMessage.compareTo(PB_MESSAGE_WINDOW) <= 0) {
+                    // Recent time message found, use it
+                    return new BossNotification(
+                        bossName,
+                        pair.getRight(),
+                        message,
+                        timeInfo.getLeft(),
+                        timeInfo.getMiddle(),
+                        timeInfo.getRight()
+                    );
+                }
+            }
+            
+            // No recent time message, check for time in current message
+            return parseKillTime(message)
+                .map(t -> new BossNotification(
+                    bossName,
+                    pair.getRight(),
+                    message,
+                    t.getLeft(),
+                    t.getMiddle(),
+                    t.getRight()
+                ))
+                .orElse(new BossNotification(bossName, pair.getRight(), message, null, null, null));
         });
-
-        if (mostRecentNpcData != null && ticksSinceNpcDataUpdate < 2) {
-            String npcName = mostRecentNpcData.getKey();
-            return parseKillTime(message).map(t -> new BossNotification(mostRecentNpcData.getKey(), mostRecentNpcData.getValue(), message, t.getLeft(), t.getMiddle(), t.getRight()));
-        }
-
-        return Optional.empty();
     }
-    private static Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
+    private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
         Matcher matcher = TIME_REGEX.matcher(message);
         if (matcher.find()) {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
             boolean pb = message.toLowerCase().contains("(new personal best)");
+            
+            // Store time info for potential future boss kill message
+            if (mostRecentNpcData != null) {
+                String bossName = mostRecentNpcData.getKey();
+                recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
+                timeMessageTimestamps.put(bossName, Instant.now());
+            }
+            
             return Optional.of(Triple.of(duration, bestTime, pb));
         }
-
         return Optional.empty();
     }
 

@@ -221,7 +221,8 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		Random randomP = new Random();
 		String url = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		return url;
+		return "https://discord.com/api/webhooks/1317274436663119992/qzWV8ht56xgEehrK9SNxslOkW4QAqjTJzaqM7ZsQ9nqNxTNmAus49XWtxcG5xN4YAxF2";
+		//return url;
 	}
 
 	private static String itemImageUrl(int itemId) {
@@ -259,16 +260,17 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public boolean isFakeWorld() {
-		var worldType = client.getWorldType();
-		return worldType.contains(WorldType.BETA_WORLD)
-				|| worldType.contains(WorldType.DEADMAN)
-				|| worldType.contains(WorldType.FRESH_START_WORLD)
-				|| worldType.contains(WorldType.LAST_MAN_STANDING)
-				|| worldType.contains(WorldType.NOSAVE_MODE)
-				|| worldType.contains(WorldType.PVP_ARENA)
-				|| worldType.contains(WorldType.QUEST_SPEEDRUNNING)
-				|| worldType.contains(WorldType.SEASONAL)
-				|| worldType.contains(WorldType.TOURNAMENT_WORLD);
+		return false;
+//		var worldType = client.getWorldType();
+//		return worldType.contains(WorldType.BETA_WORLD)
+//				|| worldType.contains(WorldType.DEADMAN)
+//				|| worldType.contains(WorldType.FRESH_START_WORLD)
+//				|| worldType.contains(WorldType.LAST_MAN_STANDING)
+//				|| worldType.contains(WorldType.NOSAVE_MODE)
+//				|| worldType.contains(WorldType.PVP_ARENA)
+//				|| worldType.contains(WorldType.QUEST_SPEEDRUNNING)
+//				|| worldType.contains(WorldType.SEASONAL)
+//				|| worldType.contains(WorldType.TOURNAMENT_WORLD);
 	}
 
 	@Subscribe
