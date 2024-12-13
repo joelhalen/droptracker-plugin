@@ -32,7 +32,6 @@ package io.droptracker;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
-import java.awt.image.RenderedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -50,7 +49,6 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
-import io.droptracker.util.ContainerManager;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -65,7 +63,6 @@ import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
-import net.runelite.client.game.NPCManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -266,13 +263,16 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public boolean isFakeWorld() {
-		boolean isFake = false;
-		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			isFake = client.getWorldType().contains(WorldType.SEASONAL) || client.getWorldType().contains(WorldType.BETA_WORLD) || client.getWorldType().contains(WorldType.FRESH_START_WORLD) || client.getWorldType().contains(WorldType.DEADMAN);
-
-		} else {
-			return true;
-		}
+		var worldType = client.getWorldType();
+		return worldType.contains(WorldType.BETA_WORLD)
+				|| worldType.contains(WorldType.DEADMAN)
+				|| worldType.contains(WorldType.FRESH_START_WORLD)
+				|| worldType.contains(WorldType.LAST_MAN_STANDING)
+				|| worldType.contains(WorldType.NOSAVE_MODE)
+				|| worldType.contains(WorldType.PVP_ARENA)
+				|| worldType.contains(WorldType.QUEST_SPEEDRUNNING)
+				|| worldType.contains(WorldType.SEASONAL)
+				|| worldType.contains(WorldType.TOURNAMENT_WORLD);
 	}
 
 	@Subscribe
