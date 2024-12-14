@@ -100,7 +100,11 @@ public class ChatMessageEvent {
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>[\\d,]+)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>[\\d,]+)\\b");
     private static final Pattern TIME_REGEX = Pattern.compile(
-            "(?:(?:Challenge )?Duration|duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
+            "(?:(?:Challenge )?Duration|Challenge duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern GAUNTLET_TIME_REGEX = Pattern.compile(
+            "Challenge duration: (?<time>[\\d:]+)\\. Personal best: (?<bestTime>[\\d:]+)",
             Pattern.CASE_INSENSITIVE
     );
     private static final String BA_BOSS_NAME = "Penance Queen";
@@ -433,13 +437,29 @@ public class ChatMessageEvent {
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
+        // Try Gauntlet specific pattern first
+        Matcher gauntletMatcher = GAUNTLET_TIME_REGEX.matcher(message);
+        if (gauntletMatcher.find()) {
+            Duration duration = parseTime(gauntletMatcher.group("time"));
+            Duration bestTime = parseTime(gauntletMatcher.group("bestTime"));
+            boolean pb = message.toLowerCase().contains("(new personal best)");
+            
+            if (mostRecentNpcData != null) {
+                String bossName = mostRecentNpcData.getKey();
+                recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
+                timeMessageTimestamps.put(bossName, Instant.now());
+            }
+            
+            return Optional.of(Triple.of(duration, bestTime, pb));
+        }
+
+        // Fall back to general pattern
         Matcher matcher = TIME_REGEX.matcher(message);
         if (matcher.find()) {
             Duration duration = parseTime(matcher.group("time"));
             Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
             boolean pb = message.toLowerCase().contains("(new personal best)");
             
-            // Store time info for potential future boss kill message
             if (mostRecentNpcData != null) {
                 String bossName = mostRecentNpcData.getKey();
                 recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
