@@ -237,8 +237,6 @@ public class ChatMessageEvent {
                 ticksSinceNpcDataUpdate = 0;
             }
         }
-        if (cumulativeUnlockPoints.size() < CUM_POINTS_VARBIT_BY_TIER.size())
-            initThresholds();
         if (ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
             mostRecentNpcData = null;
         }
@@ -444,6 +442,9 @@ public class ChatMessageEvent {
             Duration bestTime = parseTime(gauntletMatcher.group("bestTime"));
             boolean pb = message.toLowerCase().contains("(new personal best)");
             
+            log.debug("Parsed Gauntlet time - Duration: {}, Best: {}, PB: {}, NPC Data: {}", 
+                duration, bestTime, pb, mostRecentNpcData);
+            
             if (mostRecentNpcData != null) {
                 String bossName = mostRecentNpcData.getKey();
                 recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
@@ -502,11 +503,29 @@ public class ChatMessageEvent {
         if (primary.find()) {
             String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
             String count = primary.group("value");
-            return result(boss, count);
+            if (boss != null) {
+                try {
+                    int killCount = Integer.parseInt(count.replace(",", ""));
+                    mostRecentNpcData = Pair.of(boss, killCount);
+                    ticksSinceNpcDataUpdate = 0;
+                    return Optional.of(mostRecentNpcData);
+                } catch (NumberFormatException e) {
+                    log.debug("Failed to parse kill count [{}] for boss [{}]", count, boss);
+                }
+            }
         } else if ((secondary = SECONDARY_REGEX.matcher(message)).find()) {
             String key = parseSecondary(secondary.group("key"));
             String value = secondary.group("value");
-            return result(key, value);
+            if (key != null) {
+                try {
+                    int killCount = Integer.parseInt(value.replace(",", ""));
+                    mostRecentNpcData = Pair.of(key, killCount);
+                    ticksSinceNpcDataUpdate = 0;
+                    return Optional.of(mostRecentNpcData);
+                } catch (NumberFormatException e) {
+                    log.debug("Failed to parse kill count [{}] for boss [{}]", value, key);
+                }
+            }
         }
         return Optional.empty();
     }
