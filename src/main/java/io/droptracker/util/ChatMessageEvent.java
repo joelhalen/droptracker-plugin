@@ -100,7 +100,7 @@ public class ChatMessageEvent {
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>[\\d,]+)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>[\\d,]+)\\b");
     private static final Pattern TIME_REGEX = Pattern.compile(
-            "(?:Duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
+            "(?:(?:Challenge )?Duration|duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
             Pattern.CASE_INSENSITIVE
     );
     private static final String BA_BOSS_NAME = "Penance Queen";
