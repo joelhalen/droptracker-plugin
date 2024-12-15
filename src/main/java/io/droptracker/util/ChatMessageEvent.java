@@ -68,6 +68,8 @@ public class ChatMessageEvent {
     private final AtomicInteger completed = new AtomicInteger(-1);
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
     public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
+    private static final Duration TIME_MESSAGE_WINDOW = Duration.ofSeconds(10);
+    private final Map<String, TimeData> recentTimeData = new HashMap<>();
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
@@ -149,11 +151,27 @@ public class ChatMessageEvent {
     }
 
     public void onGameMessage(String message) {
-        if (isEnabled())
-            parseBossKill(message).ifPresent(this::updateData);
-        parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
-    }
+        if (!isEnabled()) return;
+        System.out.println("Game MEssage received: " + message);
+        // Check for time message first
+        parseKillTime(message).ifPresent(timeTriple -> {
+            // If we have recent NPC data, associate the time with that boss
+            if (mostRecentNpcData != null) {
+                String bossName = mostRecentNpcData.getLeft();
+                recentTimeData.put(bossName, new TimeData(
+                        timeTriple.getLeft(),
+                        timeTriple.getMiddle(),
+                        timeTriple.getRight()
+                ));
+                System.out.println("Stored time data for: " + bossName + " " + timeTriple);
+            }else{
+                System.out.println("Time Data found but no recent NPC data available");
+            }
+        });
 
+        // Then check for kill count message
+        parseBossKill(message).ifPresent(this::updateData);
+    }
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
             // require notifier enabled without popup mode to use chat event
@@ -242,13 +260,7 @@ public class ChatMessageEvent {
         }
 
         // Clean up old time messages
-        Instant cutoff = Instant.now().minus(PB_MESSAGE_WINDOW);
-        timeMessageTimestamps.entrySet().removeIf(entry -> 
-            entry.getValue().isBefore(cutoff)
-        );
-        recentTimeMessages.keySet().removeIf(boss -> 
-            !timeMessageTimestamps.containsKey(boss)
-        );
+        recentTimeData.entrySet().removeIf(entry -> !entry.getValue().isRecent());
     }
     private void processCollection(String itemName) {
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
@@ -397,81 +409,85 @@ public class ChatMessageEvent {
     }
 
     private Optional<BossNotification> parseBossKill(String message) {
-        Optional<Pair<String, Integer>> boss = parseBoss(message);
-        
-        return boss.map(pair -> {
+        return parseBoss(message).map(pair -> {
             String bossName = pair.getLeft();
-            
-            // Check for recent time message for this boss
-            Triple<Duration, Duration, Boolean> timeInfo = recentTimeMessages.get(bossName);
-            Instant timeMessageTime = timeMessageTimestamps.get(bossName);
-            
-            if (timeInfo != null && timeMessageTime != null) {
-                Duration timeSinceMessage = Duration.between(timeMessageTime, Instant.now());
-                if (timeSinceMessage.compareTo(PB_MESSAGE_WINDOW) <= 0) {
-                    // Recent time message found, use it
-                    return new BossNotification(
+            Integer killCount = pair.getRight();
+
+            // Look for recent time data for this boss
+            TimeData timeData = recentTimeData.get(bossName);
+            if (timeData != null && timeData.isRecent()) {
+                System.out.println("Found recent time data for:" + bossName + " " + timeData);
+                return new BossNotification(
                         bossName,
-                        pair.getRight(),
+                        killCount,
                         message,
-                        timeInfo.getLeft(),
-                        timeInfo.getMiddle(),
-                        timeInfo.getRight()
-                    );
-                }
+                        timeData.time,
+                        timeData.bestTime,
+                        timeData.isPb
+                );
             }
-            
-            // No recent time message, check for time in current message
-            return parseKillTime(message)
-                .map(t -> new BossNotification(
-                    bossName,
-                    pair.getRight(),
-                    message,
-                    t.getLeft(),
-                    t.getMiddle(),
-                    t.getRight()
-                ))
-                .orElse(new BossNotification(bossName, pair.getRight(), message, null, null, null));
+
+            // If no recent time data, create notification without time
+            return new BossNotification(bossName, killCount, message, null, null, null);
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
-        // Try Gauntlet specific pattern first
-        Matcher gauntletMatcher = GAUNTLET_TIME_REGEX.matcher(message);
-        if (gauntletMatcher.find()) {
-            Duration duration = parseTime(gauntletMatcher.group("time"));
-            Duration bestTime = parseTime(gauntletMatcher.group("bestTime"));
-            boolean pb = message.toLowerCase().contains("(new personal best)");
-            
-            log.debug("Parsed Gauntlet time - Duration: {}, Best: {}, PB: {}, NPC Data: {}", 
-                duration, bestTime, pb, mostRecentNpcData);
-            
-            if (mostRecentNpcData != null) {
-                String bossName = mostRecentNpcData.getKey();
-                recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
-                timeMessageTimestamps.put(bossName, Instant.now());
+        System.out.println("Attempting to parse kill time from message: " + message);
+
+        // Define patterns for different message formats
+        Pattern[] timePatterns = new Pattern[]{
+                // Gauntlet format (with period)
+                Pattern.compile("Challenge duration: (?<time>[\\d:]+)\\. Personal best: (?<bestTime>[\\d:]+)\\."),
+                // Standard boss format (without period)
+                Pattern.compile("Fight duration: (?<time>[\\d:]+\\.\\d+) \\(Personal best: (?<bestTime>[\\d:]+\\.\\d+)\\)"),
+                // Generic format (handles both with and without period)
+                Pattern.compile("(?:Fight|Challenge|Kill) duration: (?<time>[\\d:]+(?:\\.\\d+)?)\\.? (?:Personal best: |\\(Personal best: )(?<bestTime>[\\d:]+(?:\\.\\d+)?)\\.?\\)?"),
+                // Backup patterns for single time messages
+                Pattern.compile("Duration: (?<time>[\\d:]+(?:\\.\\d+)?)\\.?"),
+                Pattern.compile("Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?)\\.?")
+        };
+
+        for (Pattern pattern : timePatterns) {
+            Matcher matcher = pattern.matcher(message);
+            if (matcher.find()) {
+                System.out.println("Matched pattern: " + pattern.pattern());
+
+                Duration time = null;
+                Duration bestTime = null;
+                boolean isPb = message.toLowerCase().contains("new personal best");
+
+                // Try to get the time
+                try {
+                    String timeStr = matcher.group("time");
+                    if (timeStr != null) {
+                        time = parseTime(timeStr.trim());
+                        System.out.println("Parsed time: " + time);
+                    }
+                } catch (IllegalArgumentException e) {
+                    System.out.println("No time group found or parse error: " + e.getMessage());
+                }
+
+                // Try to get the best time
+                try {
+                    String bestTimeStr = matcher.group("bestTime");
+                    if (bestTimeStr != null) {
+                        bestTime = parseTime(bestTimeStr.trim());
+                        System.out.println("Parsed best time: " + bestTime);
+
+                    }
+                } catch (IllegalArgumentException e) {
+                    System.out.println("No best time group found or parse error: " + e.getMessage());
+                }
+
+                if (time != null || bestTime != null) {
+                    return Optional.of(Triple.of(time, bestTime, isPb));
+                }
             }
-            
-            return Optional.of(Triple.of(duration, bestTime, pb));
         }
 
-        // Fall back to general pattern
-        Matcher matcher = TIME_REGEX.matcher(message);
-        if (matcher.find()) {
-            Duration duration = parseTime(matcher.group("time"));
-            Duration bestTime = matcher.group("bestTime") != null ? parseTime(matcher.group("bestTime")) : null;
-            boolean pb = message.toLowerCase().contains("(new personal best)");
-            
-            if (mostRecentNpcData != null) {
-                String bossName = mostRecentNpcData.getKey();
-                recentTimeMessages.put(bossName, Triple.of(duration, bestTime, pb));
-                timeMessageTimestamps.put(bossName, Instant.now());
-            }
-            
-            return Optional.of(Triple.of(duration, bestTime, pb));
-        }
+        System.out.println("No time pattern matched");
         return Optional.empty();
     }
-
     @NotNull
     public static Duration parseTime(@NotNull String in) {
         Pattern TIME_PATTERN = Pattern.compile("\\b(?:(?<hours>\\d+):)?(?<minutes>\\d+):(?<seconds>\\d{2})(?:\\.(?<fractional>\\d{2}))?\\b");
@@ -510,7 +526,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    log.debug("Failed to parse kill count [{}] for boss [{}]", count, boss);
+                    System.out.println("Failed to parse kill count" + count + " for boss " + boss);
                 }
             }
         } else if ((secondary = SECONDARY_REGEX.matcher(message)).find()) {
@@ -523,7 +539,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    log.debug("Failed to parse kill count [{}] for boss [{}]", value, key);
+                    System.out.println("Failed to parse kill count" + value + " for boss " + key);
                 }
             }
         }
@@ -535,7 +551,7 @@ public class ChatMessageEvent {
         try {
             return Optional.ofNullable(boss).map(k -> Pair.of(boss, Integer.parseInt(count)));
         } catch (NumberFormatException e) {
-            log.debug("Failed to parse kill count [{}] for boss [{}]", count, boss);
+            System.out.println("Failed to parse kill count " + count + "for boss" + boss);
             return Optional.empty();
         }
     }
@@ -647,4 +663,27 @@ public class ChatMessageEvent {
             lastDrop = new Drop(source, event.getType(), event.getItems());
         }
     }
+    // Create a class to hold time-related data
+    private static class TimeData {
+        final Duration time;
+        final Duration bestTime;
+        final boolean isPb;
+        final Instant timestamp;
+
+        TimeData(Duration time, Duration bestTime, boolean isPb) {
+            this.time = time;
+            this.bestTime = bestTime;
+            this.isPb = isPb;
+            this.timestamp = Instant.now();
+        }
+
+        boolean isRecent() {
+            return Duration.between(timestamp, Instant.now()).compareTo(TIME_MESSAGE_WINDOW) <= 0;
+        }
+    }
 }
+
+
+
+
+
