@@ -142,9 +142,13 @@ public class ChatMessageEvent {
     private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
     private final ScheduledExecutorService executor;
 
-    private static final Duration PB_MESSAGE_WINDOW = Duration.ofSeconds(5); // Adjust window as needed
-    private final Map<String, Triple<Duration, Duration, Boolean>> recentTimeMessages = new HashMap<>();
-    private final Map<String, Instant> timeMessageTimestamps = new HashMap<>();
+
+    private static final Pattern BOSS_TIME_PATTERN = Pattern.compile("Fight duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)");
+    private static final Duration KILL_MESSAGE_WINDOW = Duration.ofSeconds(2);
+    private static final long TIME_MESSAGE_DELAY = 1000;
+    private final Map<String,TimeData> pendingTimeData = new HashMap<>();
+    private final Set<String> processedKills = new HashSet<>();
+
 
     public boolean isEnabled() {
         return true;
@@ -152,25 +156,92 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        System.out.println("Game MEssage received: " + message);
-        // Check for time message first
-        parseKillTime(message).ifPresent(timeTriple -> {
-            // If we have recent NPC data, associate the time with that boss
-            if (mostRecentNpcData != null) {
-                String bossName = mostRecentNpcData.getLeft();
-                recentTimeData.put(bossName, new TimeData(
-                        timeTriple.getLeft(),
-                        timeTriple.getMiddle(),
-                        timeTriple.getRight()
-                ));
-                System.out.println("Stored time data for: " + bossName + " " + timeTriple);
-            }else{
-                System.out.println("Time Data found but no recent NPC data available");
+
+        System.out.println("Game message received: '" + message + "'");
+
+        // Check for time messages using existing patterns
+        for (Pattern pattern : TIME_PATTERNS) {
+            Matcher timeMatcher = pattern.matcher(message);
+            if (timeMatcher.find()) {
+                System.out.println("Found time message matching pattern: " + pattern.pattern());
+                try {
+                    Duration time = parseTime(timeMatcher.group(1));
+                    Duration bestTime = null;
+                    try {
+                        String bestTimeStr = timeMatcher.group(2);
+                        if (bestTimeStr != null) {
+                            bestTime = parseTime(bestTimeStr);
+                        }
+                    } catch (IllegalStateException | IndexOutOfBoundsException e) {
+                        // Pattern doesn't include best time
+                    }
+                    boolean isPb = message.contains("new personal best") || message.contains("(Personal best)");
+
+                    // Determine boss name based on message
+                    String bossName = determineBossFromMessage(message);
+                    if (bossName != null) {
+                        TimeData timeData = new TimeData(time, bestTime, isPb);
+                        pendingTimeData.put(bossName, timeData);
+                        System.out.println(String.format("Stored time data for %s - Time: %s BestTime: %s isPB: %s",
+                                bossName, time, bestTime, isPb));
+
+                        // Check if we already have a notification for this boss
+                        BossNotification current = bossData.get();
+                        if (current != null && current.getBoss().equals(bossName) && current.getTime() == null) {
+                            BossNotification withTime = new BossNotification(
+                                    current.getBoss(),
+                                    current.getCount(),
+                                    current.getGameMessage(),
+                                    time,
+                                    bestTime,
+                                    isPb
+                            );
+                            bossData.set(withTime);
+                            System.out.println("Updated existing notification with time data: " + withTime);
+                            processKill(withTime);
+                        }
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
+                }
+                return;
+            }
+        }
+
+        // Kill count message handling
+        parseBossKill(message).ifPresent(notification -> {
+            String bossName = notification.getBoss();
+            System.out.println("Found kill count message for " + bossName);
+
+            // Check for pending time data
+            TimeData timeData = pendingTimeData.get(bossName);
+            if (timeData != null) {
+                BossNotification withTime = new BossNotification(
+                        bossName,
+                        notification.getCount(),
+                        notification.getGameMessage(),
+                        timeData.time,
+                        timeData.bestTime,
+                        timeData.isPb
+                );
+                System.out.println("Created notification with pending time data: " + withTime);
+                bossData.set(withTime);
+                processKill(withTime);
+            } else {
+                // Store notification and wait for time data
+                System.out.println("Storing notification without time data for: " + bossName);
+                bossData.set(notification);
+
+                // Only schedule time check for non-raid bosses or if we haven't processed this kill yet
+                if (!RAID_STYLE_BOSSES.contains(bossName)) {
+                    scheduleTimeDataCheck(notification);
+                } else {
+                    // For raid bosses, process immediately as time should have been received
+                    System.out.println("Processing raid boss kill without time data: " + bossName);
+                    processKill(notification);
+                }
             }
         });
-
-        // Then check for kill count message
-        parseBossKill(message).ifPresent(this::updateData);
     }
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
@@ -260,7 +331,10 @@ public class ChatMessageEvent {
         }
 
         // Clean up old time messages
-        recentTimeData.entrySet().removeIf(entry -> !entry.getValue().isRecent());
+        if (processedKills.size() > 100) { // Prevent memory leak
+            processedKills.clear();
+            System.out.println("Cleared processed kills cache");
+        }
     }
     private void processCollection(String itemName) {
         int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
@@ -335,57 +409,96 @@ public class ChatMessageEvent {
 
 
     private void processKill(BossNotification data) {
-        if (data.getBoss() == null || data.getCount() == null)
+        System.out.println("About to process kill Notification: " + data);
+        if (data.getBoss() == null || data.getCount() == null) {
+            System.out.println("Missing Boss or Count Data");
             return;
-        boolean ba = data.getBoss().equals(BA_BOSS_NAME);
-        boolean isPb = data.isPersonalBest() == Boolean.TRUE;
+        }
+        String killKey = data.getBoss() + "-" + data.getCount();
+
+        // Check if we've already processed this kill
+        if (processedKills.contains(killKey)) {
+            System.out.println("Kill already processed, skipping: " + killKey);
+            return;
+        }
+
+        System.out.println("processing Kill for Boss: " + data.getBoss() + " with time: " + data.getTime() + " and PB: " + data.getBestTime());
+
+
+        // Add to processed kills before sending webhook
+        processedKills.add(killKey);
+        // Check for time data for any boss
+        if (data.getTime() == null) {
+            TimeData timeData = recentTimeData.get(data.getBoss());
+            if (timeData != null && timeData.isRecent()) {
+                data = new BossNotification(
+                        data.getBoss(),
+                        data.getCount(),
+                        data.getGameMessage(),
+                        timeData.time,
+                        timeData.bestTime,
+                        timeData.isPb
+                );
+            }
+        }
+
         String player = plugin.getLocalPlayerName();
-        String time = formatTime(data.getTime(), isPreciseTiming(client));
-        String bestTime = formatTime(data.getBestTime(), isPreciseTiming(client));
-        CustomWebhookBody.Embed killEmbed = null;
-        CustomWebhookBody killWebhook = new CustomWebhookBody();
-        killEmbed = new CustomWebhookBody.Embed();
+        CustomWebhookBody.Embed killEmbed = new CustomWebhookBody.Embed();
         killEmbed.setTitle(player + " has killed a boss:");
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
-        killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
-        killEmbed.addField("kill_time", time, true);
-        killEmbed.addField("best_time", bestTime, true);
+        killEmbed.addField("player_name", player, true);
+
+        // Add time data if available
+        if (data.getTime() != null) {
+            killEmbed.addField("kill_time", formatTime(data.getTime(), isPreciseTiming(client)), true);
+        }
+        if (data.getBestTime() != null) {
+            killEmbed.addField("best_time", formatTime(data.getBestTime(), isPreciseTiming(client)), true);
+        }
+        killEmbed.addField("is_pb", String.valueOf(data.isPersonalBest()), true);
+
         killEmbed.addField("auth_key", config.token(), true);
-        killEmbed.addField("is_pb", String.valueOf(isPb), true);
         String accountHash = String.valueOf(client.getAccountHash());
         killEmbed.addField("acc_hash", accountHash, true);
 
+        CustomWebhookBody killWebhook = new CustomWebhookBody();
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
-        mostRecentNpcData = null;
     }
 
-    private void updateData(BossNotification updated) {
+    private void updateData(BossNotification notification) {
+        final String bossName = notification.getBoss();
+
         bossData.getAndUpdate(old -> {
             if (old == null) {
-                // Store pending notification for later processing
-                pendingNotifications.put(updated.getBoss(), updated);
-                
-                // Schedule cleanup task
+                // Schedule a check for time data
                 executor.schedule(() -> {
-                    BossNotification pending = pendingNotifications.remove(updated.getBoss());
-                    if (pending != null) {
-                        // If notification wasn't processed by loot event, process it now
-                        processKill(pending);
+                    BossNotification current = bossData.get();
+                    if (current != null && current.getBoss().equals(bossName) && current.getTime() == null) {
+                        TimeData timeData = recentTimeData.get(bossName);
+                        if (timeData != null && timeData.isRecent()) {
+                            BossNotification withTime = new BossNotification(
+                                    current.getBoss(),
+                                    current.getCount(),
+                                    current.getGameMessage(),
+                                    timeData.time,
+                                    timeData.bestTime,
+                                    timeData.isPb
+                            );
+                            bossData.set(withTime);
+                            System.out.println("Updated notification with delayed time data: "+ withTime);
+                            processKill(withTime);
+                        } else {
+                            System.out.println("Processing kill without time data");
+                            processKill(current);
+                        }
                     }
-                }, MESSAGE_LOOT_WINDOW, TimeUnit.MILLISECONDS);
-                
-                return updated;
+                }, KILL_MESSAGE_WINDOW.toMillis(), TimeUnit.MILLISECONDS);
+
+                return notification;
             } else {
-                return new BossNotification(
-                        defaultIfNull(updated.getBoss(), old.getBoss()),
-                        defaultIfNull(updated.getCount(), old.getCount()),
-                        defaultIfNull(updated.getGameMessage(), old.getGameMessage()),
-                        defaultIfNull(updated.getTime(), old.getTime()),
-                        defaultIfNull(updated.getBestTime(), old.getBestTime()),
-                        defaultIfNull(updated.isPersonalBest(), old.isPersonalBest())
-                );
+                return old; // Keep existing data
             }
         });
     }
@@ -410,13 +523,38 @@ public class ChatMessageEvent {
 
     private Optional<BossNotification> parseBossKill(String message) {
         return parseBoss(message).map(pair -> {
-            String bossName = pair.getLeft();
-            Integer killCount = pair.getRight();
+                    String bossName = pair.getLeft();
+                    Integer killCount = pair.getRight();
+                    System.out.println("Parsing Boss Kill: " + bossName + " with kill count: " + killCount);
 
             // Look for recent time data for this boss
             TimeData timeData = recentTimeData.get(bossName);
             if (timeData != null && timeData.isRecent()) {
-                System.out.println("Found recent time data for:" + bossName + " " + timeData);
+                System.out.println("Found recent time data for" + bossName + ":" + timeData);
+                return new BossNotification(
+                        bossName,
+                        killCount,
+                        message,
+                        timeData.time,
+                        timeData.bestTime,
+                        timeData.isPb
+                );
+            }
+            // Check for time in the current message
+            parseKillTime(message).ifPresent(timeTriple -> {
+                log.debug("Found time data in current message: time={}, bestTime={}, isPb={}",
+                        timeTriple.getLeft(), timeTriple.getMiddle(), timeTriple.getRight());
+                recentTimeData.put(bossName, new TimeData(
+                        timeTriple.getLeft(),
+                        timeTriple.getMiddle(),
+                        timeTriple.getRight()
+                ));
+            });
+
+            // Try to get the most recent time data again
+            timeData = recentTimeData.get(bossName);
+            if (timeData != null && timeData.isRecent()) {
+                System.out.println("Using newly stored time data: " + timeData);
                 return new BossNotification(
                         bossName,
                         killCount,
@@ -427,7 +565,7 @@ public class ChatMessageEvent {
                 );
             }
 
-            // If no recent time data, create notification without time
+            System.out.println("No time data found for boss: " + bossName);
             return new BossNotification(bossName, killCount, message, null, null, null);
         });
     }
@@ -678,9 +816,108 @@ public class ChatMessageEvent {
         }
 
         boolean isRecent() {
-            return Duration.between(timestamp, Instant.now()).compareTo(TIME_MESSAGE_WINDOW) <= 0;
+            return Duration.between(timestamp, Instant.now()).compareTo(Duration.ofSeconds(2)) <= 0;
+        }
+        @Override
+        public String toString(){
+            return String.format("TimeData(time=%s, bestTime=%s, isPb%s)",time,bestTime,isPb);
         }
     }
+    private static final Pattern[] TIME_PATTERNS = {
+            // Gauntlet format
+            Pattern.compile("Challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Corrupted Format
+            Pattern.compile("Corrupted challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Tombs of Amascut Format (Total Time)
+            Pattern.compile("Tombs of Amascut total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Tombs of Amascut Expert Mode Format (Total Time)
+            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Theatre of Blood Time Format (Completion Time)
+            Pattern.compile("Theatre of Blood completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Theatre of Blood Time Format (Total Time)
+            Pattern.compile("Theatre of Blood total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Chambers of Xeric Time Format
+            Pattern.compile("Duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
+            // Standard boss format
+            Pattern.compile("Fight duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)"),
+            // With decimal seconds
+            Pattern.compile("Fight duration: (\\d+:\\d+\\.\\d+)\\. Personal best: (\\d+:\\d+\\.\\d+)"),
+            // Without personal best
+            Pattern.compile("Fight duration: (\\d+:\\d+(?:\\.\\d+)?)"),
+            // Alternative format
+            Pattern.compile("Duration: (\\d+:\\d+(?:\\.\\d+)?)")
+    };
+    private String determineBossFromMessage(String message) {
+        // Theatre of Blood variants
+        if (message.contains("Theatre of Blood total completion time:")) {
+            return "Theatre of Blood: Hard Mode";
+        }
+        if (message.contains("Theatre of Blood completion time:")) {
+            return "Theatre of Blood";
+        }
+
+        // Other raid-style bosses
+        if (message.contains("Corrupted challenge")) return "Corrupted Hunllef";
+        if (message.contains("Challenge duration")) return "Crystalline Hunllef";
+        if (message.contains("Expert Mode")) return "Tombs of Amascut: Expert Mode";
+        if (message.contains("Tombs of Amascut")) return "Tombs of Amascut";
+        if (message.contains("Challenge Mode")) return "Chambers of Xeric: Challenge Mode";
+        if (message.contains("Raid complete") || message.contains("Challenge complete")) return "Chambers of Xeric";
+
+        // For standard boss fights (like Zulrah), use the most recent NPC data
+        return mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
+    }
+    private static final Set<String> RAID_STYLE_BOSSES = Set.of(
+            "Crystalline Hunllef",      // Regular Gauntlet
+            "Corrupted Hunllef",        // Corrupted Gauntlet
+            "Tombs of Amascut",
+            "Tombs of Amascut: Expert Mode",
+            "Theatre of Blood",
+            "Theatre of Blood: Hard Mode",
+            "Chambers of Xeric",
+            "Chambers of Xeric: Challenge Mode"
+    );
+    private void updateExistingNotification(String bossName, TimeData timeData) {
+        BossNotification current = bossData.get();
+        if (current != null && current.getBoss().equals(bossName)) {
+            BossNotification withTime = new BossNotification(
+                    current.getBoss(),
+                    current.getCount(),
+                    current.getGameMessage(),
+                    timeData.time,
+                    timeData.bestTime,
+                    timeData.isPb
+            );
+            bossData.set(withTime);
+            System.out.println("Updated existing notification with time data: " + withTime);
+            processKill(withTime);
+        }
+    }
+    private void scheduleTimeDataCheck(BossNotification notification) {
+        executor.schedule(() -> {
+            BossNotification current = bossData.get();
+            if (current != null && current.getBoss().equals(notification.getBoss())) {
+                TimeData timeData = pendingTimeData.get(notification.getBoss());
+                if (timeData != null) {
+                    BossNotification withTime = new BossNotification(
+                            current.getBoss(),
+                            current.getCount(),
+                            current.getGameMessage(),
+                            timeData.time,
+                            timeData.bestTime,
+                            timeData.isPb
+                    );
+                    bossData.set(withTime);
+                    System.out.println("Processing kill with delayed time data: " + withTime);
+                    processKill(withTime);
+                } else {
+                    System.out.println("No time data found after delay, processing without time: " + current);
+                    processKill(current);
+                }
+            }
+        }, TIME_MESSAGE_DELAY, TimeUnit.MILLISECONDS);
+    }
+
 }
 
 
