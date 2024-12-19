@@ -61,6 +61,14 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         logoLabel.setHorizontalAlignment(SwingConstants.CENTER);
         logoPanel.add(logoLabel, BorderLayout.CENTER);
 
+        // Add debug button at the top (for testing)
+        if (plugin.chatMessageEventHandler != null) {
+            JButton testButton = new JButton("Generate Test Messages");
+            testButton.addActionListener(e -> plugin.chatMessageEventHandler.generateTestMessage());
+            testButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+            logoPanel.add(testButton, BorderLayout.NORTH);
+        }
+
         // Create the search panel
         JPanel searchPanel = new JPanel();
         searchPanel.setLayout(new GridBagLayout());

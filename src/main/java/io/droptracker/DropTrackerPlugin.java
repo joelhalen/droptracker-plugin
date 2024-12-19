@@ -149,7 +149,7 @@ public class DropTrackerPlugin extends Plugin {
 	private static final int MAX_RETRIES = 5;
 	private int timesTried = 0;
 	@Inject
-	private ChatMessageEvent chatMessageEventHandler;
+	public ChatMessageEvent chatMessageEventHandler;
 
 	@Inject
 	private ClientToolbar clientToolbar;

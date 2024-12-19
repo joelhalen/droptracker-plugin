@@ -100,7 +100,10 @@ public class ChatMessageEvent {
     private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile("Your (?<key>.+)\\s(?<type>kill|chest|completion)\\s?count is: (?<value>[\\d,]+)\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?:completed|subdued) (?<key>.+) count is: (?<value>[\\d,]+)\\b");
+    private static final Pattern SECONDARY_REGEX = Pattern.compile(
+        "Your (?:completed|subdued) (?<key>Tombs of Amascut(?:: Expert Mode)?|Theatre of Blood(?:: Hard Mode)?|Chambers of Xeric(?: Challenge Mode)?)(?:\\s+count\\s+is:?|\\s+completion\\s+count\\s+is:?)\\s*(?<value>[\\d,]+)\\.?",
+        Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern TIME_REGEX = Pattern.compile(
             "(?:(?:Challenge )?Duration|Challenge duration|time|Subdued in):? (?<time>[\\d:]+(?:\\.\\d+)?)(?:\\. Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?))?",
             Pattern.CASE_INSENSITIVE
@@ -159,50 +162,55 @@ public class ChatMessageEvent {
 
         System.out.println("Game message received: '" + message + "'");
 
-        // Check for time messages using existing patterns
+        // Check for time messages first
         for (Pattern pattern : TIME_PATTERNS) {
             Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
                 System.out.println("Found time message matching pattern: " + pattern.pattern());
                 try {
-                    Duration time = parseTime(timeMatcher.group(1));
-                    Duration bestTime = null;
-                    try {
-                        String bestTimeStr = timeMatcher.group(2);
-                        if (bestTimeStr != null) {
-                            bestTime = parseTime(bestTimeStr);
-                        }
-                    } catch (IllegalStateException | IndexOutOfBoundsException e) {
-                        // Pattern doesn't include best time
+                    // Debug the full match
+                    System.out.println("Full match: " + timeMatcher.group(0));
+                    String timeStr = timeMatcher.group(1);
+                    String bestTimeStr = timeMatcher.group(2);
+                    
+                    System.out.println("Group 1 (Duration): " + timeStr);
+                    System.out.println("Group 2 (Personal Best): " + bestTimeStr);
+                    
+                    // Validate time format before parsing
+                    if (!timeStr.matches("\\d+:\\d+")) {
+                        System.out.println("Invalid duration format: " + timeStr);
+                        continue;
                     }
+                    
+                    Duration time = parseTime(timeStr);
+                    Duration bestTime = parseTime(bestTimeStr);
                     boolean isPb = message.contains("new personal best") || message.contains("(Personal best)");
 
-                    // Determine boss name based on message
-                    String bossName = determineBossFromMessage(message);
-                    if (bossName != null) {
-                        TimeData timeData = new TimeData(time, bestTime, isPb);
-                        pendingTimeData.put(bossName, timeData);
-                        System.out.println(String.format("Stored time data for %s - Time: %s BestTime: %s isPB: %s",
-                                bossName, time, bestTime, isPb));
-
-                        // Check if we already have a notification for this boss
-                        BossNotification current = bossData.get();
-                        if (current != null && current.getBoss().equals(bossName) && current.getTime() == null) {
-                            BossNotification withTime = new BossNotification(
-                                    current.getBoss(),
-                                    current.getCount(),
-                                    current.getGameMessage(),
-                                    time,
-                                    bestTime,
-                                    isPb
-                            );
-                            bossData.set(withTime);
-                            System.out.println("Updated existing notification with time data: " + withTime);
-                            processKill(withTime);
+                    // Determine boss type and store time data
+                    if (message.contains("Team Size:")) {
+                        // Handle CoX time data for both regular and CM
+                        storeBossTimeData("Chambers of Xeric", time, bestTime, isPb);
+                        storeBossTimeData("Chambers of Xeric Challenge Mode", time, bestTime, isPb);
+                    } else if (message.contains("Tombs of Amascut: Expert Mode")) {
+                        storeBossTimeData("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
+                    } else if (message.contains("Tombs of Amascut")) {
+                        storeBossTimeData("Tombs of Amascut", time, bestTime, isPb);
+                    } else if (message.contains("Corrupted challenge")) {
+                        storeBossTimeData("Corrupted Hunllef", time, bestTime, isPb);
+                    } else if (message.contains("Challenge duration")) {
+                        storeBossTimeData("Crystalline Hunllef", time, bestTime, isPb);
+                    } else {
+                        // Handle regular boss time data
+                        String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
+                        if (bossName != null) {
+                            storeBossTimeData(bossName, time, bestTime, isPb);
                         }
                     }
+                    
+                    System.out.println("Successfully processed time data for message: " + message);
                 } catch (Exception e) {
                     System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
+                    e.printStackTrace();
                 }
                 return;
             }
@@ -422,49 +430,34 @@ public class ChatMessageEvent {
             return;
         }
 
-        System.out.println("processing Kill for Boss: " + data.getBoss() + " with time: " + data.getTime() + " and PB: " + data.getBestTime());
-
-
         // Add to processed kills before sending webhook
         processedKills.add(killKey);
-        // Check for time data for any boss
-        if (data.getTime() == null) {
-            TimeData timeData = recentTimeData.get(data.getBoss());
-            if (timeData != null && timeData.isRecent()) {
-                data = new BossNotification(
-                        data.getBoss(),
-                        data.getCount(),
-                        data.getGameMessage(),
-                        timeData.time,
-                        timeData.bestTime,
-                        timeData.isPb
-                );
+
+        clientThread.invoke(() -> {
+            String player = plugin.getLocalPlayerName();
+            CustomWebhookBody.Embed killEmbed = new CustomWebhookBody.Embed();
+            killEmbed.setTitle(player + " has killed a boss:");
+            killEmbed.addField("type", "npc_kill", true);
+            killEmbed.addField("boss_name", data.getBoss(), true);
+            killEmbed.addField("player_name", player, true);
+
+            // Add time data if available
+            if (data.getTime() != null) {
+                killEmbed.addField("kill_time", formatTime(data.getTime(), isPreciseTiming(client)), true);
             }
-        }
+            if (data.getBestTime() != null) {
+                killEmbed.addField("best_time", formatTime(data.getBestTime(), isPreciseTiming(client)), true);
+            }
+            killEmbed.addField("is_pb", String.valueOf(data.isPersonalBest()), true);
 
-        String player = plugin.getLocalPlayerName();
-        CustomWebhookBody.Embed killEmbed = new CustomWebhookBody.Embed();
-        killEmbed.setTitle(player + " has killed a boss:");
-        killEmbed.addField("type", "npc_kill", true);
-        killEmbed.addField("boss_name", data.getBoss(), true);
-        killEmbed.addField("player_name", player, true);
+            killEmbed.addField("auth_key", config.token(), true);
+            String accountHash = String.valueOf(client.getAccountHash());
+            killEmbed.addField("acc_hash", accountHash, true);
 
-        // Add time data if available
-        if (data.getTime() != null) {
-            killEmbed.addField("kill_time", formatTime(data.getTime(), isPreciseTiming(client)), true);
-        }
-        if (data.getBestTime() != null) {
-            killEmbed.addField("best_time", formatTime(data.getBestTime(), isPreciseTiming(client)), true);
-        }
-        killEmbed.addField("is_pb", String.valueOf(data.isPersonalBest()), true);
-
-        killEmbed.addField("auth_key", config.token(), true);
-        String accountHash = String.valueOf(client.getAccountHash());
-        killEmbed.addField("acc_hash", accountHash, true);
-
-        CustomWebhookBody killWebhook = new CustomWebhookBody();
-        killWebhook.getEmbeds().add(killEmbed);
-        plugin.sendDropTrackerWebhook(killWebhook, "1");
+            CustomWebhookBody killWebhook = new CustomWebhookBody();
+            killWebhook.getEmbeds().add(killEmbed);
+            plugin.sendDropTrackerWebhook(killWebhook, "1");
+        });
     }
 
     private void updateData(BossNotification notification) {
@@ -522,103 +515,48 @@ public class ChatMessageEvent {
     }
 
     private Optional<BossNotification> parseBossKill(String message) {
+        System.out.println("Attempting to parse boss kill from message: " + message);
         return parseBoss(message).map(pair -> {
-                    String bossName = pair.getLeft();
-                    Integer killCount = pair.getRight();
-                    System.out.println("Parsing Boss Kill: " + bossName + " with kill count: " + killCount);
+            String bossName = pair.getLeft();
+            Integer killCount = pair.getRight();
+            System.out.println("Successfully parsed boss kill - Name: " + bossName + ", KC: " + killCount);
 
             // Look for recent time data for this boss
             TimeData timeData = recentTimeData.get(bossName);
             if (timeData != null && timeData.isRecent()) {
-                System.out.println("Found recent time data for" + bossName + ":" + timeData);
+                System.out.println("Found recent time data for " + bossName + ": " + timeData);
                 return new BossNotification(
-                        bossName,
-                        killCount,
-                        message,
-                        timeData.time,
-                        timeData.bestTime,
-                        timeData.isPb
+                    bossName,
+                    killCount,
+                    message,
+                    timeData.time,
+                    timeData.bestTime,
+                    timeData.isPb
                 );
             }
-            // Check for time in the current message
-            parseKillTime(message).ifPresent(timeTriple -> {
-                log.debug("Found time data in current message: time={}, bestTime={}, isPb={}",
-                        timeTriple.getLeft(), timeTriple.getMiddle(), timeTriple.getRight());
-                recentTimeData.put(bossName, new TimeData(
-                        timeTriple.getLeft(),
-                        timeTriple.getMiddle(),
-                        timeTriple.getRight()
-                ));
-            });
-
-            // Try to get the most recent time data again
-            timeData = recentTimeData.get(bossName);
-            if (timeData != null && timeData.isRecent()) {
-                System.out.println("Using newly stored time data: " + timeData);
-                return new BossNotification(
-                        bossName,
-                        killCount,
-                        message,
-                        timeData.time,
-                        timeData.bestTime,
-                        timeData.isPb
-                );
-            }
-
-            System.out.println("No time data found for boss: " + bossName);
+            
+            System.out.println("No recent time data found for " + bossName);
             return new BossNotification(bossName, killCount, message, null, null, null);
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message) {
         System.out.println("Attempting to parse kill time from message: " + message);
 
-        // Define patterns for different message formats
-        Pattern[] timePatterns = new Pattern[]{
-                // Gauntlet format (with period)
-                Pattern.compile("Challenge duration: (?<time>[\\d:]+)\\. Personal best: (?<bestTime>[\\d:]+)\\."),
-                // Standard boss format (without period)
-                Pattern.compile("Fight duration: (?<time>[\\d:]+\\.\\d+) \\(Personal best: (?<bestTime>[\\d:]+\\.\\d+)\\)"),
-                // Generic format (handles both with and without period)
-                Pattern.compile("(?:Fight|Challenge|Kill) duration: (?<time>[\\d:]+(?:\\.\\d+)?)\\.? (?:Personal best: |\\(Personal best: )(?<bestTime>[\\d:]+(?:\\.\\d+)?)\\.?\\)?"),
-                // Backup patterns for single time messages
-                Pattern.compile("Duration: (?<time>[\\d:]+(?:\\.\\d+)?)\\.?"),
-                Pattern.compile("Personal best: (?<bestTime>[\\d:]+(?:\\.\\d+)?)\\.?")
-        };
-
-        for (Pattern pattern : timePatterns) {
+        for (Pattern pattern : TIME_PATTERNS) {
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
                 System.out.println("Matched pattern: " + pattern.pattern());
 
-                Duration time = null;
-                Duration bestTime = null;
-                boolean isPb = message.toLowerCase().contains("new personal best");
-
-                // Try to get the time
                 try {
-                    String timeStr = matcher.group("time");
-                    if (timeStr != null) {
-                        time = parseTime(timeStr.trim());
-                        System.out.println("Parsed time: " + time);
-                    }
-                } catch (IllegalArgumentException e) {
-                    System.out.println("No time group found or parse error: " + e.getMessage());
-                }
+                    Duration time = parseTime(matcher.group(1));
+                    Duration bestTime = parseTime(matcher.group(2));
+                    boolean isPb = message.toLowerCase().contains("new personal best");
 
-                // Try to get the best time
-                try {
-                    String bestTimeStr = matcher.group("bestTime");
-                    if (bestTimeStr != null) {
-                        bestTime = parseTime(bestTimeStr.trim());
-                        System.out.println("Parsed best time: " + bestTime);
-
-                    }
-                } catch (IllegalArgumentException e) {
-                    System.out.println("No best time group found or parse error: " + e.getMessage());
-                }
-
-                if (time != null || bestTime != null) {
+                    System.out.println(String.format("Parsed time: %s, best time: %s, isPB: %s", 
+                        time, bestTime, isPb));
                     return Optional.of(Triple.of(time, bestTime, isPb));
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error parsing time values: " + e.getMessage());
                 }
             }
         }
@@ -653,7 +591,8 @@ public class ChatMessageEvent {
 
     static Optional<Pair<String, Integer>> parseBoss(String message) {
         Matcher primary = PRIMARY_REGEX.matcher(message);
-        Matcher secondary;
+        Matcher secondary = SECONDARY_REGEX.matcher(message);
+        
         if (primary.find()) {
             String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
             String count = primary.group("value");
@@ -664,20 +603,25 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    System.out.println("Failed to parse kill count" + count + " for boss " + boss);
+                    System.out.println("Failed to parse kill count " + count + " for boss " + boss);
                 }
             }
-        } else if ((secondary = SECONDARY_REGEX.matcher(message)).find()) {
-            String key = parseSecondary(secondary.group("key"));
+        } else if (secondary.find()) {
+            String key = secondary.group("key");
             String value = secondary.group("value");
-            if (key != null) {
+            System.out.println("Found secondary match - key: " + key + ", value: " + value);
+            
+            // Handle Tombs of Amascut and other raid-style bosses
+            if (key != null && (key.contains("Tombs of Amascut") || 
+                              key.contains("Theatre of Blood") || 
+                              key.contains("Chambers of Xeric"))) {
                 try {
                     int killCount = Integer.parseInt(value.replace(",", ""));
                     mostRecentNpcData = Pair.of(key, killCount);
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    System.out.println("Failed to parse kill count" + value + " for boss " + key);
+                    System.out.println("Failed to parse kill count " + value + " for boss " + key);
                 }
             }
         }
@@ -720,16 +664,16 @@ public class ChatMessageEvent {
     }
 
     private static String parseSecondary(String boss) {
-        if (boss == null || "Wintertodt".equalsIgnoreCase(boss))
+        if (boss == null || "Wintertodt".equalsIgnoreCase(boss)) {
             return boss;
+        }
 
-        int modeSeparator = boss.lastIndexOf(':');
-        String raid = modeSeparator > 0 ? boss.substring(0, modeSeparator) : boss;
-        if (raid.equalsIgnoreCase("Theatre of Blood")
-                || raid.equalsIgnoreCase("Tombs of Amascut")
-                || raid.equalsIgnoreCase("Chambers of Xeric")
-                || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode"))
-            return boss;
+        // Handle raid names with their modes
+        if (boss.contains("Tombs of Amascut") || 
+            boss.contains("Theatre of Blood") || 
+            boss.contains("Chambers of Xeric")) {
+            return boss;  // Return the full name including mode
+        }
 
         return null;
     }
@@ -823,29 +767,19 @@ public class ChatMessageEvent {
             return String.format("TimeData(time=%s, bestTime=%s, isPb%s)",time,bestTime,isPb);
         }
     }
+    private static final String TEAM_SIZES = "(?<teamsize>\\d+(?:\\+|-\\d+)? players?|Solo)";
+    
     private static final Pattern[] TIME_PATTERNS = {
-            // Gauntlet format
-            Pattern.compile("Challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Corrupted Format
-            Pattern.compile("Corrupted challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Tombs of Amascut Format (Total Time)
-            Pattern.compile("Tombs of Amascut total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Tombs of Amascut Expert Mode Format (Total Time)
-            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Theatre of Blood Time Format (Completion Time)
-            Pattern.compile("Theatre of Blood completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Theatre of Blood Time Format (Total Time)
-            Pattern.compile("Theatre of Blood total completion time: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Chambers of Xeric Time Format
-            Pattern.compile("Duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)\\."),
-            // Standard boss format
-            Pattern.compile("Fight duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)"),
-            // With decimal seconds
-            Pattern.compile("Fight duration: (\\d+:\\d+\\.\\d+)\\. Personal best: (\\d+:\\d+\\.\\d+)"),
-            // Without personal best
-            Pattern.compile("Fight duration: (\\d+:\\d+(?:\\.\\d+)?)"),
-            // Alternative format
-            Pattern.compile("Duration: (\\d+:\\d+(?:\\.\\d+)?)")
+        // CoX pattern
+        Pattern.compile("Team Size: .+? Duration: (\\d+:\\d+) Personal Best: (\\d+:\\d+)"),
+        // ToA patterns
+        Pattern.compile("Tombs of Amascut total completion time: (\\d+:\\d+)\\. Personal Best: (\\d+:\\d+)"),
+        Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d+:\\d+)\\. Personal Best: (\\d+:\\d+)"),
+        // Gauntlet patterns
+        Pattern.compile("Corrupted challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)"),
+        Pattern.compile("Challenge duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)"),
+        // Standard boss pattern
+        Pattern.compile("Fight duration: (\\d+:\\d+)\\. Personal best: (\\d+:\\d+)"),
     };
     private String determineBossFromMessage(String message) {
         // Theatre of Blood variants
@@ -861,7 +795,7 @@ public class ChatMessageEvent {
         if (message.contains("Challenge duration")) return "Crystalline Hunllef";
         if (message.contains("Expert Mode")) return "Tombs of Amascut: Expert Mode";
         if (message.contains("Tombs of Amascut")) return "Tombs of Amascut";
-        if (message.contains("Challenge Mode")) return "Chambers of Xeric: Challenge Mode";
+        if (message.contains("Challenge Mode")) return "Chambers of Xeric Challenge Mode";
         if (message.contains("Raid complete") || message.contains("Challenge complete")) return "Chambers of Xeric";
 
         // For standard boss fights (like Zulrah), use the most recent NPC data
@@ -875,7 +809,7 @@ public class ChatMessageEvent {
             "Theatre of Blood",
             "Theatre of Blood: Hard Mode",
             "Chambers of Xeric",
-            "Chambers of Xeric: Challenge Mode"
+            "Chambers of Xeric Challenge Mode"
     );
     private void updateExistingNotification(String bossName, TimeData timeData) {
         BossNotification current = bossData.get();
@@ -917,6 +851,158 @@ public class ChatMessageEvent {
             }
         }, TIME_MESSAGE_DELAY, TimeUnit.MILLISECONDS);
     }
+    
+    private void storeBossTimeData(String bossName, Duration time, Duration bestTime, boolean isPb) {
+        TimeData timeData = new TimeData(time, bestTime, isPb);
+        pendingTimeData.put(bossName, timeData);
+        recentTimeData.put(bossName, timeData);
+        System.out.println("Stored time data for " + bossName + " - Time: " + time + ", BestTime: " + bestTime);
+
+        // Update existing notification if we have one
+        BossNotification current = bossData.get();
+        if (current != null && current.getBoss().equals(bossName)) {
+            BossNotification withTime = new BossNotification(
+                current.getBoss(),
+                current.getCount(),
+                current.getGameMessage(),
+                time,
+                bestTime,
+                isPb
+            );
+            bossData.set(withTime);
+            System.out.println("Updated existing notification with time data: " + withTime);
+            processKill(withTime);
+        }
+    }
+
+    @VisibleForTesting
+    public void generateTestMessage() {
+        //Chambers of Xeric Challenge Mode Test
+        /* 
+          onGameMessage("Congratulations - Your raid is complete!");        
+          onGameMessage("Team Size: 3 players Duration: 32:32 Personal Best: 28:26 Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+          
+        */
+        //Chambers of Xeric Test
+         /* 
+          onGameMessage("Congratulations - Your raid is complete!");        
+          onGameMessage("Team Size: 3 players Duration: 27:32 Personal Best: 22:26 Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric count is 52.");
+         */
+        
+       //Chambers of Xeric Challenge Mode PB Test
+        /* 
+         * onGameMessage("Congratulations - Your raid is complete!");        
+         * onGameMessage("Team Size: 3 players Duration: 27:32 Personal Best: 22:26 Olm Duration: 4:11");
+         * onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 52.");
+         * 
+        */
+        //Tombs of Amascut Test
+        /*  
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");        
+          onGameMessage("Tombs of Amascut challenge completion time: 14:40. Personal Best: 12:16");
+          onGameMessage("Tombs of Amascut total completion time: 16:37. Personal Best: 14:37");
+          onGameMessage("Your completed Tombs of Amascut count is 15.");
+        */  
+        
+        //Tombs of Amascut Expert Mode Test
+        /*  
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");        
+          onGameMessage("Tombs of Amascut: Expert Mode challenge completion time: 20:40. Personal Best: 18:16");
+          onGameMessage("Tombs of Amascut: Expert Mode total completion time: 23:37. Personal Best: 20:37");
+          onGameMessage("Your completed Tombs of Amascut: Expert Mode count is 20.");
+        */  
+        
+       //Tombs of Amascut PB Test  
+        /* 
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");         
+          onGameMessage("Tombs of Amascut challenge completion time: 12:16 (new personal best)");
+          onGameMessage("Tombs of Amascut total completion time: 14:37 (new personal best)");
+          onGameMessage("Your completed Tombs of Amascut count is 10.");
+          
+        */
+        //Theatre of Blood Test
+        /* 
+          onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");        
+          onGameMessage("Your completed Theatre of Blood count is 11.");
+          
+        */
+        //Theatre of Blood Hard Mode Test
+        /* 
+          onGameMessage("Theatre of Blood completion time: 25:12. Personal best: 23:09");
+          onGameMessage("Theatre of Blood total completion time: 28:01. Personal best: 25:41");        
+          onGameMessage("Your completed Theatre of Blood: Hard Mode count is 11.");
+          
+        */
+        //Theatre of Blood Hard Mode PB Test
+        /* 
+          onGameMessage("Congratulations - Your raid is complete!");        
+          onGameMessage("Team Size: 3 players Duration: 32:32 Personal Best: 28:26 Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+          
+        */
+        //Gauntlet Test
+        /* 
+          onGameMessage("Challenge duration: 3:06. Personal best: 1:47.");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Gauntlet completion count is 40.");
+         * 
+        */
+        //Corrupted Gauntlet Test
+        /* 
+          onGameMessage("Corrupted challenge duration: 3:06. Personal best: 1:47.");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Corrupted Gauntlet completion count is 40.");
+          
+        */
+        //Corrupted Gauntlet PB Test
+        /* 
+          onGameMessage("Congratulations - Your raid is complete!");        
+          onGameMessage("Team Size: 3 players Duration: 32:32 Personal Best: 28:26 Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+          
+        */
+        //Nightmare Test
+        /* 
+          onGameMessage("Congratulations - Your raid is complete!");        
+          onGameMessage("Team Size: 3 players Duration: 32:32 Personal Best: 28:26 Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+          
+        */  
+        //Phosani Nightmare Test
+        /* 
+          onGameMessage("Your Phosani's Nightmare kill count is: 58.");        
+          onGameMessage("Team Size: Solo Fight Duration: 8:58. Personal best: 8:30");
+          
+        /* 
+        //Phosani Nightmare PB Test
+        /* 
+          onGameMessage("Your Phosani Nightmare kill count is: 100.");        
+          onGameMessage("Team Size: Solo Fight Duration: 5:30 (new personal best)");
+          
+        */  
+        //Zulrah Test
+        /* 
+          onGameMessage("Congratulations - Your Zulrah kill count is: 559.");        
+          onGameMessage("Fight duration: 1:02. Personal best: 0:59");
+          
+        */        
+              
+        //Zulrah PB Test
+        /* 
+          onGameMessage("Congratulations - Your Zulrah kill count is: 559.");        
+          onGameMessage("Fight duration: 1:02 (new personal best)");
+
+          
+        */        
+
+
+
+    }
+
+
 
 }
 
