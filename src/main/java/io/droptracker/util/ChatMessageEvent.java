@@ -141,10 +141,12 @@ public class ChatMessageEvent {
     private final Map<String, Triple<Duration, Duration, Boolean>> recentTimeMessages = new HashMap<>();
     private final Map<String, Instant> timeMessageTimestamps = new HashMap<>();
 
+    private static final ArrayList<String> specialRaidBosses = new ArrayList<>(Arrays.asList("Theatre of Blood", "Tombs of Amascut"));
+
     private static final Pattern[] TIME_PATTERNS = {
-            // Team patterns
-            Pattern.compile("Team Size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
-            Pattern.compile("Team Size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)"),
+            // Team patterns - updated to capture team size including + notation
+            Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)"),
             // ToA patterns
             Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.*\\d*).*"),
             Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
@@ -158,9 +160,9 @@ public class ChatMessageEvent {
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
     };
     private static final Pattern[] PB_PATTERNS = {
-            // Team patterns
-            Pattern.compile("Team Size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
-            Pattern.compile("Team Size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            // Team patterns - updated to capture team size including + notation
+            Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             // ToA patterns
             Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
@@ -387,6 +389,12 @@ public class ChatMessageEvent {
         CustomWebhookBody killWebhook = new CustomWebhookBody();
         killEmbed = new CustomWebhookBody.Embed();
         killEmbed.setTitle(player + " has killed a boss:");
+        String teamSize = "1";
+        if (data.getBoss().contains("Theatre of Blood")) {
+            teamSize = tobTeamSize();
+        }else if (data.getBoss().contains("Tombs of Amascut")) {
+            teamSize = toaTeamSize();
+        }
         killEmbed.addField("type", "npc_kill", true);
         killEmbed.addField("boss_name", data.getBoss(), true);
         killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
@@ -394,11 +402,13 @@ public class ChatMessageEvent {
         killEmbed.addField("best_time", bestTime, true);
         killEmbed.addField("auth_key", config.token(), true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
+        killEmbed.addField("team_size", String.valueOf(teamSize), true);
         String accountHash = String.valueOf(client.getAccountHash());
         killEmbed.addField("acc_hash", accountHash, true);
         killEmbed.addField("p_v", plugin.pluginVersion, true);
 
         killWebhook.getEmbeds().add(killEmbed);
+
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         mostRecentNpcData = null;
     }
@@ -483,50 +493,43 @@ public class ChatMessageEvent {
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
-
-        //check for Pb
-        for(Pattern pattern: PB_PATTERNS){
+        // Check for PB first
+        for (Pattern pattern : PB_PATTERNS) {
             Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
-                String timeStr = "";
-                String bestTimeStr = "";
-                boolean isPb = true;
-                try {
-                    timeStr = timeMatcher.group(1);
-                    bestTimeStr = timeMatcher.group(1);
-                }catch (Exception e){
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
+                String timeStr = timeMatcher.group(1);
+                // Extract team size if present
+                String teamSize = timeMatcher.groupCount() >= 2 ? timeMatcher.group("teamsize") : null;
+                if (teamSize != null) {
+                    // Store team size for later use
+                    pendingTimeData.get(bossName).setTeamSize(teamSize);
                 }
                 Duration time = parseTime(timeStr);
-                Duration bestTime = parseTime(bestTimeStr);
-                storeBossTime(bossName,time,bestTime,isPb);
-                return Optional.of(Triple.of(time, bestTime, isPb));
+                Duration bestTime = time; // For PB, current time is best time
+                storeBossTime(bossName, time, bestTime, true);
+                return Optional.of(Triple.of(time, bestTime, true));
             }
         }
 
-        //check for time
-        for(Pattern pattern: TIME_PATTERNS) {
-            boolean isPb = false;
+        // Check for regular time
+        for (Pattern pattern : TIME_PATTERNS) {
             Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
-                String timeStr = "";
-                String bestTimeStr = "";
-                try {
-                    timeStr = timeMatcher.group(1);
-                    bestTimeStr = timeMatcher.group(2);
-                } catch (Exception e) {
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
+                String timeStr = timeMatcher.group(1);
+                String bestTimeStr = timeMatcher.group(2);
+                // Extract team size if present
+                String teamSize = timeMatcher.groupCount() >= 3 ? timeMatcher.group("teamsize") : null;
+                if (teamSize != null) {
+                    // Store team size for later use
+                    pendingTimeData.get(bossName).setTeamSize(teamSize);
                 }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
-                storeBossTime(bossName,time,bestTime,isPb);
-                return Optional.of(Triple.of(time, bestTime, isPb));
+                storeBossTime(bossName, time, bestTime, false);
+                return Optional.of(Triple.of(time, bestTime, false));
             }
-
-
         }
         return Optional.empty();
-
     }
 
     @NotNull
@@ -756,6 +759,7 @@ public class ChatMessageEvent {
         final Duration bestTime;
         final boolean isPb;
         final Instant timestamp;
+        private String teamSize;
 
         TimeData(Duration time, Duration bestTime, boolean isPb) {
             this.time = time;
@@ -767,6 +771,15 @@ public class ChatMessageEvent {
         boolean isRecent() {
             return Duration.between(timestamp, Instant.now()).compareTo(Duration.ofSeconds(2)) <= 0;
         }
+
+        public void setTeamSize(String teamSize) {
+            this.teamSize = teamSize;
+        }
+
+        public String getTeamSize() {
+            return teamSize;
+        }
+
         @Override
         public String toString(){
             return String.format("TimeData(time=%s, bestTime=%s, isPb%s)",time,bestTime,isPb);
@@ -861,27 +874,47 @@ public class ChatMessageEvent {
         }
     }
 
+    private String tobTeamSize()
+	{
+		return String.valueOf(Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
+			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
+			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
+			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB4), 1) +
+			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
+	}
+
+	private String toaTeamSize()
+	{
+		return String.valueOf(Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_2_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_3_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_4_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
+	}
 
     @VisibleForTesting
     public void generateTestMessage() {
         //Chambers of Xeric Challenge Mode Test
         /*
           onGameMessage("Congratulations - Your raid is complete!");
-          onGameMessage("Team Size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+          onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
           onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
         */
 
         //Chambers of Xeric Test
         /*
           onGameMessage("Congratulations - Your raid is complete!");
-          onGameMessage("Team Size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
+          onGameMessage("Team size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
           onGameMessage("Your completed Chambers of Xeric count is 52.");
         */
 
         //Chambers of Xeric Challenge Mode PB Test
         /*
           onGameMessage("Congratulations - Your raid is complete!");
-          onGameMessage("Team Size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
           onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 47.");
         */
 
@@ -958,13 +991,13 @@ public class ChatMessageEvent {
         //Phosani Nightmare Test
         /*
           onGameMessage("Your Phosani's Nightmare kill count is: 58.");
-          onGameMessage("Team Size: Solo Fight Duration: 8:58. Personal best: 8:30");
+          onGameMessage("Team size: Solo Fight Duration: 8:58. Personal best: 8:30");
         */
 
         //Phosani Nightmare PB Test
         /*
           onGameMessage("Your Phosani's Nightmare kill count is: 100.");
-          onGameMessage("Team Size: Solo Fight Duration: 1:05:30 (new personal best)");
+          onGameMessage("Team size: Solo Fight Duration: 1:05:30 (new personal best)");
         */
         //Zulrah Test
         /*
