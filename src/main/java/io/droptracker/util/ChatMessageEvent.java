@@ -876,23 +876,25 @@ public class ChatMessageEvent {
 
     private String tobTeamSize()
 	{
-		return String.valueOf(Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
+		Integer teamSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
 			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
 			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
 			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB4), 1) +
 			Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
+		return teamSize.toString();
 	}
 
 	private String toaTeamSize()
 	{
-		return String.valueOf(Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
+		Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1 +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_2_HEALTH), 1) +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_3_HEALTH), 1) +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_4_HEALTH), 1) +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
 			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
-			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
+			Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1));
+		return teamSize.toString();
 	}
 
     @VisibleForTesting
