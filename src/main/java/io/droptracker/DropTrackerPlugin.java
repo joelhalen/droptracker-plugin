@@ -328,7 +328,7 @@ public class DropTrackerPlugin extends Plugin {
 	public void onLootReceived(LootReceived lootReceived) {
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
-	    if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
+		if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
 			processDropEvent(npcName, "npc", lootReceived.getItems());
 			return;
 		}
@@ -387,87 +387,87 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
-			AtomicReference<Integer> finalValue = new AtomicReference<>(0);
-			CustomWebhookBody customWebhookBody = new CustomWebhookBody();
-			AtomicReference<StringBuilder> itemListBuilder = new AtomicReference<>(new StringBuilder());
-			clientThread.invokeLater(() -> {
-				if (sourceType != "pvp") {
-					for (ItemStack item : stack(items)) {
-						Item tempItem = new Item(item.getId(), item.getQuantity());
+		AtomicReference<Integer> finalValue = new AtomicReference<>(0);
+		CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+		AtomicReference<StringBuilder> itemListBuilder = new AtomicReference<>(new StringBuilder());
+		clientThread.invokeLater(() -> {
+			if (sourceType != "pvp") {
+				for (ItemStack item : stack(items)) {
+					Item tempItem = new Item(item.getId(), item.getQuantity());
 //						if (!containerManager.isRealDrop(tempItem)) {
 //							// If the item is determined as something that was from their inv/gear, we don't send it.
 //							continue;
 //						}
-						int itemId = item.getId();
-						int qty = item.getQuantity();
-						int price = itemManager.getItemPrice(itemId);
-						ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-						finalValue.set(qty * price);
-						CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
-						itemEmbed.setImage(itemImageUrl(itemId));
-						String accountHash = String.valueOf(client.getAccountHash());
-						itemEmbed.addField("type", "drop", true);
-						itemEmbed.addField("source_type", sourceType, true);
-						itemEmbed.addField("acc_hash", accountHash, true);
-						itemEmbed.addField("item", itemComposition.getName(), true);
-						itemEmbed.addField("auth_key", config.token(), true);
-						itemEmbed.addField("player", getLocalPlayerName(), true);
-						itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
-						itemEmbed.addField("quantity", String.valueOf(qty), true);
-						itemEmbed.addField("value", String.valueOf(price), true);
-						itemEmbed.addField("source", npcName, true);
-						itemEmbed.addField("type", sourceType, true);
-						itemEmbed.title = getLocalPlayerName() + " received some drops:";
-						customWebhookBody.getEmbeds().add(itemEmbed);
-					}
-					customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
-					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						sendDropTrackerWebhook(customWebhookBody, finalValue.get());
-					}
-				} else {
-					/* PVP kills are basically completely ignored on the server side at the moment... */
-					// Tries to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
-					
-					itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
-					Integer totalValue = 0;
-					boolean isFirstPart = true;
-
-					for (ItemStack item : stack(items)) {
-						int itemId = item.getId();
-						int qty = item.getQuantity();
-						int price = itemManager.getItemPrice(itemId);
-						ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-						totalValue = totalValue + (qty * price);
-
-						String itemDetails = "Item: " + itemComposition.getName()
-								+ ", Quantity: " + qty
-								+ ", Value: " + price
-								+ ", Item ID: " + itemId + "\n";
-
-						if (itemListBuilder.get().length() + itemDetails.length() >= 1800) {
-							if (isFirstPart) {
-								itemListBuilder.get().append("\np1");
-								isFirstPart = false;
-							} else {
-								itemListBuilder.get().append("\np2");
-							}
-							itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
-							customWebhookBody.setContent(itemListBuilder.toString());
-							sendDropTrackerWebhook(customWebhookBody, finalValue.get());
-
-							itemListBuilder.set(new StringBuilder());
-							itemListBuilder.get().append(isFirstPart ? "\np1\n\n" : "\np2\n\n").append(getLocalPlayerName()).append(" received a PvP kill:\n");
-						}
-
-						itemListBuilder.get().append(itemDetails);
-					}
-
-					finalValue.set(totalValue);
-					itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
-					customWebhookBody.setContent(itemListBuilder.toString());
+					int itemId = item.getId();
+					int qty = item.getQuantity();
+					int price = itemManager.getItemPrice(itemId);
+					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+					finalValue.set(qty * price);
+					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
+					itemEmbed.setImage(itemImageUrl(itemId));
+					String accountHash = String.valueOf(client.getAccountHash());
+					itemEmbed.addField("type", "drop", true);
+					itemEmbed.addField("source_type", sourceType, true);
+					itemEmbed.addField("acc_hash", accountHash, true);
+					itemEmbed.addField("item", itemComposition.getName(), true);
+					itemEmbed.addField("auth_key", config.token(), true);
+					itemEmbed.addField("player", getLocalPlayerName(), true);
+					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
+					itemEmbed.addField("quantity", String.valueOf(qty), true);
+					itemEmbed.addField("value", String.valueOf(price), true);
+					itemEmbed.addField("source", npcName, true);
+					itemEmbed.addField("type", sourceType, true);
+					itemEmbed.title = getLocalPlayerName() + " received some drops:";
+					customWebhookBody.getEmbeds().add(itemEmbed);
+				}
+				customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
+				if (!customWebhookBody.getEmbeds().isEmpty()) {
 					sendDropTrackerWebhook(customWebhookBody, finalValue.get());
 				}
-			});
+			} else {
+				/* PVP kills are basically completely ignored on the server side at the moment... */
+				// Tries to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
+
+				itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
+				Integer totalValue = 0;
+				boolean isFirstPart = true;
+
+				for (ItemStack item : stack(items)) {
+					int itemId = item.getId();
+					int qty = item.getQuantity();
+					int price = itemManager.getItemPrice(itemId);
+					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+					totalValue = totalValue + (qty * price);
+
+					String itemDetails = "Item: " + itemComposition.getName()
+							+ ", Quantity: " + qty
+							+ ", Value: " + price
+							+ ", Item ID: " + itemId + "\n";
+
+					if (itemListBuilder.get().length() + itemDetails.length() >= 1800) {
+						if (isFirstPart) {
+							itemListBuilder.get().append("\np1");
+							isFirstPart = false;
+						} else {
+							itemListBuilder.get().append("\np2");
+						}
+						itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
+						customWebhookBody.setContent(itemListBuilder.toString());
+						sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+
+						itemListBuilder.set(new StringBuilder());
+						itemListBuilder.get().append(isFirstPart ? "\np1\n\n" : "\np2\n\n").append(getLocalPlayerName()).append(" received a PvP kill:\n");
+					}
+
+					itemListBuilder.get().append(itemDetails);
+				}
+
+				finalValue.set(totalValue);
+				itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
+				customWebhookBody.setContent(itemListBuilder.toString());
+				sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+			}
+		});
 
 	}
 
@@ -480,10 +480,10 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	public void sendDropTrackerWebhook(CustomWebhookBody webhook, String type) {
 		/* Requires a type ID to be passed
-		* "1" = a "Kill Time" or "KC" submission
-		* "2" = a "Collection Log" submission
-		* "3" = a "Combat Achievement" submission
-		*  */
+		 * "1" = a "Kill Time" or "KC" submission
+		 * "2" = a "Collection Log" submission
+		 * "3" = a "Combat Achievement" submission
+		 *  */
 		Boolean requiredScreenshot = false;
 		if (type.equalsIgnoreCase("1")) {
 			// Kc / kill time
@@ -504,11 +504,11 @@ public class DropTrackerPlugin extends Plugin {
 		else if (type.equalsIgnoreCase("2")) // clogs {
 			if (config.screenshotNewClogs()) {
 				requiredScreenshot = true;
-		}
-		else { // combat achievements
-			if (config.screenshotCAs()) {
-				requiredScreenshot = true;
 			}
+			else { // combat achievements
+				if (config.screenshotCAs()) {
+					requiredScreenshot = true;
+				}
 			}
 		if (requiredScreenshot) {
 			drawManager.requestNextFrameListener(image ->
@@ -532,17 +532,17 @@ public class DropTrackerPlugin extends Plugin {
 		// Handles sending drops exclusively
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
 
-				drawManager.requestNextFrameListener(image ->
-				{
-					BufferedImage bufferedImage = (BufferedImage) image;
+			drawManager.requestNextFrameListener(image ->
+			{
+				BufferedImage bufferedImage = (BufferedImage) image;
 
-						byte[] imageBytes = null;
-						try {
-							imageBytes = convertImageToByteArray(bufferedImage);
-						} catch (IOException e) {
-							log.error("Error converting image to byte array", e);
-						}
-						sendDropTrackerWebhook(customWebhookBody, imageBytes);
+				byte[] imageBytes = null;
+				try {
+					imageBytes = convertImageToByteArray(bufferedImage);
+				} catch (IOException e) {
+					log.error("Error converting image to byte array", e);
+				}
+				sendDropTrackerWebhook(customWebhookBody, imageBytes);
 
 			});
 		} else {
