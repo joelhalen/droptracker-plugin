@@ -144,7 +144,7 @@ public class ChatMessageEvent {
     private static final ArrayList<String> specialRaidBosses = new ArrayList<>(Arrays.asList("Theatre of Blood", "Tombs of Amascut"));
 
     private static final Pattern[] TIME_PATTERNS = {
-            // Team patterns - updated to capture team size including + notation
+            // Team patterns - preserve original group ordering while adding teamsize capture
             Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)"),
             // ToA patterns
@@ -160,7 +160,7 @@ public class ChatMessageEvent {
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
     };
     private static final Pattern[] PB_PATTERNS = {
-            // Team patterns - updated to capture team size including + notation
+            // Team patterns - preserve original group ordering while adding teamsize capture
             Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Team size: (?<teamsize>\\d+(?:-\\d+|\\+)?) players? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             // ToA patterns
