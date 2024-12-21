@@ -528,7 +528,6 @@ public class ChatMessageEvent {
 
     @NotNull
     private Duration parseTime(String timeStr) {
-        System.out.println("Parsing time string: " + timeStr);
 
         try {
             // Split into parts based on : and .
@@ -564,9 +563,6 @@ public class ChatMessageEvent {
                     .plusMinutes(minutes)
                     .plusSeconds(seconds)
                     .plusMillis(millis);
-
-            System.out.println(String.format("Parsed %s -> %02d:%02d:%02d.%03d",
-                    timeStr, hours, minutes, seconds, millis));
             return duration;
 
         } catch (Exception e) {
@@ -835,7 +831,7 @@ public class ChatMessageEvent {
 
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
-                System.out.println(time);
+
                 if (message.contains("Team Size:")) {
                     storeBossTime("Chambers of Xeric", time, bestTime, isPb);
                     storeBossTime("Chambers of Xeric Challenge Mode", time, bestTime, isPb);
@@ -887,12 +883,12 @@ public class ChatMessageEvent {
         */
 
         //Tombs of Amascut Test
-
+        /*
         onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
         onGameMessage("Tombs of Amascut challenge completion time: 14:40. Personal best: 12:16");
         onGameMessage("Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
         onGameMessage("Your completed Tombs of Amascut count is 15.");
-
+        /*
 
         //Tombs of Amascut Expert Mode Test
         /*
