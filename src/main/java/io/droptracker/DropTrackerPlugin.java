@@ -159,6 +159,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
+	private String pluginVersion = "310";
+
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
@@ -562,7 +564,9 @@ public class DropTrackerPlugin extends Plugin {
 			requestBodyBuilder.addFormDataPart("file", "image.png",
 					RequestBody.create(MediaType.parse("image/png"), screenshot));
 		}
-		// Add the user's account hash to the embed
+		for (CustomWebhookBody.Embed embed : customWebhookBody.getEmbeds()) {
+			embed.addField("p_v", pluginVersion, true);
+		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
 		String url;
