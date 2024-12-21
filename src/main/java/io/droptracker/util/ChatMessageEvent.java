@@ -314,6 +314,7 @@ public class ChatMessageEvent {
         collEmbed.addField("player", client.getLocalPlayer().getName(), true);
         collEmbed.addField("slots", total + "/" + completed, true);
         collEmbed.addField("auth_key", config.token(), true);
+        collEmbed.addField("p_v", plugin.pluginVersion, true);
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
@@ -354,6 +355,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
             combatAchievementEmbed.addField("auth_key", config.token(), true);
+            combatAchievementEmbed.addField("p_v", plugin.pluginVersion, true);
             String accountHash = String.valueOf(client.getAccountHash());
             combatAchievementEmbed.addField("acc_hash", accountHash, true);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
@@ -394,6 +396,7 @@ public class ChatMessageEvent {
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
         String accountHash = String.valueOf(client.getAccountHash());
         killEmbed.addField("acc_hash", accountHash, true);
+        killEmbed.addField("p_v", plugin.pluginVersion, true);
 
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");

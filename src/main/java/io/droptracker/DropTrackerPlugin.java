@@ -159,7 +159,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	private String pluginVersion = "310";
+	public String pluginVersion = "310";
 
 	@Override
 	protected void startUp() {
@@ -419,6 +419,7 @@ public class DropTrackerPlugin extends Plugin {
 					itemEmbed.addField("value", String.valueOf(price), true);
 					itemEmbed.addField("source", npcName, true);
 					itemEmbed.addField("type", sourceType, true);
+					itemEmbed.addField("p_v", pluginVersion, true);
 					itemEmbed.title = getLocalPlayerName() + " received some drops:";
 					customWebhookBody.getEmbeds().add(itemEmbed);
 				}
@@ -512,6 +513,7 @@ public class DropTrackerPlugin extends Plugin {
 					requiredScreenshot = true;
 				}
 			}
+		
 		if (requiredScreenshot) {
 			drawManager.requestNextFrameListener(image ->
 			{
@@ -563,9 +565,6 @@ public class DropTrackerPlugin extends Plugin {
 		if (screenshot != null) {
 			requestBodyBuilder.addFormDataPart("file", "image.png",
 					RequestBody.create(MediaType.parse("image/png"), screenshot));
-		}
-		for (CustomWebhookBody.Embed embed : customWebhookBody.getEmbeds()) {
-			embed.addField("p_v", pluginVersion, true);
 		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
