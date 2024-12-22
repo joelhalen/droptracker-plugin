@@ -794,9 +794,10 @@ public class ChatMessageEvent {
                 }catch (Exception e){
                     System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
                 }
-
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
+                String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
+
                 if (message.contains("Team Size:")) {
                     setTeamSize("Chambers of Xeric",message);
                     storeBossTime("Chambers of Xeric", time, bestTime, isPb);
@@ -818,7 +819,6 @@ public class ChatMessageEvent {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
                 } else {
-                    String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
                     if (bossName != null) {
                         setTeamSize(bossName,message);
                         storeBossTime(bossName, time, bestTime, isPb);
@@ -848,6 +848,7 @@ public class ChatMessageEvent {
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
 
+                String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
 
                 if (message.contains("Team size:")) {
                     setTeamSize("Chambers of Xeric",message);
@@ -870,7 +871,6 @@ public class ChatMessageEvent {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
                 } else {
-                    String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
                     if (bossName != null) {
                         setTeamSize(bossName,message);
                         storeBossTime(bossName, time, bestTime, isPb);
