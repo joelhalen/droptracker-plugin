@@ -117,13 +117,5 @@ public interface DropTrackerConfig extends Config
 					"<b>Are you sure that you want to enable external connections?</b><br></html>"
 	)
 	default boolean useApi() { return false; }
-	@ConfigItem(
-			name = "Token",
-			keyName = "authKey",
-			description = "<html>If you register on Discord, you can obtain an auth key<br>to enter here, which will allow you to be added<br>to the Global Leaderboards.",
-			position = 1,
-			section = apiSection,
-			secret = true
-	)
-	default String token() { return ""; }
+
 }

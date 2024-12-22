@@ -412,7 +412,6 @@ public class DropTrackerPlugin extends Plugin {
 					itemEmbed.addField("source_type", sourceType, true);
 					itemEmbed.addField("acc_hash", accountHash, true);
 					itemEmbed.addField("item", itemComposition.getName(), true);
-					itemEmbed.addField("auth_key", config.token(), true);
 					itemEmbed.addField("player", getLocalPlayerName(), true);
 					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
 					itemEmbed.addField("quantity", String.valueOf(qty), true);
