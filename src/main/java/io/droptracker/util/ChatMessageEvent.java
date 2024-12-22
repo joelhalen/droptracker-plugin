@@ -356,7 +356,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
             combatAchievementEmbed.addField("completed", completedTierName,true);
             combatAchievementEmbed.addField("auth_key", config.token(), true);
-            combatAchievementEmbed.addField(("p_v",plugin.pluginVersion,true););
+            combatAchievementEmbed.addField("p_v", plugin.pluginVersion,true);
             String accountHash = String.valueOf(client.getAccountHash());
             combatAchievementEmbed.addField("acc_hash", accountHash, true);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
