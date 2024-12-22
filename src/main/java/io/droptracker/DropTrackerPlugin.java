@@ -159,6 +159,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
+	public String pluginVersion = "310";
+
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
@@ -417,6 +419,7 @@ public class DropTrackerPlugin extends Plugin {
 					itemEmbed.addField("value", String.valueOf(price), true);
 					itemEmbed.addField("source", npcName, true);
 					itemEmbed.addField("type", sourceType, true);
+					itemEmbed.addField("p_v",pluginVersion,true);
 					itemEmbed.title = getLocalPlayerName() + " received some drops:";
 					customWebhookBody.getEmbeds().add(itemEmbed);
 				}
