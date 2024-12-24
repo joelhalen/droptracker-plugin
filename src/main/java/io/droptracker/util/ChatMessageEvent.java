@@ -372,7 +372,6 @@ public class ChatMessageEvent {
         long currentTime = System.currentTimeMillis();
 
         if(killIdentifier.equals(lastProcessedKill) && (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD){
-            System.out.println("Kill already processed, skipping: " + killIdentifier);
             return;
         }
         lastProcessedKill = killIdentifier;
@@ -495,7 +494,6 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(1);
                 }catch (Exception e){
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
                 }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
@@ -517,8 +515,7 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(2);
                 } catch (Exception e) {
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
-                }
+                    }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 setTeamSize(bossName,message);
@@ -573,7 +570,6 @@ public class ChatMessageEvent {
             return duration;
 
         } catch (Exception e) {
-            System.out.println("Error parsing time: " + timeStr);
             e.printStackTrace();
             return null;
         }
@@ -594,8 +590,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    System.out.println("Failed to parse kill count " + count + " for boss " + boss);
-                }
+                    }
             }
         } else
         if (secondary.find()){
@@ -609,8 +604,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    System.out.println("Failed to parse kill count " +value+ " for boss " + key);
-                }
+                    }
             }
         }
         return Optional.empty();
@@ -791,12 +785,10 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(1);
                 }catch (Exception e){
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
-                }
+                    }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
-                System.out.println(bossName);
                 if (bossName != null) {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
@@ -844,19 +836,16 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(2);
                 }catch (Exception e){
-                    System.out.println("Error parsing time message: " + message + " - " + e.getMessage());
-                }
+                    }
 
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
 
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
                 if (bossName != null) {
-                    System.out.println("Boss Data found: " + bossName);
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else if (message.contains("Team size:")) {
-                    System.out.println("Team Size Found");
                     setTeamSize("Chambers of Xeric",message);
                     storeBossTime("Chambers of Xeric", time, bestTime, isPb);
                     storeBossTime("Chambers of Xeric Challenge Mode", time, bestTime, isPb);
@@ -915,22 +904,17 @@ public class ChatMessageEvent {
     private void setTeamSize (String bossName, String message){
 
         if(bossName.contains("Theatre of Blood")){
-            System.out.println("Getting Team Size from Theatre of Blood");
             TeamSize = tobTeamSize();
         }else if (bossName.contains("Tombs of Amascut")){
             TeamSize = toaTeamSize();
-            System.out.println("Tombs of Amascut Team Size: " + TeamSize);
         }else if (message.contains("Team size")){
-            System.out.println("Checking Team Size Message");
             Pattern teamSizePattern = Pattern.compile("Team size: (\\S+) players.*");
             Matcher teamMatch = teamSizePattern.matcher(message);
             if(teamMatch.find())
                 TeamSize = teamMatch.group(1);
-                System.out.println ("Team Size pulled " + TeamSize);
 
         }else if(message.contains("ersonal best")){
             TeamSize = "Solo";
-            System.out.println("Not a team boss. Setting to: " + TeamSize);
         }
 
     }
