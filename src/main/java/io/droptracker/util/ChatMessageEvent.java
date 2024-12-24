@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
 import net.runelite.api.annotations.Varp;
-import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
@@ -24,14 +23,12 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import javax.management.Notification;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -178,7 +175,7 @@ public class ChatMessageEvent {
     private String lastProcessedKill = null;
     private long lastProcessedTime = 0;
     private static final long DUPLICATE_THRESHOLD = 5000;
-    private String TeamSize = null;
+    private String teamSize = null;
 
     public boolean isEnabled() {
         return true;
@@ -393,7 +390,7 @@ public class ChatMessageEvent {
         killEmbed.addField("kill_time", time, true);
         killEmbed.addField("best_time", bestTime, true);
         killEmbed.addField("is_pb", String.valueOf(isPb), true);
-        killEmbed.addField("Team_Size",TeamSize,true);
+        killEmbed.addField("Team_Size", teamSize,true);
         killEmbed.addField("acc_hash", accountHash, true);
         killEmbed.addField("p_v",plugin.pluginVersion,true);
 
@@ -871,8 +868,11 @@ public class ChatMessageEvent {
         }
     }
 
-    //Pulling the Team Size from ToB via the player orbs
+    /*
+        We can obtain the group size for TOB/TOA using the player orb varbits
+    */
     private String tobTeamSize() {
+
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
@@ -884,7 +884,6 @@ public class ChatMessageEvent {
         return teamSize.toString();
     }
 
-    //Pulling the Team Size from ToA via the player orbs
     private String toaTeamSize() {
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1 +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
@@ -899,22 +898,20 @@ public class ChatMessageEvent {
         }
         return teamSize.toString();
     }
-
-    //Determining the team size of the boss that was killed
     private void setTeamSize (String bossName, String message){
 
         if(bossName.contains("Theatre of Blood")){
-            TeamSize = tobTeamSize();
+            teamSize = tobTeamSize();
         }else if (bossName.contains("Tombs of Amascut")){
-            TeamSize = toaTeamSize();
+            teamSize = toaTeamSize();
         }else if (message.contains("Team size")){
             Pattern teamSizePattern = Pattern.compile("Team size: (\\S+) players.*");
             Matcher teamMatch = teamSizePattern.matcher(message);
             if(teamMatch.find())
-                TeamSize = teamMatch.group(1);
+                teamSize = teamMatch.group(1);
 
         }else if(message.contains("ersonal best")){
-            TeamSize = "Solo";
+            teamSize = "Solo";
         }
 
     }
