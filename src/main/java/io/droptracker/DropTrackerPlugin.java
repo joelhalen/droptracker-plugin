@@ -524,7 +524,6 @@ public class DropTrackerPlugin extends Plugin {
 			} else {
 				drawManager.requestNextFrameListener(image ->
 				{
-					modWidget(shouldHideDm, client, clientThread, PRIVATE_CHAT_WIDGET);
 				BufferedImage bufferedImage = (BufferedImage) image;
 				byte[] imageBytes = null;
 				try {
