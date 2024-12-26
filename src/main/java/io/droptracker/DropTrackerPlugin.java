@@ -51,9 +51,14 @@ import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.annotations.Component;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ScriptPreFired;
+import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.widgets.InterfaceID;
+import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.*;
 import net.runelite.client.config.ConfigManager;
@@ -160,6 +165,8 @@ public class DropTrackerPlugin extends Plugin {
 	private ClientThread clientThread;
 
 	public String pluginVersion = "310";
+
+	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
 	@Override
 	protected void startUp() {
@@ -511,8 +518,13 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			}
 		if (requiredScreenshot) {
-			drawManager.requestNextFrameListener(image ->
-			{
+			boolean shouldHideDm = config.hideDMs();
+			if (shouldHideDm) {	
+				captureScreenshotWithPrivacy(webhook, true);
+			} else {
+				drawManager.requestNextFrameListener(image ->
+				{
+					modWidget(shouldHideDm, client, clientThread, PRIVATE_CHAT_WIDGET);
 				BufferedImage bufferedImage = (BufferedImage) image;
 				byte[] imageBytes = null;
 				try {
@@ -531,10 +543,13 @@ public class DropTrackerPlugin extends Plugin {
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		// Handles sending drops exclusively
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
-
-			drawManager.requestNextFrameListener(image ->
-			{
-				BufferedImage bufferedImage = (BufferedImage) image;
+			boolean shouldHideDm = config.hideDMs();
+			if (shouldHideDm) {
+				captureScreenshotWithPrivacy(customWebhookBody, true);
+			} else {
+				drawManager.requestNextFrameListener(image ->
+				{
+					BufferedImage bufferedImage = (BufferedImage) image;
 
 				byte[] imageBytes = null;
 				try {
@@ -543,8 +558,9 @@ public class DropTrackerPlugin extends Plugin {
 					log.error("Error converting image to byte array", e);
 				}
 				sendDropTrackerWebhook(customWebhookBody, imageBytes);
-
-			});
+			
+			});	
+		}
 		} else {
 			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
 		}
@@ -621,6 +637,14 @@ public class DropTrackerPlugin extends Plugin {
 		ImageIO.write(bufferedImage, "png", byteArrayOutputStream);
 		return byteArrayOutputStream.toByteArray();
 	}
+	public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
+		clientThread.invoke(() -> {
+			Widget widget = client.getWidget(info);
+			if (widget != null) {
+				widget.setHidden(shouldHide);
+			}
+		});
+	}
 	private static Collection<ItemStack> stack(Collection<ItemStack> items) {
 		final List<ItemStack> list = new ArrayList<>();
 
@@ -641,5 +665,24 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		return list;
+	}
+	private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
+		// First hide DMs if configured
+		modWidget(hideDMs, client, clientThread, PRIVATE_CHAT_WIDGET);
+		
+		drawManager.requestNextFrameListener(image -> {
+			BufferedImage bufferedImage = (BufferedImage) image;
+			
+			// Restore DM visibility immediately after capturing
+			modWidget(false, client, clientThread, PRIVATE_CHAT_WIDGET);
+			
+			byte[] imageBytes = null;
+			try {
+				imageBytes = convertImageToByteArray(bufferedImage);
+			} catch (IOException e) {
+				log.error("Error converting image to byte array", e);
+			}
+			sendDropTrackerWebhook(webhook, imageBytes);
+		});
 	}
 }

@@ -67,6 +67,15 @@ public interface DropTrackerConfig extends Config
 			section = screenshotSection
 	)
 	default boolean screenshotCAs() { return true; }
+	@ConfigItem(
+			keyName = "hideWhispers",
+			name = "Hide PMs",
+			description = "Do you want your private chat to be\n" +
+					"hidden when screenshots are taken?",
+			position = 4,
+			section = screenshotSection
+	)
+	default boolean hideDMs() { return false; }
 	/* PvP is pretty much completely ignored by the server
 	@ConfigItem(
 
