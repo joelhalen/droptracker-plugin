@@ -49,6 +49,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
+import io.droptracker.util.ContainerManager;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Component;
@@ -104,6 +105,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
+	@Inject
+	private ContainerManager containerManager;
 	private NavigationButton navButton;
 	@Inject
 	private Gson gson;
@@ -171,6 +174,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
+		containerManager = new ContainerManager(this, client);
 
 		if(config.showSidePanel()) {
 			createSidePanel();
@@ -371,9 +375,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
-//		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-//			containerManager.onTick();
-//		}
+		if (client.getGameState().equals(GameState.LOGGED_IN)) {
+			containerManager.onTick();
+		}
 	}
 
 
@@ -401,10 +405,10 @@ public class DropTrackerPlugin extends Plugin {
 			if (sourceType != "pvp") {
 				for (ItemStack item : stack(items)) {
 					Item tempItem = new Item(item.getId(), item.getQuantity());
-//						if (!containerManager.isRealDrop(tempItem)) {
-//							// If the item is determined as something that was from their inv/gear, we don't send it.
-//							continue;
-//						}
+					if (!containerManager.isRealDrop(tempItem)) {
+						// If the item is determined as something that was from their inv/gear, we don't send it.
+						continue;
+					}
 					int itemId = item.getId();
 					int qty = item.getQuantity();
 					int price = itemManager.getItemPrice(itemId);
@@ -519,20 +523,21 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		if (requiredScreenshot) {
 			boolean shouldHideDm = config.hideDMs();
-			if (shouldHideDm) {	
+			if (shouldHideDm) {
 				captureScreenshotWithPrivacy(webhook, true);
 			} else {
 				drawManager.requestNextFrameListener(image ->
 				{
-				BufferedImage bufferedImage = (BufferedImage) image;
-				byte[] imageBytes = null;
-				try {
-					imageBytes = convertImageToByteArray(bufferedImage);
-				} catch (IOException e) {
-					log.error("Error converting image to byte array", e);
-				}
-				sendDropTrackerWebhook(webhook, imageBytes);
-			});
+					BufferedImage bufferedImage = (BufferedImage) image;
+					byte[] imageBytes = null;
+					try {
+						imageBytes = convertImageToByteArray(bufferedImage);
+					} catch (IOException e) {
+						log.error("Error converting image to byte array", e);
+					}
+					sendDropTrackerWebhook(webhook, imageBytes);
+				});
+			}
 		} else {
 			sendDropTrackerWebhook(webhook, (byte[]) null);
 		}
@@ -550,16 +555,16 @@ public class DropTrackerPlugin extends Plugin {
 				{
 					BufferedImage bufferedImage = (BufferedImage) image;
 
-				byte[] imageBytes = null;
-				try {
-					imageBytes = convertImageToByteArray(bufferedImage);
-				} catch (IOException e) {
-					log.error("Error converting image to byte array", e);
-				}
-				sendDropTrackerWebhook(customWebhookBody, imageBytes);
-			
-			});	
-		}
+					byte[] imageBytes = null;
+					try {
+						imageBytes = convertImageToByteArray(bufferedImage);
+					} catch (IOException e) {
+						log.error("Error converting image to byte array", e);
+					}
+					sendDropTrackerWebhook(customWebhookBody, imageBytes);
+
+				});
+			}
 		} else {
 			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
 		}
@@ -668,13 +673,13 @@ public class DropTrackerPlugin extends Plugin {
 	private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
 		// First hide DMs if configured
 		modWidget(hideDMs, client, clientThread, PRIVATE_CHAT_WIDGET);
-		
+
 		drawManager.requestNextFrameListener(image -> {
 			BufferedImage bufferedImage = (BufferedImage) image;
-			
+
 			// Restore DM visibility immediately after capturing
 			modWidget(false, client, clientThread, PRIVATE_CHAT_WIDGET);
-			
+
 			byte[] imageBytes = null;
 			try {
 				imageBytes = convertImageToByteArray(bufferedImage);
