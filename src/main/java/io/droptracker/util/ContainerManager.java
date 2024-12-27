@@ -70,6 +70,7 @@ public class ContainerManager {
             for (Item item : inventory.getItems()) {
                 if (item != null && item.getId() == receivedItem.getId()) {
                     currentQuantity += item.getQuantity();
+
                 }
             }
         }
@@ -87,7 +88,6 @@ public class ContainerManager {
             return true;
         }
 
-        System.out.println("Drop ignored as it was determined to be pre-existing. Previous qty: " + previousQuantity + ", Current qty: " + currentQuantity);
         return false;
     }
 }
