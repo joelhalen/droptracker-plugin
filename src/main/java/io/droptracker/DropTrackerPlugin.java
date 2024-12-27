@@ -167,7 +167,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "310";
+	public String pluginVersion = "320";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
@@ -539,6 +539,16 @@ public class DropTrackerPlugin extends Plugin {
 				});
 			}
 		} else {
+				BufferedImage bufferedImage = (BufferedImage) image;
+				byte[] imageBytes = null;
+				try {
+					imageBytes = convertImageToByteArray(bufferedImage);
+				} catch (IOException e) {
+					log.error("Error converting image to byte array", e);
+				}
+				sendDropTrackerWebhook(webhook, imageBytes);
+			});
+		}} else {
 			sendDropTrackerWebhook(webhook, (byte[]) null);
 		}
 	}
