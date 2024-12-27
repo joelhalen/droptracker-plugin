@@ -81,7 +81,7 @@ public class ContainerManager {
                 }
             }
         }
-
+        currentQuantity += receivedItem.getQuantity();
         // If current quantity is greater than previous quantity, it's a real drop
         if (currentQuantity > previousQuantity) {
             return true;
