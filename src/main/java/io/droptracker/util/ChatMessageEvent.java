@@ -150,6 +150,8 @@ public class ChatMessageEvent {
             // Gauntlet pattern - fixed spacing and case
             Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            //Colosseum Pattern
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
@@ -166,6 +168,8 @@ public class ChatMessageEvent {
             // Gauntlet pattern - fixed spacing and case
             Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            // Colosseum Pattern
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
@@ -431,6 +435,7 @@ public class ChatMessageEvent {
     public void reset() {
         bossData.set(null);
         badTicks.set(0);
+        teamSize = null;
     }
     @VisibleForTesting
     static Optional<Pair<CombatAchievement, String>> parseCombatAchievement(String message) {
@@ -811,6 +816,9 @@ public class ChatMessageEvent {
                 } else if (message.contains("Challenge duration")) {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
+                } else if (message.contains("Colosseum duration")){
+                    setTeamSize("Sol Heredit",message);
+                    storeBossTime("Sol Heredit",time,bestTime,isPb);
                 }
 
 
