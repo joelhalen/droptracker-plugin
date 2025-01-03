@@ -401,6 +401,7 @@ public class ChatMessageEvent {
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         mostRecentNpcData = null;
+        teamSize = null;
     }
 
     private void updateData(BossNotification updated) {
@@ -435,7 +436,6 @@ public class ChatMessageEvent {
     public void reset() {
         bossData.set(null);
         badTicks.set(0);
-        teamSize = null;
     }
     @VisibleForTesting
     static Optional<Pair<CombatAchievement, String>> parseCombatAchievement(String message) {
