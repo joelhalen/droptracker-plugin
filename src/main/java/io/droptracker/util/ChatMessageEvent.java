@@ -480,7 +480,7 @@ public class ChatMessageEvent {
                             t.getMiddle(),
                             t.getRight()
                     ))
-                    .orElse(new BossNotification(bossName, pair.getRight(), message, null, null, null));
+                    .orElse(null);
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
