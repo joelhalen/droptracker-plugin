@@ -70,6 +70,7 @@ public class ContainerManager {
             for (Item item : inventory.getItems()) {
                 if (item != null && item.getId() == receivedItem.getId()) {
                     currentQuantity += item.getQuantity();
+
                 }
             }
         }

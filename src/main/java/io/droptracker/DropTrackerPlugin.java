@@ -167,6 +167,12 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
+	// In the event of a 429 response from discord,
+	// we'll force the user to wait 10 minutes before sending more webhooks
+	// hopefully preventing them from being ip banned by discord
+	private int timeToRetry = 0;
+
+	public String pluginVersion = "320";=
 	public String pluginVersion = "3.2.2";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
@@ -570,6 +576,11 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+		if (timeToRetry != 0 && timeToRetry > (int) (System.currentTimeMillis() / 1000)) {
+			return;
+		} else if (timeToRetry < (int) (System.currentTimeMillis() / 1000)) {
+			timeToRetry = 0;
+		}
 		if (isFakeWorld()) {
 			return;
 		}
@@ -582,7 +593,6 @@ public class DropTrackerPlugin extends Plugin {
 			requestBodyBuilder.addFormDataPart("file", "image.png",
 					RequestBody.create(MediaType.parse("image/png"), screenshot));
 		}
-		// Add the user's account hash to the embed
 
 		MultipartBody requestBody = requestBodyBuilder.build();
 		String url;
@@ -612,8 +622,12 @@ public class DropTrackerPlugin extends Plugin {
 			public void onResponse(Call call, Response response) throws IOException {
 				if (response.isSuccessful()) {
 					timesTried = 0;
-				} else if (response.code() == 429 || response.code() == 400) {
-					sendDropTrackerWebhook(customWebhookBody, screenshot);
+				} else if (response.code() == 429) {
+					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
+					return;
+				} else if (response.code() == 400) {
+					return;
+					//sendDropTrackerWebhook(customWebhookBody, screenshot);
 				} else {
 					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
