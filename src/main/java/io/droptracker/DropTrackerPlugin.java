@@ -517,15 +517,16 @@ public class DropTrackerPlugin extends Plugin {
 			}
 
 		}
-		else if (type.equalsIgnoreCase("2")) // clogs {
+		else if (type.equalsIgnoreCase("2")) {
 			if (config.screenshotNewClogs()) {
 				requiredScreenshot = true;
 			}
-			else { // combat achievements
+		} else if(type.equalsIgnoreCase("3")){ // combat achievements
 				if (config.screenshotCAs()) {
 					requiredScreenshot = true;
 				}
-			}
+		}
+
 		if (requiredScreenshot) {
 			boolean shouldHideDm = config.hideDMs();
 			if (shouldHideDm) {
@@ -622,11 +623,20 @@ public class DropTrackerPlugin extends Plugin {
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
+					log.info("Webhook is rate limited, response code: {}. Trying new Webhook...", response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
-					return;
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
+
 				} else if (response.code() == 400) {
+					log.info("Bad Request, response code: {}. Aborting send...", response.code());
 					return;
-					//sendDropTrackerWebhook(customWebhookBody, screenshot);
+
+				} else if(response.code() == 404){
+					log.info("Broken Webhook: {} ", url);
+					log.info("Response code: {}. Trying new Webhook...", response.code());
+					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
+
 				} else {
 					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
