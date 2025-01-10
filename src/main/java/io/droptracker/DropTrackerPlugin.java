@@ -603,7 +603,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		HttpUrl u = HttpUrl.parse(url);
 		if (u == null || !isValidDiscordWebhookUrl(u)) {
-			log.info("Invalid or malformed webhook URL: {}", url);
+			log.debug("Invalid or malformed webhook URL: {}", url);
 			return;
 		}
 
@@ -623,22 +623,22 @@ public class DropTrackerPlugin extends Plugin {
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
-					log.info("Webhook is rate limited, response code: {}. Trying new Webhook...", response.code());
+					log.debug("Webhook is rate limited, response code: {}. Trying new Webhook...", response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else if (response.code() == 400) {
-					log.info("Bad Request, response code: {}. Aborting send...", response.code());
+					log.debug("Bad Request, response code: {}. Aborting send...", response.code());
 					return;
 
 				} else if(response.code() == 404){
-					log.info("Broken Webhook: {} ", url);
-					log.info("Response code: {}. Trying new Webhook...", response.code());
+					log.debug("Broken Webhook: {} ", url);
+					log.debug("Response code: {}. Trying new Webhook...", response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else {
-					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
+					log.debug("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}
 				response.close();
