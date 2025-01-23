@@ -101,7 +101,7 @@ public class DropTrackerApi {
 
 
     public String getApiUrl() {
-        return config.useApi() ? "http://new.droptracker.io:8080/api/" : "";
+        return config.useApi() ? "https://www.droptracker.io/api/" : "";
     }
 
     public interface PanelDataLoadedCallback {
