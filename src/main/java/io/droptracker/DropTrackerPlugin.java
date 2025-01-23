@@ -44,8 +44,10 @@ import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import javax.inject.Singleton;
 
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
@@ -92,6 +94,9 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 /* Re-written using the Discord Loot Logger base code */
 @Slf4j
 @PluginDescriptor(
@@ -220,26 +225,54 @@ public class DropTrackerPlugin extends Plugin {
 	/**
 	 * Grabs a random webhook URL from a GitHub sites page that is cycled by the server
 	 * */
-	public static String getRandomWebhookUrl() throws Exception {
+	public String getRandomWebhookUrl() throws Exception {
 		if (webhookUrls.isEmpty()) {
-			// Grab the current list of webhook URLs from the github-hosted file
-			URL url = new URL("https://joelhalen.github.io/docs/webhooks.json");
+			URL url = new URL("https://joelhalen.github.io/docs/crypt.json");
 			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-			String input;
-			while ((input = in.readLine()) != null) {
-				// Remove double quotes and commas from the input string
-				input = input.replace("\"", "").replace(",", "")
-						.replace("[", "").replace("]", "");
-				// Ensure the target string contains 'discord'
-				if (input.contains("discord")) {
-					webhookUrls.add(input);
-				}
+			StringBuilder response = new StringBuilder();
+			String inputLine;
+			
+			while ((inputLine = in.readLine()) != null) {
+				response.append(inputLine);
 			}
 			in.close();
+
+			
+			JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
+			
+			for (JsonElement element : jsonArray) {
+				try {
+					String encrypted = element.getAsString();
+					
+					try {
+						String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
+						
+						if (decryptedUrl.contains("discord")) {
+							webhookUrls.add(decryptedUrl);
+						} else {
+							log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+						}
+					} catch (Exception e) {
+						log.error("Decryption failed with error: " + e.getMessage());
+						e.printStackTrace();
+					}
+					
+				} catch (Exception e) {
+					log.error("Error processing element: " + e.getMessage());
+					e.printStackTrace();
+					continue;
+				}
+			}
+
 		}
+		
+		if (webhookUrls.isEmpty()) {
+			throw new IllegalStateException("No valid webhook URLs were loaded");
+		}
+		
 		Random randomP = new Random();
-		String urls = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		return urls;
+		String selectedUrl = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		return selectedUrl;
 	}
 
 	private static String itemImageUrl(int itemId) {
