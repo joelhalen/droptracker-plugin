@@ -177,8 +177,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "320";=
-	public String pluginVersion = "3.2.2";
+	public String pluginVersion = "3.3.2";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
@@ -551,15 +550,16 @@ public class DropTrackerPlugin extends Plugin {
 			}
 
 		}
-		else if (type.equalsIgnoreCase("2")) // clogs {
+		else if (type.equalsIgnoreCase("2")) {
 			if (config.screenshotNewClogs()) {
 				requiredScreenshot = true;
 			}
-			else { // combat achievements
+		} else if(type.equalsIgnoreCase("3")){ // combat achievements
 				if (config.screenshotCAs()) {
 					requiredScreenshot = true;
 				}
-			}
+		}
+
 		if (requiredScreenshot) {
 			boolean shouldHideDm = config.hideDMs();
 			if (shouldHideDm) {
@@ -636,7 +636,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		HttpUrl u = HttpUrl.parse(url);
 		if (u == null || !isValidDiscordWebhookUrl(u)) {
-			log.info("Invalid or malformed webhook URL: {}", url);
+			log.debug("Invalid or malformed webhook URL: {}", url);
 			return;
 		}
 
@@ -656,13 +656,22 @@ public class DropTrackerPlugin extends Plugin {
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
+					log.debug("Webhook is rate limited, response code: {}. Trying new Webhook...", response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
-					return;
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
+
 				} else if (response.code() == 400) {
+					log.debug("Bad Request, response code: {}. Aborting send...", response.code());
 					return;
-					//sendDropTrackerWebhook(customWebhookBody, screenshot);
+
+				} else if(response.code() == 404){
+					log.debug("Broken Webhook: {} ", url);
+					log.debug("Response code: {}. Trying new Webhook...", response.code());
+					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
+					sendDropTrackerWebhook(customWebhookBody, screenshot);
+
 				} else {
-					log.info("Failed to send webhook, response code: {}. Retrying...", response.code());
+					log.debug("Failed to send webhook, response code: {}. Retrying...", response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}
 				response.close();
