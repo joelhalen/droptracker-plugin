@@ -150,6 +150,8 @@ public class ChatMessageEvent {
             // Gauntlet pattern - fixed spacing and case
             Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            //Colosseum Pattern
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
@@ -166,6 +168,8 @@ public class ChatMessageEvent {
             // Gauntlet pattern - fixed spacing and case
             Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            // Colosseum Pattern
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
@@ -397,6 +401,7 @@ public class ChatMessageEvent {
         killWebhook.getEmbeds().add(killEmbed);
         plugin.sendDropTrackerWebhook(killWebhook, "1");
         mostRecentNpcData = null;
+        teamSize = null;
     }
 
     private void updateData(BossNotification updated) {
@@ -475,7 +480,7 @@ public class ChatMessageEvent {
                             t.getMiddle(),
                             t.getRight()
                     ))
-                    .orElse(new BossNotification(bossName, pair.getRight(), message, null, null, null));
+                    .orElse(null);
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
@@ -811,6 +816,9 @@ public class ChatMessageEvent {
                 } else if (message.contains("Challenge duration")) {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
+                } else if (message.contains("Colosseum duration")){
+                    setTeamSize("Sol Heredit",message);
+                    storeBossTime("Sol Heredit",time,bestTime,isPb);
                 }
 
 
