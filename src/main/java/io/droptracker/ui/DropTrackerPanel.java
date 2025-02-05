@@ -84,7 +84,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
                     "You should register your account<br>" +
                     "through our Discord bot (linked below) to " +
                     "enhance your experience with the plugin. " +
-                    "Feel free to also visit the Docs<br> to learn more about the project.<br><br></html>");
+                    "Feel free to also visit our website to learn more.<br><br></html>");
             infoText.setForeground(Color.WHITE);
             JLabel searchBarText = new JLabel("Search for a player:");
             searchBarText.setForeground(Color.WHITE); // Ensure visibility on dark background
