@@ -231,22 +231,22 @@ public class DropTrackerPlugin extends Plugin {
 			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
 			StringBuilder response = new StringBuilder();
 			String inputLine;
-			
+
 			while ((inputLine = in.readLine()) != null) {
 				response.append(inputLine);
 			}
 			in.close();
 
-			
+
 			JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
-			
+
 			for (JsonElement element : jsonArray) {
 				try {
 					String encrypted = element.getAsString();
-					
+
 					try {
 						String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
-						
+
 						if (decryptedUrl.contains("discord")) {
 							webhookUrls.add(decryptedUrl);
 						} else {
@@ -256,7 +256,7 @@ public class DropTrackerPlugin extends Plugin {
 						log.error("Decryption failed with error: " + e.getMessage());
 						e.printStackTrace();
 					}
-					
+
 				} catch (Exception e) {
 					log.error("Error processing element: " + e.getMessage());
 					e.printStackTrace();
@@ -265,11 +265,11 @@ public class DropTrackerPlugin extends Plugin {
 			}
 
 		}
-		
+
 		if (webhookUrls.isEmpty()) {
 			throw new IllegalStateException("No valid webhook URLs were loaded");
 		}
-		
+
 		Random randomP = new Random();
 		String selectedUrl = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
 		return selectedUrl;
@@ -565,27 +565,13 @@ public class DropTrackerPlugin extends Plugin {
 				return;
 			}
 			if (config.screenshotCAs()) {
-					requiredScreenshot = true;
+				requiredScreenshot = true;
 			}
 		}
 
 		if (requiredScreenshot) {
 			boolean shouldHideDm = config.hideDMs();
-			if (shouldHideDm) {
-				captureScreenshotWithPrivacy(webhook, true);
-			} else {
-				drawManager.requestNextFrameListener(image ->
-				{
-					BufferedImage bufferedImage = (BufferedImage) image;
-					byte[] imageBytes = null;
-					try {
-						imageBytes = convertImageToByteArray(bufferedImage);
-					} catch (IOException e) {
-						log.error("Error converting image to byte array", e);
-					}
-					sendDropTrackerWebhook(webhook, imageBytes);
-				});
-			}
+			captureScreenshotWithPrivacy(webhook, shouldHideDm);
 		} else {
 			sendDropTrackerWebhook(webhook, (byte[]) null);
 		}
@@ -599,23 +585,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
 			boolean shouldHideDm = config.hideDMs();
-			if (shouldHideDm) {
-				captureScreenshotWithPrivacy(customWebhookBody, true);
-			} else {
-				drawManager.requestNextFrameListener(image ->
-				{
-					BufferedImage bufferedImage = (BufferedImage) image;
-
-					byte[] imageBytes = null;
-					try {
-						imageBytes = convertImageToByteArray(bufferedImage);
-					} catch (IOException e) {
-						log.error("Error converting image to byte array", e);
-					}
-					sendDropTrackerWebhook(customWebhookBody, imageBytes);
-
-				});
-			}
+			captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
 		} else {
 			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
 		}
@@ -751,6 +721,9 @@ public class DropTrackerPlugin extends Plugin {
 			byte[] imageBytes = null;
 			try {
 				imageBytes = convertImageToByteArray(bufferedImage);
+				if (imageBytes.length > 5 * 1024 * 1024) {
+					// perform compression here
+				}
 			} catch (IOException e) {
 				log.error("Error converting image to byte array", e);
 			}
