@@ -605,8 +605,8 @@ public class DropTrackerPlugin extends Plugin {
 				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
 
 		if (screenshot != null) {
-			requestBodyBuilder.addFormDataPart("file", "image.png",
-					RequestBody.create(MediaType.parse("image/png"), screenshot));
+			requestBodyBuilder.addFormDataPart("file", "image.jpeg",
+					RequestBody.create(MediaType.parse("image/jpeg"), screenshot));
 		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
@@ -676,7 +676,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
 		ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-		ImageIO.write(bufferedImage, "png", byteArrayOutputStream);
+		ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
 		return byteArrayOutputStream.toByteArray();
 	}
 	public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
