@@ -177,7 +177,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "3.5";
+	public String pluginVersion = "3.6";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
@@ -537,6 +537,9 @@ public class DropTrackerPlugin extends Plugin {
 		if (type.equalsIgnoreCase("1")) {
 			// Kc / kill time
 			List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
+			if(!config.pbEmbeds()){
+				return;
+			}
 			if (config.screenshotPBs()) {
 				for (CustomWebhookBody.Embed embed : embeds) {
 					for (CustomWebhookBody.Field field : embed.getFields()) {
@@ -551,13 +554,19 @@ public class DropTrackerPlugin extends Plugin {
 
 		}
 		else if (type.equalsIgnoreCase("2")) {
+			if(!config.clogEmbeds()){
+				return;
+			}
 			if (config.screenshotNewClogs()) {
 				requiredScreenshot = true;
 			}
 		} else if(type.equalsIgnoreCase("3")){ // combat achievements
-				if (config.screenshotCAs()) {
+			if(!config.caEmbeds()){
+				return;
+			}
+			if (config.screenshotCAs()) {
 					requiredScreenshot = true;
-				}
+			}
 		}
 
 		if (requiredScreenshot) {
@@ -585,6 +594,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
 		// Handles sending drops exclusively
+		if(!config.lootEmbeds()){
+			return;
+		}
 		if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
 			boolean shouldHideDm = config.hideDMs();
 			if (shouldHideDm) {

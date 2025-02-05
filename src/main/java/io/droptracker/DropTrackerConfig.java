@@ -14,68 +14,108 @@ public interface DropTrackerConfig extends Config
 	 */
 {
 	String GROUP = "droptracker";
+
+	/* Loot related Tracking */
 	@ConfigSection(
-			name = "Screenshots",
-			description = "Define what events you want to send screenshots for",
-			position = 2,
+			name = "Loot Tracking",
+			description = "Define what rules you want set for loot",
+			position = 1,
 			closedByDefault = false
-	)
-	String screenshotSection = "Screenshots";
-	/* Screenshot Section Items */
+	) String LootSection = "Loot Tracking";
 	@ConfigItem(
-			keyName = "screenshotValue",
-			name = "Minimum Screenshot Value",
-			description = "What minimum value would you like drops to be sent with an attached image for?",
-			position = -1,
-			section = screenshotSection
-	)
-	default int screenshotValue() { return 250000; }
+			keyName = "lootEmbeds",
+			name = "Enable Loot Tracking",
+			description = "Do you want Loot to be Tracked?",
+			position = 0,
+			section = LootSection
+	) default boolean lootEmbeds(){ return true;}
 	@ConfigItem(
 			keyName = "valueableDrops",
-			name = "Valueable Drops",
+			name = "Screenshot Drops",
 			description = "Do you want to take screenshots when a drop<br />" +
 					"Exceeds the threshold you set?",
-			position = 0,
-			section = screenshotSection
-	)
-	default boolean screenshotDrops() { return true; }
-
-	@ConfigItem(
-			keyName = "screenshotCLog",
-			name = "Collection Logs",
-			description = "Do you want screenshots to be sent when you\n" +
-					"receive new collection log items?",
 			position = 1,
-			section = screenshotSection
-	)
-	default boolean screenshotNewClogs() { return true; }
+			section = LootSection
+	) default boolean screenshotDrops() { return true; }
+	@ConfigItem(
+			keyName = "screenshotValue",
+			name = "Screenshot minimum",
+			description = "What minimum value would you like drops to be sent with an attached image for?",
+			position = 2,
+			section = LootSection
+	)default int screenshotValue() { return 250000; }
+
+	/* Personal Best related Tracking */
+	@ConfigSection(
+			name = "Personal Bests",
+			description = "Define what rules you want set for Personal Bests",
+			position = 2,
+			closedByDefault = false
+	) String PbSection = "Personal Bests";
+	@ConfigItem(
+			keyName = "pbEmbeds",
+			name = "Enable PBs",
+			description = "Do you want Droptracker to track your PBs?",
+			position = 1,
+			section = PbSection
+	) default boolean pbEmbeds() { return true; }
 	@ConfigItem(
 			keyName = "screenshotPB",
-			name = "Personal Bests",
+			name = "Screenshot PBs",
 			description = "Do you want a screenshot to be sent\n" +
 					"when you acquire a new Personal Best?",
 			position = 2,
-			section = screenshotSection
-	)
-	default boolean screenshotPBs() { return true; }
+			section = PbSection
+	) default boolean screenshotPBs() { return true; }
+
+	/* Collection Log related Tracking */
+	@ConfigSection(
+			name = "Collection Logs",
+			description = "<html>Define what rules you want set for Collection Log <br>" +
+			"<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
+			position = 3,
+			closedByDefault = false
+	) String ClogSection = "Collection Logs";
+	@ConfigItem(
+			keyName = "clogEmbeds",
+			name = "Enable Clogs",
+			description = "Do you want DropTracker to track your Collection Logs collected?",
+			position = 1,
+			section = ClogSection
+	) default boolean clogEmbeds() { return true; }
+	@ConfigItem(
+			keyName = "screenshotClog",
+			name = "Screenshot Clogs",
+			description = "Do you want screenshots to be sent when you\n" +
+					"receive new collection log items?",
+			position = 2,
+			section = ClogSection
+	) default boolean screenshotNewClogs() { return true; }
+
+	/* Combat Achievement related Tracking */
+	@ConfigSection(
+			name = "Combat Achievements",
+			description = "Define what rules you want set for Combat Achievements",
+			position = 4,
+			closedByDefault = false
+	) String CaSection = "Combat Achievements";
+	@ConfigItem(
+			keyName = "caEmbeds",
+			name = "Enable CAs",
+			description = "Do you want DropTracker to Track your CAs?",
+			position = 3,
+			section = CaSection
+	) default boolean caEmbeds() { return true; }
 	@ConfigItem(
 			keyName = "screenshotCAs",
-			name = "Combat Tasks",
+			name = "Screenshot CAs",
 			description = "Do you want a screenshot to be sent\n" +
 					"when you complete a Combat Task?",
 			position = 3,
-			section = screenshotSection
-	)
-	default boolean screenshotCAs() { return true; }
-	@ConfigItem(
-			keyName = "hideWhispers",
-			name = "Hide PMs",
-			description = "Do you want your private chat to be\n" +
-					"hidden when screenshots are taken?",
-			position = 4,
-			section = screenshotSection
-	)
-	default boolean hideDMs() { return false; }
+			section = CaSection
+	) default boolean screenshotCAs() { return true; }
+
+
 	/* PvP is pretty much completely ignored by the server
 	@ConfigItem(
 
@@ -98,33 +138,42 @@ public interface DropTrackerConfig extends Config
 //	)
 //	default boolean screenshotPets() { return true; }
 
+
+	@ConfigSection(
+			name = "Additonal Settings",
+			description = "Configure your client settings for the DropTracker database",
+			position= 5 ,
+			closedByDefault = false
+	) String apiSection = "Additional Settings";
+	/* Settings for Hiding Split Chat, Side Panel and API connections */
+	@ConfigItem(
+			keyName = "hideWhispers",
+			name = "Hide PMs",
+			description = "Do you want your private chat to be\n" +
+					"hidden when screenshots are taken?",
+			position = -1,
+			section = apiSection
+	) default boolean hideDMs() { return false; }
 	@ConfigItem(
 			name = "Show Side Panel",
 			keyName = "showSidePanel",
 			description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>" +
 					"<b>Note</b>: Requires the API to be enabled.</html>",
-			position = 2
-	)
-	default boolean showSidePanel() { return true; }
-	@ConfigSection(
-			name = "DropTracker Account",
-			description = "Configure your client settings for the DropTracker database",
-			position= 5 ,
-			closedByDefault = false
-	)
-	String apiSection = "DropTracker Account";
+			position = 0,
+			section = apiSection
+	) default boolean showSidePanel() { return true; }
+
 	@ConfigItem(
 			name="Use API Connections",
 			keyName = "useApi",
 			description = "Enables external connections to the DropTracker database, for panel data.<br />" +
 					"<b>Note</b>: The API is currently <b>required</b> for participation in events!",
-			position = -1,
+			position = 1,
 			section = apiSection,
 			warning = "<html><b>WARNING</b>: Enabling this feature will send external<br>connections" +
 					"to the DropTracker server, which" +
 					"can not<br> be verified by the RuneLite Developers.<br>" +
 					"<b>Are you sure that you want to enable external connections?</b><br></html>"
-	)
-	default boolean useApi() { return false; }
+	) default boolean useApi() { return false; }
 
 }

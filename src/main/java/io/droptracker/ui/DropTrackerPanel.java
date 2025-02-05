@@ -114,7 +114,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         JPanel actionsContainer = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
         actionsContainer.setBorder(new EmptyBorder(10, 0, 0, 0));
         actionsContainer.add(buildRoundedPanel("Discord", "https://www.droptracker.io/discord"));
-        actionsContainer.add(buildRoundedPanel("Docs", "https://www.droptracker.io/docs"));
+        actionsContainer.add(buildRoundedPanel("Website", "https://www.droptracker.io"));
         add(actionsContainer, BorderLayout.SOUTH);
 
 
