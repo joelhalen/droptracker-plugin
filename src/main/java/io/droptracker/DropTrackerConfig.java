@@ -25,14 +25,14 @@ public interface DropTrackerConfig extends Config
 	@ConfigItem(
 			keyName = "lootEmbeds",
 			name = "Enable Loot Tracking",
-			description = "Do you want Loot to be Tracked?",
+			description = "Should we send your drops to the DropTracker?",
 			position = 0,
 			section = LootSection
 	) default boolean lootEmbeds(){ return true;}
 	@ConfigItem(
 			keyName = "valueableDrops",
 			name = "Screenshot Drops",
-			description = "Do you want to take screenshots when a drop<br />" +
+			description = "Do you want to submit screenshots when a drop<br />" +
 					"Exceeds the threshold you set?",
 			position = 1,
 			section = LootSection
@@ -48,14 +48,14 @@ public interface DropTrackerConfig extends Config
 	/* Personal Best related Tracking */
 	@ConfigSection(
 			name = "Personal Bests",
-			description = "Define what rules you want set for Personal Bests",
+			description = "Should we send your personal bests to the DropTracker?",
 			position = 2,
 			closedByDefault = false
 	) String PbSection = "Personal Bests";
 	@ConfigItem(
 			keyName = "pbEmbeds",
 			name = "Enable PBs",
-			description = "Do you want Droptracker to track your PBs?",
+			description = "Do you want DropTracker to track your PBs?",
 			position = 1,
 			section = PbSection
 	) default boolean pbEmbeds() { return true; }
@@ -79,7 +79,7 @@ public interface DropTrackerConfig extends Config
 	@ConfigItem(
 			keyName = "clogEmbeds",
 			name = "Enable Clogs",
-			description = "Do you want DropTracker to track your Collection Logs collected?",
+			description = "Should we send new collection log slot unlocks to the DropTracker?",
 			position = 1,
 			section = ClogSection
 	) default boolean clogEmbeds() { return true; }
@@ -87,7 +87,7 @@ public interface DropTrackerConfig extends Config
 			keyName = "screenshotClog",
 			name = "Screenshot Clogs",
 			description = "Do you want screenshots to be sent when you\n" +
-					"receive new collection log items?",
+					"receive new collection log slots?",
 			position = 2,
 			section = ClogSection
 	) default boolean screenshotNewClogs() { return true; }
@@ -102,7 +102,7 @@ public interface DropTrackerConfig extends Config
 	@ConfigItem(
 			keyName = "caEmbeds",
 			name = "Enable CAs",
-			description = "Do you want DropTracker to Track your CAs?",
+			description = "Should we send your drops to the DropTracker?",
 			position = 3,
 			section = CaSection
 	) default boolean caEmbeds() { return true; }
@@ -114,29 +114,6 @@ public interface DropTrackerConfig extends Config
 			position = 3,
 			section = CaSection
 	) default boolean screenshotCAs() { return true; }
-
-
-	/* PvP is pretty much completely ignored by the server
-	@ConfigItem(
-
-			keyName = "screenshotPKs",
-			name = "Player vs Player",
-			description = "Do you want a screenshot to be sent\n" +
-					"when you kill another player?",
-			position = 4,
-			section = screenshotSection
-	)*/
-	default boolean screenshotPKs() { return true; }
-	/* We are only going to focus on pets that are new collection log slots, for now... */
-//	@ConfigItem(
-//			keyName = "screenshotPets",
-//			name = "Pets",
-//			description = "Do you want a screenshot to be sent\n" +
-//					"when you acquire a new pet?",
-//			position = 5,
-//			section = screenshotSection
-//	)
-//	default boolean screenshotPets() { return true; }
 
 
 	@ConfigSection(
