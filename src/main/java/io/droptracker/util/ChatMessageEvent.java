@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
 import net.runelite.api.annotations.Varp;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
@@ -180,6 +181,7 @@ public class ChatMessageEvent {
     private long lastProcessedTime = 0;
     private static final long DUPLICATE_THRESHOLD = 5000;
     private String teamSize = null;
+    private int lastNpcTypeTarget;
 
     public boolean isEnabled() {
         return true;
@@ -918,10 +920,17 @@ public class ChatMessageEvent {
             if(teamMatch.find())
                 teamSize = teamMatch.group(1);
 
-        }else if(message.contains("ersonal best")){
+        }else if(bossName.contains("Royal Titans")){
+            int size = client.getPlayers().size();
+            if(size == 1){
+                teamSize = "Solo";
+            }
+            teamSize = String.valueOf(size);
+        } else if(message.contains("ersonal best")){
             teamSize = "Solo";
         }
 
     }
 
 }
+
