@@ -924,8 +924,10 @@ public class ChatMessageEvent {
             int size = client.getPlayers().size();
             if(size == 1){
                 teamSize = "Solo";
+            }else{
+                teamSize = String.valueOf(size);
             }
-            teamSize = String.valueOf(size);
+
         } else if(message.contains("ersonal best")){
             teamSize = "Solo";
         }
