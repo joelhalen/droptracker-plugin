@@ -379,6 +379,10 @@ public class DropTrackerPlugin extends Plugin {
 		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
 
 		if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
+
+			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
+				npcName = "Royal Titans";
+			}
 			processDropEvent(npcName, "npc", lootReceived.getItems());
 			return;
 		}
