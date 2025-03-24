@@ -1010,7 +1010,7 @@ public class ChatMessageEvent {
         //Gauntlet Test
         /*
           // onGameMessage("Challenge duration: 3:06. Personal best: 1:47.");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Challenge duration: 6:22 (new personal best).");
           onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
           onGameMessage("Your Gauntlet completion count is 40.");
 
@@ -1019,7 +1019,7 @@ public class ChatMessageEvent {
         //Corrupted Gauntlet Test
         /*
           // onGameMessage("Corrupted challenge duration: 3:06. Personal best: 1:47.");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Corrupted challenge duration: 7:55 (new personal best).");
           onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
           onGameMessage("Your Corrupted Gauntlet completion count is 40.");
         */
@@ -1028,7 +1028,7 @@ public class ChatMessageEvent {
         /*
           onGameMessage("Your nightmare kill count is 31.");
           // onGameMessage("Team size: 6+ players Fight duration: 1:46. Personal best: 1:46");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Team size: 6+ players Fight duration: 3:57 (new personal best)");
         */
 
         //Phosani Nightmare Test
@@ -1063,7 +1063,7 @@ public class ChatMessageEvent {
         /*
           onGameMessage("Your Araxxor kill count is 75.");
           // onGameMessage("Fight duration: 1:19.20. Personal best: 1:00.00");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Fight duration: 1:15.60 (new personal best)");
         */
 
         //Duke Succelus Test
@@ -1077,14 +1077,15 @@ public class ChatMessageEvent {
         /*
           onGameMessage("Your TzTok-Jad kill count is 5.");
           // onGameMessage("Duration: 59:20. Personal best: 46:16");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Duration: 1:47:28.20 (new personal best)");
         */
 
         //Fortis Colosseum Test
         /*
-          onGameMessage("");
-          // onGameMessage("");
-          // onGameMessage("");
+          onGameMessage("Your Sol Heredit kill count is: 10.");
+          onGameMessage("Wave 12 completed! Wave duration: 37:51.60");
+          // onGameMessage("Colosseum duration: 37:51.60. Personal best: 30:12.00");
+          // onGameMessage("Colosseum duration: 26:13.20 (new personal best)");
         */
 
         //Fragment of Seren Test
@@ -1104,7 +1105,7 @@ public class ChatMessageEvent {
         //Grotesque Guardians Test
         /*
           // onGameMessage("Fight duration: 2:12. Personal best: 1:18");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Fight duration: 1:55 (new personal best)");
           onGameMessage("Your Grotesque Guardians kill count is 413.");
         */
 
@@ -1125,7 +1126,7 @@ public class ChatMessageEvent {
         //Inferno Test
         /*
           onGameMessage("Your TzKal-Zuk kill count is 1.");
-          // onGameMessage("");
+          // onGameMessage("Duration: 2:23:41. Personal best: 1:09:04");
           // onGameMessage("Duration: 2:21:41 (new personal best)");
         */
 
@@ -1138,22 +1139,22 @@ public class ChatMessageEvent {
 
         //Six Jads Test
         /*
-          onGameMessage("");
-          // onGameMessage("");
-          // onGameMessage("(new personal best)");
+          onGameMessage("Your completion count for Tzhaar-Ket-Rak's Sixth Challenge is 1.");
+          // onGameMessage("Challenge duration: 6:02. Personal best: 5:31");
+          // onGameMessage("Challenge duration: 6:31.80 (new personal best");
         */
 
         //Hueycoatl Test
         /*
           onGameMessage("Your Hueycoatl kill count is 3.");
           // onGameMessage("Fight duration: 3:09.60. Personal best: 0:58.20");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Fight duration: 3:04 (new personal best)");
         */
 
         //Leviathan Test
         /*
           onGameMessage("Your Leviathan kill count is 2.");
-          // onGameMessage("Fight duration: 1:16.20. Personal best: 1:06.00");
+          // onGameMessage("Fight duration: 3:19. Personal best: 2:50");
           // onGameMessage("Fight duration: 2:16.80 (new personal best)");
         */
 
@@ -1168,14 +1169,21 @@ public class ChatMessageEvent {
         /*
           onGameMessage("Your whisperer kill count is 4.");
           // onGameMessage("Fight duration: 3:06.00. Personal best: 2:29.40");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Fight duration: 2:18.60 (new personal best)");
         */
 
         //Vardorvis Test
         /*
+          onGameMessage("Your Vardorvis kill count is: 18.");
+          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("Fight duration: 2:39 (new personal best)");
+        */
+
+        //Vorkath Test
+        /*
           onGameMessage("Your Vorkath kill count is: 168.");
           // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
-          // onGameMessage("(new personal best)");
+          // onGameMessage("Fight duration: 1:53 (new personal best)");
         */
     }
 }
