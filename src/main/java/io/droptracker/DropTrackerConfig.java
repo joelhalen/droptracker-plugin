@@ -28,6 +28,7 @@ public interface DropTrackerConfig extends Config
 			description = "Should we send your drops to the DropTracker?",
 			position = 0,
 			section = LootSection
+
 	) default boolean lootEmbeds(){ return true;}
 	@ConfigItem(
 			keyName = "valueableDrops",

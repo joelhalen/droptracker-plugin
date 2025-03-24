@@ -141,39 +141,40 @@ public class ChatMessageEvent {
 
     private static final Pattern[] TIME_PATTERNS = {
             // Team patterns
-            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
-            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)"),
+            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             // ToA patterns
-            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.*\\d*).*"),
-            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.*\\d*)\\.*"),
+            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             // ToB pattern
-            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             // Gauntlet pattern - fixed spacing and case
-            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
-            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             //Colosseum Pattern
-            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             // Generic boss pattern
-            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
-            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*).*"),
+            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*")
     };
     private static final Pattern[] PB_PATTERNS = {
             // Team patterns
-            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
-            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
+            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // ToA patterns
-            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
-            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
+            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // ToB pattern
-            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // Gauntlet pattern - fixed spacing and case
-            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
-            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
+            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // Colosseum Pattern
-            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // Generic boss pattern
-            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
-            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\).*"),
+            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
+            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
     };
     private final Map<String,TimeData> pendingTimeData = new HashMap<>();
     private final Map<String,TimeData> recentTimeData = new HashMap<>();
@@ -806,15 +807,18 @@ public class ChatMessageEvent {
                     storeBossTime("Phosani's Nightmare",time,bestTime,isPb);
                 } else if (message.contains("Tombs of Amascut")) {
                     setTeamSize("Tombs of Amascut",message);
+                    storeBossTime("Tombs of Amascut: Entry Mode", time,bestTime,isPb);
                     storeBossTime("Tombs of Amascut", time, bestTime, isPb);
                     storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
                 }else if(message.contains("Theatre of Blood")){
                     setTeamSize("Theatre of Blood",message);
+                    storeBossTime("Theatre of Blood: Entry Mode", time,bestTime,isPb);
                     storeBossTime("Theatre of Blood",time,bestTime,isPb);
                     storeBossTime("Theatre of Blood: Hard Mode",time,bestTime,isPb);
                 }else if (message.contains("Corrupted challenge")) {
                     setTeamSize("Corrupted Hunllef",message);
                     storeBossTime("Corrupted Hunllef", time, bestTime, isPb);
+
                 } else if (message.contains("Challenge duration")) {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
@@ -934,5 +938,245 @@ public class ChatMessageEvent {
 
     }
 
+    @VisibleForTesting
+    public void generateTestMessage() {
+        //Chambers of Xeric Challenge Mode Test
+        /*
+          onGameMessage("Congratulations - Your raid is complete!");
+          // onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+        */
+
+        //Chambers of Xeric Test
+        /*
+          onGameMessage("Congratulations - Your raid is complete!");
+          // onGameMessage("Team size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric count is 52.");
+        */
+
+        //Tombs of Amascut: Entry Mode Test
+        /*
+          // onGameMessage("");
+          // onGameMessage("");
+          onGameMessage("");
+          onGameMessage("");
+        */
+
+        //Tombs of Amascut Test
+        /*
+        onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+        onGameMessage("Tombs of Amascut challenge completion time: 14:40. Personal best: 12:16");
+        // onGameMessage("Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
+        // onGameMessage("Tombs of Amascut total completion time: 14:36.4 (new personal best)");
+        onGameMessage("Your completed Tombs of Amascut count is 15.");
+        /*
+
+        //Tombs of Amascut Expert Mode Test
+        /*
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+          onGameMessage("Tombs of Amascut: Expert Mode challenge completion time: 20:40. Personal best: 18:16");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 1:23:38.2. Personal best: 1:20:38.4");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 18:37.4 (new personal best)");
+          onGameMessage("Your completed Tombs of Amascut: Expert Mode count is 20.");
+        */
+
+        //Theatre of Blood: Entry Mode Test
+        /*
+          // onGameMessage("");
+          // onGameMessage("");
+          onGameMessage("");
+          onGameMessage("");
+        */
+
+        //Theatre of Blood Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          // onGameMessage("Theatre of Blood completion time: 25:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");
+          onGameMessage("Your completed Theatre of Blood count is 11.");
+        */
+
+        //Theatre of Blood Hard Mode Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 25:12. Personal best: 23:09");
+          // onGameMessage("Theatre of Blood completion time: 24:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 28:01. Personal best: 25:41");
+          onGameMessage("Your completed Theatre of Blood: Hard Mode count is 11.");
+
+        */
+
+        //Gauntlet Test
+        /*
+          // onGameMessage("Challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("(new personal best)");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Gauntlet completion count is 40.");
+
+        */
+
+        //Corrupted Gauntlet Test
+        /*
+          // onGameMessage("Corrupted challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("(new personal best)");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Corrupted Gauntlet completion count is 40.");
+        */
+
+        //Nightmare Test
+        /*
+          onGameMessage("Your nightmare kill count is 31.");
+          // onGameMessage("Team size: 6+ players Fight duration: 1:46. Personal best: 1:46");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Phosani Nightmare Test
+        /*
+          onGameMessage("Your Phosani's Nightmare kill count is: 100.");
+          // onGameMessage("Team size: Solo Fight Duration: 8:58. Personal best: 8:30");
+          // onGameMessage("Team size: Solo Fight Duration: 1:05:30 (new personal best)");
+        */
+
+        //Zulrah Test
+        /*
+          onGameMessage("Congratulations - Your Zulrah kill count is: 559.");
+          // onGameMessage("Fight duration: 1:02. Personal best: 0:59");
+          // onGameMessage("Fight duration: 0:58 (new personal best)");
+        */
+
+        //Alchemical Hydra Test
+        /*
+          onGameMessage("Your Alchemical Hydra kill count is: 150.");
+          // onGameMessage("Fight duration: 1:49. Personal best: 1:28.");
+          // onGameMessage("Fight duration: 1:20 (new personal best).");
+        */
+
+        //Amoxialtl Test
+        /*
+          onGameMessage("Your Amoxliatl kill count is: 42.");
+          // onGameMessage("Fight duration: 1:05.40. Personal best: 0:29.40");
+          // onGameMessage("Fight duration: 0:29.40 (new personal best)");
+        */
+
+        //Araxxor Test
+        /*
+          onGameMessage("Your Araxxor kill count is 75.");
+          // onGameMessage("Fight duration: 1:19.20. Personal best: 1:00.00");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Duke Succelus Test
+        /*
+          onGameMessage("Your Duke Sucellus kill count is: 150.");
+          // onGameMessage("Fight duration: 2:52.20. Personal best: 1:37.80");
+          // onGameMessage("Fight duration: 1:34.20 (new personal best)");
+        */
+
+        //Fight Caves Test
+        /*
+          onGameMessage("Your TzTok-Jad kill count is 5.");
+          // onGameMessage("Duration: 59:20. Personal best: 46:16");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Fortis Colosseum Test
+        /*
+          onGameMessage("");
+          // onGameMessage("");
+          // onGameMessage("");
+        */
+
+        //Fragment of Seren Test
+        /*
+          onGameMessage("Your Fragment of Seren kill count is: 2.");
+          // onGameMessage("");
+          // onGameMessage("Fight duration: 3:29 (new personal best).");
+        */
+
+        //Galvek Test
+        /*
+          onGameMessage("Your Galvek kill count is: 2.");
+          // onGameMessage("");
+          // onGameMessage("Fight duration: 2:19 (new personal best)");
+        */
+
+        //Grotesque Guardians Test
+        /*
+          // onGameMessage("Fight duration: 2:12. Personal best: 1:18");
+          // onGameMessage("(new personal best)");
+          onGameMessage("Your Grotesque Guardians kill count is 413.");
+        */
+
+        //Hespori Test
+        /*
+          onGameMessage("Your Hespori kill count is: 134.");
+          // onGameMessage("Fight duration: 1:16. Personal best: 0:44");
+          // onGameMessage("Fight duration: 0:35 (new personal best)");
+        */
+
+        //Hallowed Sepluchre Test
+        /*
+          onGameMessage("");
+          // onGameMessage("");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Inferno Test
+        /*
+          onGameMessage("Your TzKal-Zuk kill count is 1.");
+          // onGameMessage("");
+          // onGameMessage("Duration: 2:21:41 (new personal best)");
+        */
+
+        //Phantom Muspah Test
+        /*
+          onGameMessage("Your Phantom Muspah kill count is: 12.");
+          // onGameMessage("Fight duration: 3:11. Personal best: 2:17");
+          // onGameMessage("Fight duration: 2:02 (new personal best)");
+        */
+
+        //Six Jads Test
+        /*
+          onGameMessage("");
+          // onGameMessage("");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Hueycoatl Test
+        /*
+          onGameMessage("Your Hueycoatl kill count is 3.");
+          // onGameMessage("Fight duration: 3:09.60. Personal best: 0:58.20");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Leviathan Test
+        /*
+          onGameMessage("Your Leviathan kill count is 2.");
+          // onGameMessage("Fight duration: 1:16.20. Personal best: 1:06.00");
+          // onGameMessage("Fight duration: 2:16.80 (new personal best)");
+        */
+
+        //Royal Titans Test
+        /*
+          onGameMessage("Your Royal Titans kill count is: 9.");
+          // onGameMessage("");
+          // onGameMessage("Fight duration: 2:50 (new personal best)");
+        */
+
+        //Whisperer Test
+        /*
+          onGameMessage("Your whisperer kill count is 4.");
+          // onGameMessage("Fight duration: 3:06.00. Personal best: 2:29.40");
+          // onGameMessage("(new personal best)");
+        */
+
+        //Vardorvis Test
+        /*
+          onGameMessage("Your Vorkath kill count is: 168.");
+          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("(new personal best)");
+        */
+    }
 }
 
