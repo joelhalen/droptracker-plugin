@@ -71,7 +71,6 @@ public class WidgetEvent {
         this.executor = executor;
     }
 
-    @Subscribe
     public void onWidgetLoaded(WidgetLoaded widget)
     {
         switch (widget.getGroupId())

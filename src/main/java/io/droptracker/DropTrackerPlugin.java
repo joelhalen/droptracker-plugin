@@ -407,6 +407,11 @@ public class DropTrackerPlugin extends Plugin {
 		chatMessageEventHandler.onScript(event.getScriptId());
 	}
 
+	@Subscribe
+	public void onWidgetLoaded(WidgetLoaded widget) {
+		widgetEventHandler.onWidgetLoaded(widget);
+	}
+
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
 		String chatMessage = sanitize(message.getMessage());
