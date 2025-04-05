@@ -52,6 +52,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
 import io.droptracker.util.ContainerManager;
+import io.droptracker.util.WidgetEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Component;
@@ -163,6 +164,9 @@ public class DropTrackerPlugin extends Plugin {
 	private int timesTried = 0;
 	@Inject
 	public ChatMessageEvent chatMessageEventHandler;
+
+	@Inject
+	public WidgetEvent widgetEventHandler;
 
 	@Inject
 	private ClientToolbar clientToolbar;
@@ -421,6 +425,7 @@ public class DropTrackerPlugin extends Plugin {
 		if (client.getGameState().equals(GameState.LOGGED_IN)) {
 			containerManager.onTick();
 		}
+		widgetEventHandler.onGameTick(event);
 	}
 
 
