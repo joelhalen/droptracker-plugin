@@ -1,12 +1,11 @@
-# [DropTracker](https://www.droptracker.io/)
+# [The DropTracker](https://www.droptracker.io/)
+Track your drops, compete in leaderboards, and share your achievements with your clan.
+The DropTracker is an all-in-one loot and achievement tracking system built for OSRS clans.
 
-Shares your drops, personal bests, collection logs and other in-game achievements with the DropTracker database, and sends Discord messages if you are in a **DropTracker Group** that your submission qualifies for.
-![image](https://www.joelhalen.net/img/example-board.png)
-It is highly recommended that you register in **[our Discord server](https://discord.gg/droptracker)** and enter your provided **authentication token** into the plugin config; so that you can appear on global results.
+#### [Visit our Website](https://www.droptracker.io/) | [Join our Discord](https://www.droptracker.io/discord) | [Browse the Docs (work in progress)](https://www.droptracker.io/wiki)
+![image](https://www.droptracker.io/img/clans/2/lb/lootboard.png)
 
-[Visit our Website](https://www.droptracker.io/) | [Join the Discord](https://www.droptracker.io/discord) | [Read the Docs](https://www.droptracker.io/docs)
-
-
+---
 ## **Features**:
 The DropTracker has in-built support for inserting all of the below into **Google Sheets** and for sending **Discord Webhooks** based on your configured values.
 
@@ -17,9 +16,26 @@ Tracked events:
 - Collection Log slot unlocks
 - Combat Achievement completions
 - Personal Best times
+![image](https://www.droptracker.io/img/drop_embed.png)
+---
+## **Getting Started**:
+### Players
+Players can track their drops and achievements instantly by simply installing our plugin. No further configuration is needed.
+- You can, optionally, enable **Use API Connections** in the plugin configuration to allow looking up other players inside the DropTracker side panel.
+
+    If you are part of a group, you can optionally **claim your accounts** within your group's Discord server, using the `/claim-rsn` command.
+
+### Groups
+For groups, to begin tracking you'll first need to join our [support discord server](https://www.droptracker.io/discord) and invite the **DropTracker.io Discord Bot** to your server.
+
+    Creating a group has a pre-requisite of obtaining your group's WiseOldMan ID. This is a 3-6 digit code, with no special characters. Please DO NOT share your group's verification code with us!
+
+- Once you've invited the bot to your server, please [click here to read more](https://www.droptracker.io/wiki/create-group) about creating and configuring your group.
+
+
 
 
 ---
-If you're still left looking for more answers, feel free to visit our **[Documentation | DropTracker.io](https://www.droptracker.io/docs)**.
+If you're still left looking for more answers, feel free to join our **[Discord Server](https://www.droptracker.io/discord)**.
 
 
