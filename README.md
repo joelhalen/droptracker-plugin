@@ -16,6 +16,7 @@ Tracked events:
 - Collection Log slot unlocks
 - Combat Achievement completions
 - Personal Best times
+
 ![image](https://www.droptracker.io/img/drop_embed.png)
 ---
 ## **Getting Started**:
