@@ -1,3 +1,31 @@
+/*
+ * Copyright (c) 2017. l2-
+ * Copyright (c) 2017, Adam <Adam@sigterm.info>
+ * All rights reserved.
+ *
+ * Borrowed from ChatCommandsPlugin and modified for use within the
+ * DropTracker by @joelhalen <andy@joelhalen.net>
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package io.droptracker.util;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -253,11 +281,9 @@ public class WidgetEvent {
                         } else if (teamSize.endsWith("players")) {
                             teamSize = teamSize.replace("players", "").strip();
                         }
-    
-                        System.out.println("Found team-size adventure log PB for " + boss + " (" + teamSize + "): " + seconds);
+
                         personalBests.add(new BossPB(boss, teamSize, seconds));
-                    } else {    
-                        System.out.println("Found adventure log PB for " + boss + ": " + seconds);
+                    } else {
                         personalBests.add(new BossPB(boss, "Solo", seconds));
                     }
                     
@@ -304,7 +330,7 @@ public class WidgetEvent {
                 BossPB pb = personalBests.get(j);
                 String formattedTime = formatTime(pb.getTime());
                 
-                // Format each PB as "bossName|teamSize|time" for easy parsing
+                // Format each PB as with "`boss name` - `team_size` : `time`" for easy parsing
                 fieldContent.append("`" + pb.getBossName() + "`")
                            .append(" - ")
                            .append("`" + pb.getTeamSize() + "`")
@@ -324,7 +350,7 @@ public class WidgetEvent {
         
         customWebhookBody.getEmbeds().add(pbEmbed);
         
-        // Use the plugin's webhook sending method
+        // Use the main plugin class' sendWebhook method
         plugin.sendDropTrackerWebhook(customWebhookBody, 0);
     }
 
