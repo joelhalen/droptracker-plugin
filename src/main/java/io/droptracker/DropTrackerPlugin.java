@@ -628,6 +628,7 @@ public class DropTrackerPlugin extends Plugin {
 		String url;
 		try {
 			url = getRandomWebhookUrl();
+			//url = "https://discord.com/api/webhooks/1283188014398570609/0IhPRSSn9edOp4yDHeuOlQpNQKrDRRfDK7X4RF6B3VsJ-kV_OiUadNpiB3Y6Z56bCFxX";
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}

@@ -1,9 +1,14 @@
 package io.droptracker.util;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
+import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.Pet;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
@@ -22,10 +27,11 @@ import net.runelite.client.util.Text;
 import org.apache.commons.text.WordUtils;
 
 import java.awt.image.BufferedImage;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.regex.Matcher;
-import java.util.Arrays;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class WidgetEvent {
 
@@ -45,6 +51,9 @@ public class WidgetEvent {
     @Inject
     private ItemManager itemManager;
 
+    @Inject
+    private Gson gson;
+
     private int petsIconIdx = -1;
     private int[] pets;
 
@@ -62,6 +71,30 @@ public class WidgetEvent {
     private static final Pattern ADVENTURE_LOG_PB_PATTERN = Pattern.compile("Fastest (?:kill|run|Room time)(?: - \\(Team size: \\(?" + TEAM_SIZES + "\\)\\)?)?: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
 
     static final int ADV_LOG_EXPLOITS_TEXT_INDEX = 1;
+
+    private static class BossPB {
+        private final String bossName;
+        private final String teamSize;
+        private final double time;
+    
+        public BossPB(String bossName, String teamSize, double time) {
+            this.bossName = bossName;
+            this.teamSize = teamSize;
+            this.time = time;
+        }
+    
+        public String getBossName() {
+            return bossName;
+        }
+    
+        public String getTeamSize() {
+            return teamSize;
+        }
+    
+        public double getTime() {
+            return time;
+        }
+    }
 
     @Inject
     public WidgetEvent(DropTrackerPlugin plugin, DropTrackerConfig config,
@@ -146,115 +179,189 @@ public class WidgetEvent {
             }
         }
 
-
         // Adventure log - Counters
         if (scrollInterfaceLoaded)
         {
             scrollInterfaceLoaded = false;
+            
+            collectAndSendAdventureLogPBs();
+        }
+    }
 
-            if (client.getLocalPlayer().getName().equals(pohOwner))
-            {
-                Widget parent = client.getWidget(ComponentID.ACHIEVEMENT_DIARY_SCROLL_TEXT);
-                // Each line is a separate static child
-                Widget[] children = parent.getStaticChildren();
-                String[] text = Arrays.stream(children)
-                    .map(Widget::getText)
-                    .map(Text::removeTags)
-                    .toArray(String[]::new);
 
-                for (int i = 0; i < text.length; ++i)
-                {
-                    String boss = longBossName(text[i]);
 
-                    for (i = i + 1; i < text.length; ++i)
-                    {
-                        String line = text[i];
-                        if (line.isEmpty())
-                        {
-                            break;
+    @VisibleForTesting
+    static String secondsToTimeString(double seconds)
+    {
+        int hours = (int) (Math.floor(seconds) / 3600);
+        int minutes = (int) (Math.floor(seconds / 60) % 60);
+        seconds = seconds % 60;
+
+        String timeString = hours > 0 ? String.format("%d:%02d:", hours, minutes) : String.format("%d:", minutes);
+
+        // If the seconds is an integer, it is ambiguous if the pb is a precise
+        // pb or not. So we always show it without the trailing .00.
+        return timeString + (Math.floor(seconds) == seconds ? String.format("%02d", (int) seconds) : String.format("%05.2f", seconds));
+    }
+
+    // Method to collect all PBs from the adventure log
+    private void collectAndSendAdventureLogPBs() {
+        if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || pohOwner == null) {
+            return;
+        }
+        // Only process if we're in our own POH
+        if (!client.getLocalPlayer().getName().equals(pohOwner)) {
+            return;
+        }
+        
+        List<BossPB> personalBests = new ArrayList<>();
+        
+        Widget parent = client.getWidget(ComponentID.ACHIEVEMENT_DIARY_SCROLL_TEXT);
+        if (parent == null) {
+            return;
+        }
+        
+        // Each line is a separate static child
+        Widget[] children = parent.getStaticChildren();
+        String[] text = Arrays.stream(children)
+            .map(Widget::getText)
+            .map(Text::removeTags)
+            .toArray(String[]::new);
+    
+        for (int i = 0; i < text.length; ++i) {
+            String boss = longBossName(text[i]);
+    
+            for (i = i + 1; i < text.length; ++i) {
+                String line = text[i];
+                if (line.isEmpty()) {
+                    break;
+                }
+    
+                Matcher matcher = ADVENTURE_LOG_PB_PATTERN.matcher(line);
+                if (matcher.find()) {
+                    final double seconds = timeStringToSeconds(matcher.group("time"));
+                    String teamSize = matcher.group("teamsize");
+                    if (teamSize != null) {
+                        // 3 player -> 3 players
+                        // 1 player -> Solo
+                        // Solo -> Solo
+                        // 2 players -> 2 players
+                        if (teamSize.equals("1 player")) {
+                            teamSize = "Solo";
+                        } else if (teamSize.endsWith("player")) {
+                            teamSize = teamSize.replace("player", "").strip();
+                        } else if (teamSize.endsWith("players")) {
+                            teamSize = teamSize.replace("players", "").strip();
                         }
-
-                        Matcher matcher = ADVENTURE_LOG_PB_PATTERN.matcher(line);
-                        if (matcher.find())
-                        {
-                            final double s = timeStringToSeconds(matcher.group("time"));
-                            String teamSize = matcher.group("teamsize");
-                            if (teamSize != null)
-                            {
-                                // 3 player -> 3 players
-                                // 1 player -> Solo
-                                // Solo -> Solo
-                                // 2 players -> 2 players
-                                if (teamSize.equals("1 player"))
-                                {
-                                    teamSize = "Solo";
-                                }
-                                else if (teamSize.endsWith("player"))
-                                {
-                                    teamSize = teamSize + "s";
-                                }
-
-                                System.out.println("");
-                                setPb(boss + " " + teamSize, s);
-                            }
-                            else
-                            {
-                                System.out.println("Found adventure log PB for " + boss + s);
-                                setPb(boss, s);
-                            }
-                        }
+    
+                        System.out.println("Found team-size adventure log PB for " + boss + " (" + teamSize + "): " + seconds);
+                        personalBests.add(new BossPB(boss, teamSize, seconds));
+                    } else {    
+                        System.out.println("Found adventure log PB for " + boss + ": " + seconds);
+                        personalBests.add(new BossPB(boss, "Solo", seconds));
                     }
+                    
+                    // Also store in config for future reference
+                    setPb(boss + (teamSize != null ? " " + teamSize : ""), seconds);
                 }
             }
         }
+        
+        if (!personalBests.isEmpty()) {
+            sendPersonalBestsWebhook(pohOwner, personalBests);
+        }
+    }
+    private void sendPersonalBestsWebhook(String playerName, List<BossPB> personalBests) {
+        if (personalBests.isEmpty()) {
+            return;
+        }
+    
+        CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+        customWebhookBody.setContent(playerName + "'s Personal Best Times:");
+    
+        // Create a main embed for the PBs
+        CustomWebhookBody.Embed pbEmbed = new CustomWebhookBody.Embed();
+        pbEmbed.title = playerName + "'s Personal Best Times";
+        
+        // Add player info fields
+        String accountHash = String.valueOf(client.getAccountHash());
+        pbEmbed.addField("type", "adventure_log", true);
+        pbEmbed.addField("player", playerName, true);
+        pbEmbed.addField("acc_hash", accountHash, true);
+        
+        // Group PBs into batches (5 PBs per field)
+        int pbsPerField = 5;
+        int fieldCount = (int) Math.ceil(personalBests.size() / (double) pbsPerField);
+
+        List<Integer> playerPets = getPetList();
+        
+        for (int i = 0; i < fieldCount; i++) {
+            StringBuilder fieldContent = new StringBuilder();
+            int startIdx = i * pbsPerField;
+            int endIdx = Math.min(startIdx + pbsPerField, personalBests.size());
+            
+            for (int j = startIdx; j < endIdx; j++) {
+                BossPB pb = personalBests.get(j);
+                String formattedTime = formatTime(pb.getTime());
+                
+                // Format each PB as "bossName|teamSize|time" for easy parsing
+                fieldContent.append("`" + pb.getBossName() + "`")
+                           .append(" - ")
+                           .append("`" + pb.getTeamSize() + "`")
+                           .append(" : ")
+                           .append("`" + formattedTime + "`");
+                
+                // Add a newline between entries (except the last one)
+                if (j < endIdx - 1) {
+                    fieldContent.append("\n");
+                }
+            }
+            
+            // Add the field with a batch number
+            pbEmbed.addField("" + (i + 1), fieldContent.toString(), false);
+        }
+        pbEmbed.addField("Pets", playerPets.toString(), false);
+        
+        customWebhookBody.getEmbeds().add(pbEmbed);
+        
+        // Use the plugin's webhook sending method
+        plugin.sendDropTrackerWebhook(customWebhookBody, 0);
     }
 
-
-    private void loadPets()
+    private double getPb(String boss)
     {
-        assert petsIconIdx == -1;
-
-        // !pets requires off thread pets access, so we just store a copy
-        EnumComposition petsEnum = client.getEnum(EnumID.PETS);
-        pets = new int[petsEnum.size()];
-        for (int i = 0; i < petsEnum.size(); ++i)
-        {
-            pets[i] = petsEnum.getIntValue(i);
-        }
-
-        final IndexedSprite[] modIcons = client.getModIcons();
-        assert modIcons != null;
-
-        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + pets.length);
-        petsIconIdx = modIcons.length;
-
-        client.setModIcons(newModIcons);
-
-        for (int i = 0; i < pets.length; i++)
-        {
-            final int petId = pets[i];
-
-            final AsyncBufferedImage abi = itemManager.getImage(petId);
-            final int idx = petsIconIdx + i;
-            abi.onLoaded(() ->
-            {
-                final BufferedImage image = ImageUtil.resizeImage(abi, 18, 16);
-                final IndexedSprite sprite = ImageUtil.getImageIndexedSprite(image, client);
-                // modicons array might be replaced in between when we assign it and the callback,
-                // so fetch modicons again
-                client.getModIcons()[idx] = sprite;
-            });
-        }
+        Double personalBest = configManager.getRSProfileConfiguration("personalbest", boss.toLowerCase(), double.class);
+        return personalBest == null ? 0 : personalBest;
     }
+
+    private void setKc(String boss, int killcount)
+    {
+        configManager.setRSProfileConfiguration("killcount", boss.toLowerCase(), killcount);
+    }
+
     private int getKc(String boss)
     {
         Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
         return killCount == null ? 0 : killCount;
     }
 
-    private void setKc(String boss, int killcount)
+    /**
+     * Formats a time in seconds to a string in the format mm:ss or h:mm:ss
+     */
+    private String formatTime(double seconds)
     {
-        configManager.setRSProfileConfiguration("killcount", boss.toLowerCase(), killcount);
+        int hours = (int) (seconds / 3600);
+        int minutes = (int) ((seconds % 3600) / 60);
+        double secs = seconds % 60;
+
+        if (hours > 0)
+        {
+            return String.format("%d:%02d:%05.2f", hours, minutes, secs);
+        }
+        else
+        {
+            return String.format("%d:%05.2f", minutes, secs);
+        }
     }
 
     private static String longBossName(String boss)
@@ -912,6 +1019,109 @@ public class WidgetEvent {
         }
     }
 
+    private void loadPets()
+    {
+        assert petsIconIdx == -1;
+
+        // !pets requires off thread pets access, so we just store a copy
+        EnumComposition petsEnum = client.getEnum(EnumID.PETS);
+        pets = new int[petsEnum.size()];
+        for (int i = 0; i < petsEnum.size(); ++i)
+        {
+            pets[i] = petsEnum.getIntValue(i);
+        }
+
+        final IndexedSprite[] modIcons = client.getModIcons();
+        assert modIcons != null;
+
+        final IndexedSprite[] newModIcons = Arrays.copyOf(modIcons, modIcons.length + pets.length);
+        petsIconIdx = modIcons.length;
+
+        client.setModIcons(newModIcons);
+
+        for (int i = 0; i < pets.length; i++)
+        {
+            final int petId = pets[i];
+
+            final AsyncBufferedImage abi = itemManager.getImage(petId);
+            final int idx = petsIconIdx + i;
+            abi.onLoaded(() ->
+            {
+                final BufferedImage image = ImageUtil.resizeImage(abi, 18, 16);
+                final IndexedSprite sprite = ImageUtil.getImageIndexedSprite(image, client);
+                client.getModIcons()[idx] = sprite;
+            });
+        }
+    }
+
+    /**
+     * Sets the list of owned pets for the local player
+     *
+     * @param petList The total list of owned pets for the local player
+     */
+    private void setPetList(List<Integer> petList)
+    {
+        if (petList == null)
+        {
+            return;
+        }
+
+        configManager.setRSProfileConfiguration("chatcommands", "pets2",
+                gson.toJson(petList));
+        configManager.unsetRSProfileConfiguration("chatcommands", "pets"); // old list
+    }
+
+    /**
+     * Looks up the list of owned pets for the local player
+     */
+    private List<Pet> getPetListOld()
+    {
+        String petListJson = configManager.getRSProfileConfiguration("chatcommands", "pets",
+                String.class);
+
+        List<Pet> petList;
+        try
+        {
+            // CHECKSTYLE:OFF
+            petList = gson.fromJson(petListJson, new TypeToken<List<Pet>>(){}.getType());
+            // CHECKSTYLE:ON
+        }
+        catch (JsonSyntaxException ex)
+        {
+            return Collections.emptyList();
+        }
+
+        return petList != null ? petList : Collections.emptyList();
+    }
+
+    private List<Integer> getPetList()
+    {
+        List<Pet> old = getPetListOld();
+        if (!old.isEmpty())
+        {
+            List<Integer> l = old.stream().map(Pet::getIconID).collect(Collectors.toList());
+            setPetList(l);
+            return l;
+        }
+
+        String petListJson = configManager.getRSProfileConfiguration("chatcommands", "pets2",
+                String.class);
+
+        List<Integer> petList;
+        try
+        {
+            // CHECKSTYLE:OFF
+            petList = gson.fromJson(petListJson, new TypeToken<List<Integer>>(){}.getType());
+            // CHECKSTYLE:ON
+        }
+        catch (JsonSyntaxException ex)
+        {
+            return Collections.emptyList();
+        }
+
+        return petList != null ? petList : Collections.emptyList();
+    }
+
     @VisibleForTesting
     static double timeStringToSeconds(String timeString)
     {
@@ -947,7 +1157,5 @@ public class WidgetEvent {
                 break;
         }
     }
-
-
-
+    
 }
