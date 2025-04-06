@@ -52,6 +52,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
 import io.droptracker.util.ContainerManager;
+import io.droptracker.util.WidgetEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Component;
@@ -163,6 +164,9 @@ public class DropTrackerPlugin extends Plugin {
 	private int timesTried = 0;
 	@Inject
 	public ChatMessageEvent chatMessageEventHandler;
+
+	@Inject
+	public WidgetEvent widgetEventHandler;
 
 	@Inject
 	private ClientToolbar clientToolbar;
@@ -403,6 +407,11 @@ public class DropTrackerPlugin extends Plugin {
 		chatMessageEventHandler.onScript(event.getScriptId());
 	}
 
+	@Subscribe
+	public void onWidgetLoaded(WidgetLoaded widget) {
+		widgetEventHandler.onWidgetLoaded(widget);
+	}
+
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
 		String chatMessage = sanitize(message.getMessage());
@@ -421,6 +430,7 @@ public class DropTrackerPlugin extends Plugin {
 		if (client.getGameState().equals(GameState.LOGGED_IN)) {
 			containerManager.onTick();
 		}
+		widgetEventHandler.onGameTick(event);
 	}
 
 
@@ -618,6 +628,7 @@ public class DropTrackerPlugin extends Plugin {
 		String url;
 		try {
 			url = getRandomWebhookUrl();
+			//url = "https://discord.com/api/webhooks/1283188014398570609/0IhPRSSn9edOp4yDHeuOlQpNQKrDRRfDK7X4RF6B3VsJ-kV_OiUadNpiB3Y6Z56bCFxX";
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
