@@ -485,7 +485,7 @@ public class ChatMessageEvent {
 
     private Optional<BossNotification> parseBossKill(String message) {
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-
+        System.out.println("Called parseBossKill with " + message);
         return boss.map(pair -> {
             String bossName = pair.getLeft();
             // retrieve the stored timeData for this bossName, if any is stored...
@@ -505,9 +505,8 @@ public class ChatMessageEvent {
             } else {
                 System.out.println("Time data is null...");
             }
-
-            // No recent time message, check for time in current message
-            return parseKillTime(message, bossName)
+            System.out.println("No recent time, checking for time in this message...");
+            BossNotification pbData = parseKillTime(message, bossName)
                     .map(t -> new BossNotification(
                             bossName,
                             pair.getRight(),
@@ -517,6 +516,9 @@ public class ChatMessageEvent {
                             t.getRight()
                     ))
                     .orElse(null);
+            // No recent time message, check for time in current message
+            System.out.println("Got pbData:" + pbData);
+            return pbData;
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
@@ -540,7 +542,7 @@ public class ChatMessageEvent {
                 return Optional.of(Triple.of(time, bestTime, isPb));
             }
         }
-        System.out.println("No PB found");
+        //System.out.println("No PB found");
         //check for time
         for(Pattern pattern: TIME_PATTERNS) {
             boolean isPb = false;
@@ -563,7 +565,7 @@ public class ChatMessageEvent {
                 return Optional.of(Triple.of(time, bestTime, isPb));
             }
 
-            System.out.println("No time message Found");
+            //System.out.println("No time message Found");
         }
         return Optional.empty();
 
@@ -773,8 +775,6 @@ public class ChatMessageEvent {
         TimeData timeData = new TimeData(time,bestTime,isPb);
         pendingTimeData.put(bossName,timeData);
         System.out.println("Put pendingTimeData: " + bossName + " with time" + time + " / " + bestTime);
-
-
         BossNotification withTime = new BossNotification(
                 bossName,
                 mostRecentNpcData.getRight(),
@@ -886,14 +886,17 @@ public class ChatMessageEvent {
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 System.out.println("Time:" + time + " Best: " + bestTime);
-                System.out.println("Raw:" + timeStr + " " + bestTimeStr);
+                System.out.println("Raw: " + timeStr + " " + bestTimeStr);
 
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
                 if (bossName != null) {
                     System.out.println("Boss Name not Null: " + bossName);
-                    setTeamSize(bossName,message);
+                    setTeamSize(bossName, message);
                     storeBossTime(bossName, time, bestTime, isPb);
-                } else if (message.contains("Team size:")) {
+                }
+                // removed else if here, as if we only entered the below clauses
+                // where bossname is null, it may not work as expected...
+                if (message.contains("Team size:")) {
                     setTeamSize("Chambers of Xeric",message);
                     storeBossTime("Chambers of Xeric", time, bestTime, isPb);
                     storeBossTime("Chambers of Xeric Challenge Mode", time, bestTime, isPb);
