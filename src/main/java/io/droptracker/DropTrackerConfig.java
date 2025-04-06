@@ -73,7 +73,7 @@ public interface DropTrackerConfig extends Config
 	@ConfigSection(
 			name = "Collection Logs",
 			description = "<html>Define what rules you want set for Collection Log <br>" +
-			"<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
+					"<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
 			position = 3,
 			closedByDefault = false
 	) String ClogSection = "Collection Logs";

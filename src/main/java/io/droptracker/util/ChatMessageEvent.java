@@ -190,6 +190,7 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
+        System.out.println(message);
         checkPB(message);
         checkTime(message);
 
@@ -266,16 +267,28 @@ public class ChatMessageEvent {
     public void onTick() {
         BossNotification data = this.bossData.get();
         if (data != null) {
+            System.out.println("onTick got data:" + data.getBoss() + " time: " + data.getTime());
+        }
+        if (data != null) {
             if (data.getBoss() != null) {
                 if (isEnabled()) {
                     processKill(data);
+                } else {
+                    System.out.println("disabled?");
                 }
+                System.out.println("onTick: reset");
                 reset();
             } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
+                System.out.println("onTick: badTicks > MAX_BAD_TICKS");
                 reset();
             }
         }
         if (mostRecentNpcData != null) {
+            System.out.println("ticksSinceNpcDataUpdate incremented.");
+            if (bossData.get() != null) {
+                processKill(bossData.get());
+                System.out.println("name: " + mostRecentNpcData.getLeft() + "time: " + mostRecentNpcData.getRight());
+            }
             ticksSinceNpcDataUpdate += 1;
         } else {
             if (ticksSinceNpcDataUpdate > 1)  {
@@ -369,6 +382,9 @@ public class ChatMessageEvent {
 
 
     private void processKill(BossNotification data) {
+        if (data == null) {
+            return;
+        }
         if (data.getBoss() == null || data.getCount() == null)
             return;
 
@@ -376,33 +392,45 @@ public class ChatMessageEvent {
         long currentTime = System.currentTimeMillis();
 
         if(killIdentifier.equals(lastProcessedKill) && (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD){
+            System.out.println("Duplicate message trying to send");
             return;
         }
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
-
         boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
         String player = plugin.getLocalPlayerName();
-        String time = formatTime(data.getTime(), isPreciseTiming(client));
-        String bestTime = formatTime(data.getBestTime(), isPreciseTiming(client));
-        String accountHash = String.valueOf(client.getAccountHash());
-        CustomWebhookBody.Embed killEmbed = null;
-        CustomWebhookBody killWebhook = new CustomWebhookBody();
-        killEmbed = new CustomWebhookBody.Embed();
-        killEmbed.setTitle(player + " has killed a boss:");
-        killEmbed.addField("type", "npc_kill", true);
-        killEmbed.addField("boss_name", data.getBoss(), true);
-        killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
-        killEmbed.addField("kill_time", time, true);
-        killEmbed.addField("best_time", bestTime, true);
-        killEmbed.addField("is_pb", String.valueOf(isPb), true);
-        killEmbed.addField("Team_Size", teamSize,true);
-        killEmbed.addField("acc_hash", accountHash, true);
-        killEmbed.addField("p_v",plugin.pluginVersion,true);
-
-        killWebhook.getEmbeds().add(killEmbed);
-        plugin.sendDropTrackerWebhook(killWebhook, "1");
+        System.out.println("Player: " + player);
+        System.out.println(data + " " + data.getClass());
+        String time = null;
+        final String[] timeRef = {null};
+        final String[] bestTimeRef = {null};
+        System.out.println("calling invokeLater...");
+        clientThread.invokeLater(() -> {
+            System.out.println("Attempting to generate timeRef and bestTimeRef");
+            timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
+            bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
+            System.out.println("bestTime: " + bestTimeRef[0]);
+            System.out.println("Time: " + timeRef[0]); 
+            String accountHash = String.valueOf(client.getAccountHash());
+            System.out.println("AccountHash: " + accountHash);
+            CustomWebhookBody.Embed killEmbed = null;
+            CustomWebhookBody killWebhook = new CustomWebhookBody();
+            killEmbed = new CustomWebhookBody.Embed();
+            killEmbed.setTitle(player + " has killed a boss:");
+            killEmbed.addField("type", "npc_kill", true);
+            killEmbed.addField("boss_name", data.getBoss(), true);
+            killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
+            killEmbed.addField("kill_time", timeRef[0], true);
+            killEmbed.addField("best_time", bestTimeRef[0], true);
+            killEmbed.addField("is_pb", String.valueOf(isPb), true);
+            killEmbed.addField("Team_Size", teamSize,true);
+            killEmbed.addField("acc_hash", accountHash, true);
+            killEmbed.addField("p_v",plugin.pluginVersion,true);
+            killWebhook.getEmbeds().add(killEmbed);
+            System.out.println("Sending Boss: " + data.getBoss() + " with kill time: " + timeRef[0]);
+            plugin.sendDropTrackerWebhook(killWebhook, "1");
+        });
         mostRecentNpcData = null;
         teamSize = null;
     }
@@ -418,6 +446,7 @@ public class ChatMessageEvent {
                     BossNotification pending = pendingNotifications.remove(updated.getBoss());
                     if (pending != null) {
                         // If notification wasn't processed by loot event, process it now
+                        System.out.println("Processing after loot event");
                         processKill(pending);
                     }
                 }, MESSAGE_LOOT_WINDOW, TimeUnit.MILLISECONDS);
@@ -459,8 +488,11 @@ public class ChatMessageEvent {
 
         return boss.map(pair -> {
             String bossName = pair.getLeft();
+            // retrieve the stored timeData for this bossName, if any is stored...
+            // for cases where a time message may appear before the boss name/kc message appears
             TimeData timeData = pendingTimeData.get(bossName);
             //Search for stored TimeData
+            System.out.println("Received bossName from pair:" + bossName);
             if(timeData != null){
                 return new BossNotification(
                         bossName,
@@ -470,8 +502,9 @@ public class ChatMessageEvent {
                         timeData.bestTime,
                         timeData.isPb
                 );
+            } else {
+                System.out.println("Time data is null...");
             }
-
 
             // No recent time message, check for time in current message
             return parseKillTime(message, bossName)
@@ -507,20 +540,21 @@ public class ChatMessageEvent {
                 return Optional.of(Triple.of(time, bestTime, isPb));
             }
         }
-
+        System.out.println("No PB found");
         //check for time
         for(Pattern pattern: TIME_PATTERNS) {
             boolean isPb = false;
             Matcher timeMatcher = pattern.matcher(message);
 
             if (timeMatcher.find()) {
+                System.out.println("Time Pattern Found (after KC)");
                 String timeStr = "";
                 String bestTimeStr = "";
                 try {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(2);
                 } catch (Exception e) {
-                    }
+                }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 setTeamSize(bossName,message);
@@ -529,7 +563,7 @@ public class ChatMessageEvent {
                 return Optional.of(Triple.of(time, bestTime, isPb));
             }
 
-
+            System.out.println("No time message Found");
         }
         return Optional.empty();
 
@@ -595,7 +629,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    }
+                }
             }
         } else
         if (secondary.find()){
@@ -609,7 +643,7 @@ public class ChatMessageEvent {
                     ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
-                    }
+                }
             }
         }
         return Optional.empty();
@@ -726,6 +760,7 @@ public class ChatMessageEvent {
 
         if (pending != null) {
             // We found a pending notification for this boss, process it now
+            System.out.println("Loot was received now processing kill");
             processKill(pending);
         } else {
             // Store the loot event info for later matching with chat message
@@ -737,22 +772,20 @@ public class ChatMessageEvent {
     private void storeBossTime(String bossName, Duration time, Duration bestTime, boolean isPb){
         TimeData timeData = new TimeData(time,bestTime,isPb);
         pendingTimeData.put(bossName,timeData);
-        recentTimeData.put(bossName,timeData);
+        System.out.println("Put pendingTimeData: " + bossName + " with time" + time + " / " + bestTime);
 
-        BossNotification current = bossData.get();
-        if(current != null && current.getBoss().equals(bossName)){
 
-            BossNotification withTime = new BossNotification(
-                    current.getBoss(),
-                    current.getCount(),
-                    current.getGameMessage(),
-                    time,
-                    bestTime,
-                    isPb
-            );
-            bossData.set(withTime);
-            processKill(withTime);
-        }
+        BossNotification withTime = new BossNotification(
+                bossName,
+                mostRecentNpcData.getRight(),
+                "",
+                time,
+                bestTime,
+                isPb
+        );
+        bossData.set(withTime);
+        System.out.println("Time: " + time + " Processing Kill next");
+        processKill(withTime);
     }
     private static class TimeData {
         final Duration time;
@@ -790,7 +823,7 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(1);
                 }catch (Exception e){
-                    }
+                }
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
@@ -840,6 +873,7 @@ public class ChatMessageEvent {
 
             Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
+                System.out.println("Time message Found");
                 String timeStr = "";
                 String bestTimeStr = "";
                 boolean isPb = false;
@@ -847,13 +881,16 @@ public class ChatMessageEvent {
                     timeStr = timeMatcher.group(1);
                     bestTimeStr = timeMatcher.group(2);
                 }catch (Exception e){
-                    }
+                }
 
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
+                System.out.println("Time:" + time + " Best: " + bestTime);
+                System.out.println("Raw:" + timeStr + " " + bestTimeStr);
 
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
                 if (bossName != null) {
+                    System.out.println("Boss Name not Null: " + bossName);
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else if (message.contains("Team size:")) {
@@ -935,6 +972,286 @@ public class ChatMessageEvent {
         } else if(message.contains("ersonal best")){
             teamSize = "Solo";
         }
+
+    }
+
+    @VisibleForTesting
+    public void generateTestMessage() {
+        //Chambers of Xeric Challenge Mode Test
+        /*
+          onGameMessage("Congratulations - Your raid is complete!");
+          // onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+        */
+
+        //Chambers of Xeric Test
+        /*
+          onGameMessage("Congratulations - Your raid is complete!");
+          // onGameMessage("Team size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric count is 52.");
+        */
+
+        //Tombs of Amascut: Entry Mode Test
+        /*
+        onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+        onGameMessage("Tombs of Amascut: Entry Mode challenge completion time: 14:40. Personal best: 12:16");
+        // onGameMessage("Tombs of Amascut: Entry Mode total completion time: 16:37.4. Personal best: 14:37.4");
+        // onGameMessage("Tombs of Amascut: Entry Mode total completion time: 14:36.4 (new personal best)");
+        onGameMessage("Your completed Tombs of Amascut: Entry Mode count is 15.");
+        */
+
+        //Tombs of Amascut Test
+        /*
+        onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+        onGameMessage("Tombs of Amascut challenge completion time: 14:40. Personal best: 12:16");
+        // onGameMessage("Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
+        // onGameMessage("Tombs of Amascut total completion time: 14:36.4 (new personal best)");
+        onGameMessage("Your completed Tombs of Amascut count is 15.");
+        /*
+
+        //Tombs of Amascut Expert Mode Test
+        /*
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+          onGameMessage("Tombs of Amascut: Expert Mode challenge completion time: 20:40. Personal best: 18:16");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 1:23:38.2. Personal best: 1:20:38.4");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 18:37.4 (new personal best)");
+          onGameMessage("Your completed Tombs of Amascut: Expert Mode count is 20.");
+        */
+
+        //Theatre of Blood: Entry Mode Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          // onGameMessage("Theatre of Blood completion time: 25:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");
+          onGameMessage("Your completed Theatre of Blood: Entry Mode count is: 1.");
+        */
+
+        //Theatre of Blood Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          // onGameMessage("Theatre of Blood completion time: 25:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");
+          onGameMessage("Your completed Theatre of Blood count is 11.");
+        */
+
+        //Theatre of Blood Hard Mode Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 25:12. Personal best: 23:09");
+          // onGameMessage("Theatre of Blood completion time: 24:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 28:01. Personal best: 25:41");
+          onGameMessage("Your completed Theatre of Blood: Hard Mode count is 11.");
+
+        */
+
+        //Gauntlet Test
+        /*
+          // onGameMessage("Challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("Challenge duration: 6:22 (new personal best).");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Gauntlet completion count is 40.");
+        */
+
+
+        //Corrupted Gauntlet Test
+        /*
+          // onGameMessage("Corrupted challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("Corrupted challenge duration: 7:55 (new personal best).");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Corrupted Gauntlet completion count is 40.");
+        */
+
+        //Nightmare Test
+        /*
+          onGameMessage("Your nightmare kill count is 31.");
+          // onGameMessage("Team size: 6+ players Fight duration: 1:46. Personal best: 1:46");
+          // onGameMessage("Team size: 6+ players Fight duration: 3:57 (new personal best)");
+        */
+
+        //Phosani Nightmare Test
+        /*
+          onGameMessage("Your Phosani's Nightmare kill count is: 100.");
+          // onGameMessage("Team size: Solo Fight Duration: 8:58. Personal best: 8:30");
+          // onGameMessage("Team size: Solo Fight Duration: 1:05:30 (new personal best)");
+        */
+
+        //Zulrah Test
+        /*
+          onGameMessage("Congratulations - Your Zulrah kill count is: 559.");
+          // onGameMessage("Fight duration: 1:02. Personal best: 0:59");
+          // onGameMessage("Fight duration: 0:58 (new personal best)");
+        */
+
+        //Alchemical Hydra Test
+
+//        onGameMessage("Your Alchemical Hydra kill count is: 150.");
+//        onGameMessage("Fight duration: 1:49. Personal best: 1:28.");
+        // onGameMessage("Fight duration: 1:20 (new personal best).");
+
+
+        //Amoxialtl Test
+        /*
+          onGameMessage("Your Amoxliatl kill count is: 42.");
+          // onGameMessage("Fight duration: 1:05.40. Personal best: 0:29.40");
+          // onGameMessage("Fight duration: 0:29.40 (new personal best)");
+        */
+
+        //Araxxor Test
+        /*
+          onGameMessage("Your Araxxor kill count is 75.");
+          // onGameMessage("Fight duration: 1:19.20. Personal best: 1:00.00");
+          // onGameMessage("Fight duration: 1:15.60 (new personal best)");
+        */
+
+        //Duke Succelus Test
+        /*
+          onGameMessage("Your Duke Sucellus kill count is: 150.");
+          // onGameMessage("Fight duration: 2:52.20. Personal best: 1:37.80");
+          // onGameMessage("Fight duration: 1:34.20 (new personal best)");
+        */
+
+        //Fight Caves Test
+        /*
+          onGameMessage("Your TzTok-Jad kill count is 5.");
+          // onGameMessage("Duration: 59:20. Personal best: 46:16");
+          // onGameMessage("Duration: 1:47:28.20 (new personal best)");
+        */
+
+        //Fortis Colosseum Test
+        /*
+          onGameMessage("Your Sol Heredit kill count is: 10.");
+          onGameMessage("Wave 12 completed! Wave duration: 37:51.60");
+          // onGameMessage("Colosseum duration: 37:51.60. Personal best: 30:12.00");
+          // onGameMessage("Colosseum duration: 26:13.20 (new personal best)");
+        */
+
+        //Fragment of Seren Test
+        /*
+          onGameMessage("Your Fragment of Seren kill count is: 2.");
+          // onGameMessage("Fight duration: 4:25.20. Personal best: 3:25.20.");
+          // onGameMessage("Fight duration: 3:29 (new personal best).");
+        */
+
+        //Galvek Test
+        /*
+          onGameMessage("Your Galvek kill count is: 2.");
+          // onGameMessage("Fight duration: 3:48.60. Personal best: 2:58.80");
+          // onGameMessage("Fight duration: 2:19 (new personal best)");
+        */
+
+        //Grotesque Guardians Test
+
+          onGameMessage("Fight duration: 2:12. Personal best: 1:18");
+          //onGameMessage("Fight duration: 1:55 (new personal best)");
+          onGameMessage("Your Grotesque Guardians kill count is 413.");
+
+
+        //Hespori Test
+        /*
+          onGameMessage("Your Hespori kill count is: 134.");
+          // onGameMessage("Fight duration: 1:16. Personal best: 0:44");
+          // onGameMessage("Fight duration: 0:35 (new personal best)");
+        */
+
+        //Colossal Wyrm Agility (Basic) Test
+        /*
+          onGameMessage("Your Colossal Wyrm Agility Course (Basic) lap count is: 3.");
+          // onGameMessage("Lap duration: 2:52.80. Personal best: 1:22.20");
+          // onGameMessage("Lap duration: 2:52.80 (new personal best)");
+        */
+
+        //Colossal Wyrm Agility (Advanced) Test
+        /*
+          onGameMessage("Your Colossal Wyrm Agility Course (Advanced) lap count is: 217.");
+          // onGameMessage("Lap duration: 1:01.80. Personal best: 0:59.40");
+          // onGameMessage("Lap duration: 1:01.80 (new personal best)");
+        */
+
+        //Priff Agility Test
+        /*
+          onGameMessage("Your Prifddinas Agility Course lap count is: 92.");
+          // onGameMessage("Lap duration: 1:15.00. Personal best: 1:04.80");
+          // onGameMessage("Lap duration: 1:15.00 (new personal best)");
+        */
+
+        //Hallowed Sepluchre Floor Test
+        /*
+          onGameMessage("You have completed Floor 4 of the Hallowed Sepulchre! Total completions: 125.");
+          // onGameMessage("Floor 4 time: 1:46.80. Personal best: 1:36.60");
+          // onGameMessage("Floor 4 time: 1:46.80 (new personal best)");
+        */
+
+        //Hallowed Sepluchre Total Test
+        /*
+          onGameMessage("You have completed Floor 5 of the Hallowed Sepulchre! Total completions: 95.");
+          // onGameMessage("Floor 5 time: 2:49.80. Personal best: 2:38.40");
+          // onGameMessage("Overall time: 6:48.60. Personal best: 6:18.00");
+          // onGameMessage("Overall time: 6:48.60 (new personal best)");
+        */
+
+        //Inferno Test
+        /*
+          onGameMessage("Your TzKal-Zuk kill count is 1.");
+          // onGameMessage("Duration: 2:23:41. Personal best: 1:09:04");
+          // onGameMessage("Duration: 2:21:41 (new personal best)");
+        */
+
+        //Phantom Muspah Test
+        /*
+          onGameMessage("Your Phantom Muspah kill count is: 12.");
+          // onGameMessage("Fight duration: 3:11. Personal best: 2:17");
+          // onGameMessage("Fight duration: 2:02 (new personal best)");
+        */
+
+        //Six Jads Test
+        /*
+          onGameMessage("Your completion count for Tzhaar-Ket-Rak's Sixth Challenge is 1.");
+          // onGameMessage("Challenge duration: 6:02. Personal best: 5:31");
+          // onGameMessage("Challenge duration: 6:31.80 (new personal best");
+        */
+
+        //Hueycoatl Test
+        /*
+          onGameMessage("Your Hueycoatl kill count is 3.");
+          // onGameMessage("Fight duration: 3:09.60. Personal best: 0:58.20");
+          // onGameMessage("Fight duration: 3:04 (new personal best)");
+        */
+
+        //Leviathan Test
+        /*
+          onGameMessage("Your Leviathan kill count is 2.");
+          // onGameMessage("Fight duration: 3:19. Personal best: 2:50");
+          // onGameMessage("Fight duration: 2:16.80 (new personal best)");
+        */
+
+        //Royal Titans Test
+        /*
+          onGameMessage("Your Royal Titans kill count is: 9.");
+          // onGameMessage("Fight Duration: 2:33. Personal best: 0:53");
+          // onGameMessage("Fight duration: 2:50 (new personal best)");
+        */
+
+        //Whisperer Test
+        /*
+          onGameMessage("Your whisperer kill count is 4.");
+          // onGameMessage("Fight duration: 3:06.00. Personal best: 2:29.40");
+          // onGameMessage("Fight duration: 2:18.60 (new personal best)");
+        */
+
+        //Vardorvis Test
+        /*
+          onGameMessage("Your Vardorvis kill count is: 18.");
+          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("Fight duration: 2:39 (new personal best)");
+        */
+
+        //Vorkath Test
+        /*
+          onGameMessage("Your Vorkath kill count is: 168.");
+          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("Fight duration: 1:53 (new personal best)");
+        */
 
     }
 }
