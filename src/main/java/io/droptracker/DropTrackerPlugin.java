@@ -41,6 +41,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -50,6 +52,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageEvent;
 import io.droptracker.util.ContainerManager;
 import io.droptracker.util.WidgetEvent;
@@ -86,18 +89,12 @@ import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import okio.Buffer;
+
 /* Re-written using the Discord Loot Logger base code */
 @Slf4j
 @PluginDescriptor(
@@ -111,9 +108,13 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
+
+	private DropTrackerPanelNew newPanel;
 	@Inject
 	private ContainerManager containerManager;
 	private NavigationButton navButton;
+
+	private NavigationButton newNavButton;
 	@Inject
 	private Gson gson;
 	@Inject
@@ -189,7 +190,7 @@ public class DropTrackerPlugin extends Plugin {
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
 		containerManager = new ContainerManager(this, client);
-
+		Logger.getLogger(OkHttpClient.class.getName()).setLevel(Level.FINE);
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
@@ -210,7 +211,10 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	private void createSidePanel() {
 		panel = injector.getInstance(DropTrackerPanel.class);
+		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		panel.init();
+		System.out.println("Init new panel");
+		newPanel.init();
 
 
 		navButton = NavigationButton.builder()
@@ -220,7 +224,15 @@ public class DropTrackerPlugin extends Plugin {
 				.panel(panel)
 				.build();
 
+		newNavButton = NavigationButton.builder()
+				.tooltip("DropTracker - New")
+				.icon(PANEL_ICON)
+				.priority(1)
+				.panel(newPanel)
+				.build();
+
 		clientToolbar.addNavigation(navButton);
+		clientToolbar.addNavigation(newNavButton);
 	}
 	private void removeSidePanel() {
 		clientToolbar.removeNavigation(navButton);
@@ -305,6 +317,10 @@ public class DropTrackerPlugin extends Plugin {
 			panel.deinit();
 			panel = null;
 		}
+		if (newPanel != null) {
+			newPanel.deinit();
+			newPanel = null;
+		}
 		executor.shutdown();
 	}
 
@@ -331,6 +347,7 @@ public class DropTrackerPlugin extends Plugin {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				panel.deinit();
+				
 				if(navButton != null) {
 					clientToolbar.removeNavigation(navButton);
 				}
@@ -615,6 +632,7 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		this.timesTried++;
+		System.out.println("Custom webhook body content:" + GSON.toJson(customWebhookBody));
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
 				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
@@ -625,6 +643,37 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
+		System.out.println("Got request body:");
+		for (MultipartBody.Part part : requestBody.parts()) {
+			Headers headers = part.headers();
+			if (headers != null) {
+				System.out.println("Part headers:");
+				for (int i = 0; i < headers.size(); i++) {
+					System.out.println("  " + headers.name(i) + ": " + headers.value(i));
+				}
+			}
+
+			// Try to read the body content
+			RequestBody body = part.body();
+			if (body != null) {
+				// Safely check content type
+				MediaType contentType = body.contentType();
+				if (contentType != null && 
+						(contentType.toString().contains("text") || 
+						 contentType.toString().contains("json"))) {
+					Buffer buffer = new Buffer();
+					try {
+						body.writeTo(buffer);
+						System.out.println("  Content: " + buffer.readUtf8());
+					} catch (IOException e) {
+						System.out.println("  Could not read content: " + e.getMessage());
+					}
+				} else {
+					System.out.println("  [Binary content not displayed]");
+				}
+			}
+			System.out.println("---");
+		}
 		String url;
 		try {
 			url = getRandomWebhookUrl();
@@ -637,6 +686,7 @@ public class DropTrackerPlugin extends Plugin {
 			log.debug("Invalid or malformed webhook URL: {}", url);
 			return;
 		}
+		System.out.println("Got request body:" + requestBody);
 
 		Request request = new Request.Builder()
 				.url(url)
@@ -651,32 +701,37 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
+				System.out.println("onResponse called...");
 				if (response.isSuccessful()) {
+					System.out.println("Response was successful...");
 					timesTried = 0;
 				} else if (response.code() == 429) {
-					log.debug("Webhook is rate limited, response code: {}. Trying new Webhook...", response.code());
+					System.out.println("Webhook is rate limited, response code: {}. Trying new Webhook..." + response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else if (response.code() == 400) {
-					log.debug("Bad Request, response code: {}. Aborting send...", response.code());
+					System.out.println("Bad Request, response code: {}. Aborting send..." + response.code());
+					response.close();
 					return;
 
 				} else if(response.code() == 404){
-					log.debug("Broken Webhook: {} ", url);
-					log.debug("Response code: {}. Trying new Webhook...", response.code());
+					System.out.println("Broken Webhook: {} " + url);
+					System.out.println("Response code: {}. Trying new Webhook..." + response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else {
-					log.debug("Failed to send webhook, response code: {}. Retrying...", response.code());
+					System.out.println("Failed to send webhook, response code: {}. Retrying..." + response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}
+				System.out.println("Response was not successful? Code: " + response.code());
 				response.close();
 			}
 		});
 
 	}
+	
 	private boolean isValidDiscordWebhookUrl(HttpUrl url) {
 		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks
 		// And not external connections of some sort

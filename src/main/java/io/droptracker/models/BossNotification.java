@@ -8,6 +8,7 @@ package io.droptracker.models;
 import com.google.gson.annotations.JsonAdapter;
 import io.droptracker.util.DurationAdapter;
 import lombok.EqualsAndHashCode;
+import lombok.Setter;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -30,4 +31,5 @@ public class BossNotification {
     Duration bestTime;
     @Accessors(fluent = true)
     Boolean isPersonalBest;
+
 }

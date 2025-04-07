@@ -18,6 +18,7 @@ import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -61,6 +62,9 @@ public class ChatMessageEvent {
     private Rarity rarity;
 
     @Inject
+    private ConfigManager configManager;
+
+    @Inject
     private ClientThread clientThread;
 
     private ItemIDSearch itemIDFinder;
@@ -71,11 +75,12 @@ public class ChatMessageEvent {
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
     public ChatMessageEvent(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder,
-                            ScheduledExecutorService executor) {
+                            ScheduledExecutorService executor, ConfigManager configManager) {
         this.plugin = plugin;
         this.config = config;
         this.itemIDFinder = itemIDFinder;
         this.executor = executor;
+        this.configManager = configManager;
     }
     private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
     private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
@@ -190,12 +195,15 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        System.out.println(message);
+        System.out.println("1: BossData is currently" + bossData);
         checkPB(message);
+        System.out.println("2: BossData is currently" + bossData);
         checkTime(message);
+        System.out.println("3: BossData is currently" + bossData);
 
 
         parseBossKill(message).ifPresent(this::updateData);
+        System.out.println("4: BossData is currently" + bossData);
 
         parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
@@ -273,6 +281,7 @@ public class ChatMessageEvent {
             if (data.getBoss() != null) {
                 if (isEnabled()) {
                     processKill(data);
+                    return;
                 } else {
                     System.out.println("disabled?");
                 }
@@ -283,11 +292,11 @@ public class ChatMessageEvent {
                 reset();
             }
         }
-        if (mostRecentNpcData != null) {
+        else if (mostRecentNpcData != null) {
             System.out.println("ticksSinceNpcDataUpdate incremented.");
             if (bossData.get() != null) {
                 processKill(bossData.get());
-                System.out.println("name: " + mostRecentNpcData.getLeft() + "time: " + mostRecentNpcData.getRight());
+                System.out.println("name: " + mostRecentNpcData.getLeft() + "kc: " + mostRecentNpcData.getRight());
             }
             ticksSinceNpcDataUpdate += 1;
         } else {
@@ -324,6 +333,11 @@ public class ChatMessageEvent {
         CustomWebhookBody collectionLogBody = new CustomWebhookBody();
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
+        if (loot != null) {
+            if (loot.getSource() != null) {
+                Drop drop = getLootSource(itemId);
+            }
+        }
         collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
         collEmbed.addField("item", itemName, true);
         collEmbed.addField("kc", String.valueOf(killCount),true);
@@ -380,6 +394,11 @@ public class ChatMessageEvent {
         });
     }
 
+    private int getKc(String boss)
+    {
+        Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
+        return killCount == null ? 0 : killCount;
+    }
 
     private void processKill(BossNotification data) {
         if (data == null) {
@@ -417,9 +436,26 @@ public class ChatMessageEvent {
             CustomWebhookBody.Embed killEmbed = null;
             CustomWebhookBody killWebhook = new CustomWebhookBody();
             killEmbed = new CustomWebhookBody.Embed();
+            String bossName = "";
+            if (teamSize == null || teamSize.equals("")) {
+                teamSize = "Solo";
+            }
+            if (mostRecentNpcData != null) {
+                bossName = mostRecentNpcData.getLeft();
+            } else if (!pendingNotifications.isEmpty()) {
+                if (pendingNotifications.size() > 1) {
+                    System.out.println("More than one pending notification found...");
+                } else {
+                    bossName = pendingNotifications.get(0).getBoss();
+                }
+            }
+            if (bossName == null) {
+                System.out.println("We did not find a boss name.");
+                return;
+            }
             killEmbed.setTitle(player + " has killed a boss:");
             killEmbed.addField("type", "npc_kill", true);
-            killEmbed.addField("boss_name", data.getBoss(), true);
+            killEmbed.addField("boss_name", bossName, true);
             killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
             killEmbed.addField("kill_time", timeRef[0], true);
             killEmbed.addField("best_time", bestTimeRef[0], true);
@@ -430,9 +466,11 @@ public class ChatMessageEvent {
             killWebhook.getEmbeds().add(killEmbed);
             System.out.println("Sending Boss: " + data.getBoss() + " with kill time: " + timeRef[0]);
             plugin.sendDropTrackerWebhook(killWebhook, "1");
+            mostRecentNpcData = null;
+            pendingNotifications.clear();
+            bossData.set(null);
+            teamSize = null;
         });
-        mostRecentNpcData = null;
-        teamSize = null;
     }
 
     private void updateData(BossNotification updated) {
@@ -503,9 +541,13 @@ public class ChatMessageEvent {
                         timeData.isPb
                 );
             } else {
-                System.out.println("Time data is null...");
+                System.out.println("timeData is null, assuming that we should update stored bossData with this npc name and kc");
+                BossNotification currentData = bossData.get();
+                BossNotification newBossData = new BossNotification(bossName, pair.getRight(), "", currentData.getTime(), currentData.getBestTime(), currentData.isPersonalBest());
+                bossData.set(newBossData);
+                System.out.println("Created newBossData with values: " + newBossData);
             }
-            System.out.println("No recent time, checking for time in this message...");
+            System.out.println("No recent time, checking for time in this message (" + message + ")");
             BossNotification pbData = parseKillTime(message, bossName)
                     .map(t -> new BossNotification(
                             bossName,
@@ -763,6 +805,11 @@ public class ChatMessageEvent {
         if (pending != null) {
             // We found a pending notification for this boss, process it now
             System.out.println("Loot was received now processing kill");
+            if (pending.getBoss().equals("")) {
+                String npcName = source;
+                BossNotification trueBossNoti = new BossNotification(npcName, pending.getCount(), pending.getGameMessage(), pending.getTime(), pending.getBestTime(), pending.isPersonalBest());
+                bossData.set(trueBossNoti);
+            }
             processKill(pending);
         } else {
             // Store the loot event info for later matching with chat message
@@ -775,17 +822,31 @@ public class ChatMessageEvent {
         TimeData timeData = new TimeData(time,bestTime,isPb);
         pendingTimeData.put(bossName,timeData);
         System.out.println("Put pendingTimeData: " + bossName + " with time" + time + " / " + bestTime);
-        BossNotification withTime = new BossNotification(
-                bossName,
-                mostRecentNpcData.getRight(),
-                "",
-                time,
-                bestTime,
-                isPb
-        );
+        BossNotification withTime = null;
+        if (mostRecentNpcData != null) {
+            withTime = new BossNotification(
+                    bossName,
+                    mostRecentNpcData.getRight(),
+                    "",
+                    time,
+                    bestTime,
+                    isPb
+            );
+
+        } else {
+            withTime = new BossNotification(
+                    "",
+                    0,
+                    "",
+                    time,
+                    bestTime,
+                    isPb
+            );
+        }
         bossData.set(withTime);
         System.out.println("Time: " + time + " Processing Kill next");
         processKill(withTime);
+
     }
     private static class TimeData {
         final Duration time;
@@ -830,6 +891,8 @@ public class ChatMessageEvent {
                 if (bossName != null) {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
+                } else {
+                    teamSize = "Solo";
                 }
 
                 if (message.contains("Team Size:")) {
@@ -873,7 +936,7 @@ public class ChatMessageEvent {
 
             Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
-                System.out.println("Time message Found");
+                //System.out.println("Time message Found");
                 String timeStr = "";
                 String bestTimeStr = "";
                 boolean isPb = false;
@@ -893,6 +956,11 @@ public class ChatMessageEvent {
                     System.out.println("Boss Name not Null: " + bossName);
                     setTeamSize(bossName, message);
                     storeBossTime(bossName, time, bestTime, isPb);
+                    return;
+                } else {
+                    storeBossTime("", time, bestTime, isPb);
+                    teamSize = "Solo";
+                    System.out.println("No boss name was passed.. attempting to store empty until we receive a valid name");
                 }
                 // removed else if here, as if we only entered the below clauses
                 // where bossname is null, it may not work as expected...
