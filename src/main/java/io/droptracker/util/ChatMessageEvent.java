@@ -1170,11 +1170,11 @@ public class ChatMessageEvent {
         */
 
         //Grotesque Guardians Test
-
+/*
           onGameMessage("Fight duration: 2:12. Personal best: 1:18");
           //onGameMessage("Fight duration: 1:55 (new personal best)");
           onGameMessage("Your Grotesque Guardians kill count is 413.");
-
+*/
 
         //Hespori Test
         /*

@@ -37,7 +37,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
     private final BossPanel bossPanel;
     @Inject
     private EventBus eventBus;
-    private boolean testing = true;
+    private boolean testing = false;
 
     @Inject
     public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
