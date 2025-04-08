@@ -213,7 +213,6 @@ public class DropTrackerPlugin extends Plugin {
 		panel = injector.getInstance(DropTrackerPanel.class);
 		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		panel.init();
-		System.out.println("Init new panel");
 		newPanel.init();
 
 
@@ -632,7 +631,6 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		this.timesTried++;
-		System.out.println("Custom webhook body content:" + GSON.toJson(customWebhookBody));
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
 				.addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
@@ -643,13 +641,10 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		MultipartBody requestBody = requestBodyBuilder.build();
-		System.out.println("Got request body:");
 		for (MultipartBody.Part part : requestBody.parts()) {
 			Headers headers = part.headers();
 			if (headers != null) {
-				System.out.println("Part headers:");
 				for (int i = 0; i < headers.size(); i++) {
-					System.out.println("  " + headers.name(i) + ": " + headers.value(i));
 				}
 			}
 
@@ -664,15 +659,11 @@ public class DropTrackerPlugin extends Plugin {
 					Buffer buffer = new Buffer();
 					try {
 						body.writeTo(buffer);
-						System.out.println("  Content: " + buffer.readUtf8());
 					} catch (IOException e) {
-						System.out.println("  Could not read content: " + e.getMessage());
 					}
 				} else {
-					System.out.println("  [Binary content not displayed]");
 				}
 			}
-			System.out.println("---");
 		}
 		String url;
 		try {
@@ -686,8 +677,6 @@ public class DropTrackerPlugin extends Plugin {
 			log.debug("Invalid or malformed webhook URL: {}", url);
 			return;
 		}
-		System.out.println("Got request body:" + requestBody);
-
 		Request request = new Request.Builder()
 				.url(url)
 				.post(requestBody)
@@ -701,31 +690,23 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				System.out.println("onResponse called...");
 				if (response.isSuccessful()) {
-					System.out.println("Response was successful...");
 					timesTried = 0;
 				} else if (response.code() == 429) {
-					System.out.println("Webhook is rate limited, response code: {}. Trying new Webhook..." + response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else if (response.code() == 400) {
-					System.out.println("Bad Request, response code: {}. Aborting send..." + response.code());
 					response.close();
 					return;
 
 				} else if(response.code() == 404){
-					System.out.println("Broken Webhook: {} " + url);
-					System.out.println("Response code: {}. Trying new Webhook..." + response.code());
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 
 				} else {
-					System.out.println("Failed to send webhook, response code: {}. Retrying..." + response.code());
 					sendDropTrackerWebhook(customWebhookBody, screenshot);
 				}
-				System.out.println("Response was not successful? Code: " + response.code());
 				response.close();
 			}
 		});
