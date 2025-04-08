@@ -46,7 +46,7 @@ public class DropTrackerApi {
     }
 
     /**
-     * Sends a request to the API to look up a player’s data and returns a CompletionStage for async handling.
+     * Sends a request to the API to look up a player's data and returns a CompletionStage for async handling.
      */
     public CompletionStage<Map<String, Object>> lookupPlayer(String playerName) {
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
@@ -102,6 +102,22 @@ public class DropTrackerApi {
 
     public String getApiUrl() {
         return config.useApi() ? "https://www.droptracker.io/api/" : "";
+    }
+
+    public String getLatestUpdateString() {
+        String endpoint = "https://www.droptracker.io/api/latest_news";
+        try {
+            Request request = new Request.Builder().url(endpoint).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    return response.body().string();
+                } else {
+                    return "Error fetching latest update";
+                }
+            }
+        } catch (IOException e) {
+            return "Error fetching latest update";
+        }
     }
 
     public interface PanelDataLoadedCallback {
