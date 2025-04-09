@@ -52,7 +52,6 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageEvent;
 import io.droptracker.util.ContainerManager;
 import io.droptracker.util.WidgetEvent;
@@ -109,7 +108,6 @@ public class DropTrackerPlugin extends Plugin {
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
 
-	private DropTrackerPanelNew newPanel;
 	@Inject
 	private ContainerManager containerManager;
 	private NavigationButton navButton;
@@ -211,9 +209,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	private void createSidePanel() {
 		panel = injector.getInstance(DropTrackerPanel.class);
-		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		panel.init();
-		newPanel.init();
 
 
 		navButton = NavigationButton.builder()
@@ -223,19 +219,8 @@ public class DropTrackerPlugin extends Plugin {
 				.panel(panel)
 				.build();
 
-		newNavButton = NavigationButton.builder()
-				.tooltip("DropTracker - New")
-				.icon(PANEL_ICON)
-				.priority(1)
-				.panel(newPanel)
-				.build();
 
 		clientToolbar.addNavigation(navButton);
-		clientToolbar.addNavigation(newNavButton);
-	}
-	private void removeSidePanel() {
-		clientToolbar.removeNavigation(navButton);
-		panel = null;
 	}
 	/**
 	 * Grabs a random webhook URL from a GitHub sites page that is cycled by the server
@@ -315,10 +300,6 @@ public class DropTrackerPlugin extends Plugin {
 		if (panel != null) {
 			panel.deinit();
 			panel = null;
-		}
-		if (newPanel != null) {
-			newPanel.deinit();
-			newPanel = null;
 		}
 		executor.shutdown();
 	}
