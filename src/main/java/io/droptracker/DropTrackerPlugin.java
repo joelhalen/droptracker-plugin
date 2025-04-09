@@ -46,7 +46,6 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
@@ -54,7 +53,6 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageEvent;
-import io.droptracker.util.ContainerManager;
 import io.droptracker.util.WidgetEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -110,8 +108,6 @@ public class DropTrackerPlugin extends Plugin {
 	private DropTrackerPanel panel;
 
 	private DropTrackerPanelNew newPanel;
-	@Inject
-	private ContainerManager containerManager;
 	private NavigationButton navButton;
 
 	private NavigationButton newNavButton;
@@ -189,7 +185,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
-		containerManager = new ContainerManager(this, client);
 		Logger.getLogger(OkHttpClient.class.getName()).setLevel(Level.FINE);
 		if(config.showSidePanel()) {
 			createSidePanel();
@@ -310,6 +305,9 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() {
 		if(navButton != null) {
 			clientToolbar.removeNavigation(navButton);
+		}
+		if (newNavButton != null) {
+			clientToolbar.removeNavigation(newNavButton);
 		}
 		chatCommandManager.unregisterCommand("!droptracker");
 		chatCommandManager.unregisterCommand("!loot");
@@ -444,9 +442,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
-		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			containerManager.onTick();
-		}
 		widgetEventHandler.onGameTick(event);
 	}
 
@@ -475,10 +470,6 @@ public class DropTrackerPlugin extends Plugin {
 			if (sourceType != "pvp") {
 				for (ItemStack item : stack(items)) {
 					Item tempItem = new Item(item.getId(), item.getQuantity());
-					if (!containerManager.isRealDrop(tempItem)) {
-						// If the item is determined as something that was from their inv/gear, we don't send it.
-						continue;
-					}
 					int itemId = item.getId();
 					int qty = item.getQuantity();
 					int price = itemManager.getItemPrice(itemId);
@@ -558,6 +549,10 @@ public class DropTrackerPlugin extends Plugin {
 		} else {
 			return "";
 		}
+	}
+
+	public void sendChatMessage(String messageContent) {
+		client.addChatMessage(ChatMessageType.GAMEMESSAGE, messageContent, messageContent, "DropTracker.io");
 	}
 	public void sendDropTrackerWebhook(CustomWebhookBody webhook, String type) {
 		/* Requires a type ID to be passed

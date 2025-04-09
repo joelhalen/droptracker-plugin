@@ -104,19 +104,28 @@ public class DropTrackerApi {
         return config.useApi() ? "https://www.droptracker.io/api/" : "";
     }
 
+    public String getLatestWelcomeString() {
+        String endpoint = "https://www.droptracker.io/api/latest_welcome_message";
+        return fetchStringFromApi(endpoint);
+    }
+
     public String getLatestUpdateString() {
         String endpoint = "https://www.droptracker.io/api/latest_news";
+        return fetchStringFromApi(endpoint);
+    }
+
+    private String fetchStringFromApi(String apiEndpoint) {
         try {
-            Request request = new Request.Builder().url(endpoint).build();
+            Request request = new Request.Builder().url(apiEndpoint).build();
             try (Response response = httpClient.newCall(request).execute()) {
                 if (response.isSuccessful() && response.body() != null) {
                     return response.body().string();
                 } else {
-                    return "Error fetching latest update";
+                    return "Error connecting to server...";
                 }
             }
         } catch (IOException e) {
-            return "Error fetching latest update";
+            return "Error connecting to server...";
         }
     }
 
