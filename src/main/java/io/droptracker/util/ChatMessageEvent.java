@@ -498,38 +498,39 @@ public class ChatMessageEvent {
 
     private Optional<BossNotification> parseBossKill(String message) {
         Optional<Pair<String, Integer>> boss = parseBoss(message);
-        return boss.map(pair -> {
+        return boss.flatMap(pair -> {
             String bossName = pair.getLeft();
             // retrieve the stored timeData for this bossName, if any is stored...
             // for cases where a time message may appear before the boss name/kc message appears
             TimeData timeData = pendingTimeData.get(bossName);
+
             //Search for stored TimeData
             if(timeData != null){
-                return new BossNotification(
+                Optional<Triple<Duration, Duration, Boolean>> killTimeOpt = parseKillTime(message, bossName);
+                return killTimeOpt.map(t -> new BossNotification(
                         bossName,
                         pair.getRight(),
                         message,
-                        timeData.time,
-                        timeData.bestTime,
-                        timeData.isPb
-                );
+                        t.getLeft(),
+                        t.getMiddle(),
+                        t.getRight()
+                ));
             } else {
                 BossNotification currentData = bossData.get();
-                BossNotification newBossData = new BossNotification(bossName, pair.getRight(), "", currentData.getTime(), currentData.getBestTime(), currentData.isPersonalBest());
-                bossData.set(newBossData);
-            }
-            BossNotification pbData = parseKillTime(message, bossName)
-                    .map(t -> new BossNotification(
+                if (currentData != null) {
+                    BossNotification newBossData = new BossNotification(
                             bossName,
                             pair.getRight(),
-                            message,
-                            t.getLeft(),
-                            t.getMiddle(),
-                            t.getRight()
-                    ))
-                    .orElse(null);
-            // No recent time message, check for time in current message
-            return pbData;
+                            "",
+                            currentData.getTime(),
+                            currentData.getBestTime(),
+                            currentData.isPersonalBest()
+                    );
+                    bossData.set(newBossData);
+                    return Optional.of(newBossData);
+                }
+                return Optional.empty();
+            }
         });
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
