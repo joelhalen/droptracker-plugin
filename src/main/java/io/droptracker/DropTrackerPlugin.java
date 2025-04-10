@@ -6,6 +6,9 @@ BSD 2-Clause License
 
 		Copyright (c) 2022, pajlads
 
+  		Copyright (c) 2025, joelhalen
+    		https://www.droptracker.io/
+
 		Redistribution and use in source and binary forms, with or without
 		modification, are permitted provided that the following conditions are met:
 
@@ -43,17 +46,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
-import io.droptracker.util.ContainerManager;
+import io.droptracker.util.KCService;
 import io.droptracker.util.WidgetEvent;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -108,8 +109,6 @@ public class DropTrackerPlugin extends Plugin {
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
 
-	@Inject
-	private ContainerManager containerManager;
 	private NavigationButton navButton;
 
 	private NavigationButton newNavButton;
@@ -133,33 +132,23 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ChatCommandManager chatCommandManager;
 
+	@Inject
+	private KCService kcService;
+
 	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
-	private static final Pattern COLLECTION_LOG_ITEM_REGEX = Pattern.compile("New item added to your collection log: (.*)");
-	private static final Pattern KILLCOUNT_PATTERN = Pattern.compile("Your (?<pre>completion count for |subdued |completed )?(?<boss>.+?) (?<post>(?:(?:kill|harvest|lap|completion) )?(?:count )?)is: <col=ff0000>(?<kc>\\d+)</col>");
-	private static final String TEAM_SIZES = "(?<teamsize>\\d+(?:\\+|-\\d+)? players?|Solo)";
-	private static final Pattern RAIDS_PB_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col> \\(new personal best\\)</col>");
-	private static final Pattern RAIDS_DURATION_PATTERN = Pattern.compile("<col=ef20ff>Congratulations - your raid is complete!</col><br>Team size: <col=ff0000>" + TEAM_SIZES + "</col> Duration:</col> <col=ff0000>(?<current>[0-9:.]+)</col> Personal best: </col><col=ff0000>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col>");
-	private static final Pattern KILL_DURATION_PATTERN = Pattern.compile("(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:) <col=[0-9a-f]{6}>(?<current>[0-9:.]+)</col>\\. Personal best: (?:<col=ff0000>)?(?<pb>[0-9:]+(?:\\.[0-9]+)?)");
-	private static final Pattern NEW_PB_PATTERN = Pattern.compile("(?i)(?:(?:Fight |Lap |Challenge |Corrupted challenge )?duration:|Subdued in|(?<!total )completion time:) <col=[0-9a-f]{6}>(?<pb>[0-9:]+(?:\\.[0-9]+)?)</col> \\(new personal best\\)");
-	public Integer totalLogSlots = 0;
 	@Inject
 	public ChatMessageManager msgManager;
-
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 	private String currentKillTime = "";
 	private String currentPbTime = "";
 	private String currentNpcName = "";
 	private boolean readyToSendPb = false;
-	private boolean hasUpdatedStoredItems;
 	private ScheduledFuture<?> skillDataResetTask = null;
 	private final Object lock = new Object();
-	private boolean hasReminded = false;
 	public static List<String> webhookUrls = new ArrayList<>();
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
-	private String logItemReceived;
-	private static final int MAX_RETRIES = 5;
 	private int timesTried = 0;
 	@Inject
 	public ChatMessageEvent chatMessageEventHandler;
@@ -187,7 +176,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
-		containerManager = new ContainerManager(this, client);
 		Logger.getLogger(OkHttpClient.class.getName()).setLevel(Level.FINE);
 		if(config.showSidePanel()) {
 			createSidePanel();
@@ -364,6 +352,7 @@ public class DropTrackerPlugin extends Plugin {
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		processDropEvent(npc.getName(), "npc", items);
+		kcService.onNpcKill(npcLootReceived);
 		//sendChatReminder();
 	}
 
@@ -371,6 +360,7 @@ public class DropTrackerPlugin extends Plugin {
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
+		kcService.onPlayerKill(playerLootReceived);
 		//sendChatReminder();
 	}
 
@@ -391,6 +381,7 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		processDropEvent(npcName, "other", lootReceived.getItems());
+		kcService.onLoot(lootReceived);
 		//sendChatReminder();
 	}
 
@@ -424,9 +415,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onGameTick(GameTick event) {
 		chatMessageEventHandler.onTick();
-		if (client.getGameState().equals(GameState.LOGGED_IN)) {
-			containerManager.onTick();
-		}
 		widgetEventHandler.onGameTick(event);
 	}
 
@@ -455,10 +443,6 @@ public class DropTrackerPlugin extends Plugin {
 			if (sourceType != "pvp") {
 				for (ItemStack item : stack(items)) {
 					Item tempItem = new Item(item.getId(), item.getQuantity());
-					if (!containerManager.isRealDrop(tempItem)) {
-						// If the item is determined as something that was from their inv/gear, we don't send it.
-						continue;
-					}
 					int itemId = item.getId();
 					int qty = item.getQuantity();
 					int price = itemManager.getItemPrice(itemId);
