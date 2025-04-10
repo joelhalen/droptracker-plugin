@@ -147,10 +147,6 @@ public class WidgetEvent {
                 break;
         }
     }
-    private void setPb(String boss, double seconds)
-    {
-        configManager.setRSProfileConfiguration("personalbest", boss.toLowerCase(), seconds);
-    }
 
     @Subscribe
     public void onGameTick(GameTick event)
@@ -200,10 +196,6 @@ public class WidgetEvent {
 
                 String bossName = boss.getText().replace(":", "");
                 int kc = Integer.parseInt(kill.getText().replace(",", ""));
-                if (kc != getKc(longBossName(bossName)))
-                {
-                    setKc(longBossName(bossName), kc);
-                }
             }
         }
 
@@ -286,9 +278,6 @@ public class WidgetEvent {
                     } else {
                         personalBests.add(new BossPB(boss, "Solo", seconds));
                     }
-                    
-                    // Also store in config for future reference
-                    setPb(boss + (teamSize != null ? " " + teamSize : ""), seconds);
                 }
             }
         }
@@ -360,10 +349,6 @@ public class WidgetEvent {
         return personalBest == null ? 0 : personalBest;
     }
 
-    private void setKc(String boss, int killcount)
-    {
-        configManager.setRSProfileConfiguration("killcount", boss.toLowerCase(), killcount);
-    }
 
     private int getKc(String boss)
     {
@@ -1081,23 +1066,6 @@ public class WidgetEvent {
     }
 
     /**
-     * Sets the list of owned pets for the local player
-     *
-     * @param petList The total list of owned pets for the local player
-     */
-    private void setPetList(List<Integer> petList)
-    {
-        if (petList == null)
-        {
-            return;
-        }
-
-        configManager.setRSProfileConfiguration("chatcommands", "pets2",
-                gson.toJson(petList));
-        configManager.unsetRSProfileConfiguration("chatcommands", "pets"); // old list
-    }
-
-    /**
      * Looks up the list of owned pets for the local player
      */
     private List<Pet> getPetListOld()
@@ -1126,7 +1094,6 @@ public class WidgetEvent {
         if (!old.isEmpty())
         {
             List<Integer> l = old.stream().map(Pet::getIconID).collect(Collectors.toList());
-            setPetList(l);
             return l;
         }
 
