@@ -5,6 +5,8 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import io.droptracker.DropTrackerConfig;
+import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.Drop;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +74,17 @@ public class KCService {
     @Getter
     @Nullable
     protected static Drop lastDrop = null;
+
+    @Inject
+    public KCService(ConfigManager configManager, Gson gson,
+                     ScheduledExecutorService executor,
+                     ChatMessageEvent chatMessageEventHandler,
+                     Rarity rarityService) {
+        this.configManager = configManager;
+        this.gson = gson;
+        this.chatMessageEventHandler = chatMessageEventHandler;
+        this.rarityService = rarityService;
+    }
 
     public void reset() {
         this.lastDrop = null;
