@@ -348,8 +348,8 @@ public class DropTrackerPlugin extends Plugin {
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
-		processDropEvent(npc.getName(), "npc", items);
 		kcService.onNpcKill(npcLootReceived);
+		processDropEvent(npc.getName(), "npc", items);
 		//sendChatReminder();
 	}
 

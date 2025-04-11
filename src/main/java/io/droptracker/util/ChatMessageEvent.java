@@ -438,7 +438,7 @@ public class ChatMessageEvent {
             killEmbed.addField("kill_time", timeRef[0], true);
             killEmbed.addField("best_time", bestTimeRef[0], true);
             killEmbed.addField("is_pb", String.valueOf(isPb), true);
-            killEmbed.addField("Team_Size", teamSize,true);
+            killEmbed.addField("team_size", teamSize,true);
             killEmbed.addField("acc_hash", accountHash, true);
             killEmbed.addField("p_v",plugin.pluginVersion,true);
             killWebhook.getEmbeds().add(killEmbed);
@@ -478,10 +478,10 @@ public class ChatMessageEvent {
             }
         });
     }
-
     public void reset() {
         bossData.set(null);
         badTicks.set(0);
+        teamSize = null;
     }
     @VisibleForTesting
     static Optional<Pair<CombatAchievement, String>> parseCombatAchievement(String message) {
