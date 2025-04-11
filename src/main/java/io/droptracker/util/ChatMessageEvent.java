@@ -305,8 +305,9 @@ public class ChatMessageEvent {
         );
     }
     private void processCollection(String itemName) {
-        int completed = this.completed.updateAndGet(i -> i >= 0 ? i + 1 : i);
+        int completed = client.getVarpValue(COMPLETED_VARP);
         int total = client.getVarpValue(TOTAL_VARP);
+
         boolean varpValid = total > 0 && completed > 0;
         if (!varpValid) {
             // This occurs if the player doesn't have the character summary tab selected
@@ -331,7 +332,7 @@ public class ChatMessageEvent {
         collEmbed.addField("rarity", String.valueOf(itemRarity),true);
         collEmbed.addField("item_id", String.valueOf(itemId),true);
         collEmbed.addField("player", client.getLocalPlayer().getName(), true);
-        collEmbed.addField("slots", total + "/" + completed, true);
+        collEmbed.addField("slots", completed + "/" + total, true);
         collEmbed.addField("p_v",plugin.pluginVersion,true);
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
