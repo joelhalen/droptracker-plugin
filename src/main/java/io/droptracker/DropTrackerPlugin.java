@@ -173,7 +173,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
-		Logger.getLogger(OkHttpClient.class.getName()).setLevel(Level.FINE);
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
@@ -183,14 +182,12 @@ public class DropTrackerPlugin extends Plugin {
 				linkOpener.accept(chatMessage, s);
 			}
 		});
-		if (config.useApi()) {
-			chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
-				BiConsumer<ChatMessage, String> linkOpener = openLink("website");
-				if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
-					linkOpener.accept(chatMessage, s);
-				}
-			});
-		}
+		chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
+			BiConsumer<ChatMessage, String> linkOpener = openLink("website");
+			if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
+				linkOpener.accept(chatMessage, s);
+			}
+		});
 	}
 	private void createSidePanel() {
 		panel = injector.getInstance(DropTrackerPanel.class);
@@ -265,7 +262,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
-		HttpUrl webUrl = HttpUrl.parse("https://www.discord.gg/droptracker");
+		HttpUrl webUrl = HttpUrl.parse("https://discord.gg/dvb7yP7JJH");
 		if (destination == "website" && config.useApi()) {
 			webUrl = HttpUrl.parse(api.getApiUrl());
 		}
