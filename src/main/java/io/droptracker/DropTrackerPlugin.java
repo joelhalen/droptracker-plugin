@@ -167,7 +167,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "3.81";
+	public String pluginVersion = "3.82";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
@@ -248,7 +248,7 @@ public class DropTrackerPlugin extends Plugin {
 		} catch (Exception e) {
 			webhookUrlsLoaded.completeExceptionally(e);
 		} finally {
-			log.debug("Webhook URLs have been loaded successfully.");
+			log.debug("Successfully loaded webhook URLs from GitHub.");
 		}
 	}
 
@@ -265,7 +265,9 @@ public class DropTrackerPlugin extends Plugin {
 			throw new IllegalStateException("No valid webhook URLs were loaded");
 		}
 		Random randomP = new Random();
-		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		String randomUrl = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+
+		return randomUrl;
 	}
 
 	private static String itemImageUrl(int itemId) {
