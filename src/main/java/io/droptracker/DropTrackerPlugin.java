@@ -29,6 +29,7 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
+import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
@@ -170,12 +171,18 @@ public class DropTrackerPlugin extends Plugin {
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
+	// Add a future to track loading state
+	private CompletableFuture<Void> webhookUrlsLoaded = new CompletableFuture<>();
+
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
+		// Preload webhook URLs asynchronously
+		executor.submit(this::loadWebhookUrls);
+
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
 			if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
@@ -204,57 +211,61 @@ public class DropTrackerPlugin extends Plugin {
 
 		clientToolbar.addNavigation(navButton);
 	}
-	/**
-	 * Grabs a random webhook URL from a GitHub sites page that is cycled by the server
-	 * */
-	public String getRandomWebhookUrl() throws Exception {
-		if (webhookUrls.isEmpty()) {
-			URL url = new URL("https://joelhalen.github.io/docs/crypt.json");
-			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-			StringBuilder response = new StringBuilder();
-			String inputLine;
+	// New method to load webhook URLs in the background
+	private void loadWebhookUrls() {
+		try {
+			if (webhookUrls.isEmpty()) {
+				URL url = new URL("https://joelhalen.github.io/docs/crypt.json");
+				BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+				StringBuilder response = new StringBuilder();
+				String inputLine;
+				while ((inputLine = in.readLine()) != null) {
+					response.append(inputLine);
+				}
+				in.close();
 
-			while ((inputLine = in.readLine()) != null) {
-				response.append(inputLine);
-			}
-			in.close();
+				JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
 
-
-			JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
-
-			for (JsonElement element : jsonArray) {
-				try {
-					String encrypted = element.getAsString();
-
+				for (JsonElement element : jsonArray) {
 					try {
-						String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
-
-						if (decryptedUrl.contains("discord")) {
-							webhookUrls.add(decryptedUrl);
-						} else {
-							log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+						String encrypted = element.getAsString();
+						try {
+							String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
+							if (decryptedUrl.contains("discord")) {
+								webhookUrls.add(decryptedUrl);
+							} else {
+								log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+							}
+						} catch (Exception e) {
+							log.error("Decryption failed with error: " + e.getMessage());
 						}
 					} catch (Exception e) {
-						log.error("Decryption failed with error: " + e.getMessage());
-						e.printStackTrace();
+						log.error("Error processing element: " + e.getMessage());
 					}
-
-				} catch (Exception e) {
-					log.error("Error processing element: " + e.getMessage());
-					e.printStackTrace();
-					continue;
 				}
 			}
-
+			webhookUrlsLoaded.complete(null);
+		} catch (Exception e) {
+			webhookUrlsLoaded.completeExceptionally(e);
+		} finally {
+			log.debug("Webhook URLs have been loaded successfully.");
 		}
+	}
 
+	/**
+	 * Grabs a random webhook URL from a preloaded list.
+	 * If not loaded yet, throws or returns null.
+	 */
+	public String getRandomWebhookUrl() throws Exception {
+		// Wait for URLs to be loaded, but don't block the main thread
+		if (!webhookUrlsLoaded.isDone()) {
+			throw new IllegalStateException("Webhook URLs are still loading, try again later.");
+		}
 		if (webhookUrls.isEmpty()) {
 			throw new IllegalStateException("No valid webhook URLs were loaded");
 		}
-
 		Random randomP = new Random();
-		String selectedUrl = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
-		return selectedUrl;
+		return webhookUrls.get(randomP.nextInt(webhookUrls.size()));
 	}
 
 	private static String itemImageUrl(int itemId) {
@@ -628,7 +639,6 @@ public class DropTrackerPlugin extends Plugin {
 		String url;
 		try {
 			url = getRandomWebhookUrl();
-			//url = "https://discord.com/api/webhooks/1283188014398570609/0IhPRSSn9edOp4yDHeuOlQpNQKrDRRfDK7X4RF6B3VsJ-kV_OiUadNpiB3Y6Z56bCFxX";
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
