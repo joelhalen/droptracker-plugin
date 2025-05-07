@@ -340,7 +340,7 @@ public class WidgetEvent {
         customWebhookBody.getEmbeds().add(pbEmbed);
         
         // Use the main plugin class' sendWebhook method
-        plugin.sendDropTrackerWebhook(customWebhookBody, 0);
+        plugin.sendDataToDropTracker(customWebhookBody, 0);
     }
 
     private double getPb(String boss)

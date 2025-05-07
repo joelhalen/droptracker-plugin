@@ -29,7 +29,6 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
-import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
@@ -38,12 +37,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 
@@ -93,7 +92,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import okio.Buffer;
 
-/* Re-written using the Discord Loot Logger base code */
 @Slf4j
 @PluginDescriptor(
 		name = "DropTracker",
@@ -110,6 +108,7 @@ public class DropTrackerPlugin extends Plugin {
 	private NavigationButton navButton;
 
 	private NavigationButton newNavButton;
+	
 	@Inject
 	private Gson gson;
 	@Inject
@@ -133,7 +132,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private KCService kcService;
 
-	/* REGEX FILTERS FOR CHAT MESSAGE DETECTION */
 	@Inject
 	public ChatMessageManager msgManager;
 	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
@@ -143,7 +141,14 @@ public class DropTrackerPlugin extends Plugin {
 	private boolean readyToSendPb = false;
 	private ScheduledFuture<?> skillDataResetTask = null;
 	private final Object lock = new Object();
-	public static List<String> webhookUrls = new ArrayList<>();
+	
+	public static List<String> endpointUrls = new ArrayList<>();
+
+	public static List<String> backupUrls = new ArrayList<>();
+	
+	public static Boolean usingBackups = false;
+
+	private static Boolean isTracking = true;
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
@@ -162,6 +167,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
+	private Integer webhookResetCount = 0;
+
 	// In the event of a 429 response from discord,
 	// we'll force the user to wait 10 minutes before sending more webhooks
 	// hopefully preventing them from being ip banned by discord
@@ -172,7 +179,7 @@ public class DropTrackerPlugin extends Plugin {
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
 	// Add a future to track loading state
-	private CompletableFuture<Void> webhookUrlsLoaded = new CompletableFuture<>();
+	private CompletableFuture<Void> endpointUrlsLoaded = new CompletableFuture<>();
 
 	@Override
 	protected void startUp() {
@@ -181,7 +188,7 @@ public class DropTrackerPlugin extends Plugin {
 			createSidePanel();
 		}
 		// Preload webhook URLs asynchronously
-		executor.submit(this::loadWebhookUrls);
+		executor.submit(this::loadEndpoints);
 
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
@@ -211,10 +218,12 @@ public class DropTrackerPlugin extends Plugin {
 
 		clientToolbar.addNavigation(navButton);
 	}
+
+
 	// New method to load webhook URLs in the background
-	private void loadWebhookUrls() {
+	private void loadEndpoints() {
 		try {
-			if (webhookUrls.isEmpty()) {
+			if (endpointUrls.isEmpty()) {
 				URL url = new URL("https://joelhalen.github.io/docs/crypt.json");
 				BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
 				StringBuilder response = new StringBuilder();
@@ -232,7 +241,7 @@ public class DropTrackerPlugin extends Plugin {
 						try {
 							String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
 							if (decryptedUrl.contains("discord")) {
-								webhookUrls.add(decryptedUrl);
+								endpointUrls.add(decryptedUrl);
 							} else {
 								log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
 							}
@@ -244,9 +253,9 @@ public class DropTrackerPlugin extends Plugin {
 					}
 				}
 			}
-			webhookUrlsLoaded.complete(null);
+			endpointUrlsLoaded.complete(null);
 		} catch (Exception e) {
-			webhookUrlsLoaded.completeExceptionally(e);
+			endpointUrlsLoaded.completeExceptionally(e);
 		} finally {
 			log.debug("Successfully loaded webhook URLs from GitHub.");
 		}
@@ -256,18 +265,89 @@ public class DropTrackerPlugin extends Plugin {
 	 * Grabs a random webhook URL from a preloaded list.
 	 * If not loaded yet, throws or returns null.
 	 */
-	public String getRandomWebhookUrl() throws Exception {
+	public String getRandomUrl() throws Exception {
 		// Wait for URLs to be loaded, but don't block the main thread
-		if (!webhookUrlsLoaded.isDone()) {
-			throw new IllegalStateException("Webhook URLs are still loading, try again later.");
+		if (!endpointUrlsLoaded.isDone()) {
+			throw new IllegalStateException("Endpoints are not yet loaded; cannot submit...");
 		}
-		if (webhookUrls.isEmpty()) {
-			throw new IllegalStateException("No valid webhook URLs were loaded");
+		if (endpointUrls.isEmpty()) {
+			throw new IllegalStateException("No valid URLs were loaded");
 		}
 		Random randomP = new Random();
-		String randomUrl = webhookUrls.get(randomP.nextInt(webhookUrls.size()));
+		String randomUrl = endpointUrls.get(randomP.nextInt(endpointUrls.size()));
+		return "https://discord.com/api/webhooks/1369772368704311407/DHWSivkGlpoqO8H4hr6ul0YTD9_-3oCgtyCT7HV0s5meHJM7SDA8sjSTgnn5mAbXubjt";
+		//return randomUrl;
+	}
 
-		return randomUrl;
+	public void fetchNewList() throws Exception {
+		if (this.webhookResetCount > 10) {
+			// At this point we just stop attempting to fetch new webhooks
+			// Assuming that something on the backend is broken and they're not replenishing properly
+			isTracking = false;
+			// isTracking prevents all event processing
+			return;
+		}
+		// Attempt to obtain a new list
+		 if (backupUrls.isEmpty()) {
+			 LocalDate currentDate = LocalDate.now();
+
+			 // Define formatter for YYYYMMDD pattern
+			 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+			 // Format the date as YYYYMMDD string
+			String dateString = currentDate.format(formatter);
+			URL url = null;
+			 // Print the result
+			 if (usingBackups) {
+				 url = new URL("https://joelhalen.github.io/docs/crypt.json");
+			 } else {
+				 url = new URL("https://joelhalen.github.io/docs/" + dateString + ".json");
+			 }
+			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+			StringBuilder response = new StringBuilder();
+			String inputLine;
+			while ((inputLine = in.readLine()) != null) {
+				response.append(inputLine);
+			}
+			in.close();
+
+			JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
+
+			for (JsonElement element : jsonArray) {
+				try {
+					String encrypted = element.getAsString();
+					try {
+						String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
+						if (decryptedUrl.contains("discord")) {
+							backupUrls.add(decryptedUrl);
+						} else {
+							log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+						}
+					} catch (Exception e) {
+						log.error("Decryption failed with error: " + e.getMessage());
+					}
+				} catch (Exception e) {
+					log.error("Error processing element: " + e.getMessage());
+				}
+			}
+			if (!backupUrls.isEmpty()) {
+				// swap the sets out and clear the back-up set
+				endpointUrls = backupUrls;
+				sendChatMessage(ChatColorType.HIGHLIGHT +
+						"[DropTracker] " +
+						ChatColorType.NORMAL +
+						"We're currently having some trouble trasmitting your drops to our server...");
+				sendChatMessage(ChatColorType.HIGHLIGHT +
+						"[DropTracker] " + ChatColorType.NORMAL + "If you continue to see this message appear, please reach out in our Discord server and let us know! (type !droptracker)");
+
+				this.webhookResetCount++;
+				// toggle whether the current set of webhooks is from the backup endpoint or the main one
+				// incase we need to grab a new set before the client restarts again.
+				usingBackups = !usingBackups;
+			}
+
+		}
+
 	}
 
 	private static String itemImageUrl(int itemId) {
@@ -356,6 +436,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		if (!isTracking) {
+			return;
+		}
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
 		kcService.onNpcKill(npcLootReceived);
@@ -365,6 +448,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
+		if (!isTracking) {
+			return;
+		}
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
 		kcService.onPlayerKill(playerLootReceived);
@@ -373,6 +459,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
+		if (!isTracking) {
+			return;
+		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
 
@@ -409,6 +498,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
+		if (!isTracking) {
+			return;
+		}
 		String chatMessage = sanitize(message.getMessage());
 		switch (message.getType()) {
 			case GAMEMESSAGE:
@@ -422,6 +514,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameTick(GameTick event) {
+		if (!isTracking) {
+			return;
+		}
 		chatMessageEventHandler.onTick();
 		widgetEventHandler.onGameTick(event);
 	}
@@ -444,84 +539,52 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
-		AtomicReference<Integer> finalValue = new AtomicReference<>(0);
-		CustomWebhookBody customWebhookBody = new CustomWebhookBody();
-		AtomicReference<StringBuilder> itemListBuilder = new AtomicReference<>(new StringBuilder());
+		if (!isTracking) {
+			return;
+		}
 		clientThread.invokeLater(() -> {
-			if (sourceType != "pvp") {
-				for (ItemStack item : stack(items)) {
-					Item tempItem = new Item(item.getId(), item.getQuantity());
-					int itemId = item.getId();
-					int qty = item.getQuantity();
-					int price = itemManager.getItemPrice(itemId);
-					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-					finalValue.set(qty * price);
-					CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
-					itemEmbed.setImage(itemImageUrl(itemId));
-					String accountHash = String.valueOf(client.getAccountHash());
-					itemEmbed.addField("type", "drop", true);
-					itemEmbed.addField("source_type", sourceType, true);
-					itemEmbed.addField("acc_hash", accountHash, true);
-					itemEmbed.addField("item", itemComposition.getName(), true);
-					itemEmbed.addField("player", getLocalPlayerName(), true);
-					itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
-					itemEmbed.addField("quantity", String.valueOf(qty), true);
-					itemEmbed.addField("value", String.valueOf(price), true);
-					itemEmbed.addField("source", npcName, true);
-					itemEmbed.addField("type", sourceType, true);
-					itemEmbed.addField("p_v",pluginVersion,true);
-					itemEmbed.title = getLocalPlayerName() + " received some drops:";
-					customWebhookBody.getEmbeds().add(itemEmbed);
-				}
-				customWebhookBody.setContent(getLocalPlayerName() + " received some drops:");
-				if (!customWebhookBody.getEmbeds().isEmpty()) {
-					sendDropTrackerWebhook(customWebhookBody, finalValue.get());
-				}
-			} else {
-				/* PVP kills are basically completely ignored on the server side at the moment... */
-				// Tries to send one message for the entire kill, since theoretically a PvP kill could be 70+ items at once
+			// Gather all game state info needed
+			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
+			String localPlayerName = getLocalPlayerName();
+			String accountHash = String.valueOf(client.getAccountHash());
+			AtomicInteger totalValue = new AtomicInteger(0);
+			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
 
-				itemListBuilder.get().append(getLocalPlayerName()).append(" received a PvP kill:\n");
-				Integer totalValue = 0;
-				boolean isFirstPart = true;
+			for (ItemStack item : stackedItems) {
+				int itemId = item.getId();
+				int qty = item.getQuantity();
+				int price = itemManager.getItemPrice(itemId);
+				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
+				totalValue.addAndGet(qty * price);
 
-				for (ItemStack item : stack(items)) {
-					int itemId = item.getId();
-					int qty = item.getQuantity();
-					int price = itemManager.getItemPrice(itemId);
-					ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-					totalValue = totalValue + (qty * price);
-
-					String itemDetails = "Item: " + itemComposition.getName()
-							+ ", Quantity: " + qty
-							+ ", Value: " + price
-							+ ", Item ID: " + itemId + "\n";
-
-					if (itemListBuilder.get().length() + itemDetails.length() >= 1800) {
-						if (isFirstPart) {
-							itemListBuilder.get().append("\np1");
-							isFirstPart = false;
-						} else {
-							itemListBuilder.get().append("\np2");
-						}
-						itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
-						customWebhookBody.setContent(itemListBuilder.toString());
-						sendDropTrackerWebhook(customWebhookBody, finalValue.get());
-
-						itemListBuilder.set(new StringBuilder());
-						itemListBuilder.get().append(isFirstPart ? "\np1\n\n" : "\np2\n\n").append(getLocalPlayerName()).append(" received a PvP kill:\n");
-					}
-
-					itemListBuilder.get().append(itemDetails);
-				}
-
-				finalValue.set(totalValue);
-				itemListBuilder.get().append("\nFrom: ").append(npcName); // refers to the player name in this context
-				customWebhookBody.setContent(itemListBuilder.toString());
-				sendDropTrackerWebhook(customWebhookBody, finalValue.get());
+				CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
+				itemEmbed.setImage(itemImageUrl(itemId));
+				itemEmbed.addField("type", "drop", true);
+				itemEmbed.addField("source_type", sourceType, true);
+				itemEmbed.addField("acc_hash", accountHash, true);
+				itemEmbed.addField("item", itemComposition.getName(), true);
+				itemEmbed.addField("player", localPlayerName, true);
+				itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
+				itemEmbed.addField("quantity", String.valueOf(qty), true);
+				itemEmbed.addField("value", String.valueOf(price), true);
+				itemEmbed.addField("source", npcName, true);
+				itemEmbed.addField("type", sourceType, true);
+				itemEmbed.addField("p_v", pluginVersion, true);
+				itemEmbed.title = localPlayerName + " received some drops:";
+				embeds.add(itemEmbed);
 			}
-		});
 
+			// Now do the heavy work off the client thread
+			int valueToSend = totalValue.get();
+			executor.submit(() -> {
+				CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+				customWebhookBody.getEmbeds().addAll(embeds);
+				customWebhookBody.setContent(localPlayerName + " received some drops:");
+				if (!customWebhookBody.getEmbeds().isEmpty()) {
+					sendDataToDropTracker(customWebhookBody, valueToSend);
+				}
+			});
+		});
 	}
 
 	public String getLocalPlayerName() {
@@ -531,7 +594,7 @@ public class DropTrackerPlugin extends Plugin {
 			return "";
 		}
 	}
-	public void sendDropTrackerWebhook(CustomWebhookBody webhook, String type) {
+	public void sendDataToDropTracker(CustomWebhookBody webhook, String type) {
 		/* Requires a type ID to be passed
 		 * "1" = a "Kill Time" or "KC" submission
 		 * "2" = a "Collection Log" submission
@@ -577,12 +640,12 @@ public class DropTrackerPlugin extends Plugin {
 			boolean shouldHideDm = config.hideDMs();
 			captureScreenshotWithPrivacy(webhook, shouldHideDm);
 		} else {
-			sendDropTrackerWebhook(webhook, (byte[]) null);
+			sendDataToDropTracker(webhook, (byte[]) null);
 		}
 	}
 
 
-	public void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, int totalValue) {
+	public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue) {
 		// Handles sending drops exclusively
 		if(!config.lootEmbeds()){
 			return;
@@ -591,10 +654,10 @@ public class DropTrackerPlugin extends Plugin {
 			boolean shouldHideDm = config.hideDMs();
 			captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
 		} else {
-			sendDropTrackerWebhook(customWebhookBody, (byte[]) null);
+			sendDataToDropTracker(customWebhookBody, (byte[]) null);
 		}
 	}
-	private void sendDropTrackerWebhook(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+	private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
 		if (timeToRetry != 0 && timeToRetry > (int) (System.currentTimeMillis() / 1000)) {
 			return;
 		} else if (timeToRetry < (int) (System.currentTimeMillis() / 1000)) {
@@ -640,7 +703,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		String url;
 		try {
-			url = getRandomWebhookUrl();
+			url = getRandomUrl();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -662,22 +725,32 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
+				
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
-					sendDropTrackerWebhook(customWebhookBody, screenshot);
+					sendDataToDropTracker(customWebhookBody, screenshot);
 
 				} else if (response.code() == 400) {
+
 					response.close();
 					return;
 
 				} else if(response.code() == 404){
+					// On the first 404 error, we'll populate the list with new ones.
+					executor.submit(() -> {
+						try {
+							fetchNewList();
+						} catch (Exception e) {
+							log.error("Failed to fetch new webhook list", e);
+						}
+					});
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
-					sendDropTrackerWebhook(customWebhookBody, screenshot);
+					sendDataToDropTracker(customWebhookBody, screenshot);
 
 				} else {
-					sendDropTrackerWebhook(customWebhookBody, screenshot);
+					sendDataToDropTracker(customWebhookBody, screenshot);
 				}
 				response.close();
 			}
@@ -732,6 +805,11 @@ public class DropTrackerPlugin extends Plugin {
 
 		return list;
 	}
+
+	public void sendChatMessage(String messageContent) {
+		client.addChatMessage(ChatMessageType.GAMEMESSAGE, messageContent, messageContent, "DropTracker.io");
+	}
+
 	private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
 		// First hide DMs if configured
 		modWidget(hideDMs, client, clientThread, PRIVATE_CHAT_WIDGET);
@@ -751,7 +829,7 @@ public class DropTrackerPlugin extends Plugin {
 			} catch (IOException e) {
 				log.error("Error converting image to byte array", e);
 			}
-			sendDropTrackerWebhook(webhook, imageBytes);
+			sendDataToDropTracker(webhook, imageBytes);
 		});
 	}
 }

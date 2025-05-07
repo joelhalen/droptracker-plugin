@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
 import net.runelite.api.annotations.Varp;
-import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
@@ -338,7 +337,7 @@ public class ChatMessageEvent {
         collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
 
-        plugin.sendDropTrackerWebhook(collectionLogBody, "2");
+        plugin.sendDataToDropTracker(collectionLogBody, "2");
     }
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
@@ -378,7 +377,7 @@ public class ChatMessageEvent {
             combatAchievementEmbed.addField("completed", completedTierName,true);
             combatAchievementEmbed.addField("p_v", plugin.pluginVersion,true);
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
-            plugin.sendDropTrackerWebhook(combatWebhook, "3");
+            plugin.sendDataToDropTracker(combatWebhook, "3");
         });
     }
 
@@ -442,7 +441,7 @@ public class ChatMessageEvent {
             killEmbed.addField("acc_hash", accountHash, true);
             killEmbed.addField("p_v",plugin.pluginVersion,true);
             killWebhook.getEmbeds().add(killEmbed);
-            plugin.sendDropTrackerWebhook(killWebhook, "1");
+            plugin.sendDataToDropTracker(killWebhook, "1");
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
