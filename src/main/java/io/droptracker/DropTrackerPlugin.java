@@ -108,7 +108,7 @@ public class DropTrackerPlugin extends Plugin {
 	private NavigationButton navButton;
 
 	private NavigationButton newNavButton;
-	
+
 	@Inject
 	private Gson gson;
 	@Inject
@@ -174,7 +174,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "3.82";
+	public String pluginVersion = "3.83";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
@@ -275,8 +275,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		Random randomP = new Random();
 		String randomUrl = endpointUrls.get(randomP.nextInt(endpointUrls.size()));
-		return "https://discord.com/api/webhooks/1369772368704311407/DHWSivkGlpoqO8H4hr6ul0YTD9_-3oCgtyCT7HV0s5meHJM7SDA8sjSTgnn5mAbXubjt";
-		//return randomUrl;
+		return randomUrl;
 	}
 
 	public void fetchNewList() throws Exception {
@@ -658,6 +657,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+
 		if (timeToRetry != 0 && timeToRetry > (int) (System.currentTimeMillis() / 1000)) {
 			return;
 		} else if (timeToRetry < (int) (System.currentTimeMillis() / 1000)) {
@@ -725,7 +725,7 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
-				
+
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
@@ -746,7 +746,6 @@ public class DropTrackerPlugin extends Plugin {
 							log.error("Failed to fetch new webhook list", e);
 						}
 					});
-					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDataToDropTracker(customWebhookBody, screenshot);
 
 				} else {
@@ -762,13 +761,14 @@ public class DropTrackerPlugin extends Plugin {
 		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks
 		// And not external connections of some sort
 		if (!"discord.com".equals(url.host()) && !url.host().endsWith(".discord.com")) {
-			return false;
+			if(!"discordapp.com".equals(url.host()) && !url.host().endsWith(".discordapp.com")){
+				return false;
+			}
 		}
 		List<String> segments = url.pathSegments();
 		if (segments.size() >= 4 && "api".equals(segments.get(0)) && "webhooks".equals(segments.get(1))) {
 			return true;
 		}
-
 		return false;
 	}
 	private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
