@@ -101,7 +101,7 @@ public class ChatMessageEvent {
     private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile(
-            "Your (?<key>[\\w\\s:']+) (?<type>kill|chest|completion) count is:? (?<value>[\\d,]+)"
+            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion) count is:? (?<value>[\\d,]+)"
     );
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
 
@@ -193,7 +193,6 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        System.out.println(message);
         checkPB(message);
         checkTime(message);
 
@@ -452,7 +451,6 @@ public class ChatMessageEvent {
     private void updateData(BossNotification updated) {
         bossData.getAndUpdate(old -> {
             if (old == null) {
-                System.out.println("Old Data is null");
                 // Store pending notification for later processing
                 pendingNotifications.put(updated.getBoss(), updated);
 
@@ -467,7 +465,6 @@ public class ChatMessageEvent {
 
                 return updated;
             } else {
-                System.out.println("Old Data is not null: " + updated.getTime());
 
                 return new BossNotification(
                         defaultIfNull(updated.getBoss(), old.getBoss()),
@@ -506,12 +503,10 @@ public class ChatMessageEvent {
             // retrieve the stored timeData for this bossName, if any is stored...
             // for cases where a time message may appear before the boss name/kc message appears
             TimeData timeData = pendingTimeData.get(bossName);
-            System.out.println(timeData);
+
             //Search for stored TimeData
             if(timeData != null){
 
-                System.out.println("Time Data is not null");
-                System.out.println("Boss Name: "+pair.getLeft());
 
                 BossNotification newBossData  = new BossNotification(
                         bossName,
@@ -652,7 +647,6 @@ public class ChatMessageEvent {
             }
         } else
         if (secondary.find()){
-
             String key = parseSecondary(secondary.group("key"));
             String value = secondary.group("value");
             if (key != null) {
@@ -860,8 +854,6 @@ public class ChatMessageEvent {
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
-                System.out.println(" Time Found " + timeStr);
-                System.out.println(" Boss Name Found: " + bossName) ;
                 if (bossName != null) {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
