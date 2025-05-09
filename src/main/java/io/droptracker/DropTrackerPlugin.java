@@ -122,7 +122,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient httpClient;
-	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King");
+	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
+	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians");
 
 	@Inject
 	private DrawManager drawManager;
@@ -149,6 +150,7 @@ public class DropTrackerPlugin extends Plugin {
 	public static Boolean usingBackups = false;
 
 	private static Boolean isTracking = true;
+	public Integer ticksSinceNpcDataUpdate = 0;
 
 	private final ExecutorService executor = Executors.newCachedThreadPool();
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
@@ -469,6 +471,9 @@ public class DropTrackerPlugin extends Plugin {
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
+			if(npcName.equals("Dusk")){
+				npcName = "Grotesque Guardians";
+			}
 			processDropEvent(npcName, "npc", lootReceived.getItems());
 			return;
 		}
@@ -540,6 +545,9 @@ public class DropTrackerPlugin extends Plugin {
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
 		if (!isTracking) {
 			return;
+		}
+		if (LONG_TICK_NPC_NAMES.contains(npcName)){
+			ticksSinceNpcDataUpdate -= 30;
 		}
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed

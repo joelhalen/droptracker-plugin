@@ -130,7 +130,6 @@ public class ChatMessageEvent {
 
     private static Pair<String, Integer> mostRecentNpcData = null;
 
-    private static Integer ticksSinceNpcDataUpdate = 0;
 
     @Varbit
     public static final int KILL_COUNT_SPAM_FILTER = 4930;
@@ -194,6 +193,7 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
+        System.out.println(message);
         checkPB(message);
         checkTime(message);
 
@@ -284,13 +284,13 @@ public class ChatMessageEvent {
             if (bossData.get() != null) {
                 processKill(bossData.get());
             }
-            ticksSinceNpcDataUpdate += 1;
+            plugin.ticksSinceNpcDataUpdate += 1;
         } else {
-            if (ticksSinceNpcDataUpdate > 1)  {
-                ticksSinceNpcDataUpdate = 0;
+            if (plugin.ticksSinceNpcDataUpdate > 1)  {
+                plugin.ticksSinceNpcDataUpdate = 0;
             }
         }
-        if (ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
+        if (plugin.ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
             mostRecentNpcData = null;
         }
 
@@ -427,7 +427,7 @@ public class ChatMessageEvent {
                     bossName = pendingNotifications.get(0).getBoss();
                 }
             }
-            if (bossName == null) {
+            if (bossName == null || bossName.equalsIgnoreCase("")){
                 return;
             }
             killEmbed.setTitle(player + " has killed a boss:");
@@ -452,6 +452,7 @@ public class ChatMessageEvent {
     private void updateData(BossNotification updated) {
         bossData.getAndUpdate(old -> {
             if (old == null) {
+                System.out.println("Old Data is null");
                 // Store pending notification for later processing
                 pendingNotifications.put(updated.getBoss(), updated);
 
@@ -466,6 +467,8 @@ public class ChatMessageEvent {
 
                 return updated;
             } else {
+                System.out.println("Old Data is not null: " + updated.getTime());
+
                 return new BossNotification(
                         defaultIfNull(updated.getBoss(), old.getBoss()),
                         defaultIfNull(updated.getCount(), old.getCount()),
@@ -503,18 +506,23 @@ public class ChatMessageEvent {
             // retrieve the stored timeData for this bossName, if any is stored...
             // for cases where a time message may appear before the boss name/kc message appears
             TimeData timeData = pendingTimeData.get(bossName);
-
+            System.out.println(timeData);
             //Search for stored TimeData
             if(timeData != null){
-                Optional<Triple<Duration, Duration, Boolean>> killTimeOpt = parseKillTime(message, bossName);
-                return killTimeOpt.map(t -> new BossNotification(
+
+                System.out.println("Time Data is not null");
+                System.out.println("Boss Name: "+pair.getLeft());
+
+                BossNotification newBossData  = new BossNotification(
                         bossName,
                         pair.getRight(),
                         message,
-                        t.getLeft(),
-                        t.getMiddle(),
-                        t.getRight()
-                ));
+                        timeData.time,
+                        timeData.bestTime,
+                        timeData.isPb
+                );
+                bossData.set(newBossData);
+                return Optional.of(newBossData);
             } else {
                 BossNotification currentData = bossData.get();
                 if (currentData != null) {
@@ -625,7 +633,7 @@ public class ChatMessageEvent {
         }
     }
 
-    static Optional<Pair<String, Integer>> parseBoss(String message) {
+    public Optional<Pair<String, Integer>> parseBoss(String message) {
         Matcher primary = PRIMARY_REGEX.matcher(message);
         Matcher secondary = SECONDARY_REGEX.matcher(message);
 
@@ -637,7 +645,7 @@ public class ChatMessageEvent {
                 try {
                     int killCount = Integer.parseInt(count.replace(",", ""));
                     mostRecentNpcData = Pair.of(boss, killCount);
-                    ticksSinceNpcDataUpdate = 0;
+                    plugin.ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
                 }
@@ -651,7 +659,7 @@ public class ChatMessageEvent {
                 try {
                     int killCount = Integer.parseInt(value.replace(",", ""));
                     mostRecentNpcData = Pair.of(key, killCount);
-                    ticksSinceNpcDataUpdate = 0;
+                    plugin.ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
                 } catch (NumberFormatException e) {
                 }
@@ -852,10 +860,13 @@ public class ChatMessageEvent {
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
                 String bossName = mostRecentNpcData != null ? mostRecentNpcData.getLeft() : null;
+                System.out.println(" Time Found " + timeStr);
+                System.out.println(" Boss Name Found: " + bossName) ;
                 if (bossName != null) {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else {
+                    storeBossTime("Grotesque Guardians",time,bestTime,isPb);
                     teamSize = "Solo";
                 }
 
@@ -878,7 +889,6 @@ public class ChatMessageEvent {
                 }else if (message.contains("Corrupted challenge")) {
                     setTeamSize("Corrupted Hunllef",message);
                     storeBossTime("Corrupted Hunllef", time, bestTime, isPb);
-
                 } else if (message.contains("Challenge duration")) {
                     setTeamSize("Crystalline Hunllef",message);
                     storeBossTime("Crystalline Hunllef", time, bestTime, isPb);
@@ -918,7 +928,7 @@ public class ChatMessageEvent {
                     storeBossTime(bossName, time, bestTime, isPb);
                     return;
                 } else {
-                    storeBossTime("", time, bestTime, isPb);
+                    storeBossTime("Grotesque Guardians",time,bestTime,isPb);
                     teamSize = "Solo";
                 }
                 // removed else if here, as if we only entered the below clauses
