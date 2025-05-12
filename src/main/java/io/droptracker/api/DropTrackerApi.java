@@ -101,11 +101,16 @@ public class DropTrackerApi {
 
 
     public String getApiUrl() {
-        return config.useApi() ? "https://www.droptracker.io/api/" : "";
+        return config.useApi() ? "https://api.droptracker.io" : "";
     }
 
     public String getLatestUpdateString() {
-        String endpoint = "https://www.droptracker.io/api/latest_news";
+        String endpoint;
+        if (config.useApi()) {
+            endpoint = "https://api.droptracker.io/latest_news";
+        } else {
+            endpoint = "https://droptracker-io.github.io/content/news.txt";
+        }
         try {
             Request request = new Request.Builder().url(endpoint).build();
             try (Response response = httpClient.newCall(request).execute()) {

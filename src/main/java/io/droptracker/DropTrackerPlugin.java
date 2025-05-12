@@ -105,6 +105,9 @@ public class DropTrackerPlugin extends Plugin {
 	public static DropTrackerApi api;
 	private DropTrackerPanel panel;
 
+	@Inject
+	private ConfigManager configManager;
+
 	private NavigationButton navButton;
 
 	private NavigationButton newNavButton;
@@ -358,7 +361,7 @@ public class DropTrackerPlugin extends Plugin {
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://discord.gg/dvb7yP7JJH");
 		if (destination == "website" && config.useApi()) {
-			webUrl = HttpUrl.parse(api.getApiUrl());
+			webUrl = HttpUrl.parse("https://www.droptracker.io/");
 		}
 		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
 		HttpUrl url = urlBuilder.build();
@@ -386,6 +389,7 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public boolean isFakeWorld() {
+		checkForMessage();
 		var worldType = client.getWorldType();
 		return worldType.contains(WorldType.BETA_WORLD)
 				|| worldType.contains(WorldType.DEADMAN)
@@ -400,6 +404,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
+		checkForMessage();
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				panel.deinit();
@@ -437,6 +442,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -449,6 +455,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
+		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -460,6 +467,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
+		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -502,6 +510,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
+		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -542,7 +551,20 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
+	private void checkForMessage() {
+		// determine whether the player needs to be notified about a possible change to the plugin
+		// based on the last version they loaded, and the currently stored version
+		String currentVersion = configManager.getConfiguration(DropTrackerConfig.GROUP, "lastNotificationNum");
+		if (currentVersion != null && currentVersion != this.pluginVersion) {
+			String newNotificationData = api.getLatestUpdateString();
+			sendChatMessage(newNotificationData);
+			// Update the internal config value of this update message
+			configManager.setConfiguration(DropTrackerConfig.GROUP, "lastNotificationNum", this.pluginVersion);
+		}
+	}
+
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
+		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -710,10 +732,14 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		}
 		String url;
-		try {
-			url = getRandomUrl();
-		} catch (Exception e) {
-			throw new RuntimeException(e);
+		if (!config.useApi()) {
+			try {
+				url = getRandomUrl();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+		} else {
+			url = api.getApiUrl() + "/webhook";
 		}
 		HttpUrl u = HttpUrl.parse(url);
 		if (u == null || !isValidDiscordWebhookUrl(u)) {
@@ -766,6 +792,10 @@ public class DropTrackerPlugin extends Plugin {
 	}
 	
 	private boolean isValidDiscordWebhookUrl(HttpUrl url) {
+		if (config.useApi() && url.host().equals("api.droptracker.io")) {
+			// we send all data to our api endpoint if the user has it enabled; so this check can just return true
+			return true;
+		}
 		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks
 		// And not external connections of some sort
 		if (!"discord.com".equals(url.host()) && !url.host().endsWith(".discord.com")) {
