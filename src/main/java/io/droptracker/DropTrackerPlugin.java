@@ -29,7 +29,7 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
-import com.google.gson.Gson;
+import com.google.gson.*;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
@@ -87,9 +87,6 @@ import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 import okio.Buffer;
 
 @Slf4j
@@ -185,6 +182,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	// Add a future to track loading state
 	private CompletableFuture<Void> endpointUrlsLoaded = new CompletableFuture<>();
+
+	// Flag to prevent multiple message checks in the same session
+	private boolean isMessageChecked = false;
 
 	@Override
 	protected void startUp() {
@@ -337,12 +337,8 @@ public class DropTrackerPlugin extends Plugin {
 			if (!backupUrls.isEmpty()) {
 				// swap the sets out and clear the back-up set
 				endpointUrls = backupUrls;
-				sendChatMessage(ChatColorType.HIGHLIGHT +
-						"[DropTracker] " +
-						ChatColorType.NORMAL +
-						"We're currently having some trouble trasmitting your drops to our server...");
-				sendChatMessage(ChatColorType.HIGHLIGHT +
-						"[DropTracker] " + ChatColorType.NORMAL + "If you continue to see this message appear, please reach out in our Discord server and let us know! (type !droptracker)");
+				sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
+				sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
 
 				this.webhookResetCount++;
 				// toggle whether the current set of webhooks is from the backup endpoint or the main one
@@ -389,7 +385,6 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public boolean isFakeWorld() {
-		checkForMessage();
 		var worldType = client.getWorldType();
 		return worldType.contains(WorldType.BETA_WORLD)
 				|| worldType.contains(WorldType.DEADMAN)
@@ -404,11 +399,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
-		checkForMessage();
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				panel.deinit();
-				
+
 				if(navButton != null) {
 					clientToolbar.removeNavigation(navButton);
 				}
@@ -510,7 +504,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
-		checkForMessage();
 		if (!isTracking) {
 			return;
 		}
@@ -550,16 +543,24 @@ public class DropTrackerPlugin extends Plugin {
 			readyToSendPb = false;
 		}
 	}
-
 	private void checkForMessage() {
+		if (isMessageChecked) {
+			return;
+		}
+
 		// determine whether the player needs to be notified about a possible change to the plugin
 		// based on the last version they loaded, and the currently stored version
-		String currentVersion = configManager.getConfiguration(DropTrackerConfig.GROUP, "lastNotificationNum");
-		if (currentVersion != null && currentVersion != this.pluginVersion) {
-			String newNotificationData = api.getLatestUpdateString();
-			sendChatMessage(newNotificationData);
-			// Update the internal config value of this update message
-			configManager.setConfiguration(DropTrackerConfig.GROUP, "lastNotificationNum", this.pluginVersion);
+		String currentVersion = config.lastVersionNotified();
+		if (currentVersion != null && !this.pluginVersion.equals(currentVersion + "1")) {
+			executor.submit(() -> {
+				String newNotificationData = api.getLatestUpdateString();
+				sendChatMessage(newNotificationData);
+				// Update the internal config value of this update message
+				configManager.setConfiguration("droptracker", "lastVersionNotified", this.pluginVersion + "1");
+				// Add a flag to prevent multiple checks in the same session
+			});
+			isMessageChecked = true;
+
 		}
 	}
 
@@ -719,8 +720,8 @@ public class DropTrackerPlugin extends Plugin {
 			if (body != null) {
 				// Safely check content type
 				MediaType contentType = body.contentType();
-				if (contentType != null && 
-						(contentType.toString().contains("text") || 
+				if (contentType != null &&
+						(contentType.toString().contains("text") ||
 						 contentType.toString().contains("json"))) {
 					Buffer buffer = new Buffer();
 					try {
@@ -759,13 +760,37 @@ public class DropTrackerPlugin extends Plugin {
 
 			@Override
 			public void onResponse(Call call, Response response) throws IOException {
+				if (config.useApi()) {
+					// Try to get response body, but don't consume it
+					ResponseBody body = response.peekBody(Long.MAX_VALUE);
+					if (body != null) {
+						String bodyString = body.string();
+						if (!bodyString.isEmpty()) {
+							
+							// Check for notice parameter in the response
+							try {
+								JsonElement jsonElement = new JsonParser().parse(bodyString);
+								if (jsonElement.isJsonObject()) {
+									JsonObject jsonObject = jsonElement.getAsJsonObject();
+									if (jsonObject.has("notice")) {
+										String noticeMessage = jsonObject.get("notice").getAsString();
+										if (noticeMessage != null && !noticeMessage.isEmpty()) {
+											sendChatMessage(noticeMessage);
+										}
+									}
+								}
+							} catch (Exception e) {
+								
+							}
+						}
+					}
+				} 
 
 				if (response.isSuccessful()) {
 					timesTried = 0;
 				} else if (response.code() == 429) {
 					timeToRetry = (int) (System.currentTimeMillis() / 1000) + 600;
 					sendDataToDropTracker(customWebhookBody, screenshot);
-
 				} else if (response.code() == 400) {
 
 					response.close();
@@ -790,10 +815,9 @@ public class DropTrackerPlugin extends Plugin {
 		});
 
 	}
-	
+
 	private boolean isValidDiscordWebhookUrl(HttpUrl url) {
 		if (config.useApi() && url.host().equals("api.droptracker.io")) {
-			// we send all data to our api endpoint if the user has it enabled; so this check can just return true
 			return true;
 		}
 		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks
@@ -845,7 +869,19 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public void sendChatMessage(String messageContent) {
-		client.addChatMessage(ChatMessageType.GAMEMESSAGE, messageContent, messageContent, "DropTracker.io");
+		ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
+		messageBuilder.append(ChatColorType.HIGHLIGHT)
+				.append("[")
+				.append(ChatColorType.NORMAL)
+				.append("DropTracker")
+				.append(ChatColorType.HIGHLIGHT)
+				.append("] ")
+				.append(ChatColorType.NORMAL);
+		messageBuilder.append(messageContent);
+		final String finalMessage = messageBuilder.build();
+		clientThread.invokeLater(() -> {
+			client.addChatMessage(ChatMessageType.CONSOLE, finalMessage, finalMessage,"DropTracker.io");
+		});
 	}
 
 	private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
@@ -870,4 +906,6 @@ public class DropTrackerPlugin extends Plugin {
 			sendDataToDropTracker(webhook, imageBytes);
 		});
 	}
+
+
 }

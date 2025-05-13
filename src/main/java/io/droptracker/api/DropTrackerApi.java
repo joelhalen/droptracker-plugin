@@ -111,6 +111,7 @@ public class DropTrackerApi {
         } else {
             endpoint = "https://droptracker-io.github.io/content/news.txt";
         }
+        System.out.println("Using endpoint:" + endpoint);
         try {
             Request request = new Request.Builder().url(endpoint).build();
             try (Response response = httpClient.newCall(request).execute()) {

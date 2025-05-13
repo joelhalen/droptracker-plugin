@@ -154,4 +154,11 @@ public interface DropTrackerConfig extends Config
 					"<b>Are you sure that you want to enable external connections?</b><br></html>"
 	) default boolean useApi() { return false; }
 
+	@ConfigItem(
+			name="lastVersionNotified",
+			keyName="lastVersionNotified",
+			description="lastVersionNotified",
+			hidden=true
+	)
+	default String lastVersionNotified() { return "0"; }
 }
