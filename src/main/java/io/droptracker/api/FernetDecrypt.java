@@ -14,7 +14,7 @@ import javax.inject.Singleton;
 
 @Singleton
 public class FernetDecrypt {
-    private static final String ENCRYPTION_KEY = "bKWn6PnBLfJHNM7nrxuotRTcn3hzHnl-eANL54Il2Hw=";
+    public static String ENCRYPTION_KEY = "";
     private static final byte VERSION = (byte) 0x80;
 
     @Inject

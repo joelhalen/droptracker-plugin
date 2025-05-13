@@ -229,8 +229,24 @@ public class DropTrackerPlugin extends Plugin {
 	private void loadEndpoints() {
 		try {
 			if (endpointUrls.isEmpty()) {
-				URL url = new URL("https://joelhalen.github.io/docs/crypt.json");
+				
+				LocalDate currentDate = LocalDate.now();
+
+				// Define formatter for YYYYMMDD pattern
+				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+   
+				// Format the date as YYYYMMDD string
+			    String dateString = currentDate.format(formatter);
+				URL url = new URL("https://droptracker-io.github.io/content/" + dateString + ".json");
 				BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
+				// Get the encryption key first from github
+				URL keyUrl = new URL("https://droptracker-io.github.io/content/" + dateString + "-key.txt");
+				BufferedReader keyIn = new BufferedReader(new InputStreamReader(keyUrl.openStream()));	
+				String loaded_key = keyIn.readLine();
+				keyIn.close();
+				if (loaded_key != null) {	
+					FernetDecrypt.ENCRYPTION_KEY = loaded_key;
+				} 
 				StringBuilder response = new StringBuilder();
 				String inputLine;
 				while ((inputLine = in.readLine()) != null) {
@@ -245,10 +261,14 @@ public class DropTrackerPlugin extends Plugin {
 						String encrypted = element.getAsString();
 						try {
 							String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
-							if (decryptedUrl.contains("discord")) {
-								endpointUrls.add(decryptedUrl);
-							} else {
-								log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+							if (!config.useApi()) {
+								// allow the user to use non-discord endpoints for submissions if the api is enabled
+								if (decryptedUrl.contains("discord")) {
+									endpointUrls.add(decryptedUrl);
+								} else {
+									
+									log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
+								}
 							}
 						} catch (Exception e) {
 							log.error("Decryption failed with error: " + e.getMessage());
@@ -303,9 +323,9 @@ public class DropTrackerPlugin extends Plugin {
 			URL url = null;
 			 // Print the result
 			 if (usingBackups) {
-				 url = new URL("https://joelhalen.github.io/docs/crypt.json");
+				 url = new URL("https://droptracker-io.github.io/content/" + dateString + ".json");
 			 } else {
-				 url = new URL("https://joelhalen.github.io/docs/" + dateString + ".json");
+				 url = new URL("https://droptracker-io.github.io/content/" + dateString + "-1.json");
 			 }
 			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
 			StringBuilder response = new StringBuilder();
@@ -337,6 +357,7 @@ public class DropTrackerPlugin extends Plugin {
 			if (!backupUrls.isEmpty()) {
 				// swap the sets out and clear the back-up set
 				endpointUrls = backupUrls;
+				backupUrls.clear();
 				sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
 				sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
 
