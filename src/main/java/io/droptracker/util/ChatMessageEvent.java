@@ -313,7 +313,7 @@ public class ChatMessageEvent {
         }
         Integer itemId = itemIDFinder.findItemId(itemName);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
-        Integer killCount = loot != null ? KCService.getKillCount(loot.getCategory(), loot.getSource()) : null;
+        Integer killCount = getKc(loot.getSource());
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
         CustomWebhookBody collectionLogBody = new CustomWebhookBody();
