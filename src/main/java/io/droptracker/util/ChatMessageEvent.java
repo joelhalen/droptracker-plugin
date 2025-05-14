@@ -101,7 +101,7 @@ public class ChatMessageEvent {
     private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile(
-            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion) count is:? (?<value>[\\d,]+)"
+            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
     );
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
 
