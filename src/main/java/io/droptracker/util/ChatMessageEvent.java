@@ -694,6 +694,9 @@ public class ChatMessageEvent {
             case "kill":
                 return boss;
 
+            case "success":
+                return boss;
+
             default:
                 return null;
         }
@@ -1289,8 +1292,8 @@ public class ChatMessageEvent {
         //Yama Test
 
          onGameMessage("Your Yama success count is 20.");
-          onGameMessage("Fight duration: 4:04. Personal best: 3:50");
-         // onGameMessage("Fight duration: 3:22 (new personal best)");
+         // onGameMessage("Fight duration: 4:04. Personal best: 3:50");
+          onGameMessage("Fight duration: 3:22 (new personal best)");
 
 
     }

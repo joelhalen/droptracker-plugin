@@ -176,7 +176,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "3.83";
+	public String pluginVersion = "3.84";
 
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
