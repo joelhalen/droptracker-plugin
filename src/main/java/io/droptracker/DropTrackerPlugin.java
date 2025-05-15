@@ -624,6 +624,8 @@ public class DropTrackerPlugin extends Plugin {
 				itemEmbed.title = localPlayerName + " received some drops:";
 				embeds.add(itemEmbed);
 			}
+			System.out.println("drop Sent");
+
 
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
@@ -633,6 +635,7 @@ public class DropTrackerPlugin extends Plugin {
 				customWebhookBody.setContent(localPlayerName + " received some drops:");
 				if (!customWebhookBody.getEmbeds().isEmpty()) {
 					sendDataToDropTracker(customWebhookBody, valueToSend);
+					System.out.println("drop Sent");
 				}
 			});
 		});
