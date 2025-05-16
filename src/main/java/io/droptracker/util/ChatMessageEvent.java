@@ -110,14 +110,11 @@ public class ChatMessageEvent {
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
 
     static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (?<itemName>(.*))");
-    public static final String ADDITION_WARNING = "Collection notifier will not fire unless you enable the game setting: Collection log - New addition notification";
     private static final int POPUP_PREFIX_LENGTH = "New item:".length();
     public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
     private static final String TOA = "Tombs of Amascut";
     private static final String TOB = "Theatre of Blood";
     private static final String COX = "Chambers of Xeric";
-    private static final String RL_CHAT_CMD_PLUGIN_NAME = ChatCommandsPlugin.class.getSimpleName().toLowerCase();
-    private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
     @Varbit
     public static final int TOTAL_POINTS_ID = 14815;
     @Varbit
@@ -129,10 +126,6 @@ public class ChatMessageEvent {
     private final AtomicReference<BossNotification> bossData = new AtomicReference<>();
 
     private static Pair<String, Integer> mostRecentNpcData = null;
-
-
-    @Varbit
-    public static final int KILL_COUNT_SPAM_FILTER = 4930;
 
     private static final long MESSAGE_LOOT_WINDOW = 15000; // 15 seconds
     private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
@@ -179,12 +172,10 @@ public class ChatMessageEvent {
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
     };
     private final Map<String,TimeData> pendingTimeData = new HashMap<>();
-    private final Map<String,TimeData> recentTimeData = new HashMap<>();
     private String lastProcessedKill = null;
     private long lastProcessedTime = 0;
     private static final long DUPLICATE_THRESHOLD = 5000;
     private String teamSize = null;
-    private int lastNpcTypeTarget;
 
     public boolean isEnabled() {
         return true;
@@ -194,8 +185,6 @@ public class ChatMessageEvent {
         if (!isEnabled()) return;
         checkPB(message);
         checkTime(message);
-
-
         parseBossKill(message).ifPresent(this::updateData);
         parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
@@ -273,7 +262,6 @@ public class ChatMessageEvent {
                     processKill(data);
                     return;
                 }
-                reset();
             } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
             }
@@ -321,7 +309,6 @@ public class ChatMessageEvent {
         if (loot != null && loot.getSource() != null) {
             Drop drop = getLootSource(itemId);
             killCount = String.valueOf(getKc(loot.getSource()));
-
         }
         collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
         collEmbed.addField("item", itemName, true);
@@ -536,49 +523,40 @@ public class ChatMessageEvent {
     }
     private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
 
-        //check for Pb
-        for(Pattern pattern: PB_PATTERNS){
-            Matcher timeMatcher = pattern.matcher(message);
-            if (timeMatcher.find()) {
-                String timeStr = "";
-                String bestTimeStr = "";
-                boolean isPb = true;
-                try {
-                    timeStr = timeMatcher.group(1);
-                    bestTimeStr = timeMatcher.group(1);
-                }catch (Exception e){
-                }
-                Duration time = parseTime(timeStr);
-                Duration bestTime = parseTime(bestTimeStr);
-                setTeamSize(bossName,message);
-                storeBossTime(bossName,time,bestTime,isPb);
-                return Optional.of(Triple.of(time, bestTime, isPb));
-            }
+        Pattern[] groupedPatterns;
+
+        List<Pair<Pattern, Boolean>> allPatterns = new ArrayList<>();
+        for (Pattern pattern : PB_PATTERNS) {
+            allPatterns.add(Pair.of(pattern, true));
         }
-        //check for time
-        for(Pattern pattern: TIME_PATTERNS) {
-            boolean isPb = false;
-            Matcher timeMatcher = pattern.matcher(message);
+        for (Pattern pattern : TIME_PATTERNS) {
+            allPatterns.add(Pair.of(pattern, false));
+        }
+        for (Pair<Pattern, Boolean> patternPair : allPatterns) {
+            Pattern pattern = patternPair.getLeft();
+            boolean isPb = patternPair.getRight();
 
+            Matcher timeMatcher = pattern.matcher(message);
             if (timeMatcher.find()) {
                 String timeStr = "";
                 String bestTimeStr = "";
+
                 try {
                     timeStr = timeMatcher.group(1);
-                    bestTimeStr = timeMatcher.group(2);
+                    bestTimeStr = isPb ? timeMatcher.group(1) : timeMatcher.group(2);
                 } catch (Exception e) {
+                    // Handle exception
                 }
+
                 Duration time = parseTime(timeStr);
                 Duration bestTime = parseTime(bestTimeStr);
-                setTeamSize(bossName,message);
-                storeBossTime(bossName,time,bestTime,isPb);
+                setTeamSize(bossName, message);
+                storeBossTime(bossName, time, bestTime, isPb);
 
                 return Optional.of(Triple.of(time, bestTime, isPb));
             }
-
         }
         return Optional.empty();
-
     }
 
     @NotNull
