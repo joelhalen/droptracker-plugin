@@ -318,11 +318,10 @@ public class ChatMessageEvent {
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
         String killCount = "n/a";
-        if (loot != null) {
-            if (loot.getSource() != null) {
-                Drop drop = getLootSource(itemId);
-                killCount = String.valueOf(getKc(loot.getSource()));
-            }
+        if (loot != null && loot.getSource() != null) {
+            Drop drop = getLootSource(itemId);
+            killCount = String.valueOf(getKc(loot.getSource()));
+
         }
         collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
         collEmbed.addField("item", itemName, true);
