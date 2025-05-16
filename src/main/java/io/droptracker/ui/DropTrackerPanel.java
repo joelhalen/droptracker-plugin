@@ -38,7 +38,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
     @Inject
     private EventBus eventBus;
 
-
     @Inject
     public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
         this.config = config;

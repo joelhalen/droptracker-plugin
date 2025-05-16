@@ -101,7 +101,7 @@ public class ChatMessageEvent {
     private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile(
-            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion) count is:? (?<value>[\\d,]+)"
+            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
     );
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
 
@@ -159,7 +159,6 @@ public class ChatMessageEvent {
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*")
     };
     private static final Pattern[] PB_PATTERNS = {
             // Team patterns
@@ -193,6 +192,7 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
+        System.out.println(message);
         checkPB(message);
         checkTime(message);
 
@@ -335,7 +335,7 @@ public class ChatMessageEvent {
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
-
+        System.out.println("Collection Log Sent");
         plugin.sendDataToDropTracker(collectionLogBody, "2");
     }
 
@@ -441,6 +441,8 @@ public class ChatMessageEvent {
             killEmbed.addField("p_v",plugin.pluginVersion,true);
             killWebhook.getEmbeds().add(killEmbed);
             plugin.sendDataToDropTracker(killWebhook, "1");
+            System.out.println("PB Sent");
+
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
@@ -690,6 +692,9 @@ public class ChatMessageEvent {
                 return null;
 
             case "kill":
+                return boss;
+
+            case "success":
                 return boss;
 
             default:
