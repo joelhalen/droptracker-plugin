@@ -192,7 +192,6 @@ public class ChatMessageEvent {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        System.out.println(message);
         checkPB(message);
         checkTime(message);
 
@@ -335,7 +334,6 @@ public class ChatMessageEvent {
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
         collectionLogBody.getEmbeds().add(collEmbed);
-        System.out.println("Collection Log Sent");
         plugin.sendDataToDropTracker(collectionLogBody, "2");
     }
 
@@ -441,8 +439,6 @@ public class ChatMessageEvent {
             killEmbed.addField("p_v",plugin.pluginVersion,true);
             killWebhook.getEmbeds().add(killEmbed);
             plugin.sendDataToDropTracker(killWebhook, "1");
-            System.out.println("PB Sent");
-
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
