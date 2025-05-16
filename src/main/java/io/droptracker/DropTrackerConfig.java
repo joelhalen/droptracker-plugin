@@ -118,11 +118,11 @@ public interface DropTrackerConfig extends Config
 
 
 	@ConfigSection(
-			name = "Additonal Settings",
-			description = "Configure your client settings for the DropTracker database",
+			name = "Miscellaneous",
+			description = "Miscellaneous plugin config options",
 			position= 5 ,
 			closedByDefault = false
-	) String apiSection = "Additional Settings";
+	) String miscSettings = "Additional Settings";
 	/* Settings for Hiding Split Chat, Side Panel and API connections */
 	@ConfigItem(
 			keyName = "hideWhispers",
@@ -130,7 +130,7 @@ public interface DropTrackerConfig extends Config
 			description = "Do you want your private chat to be\n" +
 					"hidden when screenshots are taken?",
 			position = -1,
-			section = apiSection
+			section = miscSettings
 	) default boolean hideDMs() { return false; }
 	@ConfigItem(
 			name = "Show Side Panel",
@@ -138,8 +138,14 @@ public interface DropTrackerConfig extends Config
 			description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>" +
 					"<b>Note</b>: Requires the API to be enabled.</html>",
 			position = 0,
-			section = apiSection
+			section = miscSettings
 	) default boolean showSidePanel() { return true; }
+	@ConfigSection(
+			name = "API Configuration",
+			description = "Configure settings related to integration with our external API",
+			position = 6,
+			closedByDefault = true
+	) String apiSection = "API Configuration";
 
 	@ConfigItem(
 			name="Use API Connections",
@@ -148,10 +154,10 @@ public interface DropTrackerConfig extends Config
 					"<b>Note</b>: The API is currently <b>required</b> for participation in events!",
 			position = 1,
 			section = apiSection,
-			warning = "<html><b>WARNING</b>: Enabling this feature will send external<br>connections" +
-					"to the DropTracker server, which" +
-					"can not<br> be verified by the RuneLite Developers.<br>" +
-					"<b>Are you sure that you want to enable external connections?</b><br></html>"
+			warning = "<html><b>WARNING</b>: In order to connect to the DropTracker API,<br>" +
+					"your client must make out-going connections to the developer's server.<br>" +
+					"This server can not be verified by the RuneLite developers.<br>" +
+					"<b>Are you sure?</b></html>"
 	) default boolean useApi() { return false; }
 
 	@ConfigItem(

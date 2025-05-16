@@ -201,8 +201,8 @@ public class DropTrackerPlugin extends Plugin {
 				linkOpener.accept(chatMessage, s);
 			}
 		});
-		chatCommandManager.registerCommandAsync("!loot", (chatMessage, s) -> {
-			BiConsumer<ChatMessage, String> linkOpener = openLink("website");
+		chatCommandManager.registerCommandAsync("!dtapi", (chatMessage, s) -> {
+			BiConsumer<ChatMessage, String> linkOpener = openLink("https://www.droptracker.io/wiki/why-api/");
 			if (linkOpener != null && chatMessage.getSender().equalsIgnoreCase(client.getLocalPlayer().getName())) {
 				linkOpener.accept(chatMessage, s);
 			}
@@ -240,13 +240,15 @@ public class DropTrackerPlugin extends Plugin {
 				URL url = new URL("https://droptracker-io.github.io/content/" + dateString + ".json");
 				BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
 				// Get the encryption key first from github
-				URL keyUrl = new URL("https://droptracker-io.github.io/content/" + dateString + "-key.txt");
+				URL keyUrl = new URL("https://droptracker-io.github.io/content/" + dateString + "-k.txt");
 				BufferedReader keyIn = new BufferedReader(new InputStreamReader(keyUrl.openStream()));	
 				String loaded_key = keyIn.readLine();
 				keyIn.close();
-				if (loaded_key != null) {	
+				if (loaded_key != null) {
 					FernetDecrypt.ENCRYPTION_KEY = loaded_key;
-				} 
+				} else {
+					return;
+				}
 				StringBuilder response = new StringBuilder();
 				String inputLine;
 				while ((inputLine = in.readLine()) != null) {
@@ -377,9 +379,14 @@ public class DropTrackerPlugin extends Plugin {
 
 	private BiConsumer<ChatMessage, String> openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://discord.gg/dvb7yP7JJH");
-		if (destination == "website" && config.useApi()) {
-			webUrl = HttpUrl.parse("https://www.droptracker.io/");
+		if (!destination.contains("https://")) {
+			if (destination == "website" && config.useApi()) {
+				webUrl = HttpUrl.parse("https://www.droptracker.io/");
+			}
+		} else {
+			webUrl = HttpUrl.parse(destination);
 		}
+
 		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
 		HttpUrl url = urlBuilder.build();
 		LinkBrowser.browse(url.toString());
@@ -709,7 +716,6 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 	private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
-
 		if (timeToRetry != 0 && timeToRetry > (int) (System.currentTimeMillis() / 1000)) {
 			return;
 		} else if (timeToRetry < (int) (System.currentTimeMillis() / 1000)) {
@@ -784,12 +790,25 @@ public class DropTrackerPlugin extends Plugin {
 				if (config.useApi()) {
 					// Try to get response body, but don't consume it
 					ResponseBody body = response.peekBody(Long.MAX_VALUE);
+					JsonObject notificationData = new JsonObject();
+					Integer totalRankChange = 0;
+					Integer currentRankNpc = 0;
+					Integer currentRankAll = 0;
+					String totalLootReceived = "";
+					Integer totalRankChangeAtNpc = 0;
+					String totalLootNpc = "";
+					String totalLootNpcAllTime = "";
+					String totalReceivedAllTime = "";
+					Integer totalMembers = 0;
+					Integer totalMembersNpc = 0;
+					Integer totalRankChangeAllTime = 0;
+					Integer totalRankChangeAtNpcAllTime = 0;
+					Integer minChange = 5;
 					if (body != null) {
 						String bodyString = body.string();
 						if (!bodyString.isEmpty()) {
-							
-							// Check for notice parameter in the response
 							try {
+								Boolean shouldNotify = false;
 								JsonElement jsonElement = new JsonParser().parse(bodyString);
 								if (jsonElement.isJsonObject()) {
 									JsonObject jsonObject = jsonElement.getAsJsonObject();
@@ -797,6 +816,12 @@ public class DropTrackerPlugin extends Plugin {
 										String noticeMessage = jsonObject.get("notice").getAsString();
 										if (noticeMessage != null && !noticeMessage.isEmpty()) {
 											sendChatMessage(noticeMessage);
+										}
+									}
+									if (jsonObject.has("rank_update")) {
+										String updateMessage = jsonObject.get("rank_update").getAsString();
+										if (updateMessage != null && !updateMessage.isEmpty()) {
+											sendChatMessage(updateMessage);
 										}
 									}
 								}
@@ -887,6 +912,12 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		return list;
+	}
+
+	public void sendRankChangeChatMessage(String rankChangeType, Integer currentRankNpc, Integer currentRankAll, Integer totalRankChange, String totalLootReceived,
+			Integer totalRankChangeAtNpc, String totalLootNpc, Integer totalMembers, Integer totalMembersNpc,
+			String totalReceivedAllTime, String totalLootNpcAllTime) {
+
 	}
 
 	public void sendChatMessage(String messageContent) {
