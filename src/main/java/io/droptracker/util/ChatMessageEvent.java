@@ -427,7 +427,7 @@ public class ChatMessageEvent {
             killEmbed.addField("p_v",plugin.pluginVersion,true);
             if (bossName != null) {
                 killCount = getKc(bossName);
-                killEmbed.addField("killcount", killCount, true);
+                killEmbed.addField("killcount", String.valueOf(killCount), true);
             }
             killWebhook.getEmbeds().add(killEmbed);
             plugin.sendDataToDropTracker(killWebhook, "1");
