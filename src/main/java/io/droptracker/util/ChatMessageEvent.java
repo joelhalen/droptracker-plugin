@@ -414,6 +414,7 @@ public class ChatMessageEvent {
             if (bossName == null || bossName.equalsIgnoreCase("")){
                 return;
             }
+            Integer killCount = 0;
             killEmbed.setTitle(player + " has killed a boss:");
             killEmbed.addField("type", "npc_kill", true);
             killEmbed.addField("boss_name", bossName, true);
@@ -424,6 +425,10 @@ public class ChatMessageEvent {
             killEmbed.addField("team_size", teamSize,true);
             killEmbed.addField("acc_hash", accountHash, true);
             killEmbed.addField("p_v",plugin.pluginVersion,true);
+            if (bossName != null) {
+                killCount = getKc(bossName);
+                killEmbed.addField("killcount", killCount, true);
+            }
             killWebhook.getEmbeds().add(killEmbed);
             plugin.sendDataToDropTracker(killWebhook, "1");
             mostRecentNpcData = null;

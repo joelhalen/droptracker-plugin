@@ -628,6 +628,10 @@ public class DropTrackerPlugin extends Plugin {
 				itemEmbed.addField("source", npcName, true);
 				itemEmbed.addField("type", sourceType, true);
 				itemEmbed.addField("p_v", pluginVersion, true);
+				if (npcName != null) {
+					Integer killCount = configManager.getRSProfileConfiguration("killcount", npcName.toLowerCase(), int.class);
+					itemEmbed.addField("killcount", String.valueOf(killCount), true);
+				}
 				itemEmbed.title = localPlayerName + " received some drops:";
 				embeds.add(itemEmbed);
 			}
