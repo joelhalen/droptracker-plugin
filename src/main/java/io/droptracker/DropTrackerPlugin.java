@@ -193,7 +193,9 @@ public class DropTrackerPlugin extends Plugin {
 			createSidePanel();
 		}
 		// Preload webhook URLs asynchronously
-		executor.submit(this::loadEndpoints);
+		if (!executor.isShutdown() && !executor.isTerminated()) {
+			executor.submit(this::loadEndpoints);
+		}
 
 		chatCommandManager.registerCommandAsync("!droptracker", (chatMessage, s) -> {
 			BiConsumer<ChatMessage, String> linkOpener = openLink("discord");
@@ -360,8 +362,10 @@ public class DropTrackerPlugin extends Plugin {
 				// swap the sets out and clear the back-up set
 				endpointUrls = backupUrls;
 				backupUrls.clear();
-				sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
-				sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
+				clientThread.invokeLater(() -> {
+					sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
+					sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
+				});
 
 				this.webhookResetCount++;
 				// toggle whether the current set of webhooks is from the backup endpoint or the main one
