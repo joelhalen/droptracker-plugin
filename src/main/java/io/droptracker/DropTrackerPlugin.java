@@ -123,7 +123,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private OkHttpClient httpClient;
 	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
-	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians");
+	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
 
 	@Inject
 	private DrawManager drawManager;
