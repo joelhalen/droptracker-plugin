@@ -26,7 +26,8 @@ dependencies {
 
 group = 'com.joelhalen.droptracker'
 version = '3.90'
-sourceCompatibility = "1.9"
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11
 
 tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'

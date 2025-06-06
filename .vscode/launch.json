@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Run RuneLite Plugin Test",
+            "request": "launch",
+            "mainClass": "io.droptracker.DropTrackerPluginTest",
+            "projectName": "droptracker-plugin",
+            "env": {
+                "RUNELITE_PLUGIN_DEVELOPMENT": "true",
+                "RUNELITE_PLUGIN_DEVELOPMENT_MODE": "true"
+            },
+            "vmArgs": "-ea"
+        }
+    ]
+}
