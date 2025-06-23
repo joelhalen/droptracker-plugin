@@ -121,6 +121,9 @@ public class DropTrackerPlugin extends Plugin {
 	private ImageCapture imageCapture;
 
 	@Inject
+	private DebugLogger debugLogger;
+
+	@Inject
 	private OkHttpClient httpClient;
 	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
 	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
@@ -733,6 +736,8 @@ public class DropTrackerPlugin extends Plugin {
 		if (isFakeWorld()) {
 			return;
 		}
+		String logText = String.valueOf(gson.toJson(customWebhookBody));
+		DebugLogger.logSubmission("Submission with API " + (config.useApi() ? "enabled" : "disabled") + " and screenshot " + (screenshot != null ? "true" : "false") + " -- raw json: " + logText);
 		this.timesTried++;
 		MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
 				.setType(MultipartBody.FORM)
