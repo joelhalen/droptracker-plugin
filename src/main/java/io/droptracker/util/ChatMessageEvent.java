@@ -189,29 +189,6 @@ public class ChatMessageEvent {
         parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
 
-    public void onChatMessage(String chatMessage) {
-        if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
-            // require notifier enabled without popup mode to use chat event
-            return;
-        }
-        Matcher collectionMatcher = COLLECTION_LOG_REGEX.matcher(chatMessage);
-        if (collectionMatcher.find()) {
-            String itemName = collectionMatcher.group("itemName");
-            clientThread.invokeLater(() -> processCollection(itemName));
-        }
-    }
-
-    public void onScript(int scriptId) {
-        if (scriptId == ScriptID.NOTIFICATION_START) {
-            popupStarted.set(true);
-        } else if (scriptId == ScriptID.NOTIFICATION_DELAY) {
-            String topText = client.getVarcStrValue(VarClientStr.NOTIFICATION_TOP_TEXT);
-            if (popupStarted.getAndSet(false) && "Collection log".equalsIgnoreCase(topText) && isEnabled()) {
-                String bottomText = plugin.sanitize(client.getVarcStrValue(VarClientStr.NOTIFICATION_BOTTOM_TEXT));
-                processCollection(bottomText.substring(POPUP_PREFIX_LENGTH).trim());
-            }
-        }
-    }
 
     private boolean isCorruptedGauntlet(LootReceived event) {
         return event.getType() == LootRecordType.EVENT && lastDrop != null && "The Gauntlet".equals(event.getName())
@@ -288,40 +265,6 @@ public class ChatMessageEvent {
         recentTimeMessages.keySet().removeIf(boss ->
                 !timeMessageTimestamps.containsKey(boss)
         );
-    }
-    private void processCollection(String itemName) {
-        int completed = client.getVarpValue(COMPLETED_VARP);
-        int total = client.getVarpValue(TOTAL_VARP);
-
-        boolean varpValid = total > 0 && completed > 0;
-        if (!varpValid) {
-            // This occurs if the player doesn't have the character summary tab selected
-            log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
-        }
-        Integer itemId = itemIDFinder.findItemId(itemName);
-        Drop loot = itemId != null ? getLootSource(itemId) : null;
-        OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
-                rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
-        CustomWebhookBody collectionLogBody = new CustomWebhookBody();
-        CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
-        collEmbed.addField("type", "collection_log",true);
-        String killCount = "n/a";
-        if (loot != null && loot.getSource() != null) {
-            Drop drop = getLootSource(itemId);
-            killCount = String.valueOf(getKc(loot.getSource()));
-        }
-        collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
-        collEmbed.addField("item", itemName, true);
-        collEmbed.addField("kc", String.valueOf(killCount),true);
-        collEmbed.addField("rarity", String.valueOf(itemRarity),true);
-        collEmbed.addField("item_id", String.valueOf(itemId),true);
-        collEmbed.addField("player", client.getLocalPlayer().getName(), true);
-        collEmbed.addField("slots", completed + "/" + total, true);
-        collEmbed.addField("p_v",plugin.pluginVersion,true);
-        String accountHash = String.valueOf(client.getAccountHash());
-        collEmbed.addField("acc_hash", accountHash, true);
-        collectionLogBody.getEmbeds().add(collEmbed);
-        plugin.sendDataToDropTracker(collectionLogBody, "2");
     }
 
     private void processCombatAchievement(CombatAchievement tier, String task) {

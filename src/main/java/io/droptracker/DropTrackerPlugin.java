@@ -51,6 +51,7 @@ import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageEvent;
+import io.droptracker.util.ClogHandler;
 import io.droptracker.util.KCService;
 import io.droptracker.util.WidgetEvent;
 import lombok.extern.slf4j.Slf4j;
@@ -160,6 +161,8 @@ public class DropTrackerPlugin extends Plugin {
 	private int timesTried = 0;
 	@Inject
 	public ChatMessageEvent chatMessageEventHandler;
+	@Inject
+	public ClogHandler clogHandler;
 
 	@Inject
 	public WidgetEvent widgetEventHandler;
@@ -529,7 +532,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event) {
-		chatMessageEventHandler.onScript(event.getScriptId());
+		if(config.clogEmbeds()) {
+			clogHandler.onScript(event.getScriptId());
+		}
 	}
 
 	@Subscribe
@@ -546,7 +551,9 @@ public class DropTrackerPlugin extends Plugin {
 		switch (message.getType()) {
 			case GAMEMESSAGE:
 				chatMessageEventHandler.onGameMessage(chatMessage);
-				chatMessageEventHandler.onChatMessage(chatMessage);
+				if(config.clogEmbeds()) {
+					clogHandler.onChatMessage(chatMessage);
+				}
 			case FRIENDSCHATNOTIFICATION:
 				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
 		}
