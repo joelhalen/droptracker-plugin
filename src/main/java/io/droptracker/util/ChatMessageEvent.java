@@ -57,8 +57,7 @@ public class ChatMessageEvent {
     @Inject
     protected Client client;
 
-    @Inject
-    private Rarity rarity;
+
 
     @Inject
     private ConfigManager configManager;

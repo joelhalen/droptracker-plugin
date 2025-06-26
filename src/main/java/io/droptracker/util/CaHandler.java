@@ -97,14 +97,9 @@ public class CaHandler {
     public static final int TOTAL_POINTS_ID = 14815;
     @Varbit
     public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
-    @VisibleForTesting
-    static final int MAX_BAD_TICKS = 10;
 
     private final ScheduledExecutorService executor;
 
-
-    private static final long DUPLICATE_THRESHOLD = 5000;
-    private String teamSize = null;
 
     public boolean isEnabled() {
         return true;

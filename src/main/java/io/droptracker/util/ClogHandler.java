@@ -80,22 +80,6 @@ public class ClogHandler {
         this.executor = executor;
         this.configManager = configManager;
     }
-    private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
-    private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
-    @Varbit
-    public static final int COMBAT_TASK_REPEAT_POPUP = 12456;
-    /**
-     * @see <a href="https://github.com/Joshua-F/cs2-scripts/blob/master/scripts/%5Bproc,ca_tasks_progress_bar%5D.cs2#L6-L11">CS2 Reference</a>
-     */
-
-
-    /**
-     * The cumulative points needed to unlock rewards for each tier, in a Red-Black tree.
-     * <p>
-     * This is populated by {@link #initThresholds()} based on {@link #CUM_POINTS_VARBIT_BY_TIER}.
-     *
-     * @see <a href="https://gachi.gay/01CAv">Rewards Thresholds at the launch of the points-based system</a>
-     */
 
 
     static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (?<itemName>(.*))");

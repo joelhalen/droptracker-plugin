@@ -67,9 +67,7 @@ public class PbHandler {
     private ClientThread clientThread;
 
     private ItemIDSearch itemIDFinder;
-    private final AtomicInteger completed = new AtomicInteger(-1);
-    private final AtomicBoolean popupStarted = new AtomicBoolean(false);
-    public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
+
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     @Inject
@@ -81,24 +79,7 @@ public class PbHandler {
         this.executor = executor;
         this.configManager = configManager;
     }
-    private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
-    private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
-    @Varbit
-    public static final int COMBAT_TASK_REPEAT_POPUP = 12456;
-    /**
-     * @see <a href="https://github.com/Joshua-F/cs2-scripts/blob/master/scripts/%5Bproc,ca_tasks_progress_bar%5D.cs2#L6-L11">CS2 Reference</a>
-     */
-    @VisibleForTesting
 
-
-    /**
-     * The cumulative points needed to unlock rewards for each tier, in a Red-Black tree.
-     * <p>
-     * This is populated by {@link #initThresholds()} based on {@link #CUM_POINTS_VARBIT_BY_TIER}.
-     *
-     * @see <a href="https://gachi.gay/01CAv">Rewards Thresholds at the launch of the points-based system</a>
-     */
-    private final NavigableMap<Integer, CombatAchievement> cumulativeUnlockPoints = new TreeMap<>();
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile(
             "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
@@ -109,16 +90,11 @@ public class PbHandler {
     private static final String BA_BOSS_NAME = "Penance Queen";
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
 
-    static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (?<itemName>(.*))");
-    private static final int POPUP_PREFIX_LENGTH = "New item:".length();
     public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
     private static final String TOA = "Tombs of Amascut";
     private static final String TOB = "Theatre of Blood";
     private static final String COX = "Chambers of Xeric";
-    @Varbit
-    public static final int TOTAL_POINTS_ID = 14815;
-    @Varbit
-    public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
+
     @VisibleForTesting
     static final int MAX_BAD_TICKS = 10;
 
