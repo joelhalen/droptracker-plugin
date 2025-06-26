@@ -50,10 +50,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.util.ChatMessageEvent;
-import io.droptracker.util.ClogHandler;
-import io.droptracker.util.KCService;
-import io.droptracker.util.WidgetEvent;
+import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Component;
@@ -163,6 +160,10 @@ public class DropTrackerPlugin extends Plugin {
 	public ChatMessageEvent chatMessageEventHandler;
 	@Inject
 	public ClogHandler clogHandler;
+	@Inject
+	public CaHandler caHandler;
+	@Inject
+	public PbHandler pbHandler;
 
 	@Inject
 	public WidgetEvent widgetEventHandler;
@@ -182,8 +183,7 @@ public class DropTrackerPlugin extends Plugin {
 	// hopefully preventing them from being ip banned by discord
 	private int timeToRetry = 0;
 
-	public String pluginVersion = "3.90";
-
+	public String pluginVersion = "4.0";
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
 
 	// Add a future to track loading state
@@ -550,7 +550,12 @@ public class DropTrackerPlugin extends Plugin {
 		String chatMessage = sanitize(message.getMessage());
 		switch (message.getType()) {
 			case GAMEMESSAGE:
-				chatMessageEventHandler.onGameMessage(chatMessage);
+				if(config.pbEmbeds()){
+					pbHandler.onGameMessage(chatMessage);
+				}
+				if(config.caEmbeds()){
+					caHandler.onGameMessage(chatMessage);
+				}
 				if(config.clogEmbeds()) {
 					clogHandler.onChatMessage(chatMessage);
 				}
