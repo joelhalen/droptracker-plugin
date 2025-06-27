@@ -570,7 +570,7 @@ public class DropTrackerPlugin extends Plugin {
 		if (!isTracking) {
 			return;
 		}
-		chatMessageEventHandler.onTick();
+		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
 	}
 

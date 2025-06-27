@@ -391,43 +391,6 @@ public class PbHandler {
             }
         });
     }
-    private Optional<Triple<Duration, Duration, Boolean>> parseKillTime(String message, String bossName) {
-
-        Pattern[] groupedPatterns;
-
-        List<Pair<Pattern, Boolean>> allPatterns = new ArrayList<>();
-        for (Pattern pattern : PB_PATTERNS) {
-            allPatterns.add(Pair.of(pattern, true));
-        }
-        for (Pattern pattern : TIME_PATTERNS) {
-            allPatterns.add(Pair.of(pattern, false));
-        }
-        for (Pair<Pattern, Boolean> patternPair : allPatterns) {
-            Pattern pattern = patternPair.getLeft();
-            boolean isPb = patternPair.getRight();
-
-            Matcher timeMatcher = pattern.matcher(message);
-            if (timeMatcher.find()) {
-                String timeStr = "";
-                String bestTimeStr = "";
-
-                try {
-                    timeStr = timeMatcher.group(1);
-                    bestTimeStr = isPb ? timeMatcher.group(1) : timeMatcher.group(2);
-                } catch (Exception e) {
-                    // Handle exception
-                }
-
-                Duration time = parseTime(timeStr);
-                Duration bestTime = parseTime(bestTimeStr);
-                setTeamSize(bossName, message);
-                storeBossTime(bossName, time, bestTime, isPb);
-
-                return Optional.of(Triple.of(time, bestTime, isPb));
-            }
-        }
-        return Optional.empty();
-    }
 
     @NotNull
     private Duration parseTime(String timeStr) {

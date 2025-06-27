@@ -152,36 +152,6 @@ public class ChatMessageEvent {
             }
         }
     }
-    public void onTick() {
-        BossNotification data = this.bossData.get();
-
-        if (data != null) {
-            if (data.getBoss() != null) {
-                if (isEnabled()) {
-                    return;
-                }
-            } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
-                reset();
-            }
-        }
-        else if (mostRecentNpcData != null) {
-            if (bossData.get() != null) {
-            }
-            plugin.ticksSinceNpcDataUpdate += 1;
-        } else {
-            if (plugin.ticksSinceNpcDataUpdate > 1)  {
-                plugin.ticksSinceNpcDataUpdate = 0;
-            }
-        }
-        if (plugin.ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
-            mostRecentNpcData = null;
-        }
-    }
-
-    public void reset() {
-        bossData.set(null);
-        badTicks.set(0);
-    }
 
 
     public Optional<Pair<String, Integer>> parseBoss(String message) {
