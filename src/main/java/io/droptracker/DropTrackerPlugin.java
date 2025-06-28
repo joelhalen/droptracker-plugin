@@ -43,6 +43,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BiConsumer;
 
+import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 
@@ -126,11 +127,15 @@ public class DropTrackerPlugin extends Plugin {
 	private ChatCommandManager chatCommandManager;
 
 	@Inject
+	private ChatMessageUtil chatMessageUtil;
+
+	@Inject
 	private KCService kcService;
 
 	@Inject
 	private DropHandler dropHandler;
 	
+	@Nullable
     public Drop lastDrop = null;
 
 	
@@ -373,8 +378,8 @@ public class DropTrackerPlugin extends Plugin {
 				endpointUrls = backupUrls;
 				backupUrls.clear();
 				clientThread.invokeLater(() -> {
-					ChatMessageUtil.sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
-					ChatMessageUtil.sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
+					chatMessageUtil.sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
+					chatMessageUtil.sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
 				});
 
 				this.webhookResetCount++;
@@ -711,13 +716,13 @@ public class DropTrackerPlugin extends Plugin {
 									if (jsonObject.has("notice")) {
 										String noticeMessage = jsonObject.get("notice").getAsString();
 										if (noticeMessage != null && !noticeMessage.isEmpty()) {
-											ChatMessageUtil.sendChatMessage(noticeMessage);
+											chatMessageUtil.sendChatMessage(noticeMessage);
 										}
 									}
 									if (jsonObject.has("rank_update")) {
 										String updateMessage = jsonObject.get("rank_update").getAsString();
 										if (updateMessage != null && !updateMessage.isEmpty()) {
-											ChatMessageUtil.sendChatMessage(updateMessage);
+											chatMessageUtil.sendChatMessage(updateMessage);
 										}
 									}
 								}

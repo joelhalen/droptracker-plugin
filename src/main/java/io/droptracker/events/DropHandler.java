@@ -89,7 +89,7 @@ public class DropHandler {
 			return;
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
-		String npcName = NpcUtilities.getStandardizedSource(lootReceived);
+		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
 

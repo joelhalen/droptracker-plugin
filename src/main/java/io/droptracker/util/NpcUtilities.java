@@ -10,8 +10,6 @@ import javax.annotation.Nullable;
 
 import org.apache.commons.lang3.tuple.Pair;
 
-import com.google.inject.Inject;
-
 import io.droptracker.DropTrackerPlugin;
 
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -35,20 +33,17 @@ public class NpcUtilities {
     private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
     private static Pair<String, Integer> mostRecentNpcData = null;
 
-    @Inject
-    private static DropTrackerPlugin plugin;
-
-    @Inject
-    public NpcUtilities(DropTrackerPlugin plugin) {
-        NpcUtilities.plugin = plugin;
-    }
-
     @SuppressWarnings("null")
-    public static String getStandardizedSource(LootReceived event) {
+    public static String getStandardizedSource(LootReceived event, DropTrackerPlugin plugin) {
         System.out.println("getStandardizedSource: " + event.getName());
-        if (isCorruptedGauntlet(event)) {
+        if (isCorruptedGauntlet(event, plugin)) {
             return CG_NAME;
-        } else if (plugin.lastDrop != null && shouldUseChatName(event)) {
+        } 
+        if (plugin.lastDrop == null) {
+            System.out.println("lastDrop is null, returning event.getName()");
+            return event.getName();
+        } else if (shouldUseChatName(event, plugin) && plugin.lastDrop.getSource() != null) {
+            System.out.println("lastDrop is not null, returning lastDrop.getSource()");
             return plugin.lastDrop.getSource(); // distinguish entry/expert/challenge modes
         }
         return event.getName();
@@ -56,23 +51,22 @@ public class NpcUtilities {
 
     
     @SuppressWarnings("null")
-    private static boolean isCorruptedGauntlet(LootReceived event) {
+    private static boolean isCorruptedGauntlet(LootReceived event, DropTrackerPlugin plugin) {
         return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null && "The Gauntlet".equals(event.getName())
                 && (CG_NAME.equals(plugin.lastDrop.getSource()) || CG_BOSS.equals(plugin.lastDrop.getSource()));
     }
 
     
-    private static boolean shouldUseChatName(LootReceived event) {
+    private static boolean shouldUseChatName(LootReceived event, DropTrackerPlugin plugin) {
         assert plugin.lastDrop != null;
         String lastSource = plugin.lastDrop.getSource();
         Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
         return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
     }
 
-    public static Optional<Pair<String, Integer>> parseBoss(String message) {
+    public static Optional<Pair<String, Integer>> parseBoss(String message, DropTrackerPlugin plugin) {
         Matcher primary = PRIMARY_REGEX.matcher(message);
         Matcher secondary = SECONDARY_REGEX.matcher(message);
-
 
         if (primary.find()) {
             String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
@@ -102,7 +96,6 @@ public class NpcUtilities {
         }
         return Optional.empty();
     }
-
 
     @Nullable
     private static String parsePrimaryBoss(String boss, String type) {

@@ -538,7 +538,7 @@ public class PbHandler {
     }
 
     public void onLootReceived(LootReceived event) {
-        String source = NpcUtilities.getStandardizedSource(event);
+        String source = NpcUtilities.getStandardizedSource(event, plugin);
         BossNotification pending = pendingNotifications.remove(source);
 
         if (pending != null) {

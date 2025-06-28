@@ -63,7 +63,7 @@ public class ChatMessageUtil {
 		}
 	}
 
-    public static void sendChatMessage(String messageContent) {
+    public void sendChatMessage(String messageContent) {
 		ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
 		messageBuilder.append(ChatColorType.HIGHLIGHT)
 				.append("[")

@@ -123,7 +123,7 @@ public class KCService {
         }
 
         if (increment) {
-            this.incrementKills(event.getType(), NpcUtilities.getStandardizedSource(event), event.getItems());
+            this.incrementKills(event.getType(), NpcUtilities.getStandardizedSource(event, plugin), event.getItems());
         }
     }
 
@@ -137,7 +137,7 @@ public class KCService {
             return;
         }
 
-        NpcUtilities.parseBoss(message).ifPresent(pair -> {
+        NpcUtilities.parseBoss(message, plugin).ifPresent(pair -> {
             String boss = pair.getKey();
             Integer kc = pair.getValue();
 
