@@ -133,7 +133,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
         ARROW_RIGHT_ICON = new ImageIcon(ImageUtil.loadImageResource(InfoPanel.class, "/util/arrow_right.png"));
         DISCORD_ICON = new ImageIcon(ImageUtil.loadImageResource(InfoPanel.class, "discord_icon.png"));
         WIKI_ICON = new ImageIcon(ImageUtil.loadImageResource(InfoPanel.class, "wiki_icon.png"));
-        TOP_LOGO = new ImageIcon(ImageUtil.loadImageResource(DropTrackerPlugin.class, "toplogo.png"));
+        TOP_LOGO = new ImageIcon(ImageUtil.loadImageResource(DropTrackerPlugin.class, "brand/toplogo.png"));
     }
 
     // Helper method to create rounded buttons

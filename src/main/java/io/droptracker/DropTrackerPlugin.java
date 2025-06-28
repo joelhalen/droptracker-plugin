@@ -56,7 +56,7 @@ import io.droptracker.events.PbHandler;
 import io.droptracker.events.WidgetEvent;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
-import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
@@ -103,12 +103,14 @@ public class DropTrackerPlugin extends Plugin {
 	private DropTrackerConfig config;
 	@Inject
 	public static DropTrackerApi api;
-	private DropTrackerPanel panel;
+
+	private DropTrackerPanelNew newPanel;
 
 	@Inject
 	private ConfigManager configManager;
 
 	private NavigationButton navButton;
+	private NavigationButton newNavButton;
 
 	@Inject
 	private Gson gson;
@@ -226,19 +228,18 @@ public class DropTrackerPlugin extends Plugin {
 		});
 	}
 	private void createSidePanel() {
-		panel = injector.getInstance(DropTrackerPanel.class);
-		panel.init();
+		
+		newPanel = injector.getInstance(DropTrackerPanelNew.class);
+		newPanel.init();
 
-
-		navButton = NavigationButton.builder()
+		newNavButton = NavigationButton.builder()
 				.tooltip("DropTracker")
 				.icon(PANEL_ICON)
 				.priority(1)
-				.panel(panel)
+				.panel(newPanel)
 				.build();
 
-
-		clientToolbar.addNavigation(navButton);
+		clientToolbar.addNavigation(newNavButton);
 	}
 
 
@@ -421,9 +422,9 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		chatCommandManager.unregisterCommand("!droptracker");
 		chatCommandManager.unregisterCommand("!loot");
-		if (panel != null) {
-			panel.deinit();
-			panel = null;
+		if (newPanel != null) {
+			newPanel.deinit();
+			newPanel = null;
 		}
 		executor.shutdown();
 	}
@@ -450,7 +451,6 @@ public class DropTrackerPlugin extends Plugin {
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
-				panel.deinit();
 
 				if(navButton != null) {
 					clientToolbar.removeNavigation(navButton);
@@ -469,10 +469,13 @@ public class DropTrackerPlugin extends Plugin {
 					if(navButton != null) {
 						clientToolbar.removeNavigation(navButton);
 					}
-					panel.deinit();
-					panel = null;
+					if (newPanel != null) {
+						clientToolbar.removeNavigation(newNavButton);
+						newPanel.deinit();
+						newPanel = null;
+					}
 				} else {
-					if(panel == null) {
+					if (newPanel == null) {
 						createSidePanel();
 					}
 				}
