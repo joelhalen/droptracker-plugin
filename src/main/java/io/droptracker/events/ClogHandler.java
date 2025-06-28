@@ -146,7 +146,7 @@ public class ClogHandler {
 
     @Nullable
     private Drop getLootSource(int itemId) {
-        Drop drop = KCService.getLastDrop();
+        Drop drop = plugin.lastDrop;
         if (drop == null) return null;
         if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) return null;
         for (ItemStack item : drop.getItems()) {

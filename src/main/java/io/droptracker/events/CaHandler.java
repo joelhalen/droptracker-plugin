@@ -2,51 +2,23 @@ package io.droptracker.events;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.models.BossNotification;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.Drop;
 import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
-import net.runelite.api.annotations.Varp;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.ComponentID;
-import net.runelite.api.widgets.InterfaceID;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.game.ItemStack;
-import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
-import net.runelite.client.plugins.loottracker.LootReceived;
-import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
-import net.runelite.http.api.loottracker.LootRecordType;
-import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.commons.lang3.tuple.Triple;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalTime;
-import java.time.temporal.Temporal;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
-import static io.droptracker.util.KCService.lastDrop;
-import static java.time.temporal.ChronoField.*;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 @Slf4j
 public class CaHandler {

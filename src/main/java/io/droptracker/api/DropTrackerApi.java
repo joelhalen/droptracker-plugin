@@ -63,6 +63,7 @@ public class DropTrackerApi {
                 future.completeExceptionally(e);
             }
 
+            @SuppressWarnings({ "null", "unchecked" })
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
@@ -93,6 +94,7 @@ public class DropTrackerApi {
         return config.useApi() ? "https://api.droptracker.io" : "";
     }
 
+    @SuppressWarnings("null")
     public String getLatestUpdateString() {
         String endpoint;
         if (config.useApi()) {

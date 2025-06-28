@@ -5,11 +5,10 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import io.droptracker.events.ChatMessageEvent;
+
+import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.Drop;
 import io.droptracker.models.SerializedDrop;
-import io.droptracker.util.Rarity;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.NPC;
 import net.runelite.api.NpcID;
@@ -43,12 +42,6 @@ import java.util.regex.Pattern;
 @Singleton
 public class KCService {
 
-    public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
-    public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
-    private static final String TOA = "Tombs of Amascut";
-    private static final String TOB = "Theatre of Blood";
-    private static final String COX = "Chambers of Xeric";
-
 
     private static final String RL_CHAT_CMD_PLUGIN_NAME = ChatCommandsPlugin.class.getSimpleName().toLowerCase();
     private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
@@ -56,7 +49,6 @@ public class KCService {
 
     private ConfigManager configManager;
 
-    private ChatMessageEvent chatMessageEventHandler;
 
     private Gson gson;
 
@@ -65,28 +57,27 @@ public class KCService {
 
     private Rarity rarityService;
 
+    @Inject
+    private DropTrackerPlugin plugin;
+
     private static final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .maximumSize(64L)
             .build();
 
-    @Getter
-    @Nullable
-    public static Drop lastDrop = null;
 
     @Inject
     public KCService(ConfigManager configManager, Gson gson,
                      ScheduledExecutorService executor,
-                     ChatMessageEvent chatMessageEventHandler,
-                     Rarity rarityService) {
+                     Rarity rarityService, DropTrackerPlugin plugin) {
         this.configManager = configManager;
         this.gson = gson;
-        this.chatMessageEventHandler = chatMessageEventHandler;
         this.rarityService = rarityService;
+        this.plugin = plugin;
     }
 
     public void reset() {
-        KCService.lastDrop = null;
+        plugin.lastDrop = null;
         KCService.killCounts.invalidateAll();
     }
 
@@ -100,7 +91,7 @@ public class KCService {
         }
 
         String name = npc.getName();
-        if (GAUNTLET_BOSS.equals(name) || CG_BOSS.equals(name)) {
+        if (NpcUtilities.GAUNTLET_BOSS.equals(name) || NpcUtilities.CG_BOSS.equals(name)) {
             // already handled by onGameMessage
             return;
         }
@@ -132,7 +123,7 @@ public class KCService {
         }
 
         if (increment) {
-            this.incrementKills(event.getType(), getStandardizedSource(event), event.getItems());
+            this.incrementKills(event.getType(), NpcUtilities.getStandardizedSource(event), event.getItems());
         }
     }
 
@@ -146,7 +137,7 @@ public class KCService {
             return;
         }
 
-        chatMessageEventHandler.parseBoss(message).ifPresent(pair -> {
+        NpcUtilities.parseBoss(message).ifPresent(pair -> {
             String boss = pair.getKey();
             Integer kc = pair.getValue();
 
@@ -154,9 +145,9 @@ public class KCService {
             String cacheKey = getCacheKey(LootRecordType.UNKNOWN, boss);
             killCounts.asMap().merge(cacheKey, kc - 1, Math::max);
 
-            if (boss.equals(GAUNTLET_BOSS) || boss.equals(CG_BOSS) || boss.startsWith(TOA) || boss.startsWith(TOB) || boss.startsWith(COX)) {
+            if (boss.equals(NpcUtilities.GAUNTLET_BOSS) || boss.equals(NpcUtilities.CG_BOSS) || boss.startsWith(NpcUtilities.TOA) || boss.startsWith(NpcUtilities.TOB) || boss.startsWith(NpcUtilities.COX)) {
                 // populate lastDrop to workaround loot tracker quirks
-                KCService.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
+                plugin.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
 
                 if (!isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {   
                     // onLoot will already increment kc, no need to schedule task below.
@@ -174,20 +165,13 @@ public class KCService {
         });
     }
 
-    public String getStandardizedSource(LootReceived event) {
-        if (isCorruptedGauntlet(event)) {
-            return KCService.CG_NAME;
-        } else if (lastDrop != null && shouldUseChatName(event)) {
-            return lastDrop.getSource(); // distinguish entry/expert/challenge modes
-        }
-        return event.getName();
-    }
+    
 
     private boolean shouldUseChatName(LootReceived event) {
-        assert lastDrop != null;
-        String lastSource = lastDrop.getSource();
+        assert plugin.lastDrop != null;
+        String lastSource = plugin.lastDrop.getSource();
         Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
-        return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
+        return coincides.test(NpcUtilities.TOA) || coincides.test(NpcUtilities.TOB) || coincides.test(NpcUtilities.COX);
     }
 
     /**
@@ -196,9 +180,10 @@ public class KCService {
      * @apiNote Useful to distinguish normal vs. corrupted gauntlet since the base loot tracker plugin does not,
      * which was <a href="https://github.com/pajlads/DinkPlugin/issues/469">reported</a> to our issue tracker.
      */
+    @SuppressWarnings("null")
     private boolean isCorruptedGauntlet(LootReceived event) {
-        return event.getType() == LootRecordType.EVENT && lastDrop != null && "The Gauntlet".equals(event.getName())
-                && (CG_NAME.equals(lastDrop.getSource()) || CG_BOSS.equals(lastDrop.getSource()));
+        return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null && "The Gauntlet".equals(event.getName())
+                && (NpcUtilities.CG_NAME.equals(plugin.lastDrop.getSource()) || NpcUtilities.CG_BOSS.equals(plugin.lastDrop.getSource()));
     }
 
     @Nullable
@@ -231,7 +216,7 @@ public class KCService {
                 return kc != null ? kc + 1 : null;
             }
         });
-        KCService.lastDrop = new Drop(sourceName, type, items);
+        plugin.lastDrop = new Drop(sourceName, type, items);
     }
 
     /**
@@ -301,8 +286,8 @@ public class KCService {
             case PLAYER:
                 return "player_" + sourceName;
             default:
-                if ("The Gauntlet".equals(sourceName)) return GAUNTLET_BOSS;
-                if (CG_NAME.equals(sourceName)) return CG_BOSS;
+                if ("The Gauntlet".equals(sourceName)) return NpcUtilities.GAUNTLET_BOSS;
+                if (NpcUtilities.CG_NAME.equals(sourceName)) return NpcUtilities.CG_BOSS;
                 return sourceName;
         }
     }

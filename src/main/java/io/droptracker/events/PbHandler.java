@@ -1,20 +1,17 @@
 package io.droptracker.events;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.BossNotification;
 import io.droptracker.DropTrackerPlugin;
-import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
 import io.droptracker.util.ItemIDSearch;
-import io.droptracker.util.KCService;
 import io.droptracker.util.Rarity;
+import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
-import net.runelite.api.annotations.Varp;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
@@ -22,10 +19,7 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemStack;
-import net.runelite.client.plugins.chatcommands.ChatCommandsPlugin;
 import net.runelite.client.plugins.loottracker.LootReceived;
-import net.runelite.client.plugins.loottracker.LootTrackerPlugin;
-import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
@@ -38,16 +32,13 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.Temporal;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static io.droptracker.util.KCService.lastDrop;
 import static java.time.temporal.ChronoField.*;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
@@ -168,10 +159,6 @@ public class PbHandler {
     }
 
 
-    private boolean isCorruptedGauntlet(LootReceived event) {
-        return event.getType() == LootRecordType.EVENT && lastDrop != null && "The Gauntlet".equals(event.getName())
-                && (CG_NAME.equals(lastDrop.getSource()) || CG_BOSS.equals(lastDrop.getSource()));
-    }
 
     public void onFriendsChatNotification(String message) {
         /* Chambers of Xeric completions are sent in the Friends chat channel */
@@ -179,21 +166,8 @@ public class PbHandler {
             this.onGameMessage(message);
     }
 
-    public String getStandardizedSource(LootReceived event) {
-        if (isCorruptedGauntlet(event)) {
-            return CG_NAME;
-        } else if (lastDrop != null && shouldUseChatName(event)) {
-            return lastDrop.getSource(); // distinguish entry/expert/challenge modes
-        }
-        return event.getName();
-    }
 
-    private boolean shouldUseChatName(LootReceived event) {
-        assert lastDrop != null;
-        String lastSource = lastDrop.getSource();
-        Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
-        return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
-    }
+
 
     public void onWidget(WidgetLoaded event) {
         if (!isEnabled())
@@ -266,10 +240,8 @@ public class PbHandler {
         }
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
-        boolean ba = data.getBoss().equals(BA_BOSS_NAME);
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
         String player = plugin.getLocalPlayerName();
-        String time = null;
         final String[] timeRef = {null};
         final String[] bestTimeRef = {null};
         clientThread.invokeLater(() -> {
@@ -554,7 +526,7 @@ public class PbHandler {
 
     @Nullable
     private Drop getLootSource(int itemId) {
-        Drop drop = KCService.getLastDrop();
+        Drop drop = plugin.lastDrop;
         if (drop == null) return null;
         if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) return null;
         for (ItemStack item : drop.getItems()) {
@@ -566,7 +538,7 @@ public class PbHandler {
     }
 
     public void onLootReceived(LootReceived event) {
-        String source = getStandardizedSource(event);
+        String source = NpcUtilities.getStandardizedSource(event);
         BossNotification pending = pendingNotifications.remove(source);
 
         if (pending != null) {
@@ -579,7 +551,7 @@ public class PbHandler {
             processKill(pending);
         } else {
             // Store the loot event info for later matching with chat message
-            lastDrop = new Drop(source, event.getType(), event.getItems());
+            plugin.lastDrop = new Drop(source, event.getType(), event.getItems());
         }
     }
 
@@ -764,6 +736,7 @@ public class PbHandler {
         }
         return teamSize.toString();
     }
+    
 
     private String toaTeamSize() {
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1 +

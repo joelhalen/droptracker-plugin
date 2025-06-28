@@ -43,18 +43,21 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+
+import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.events.CaHandler;
-import io.droptracker.events.ChatMessageEvent;
 import io.droptracker.events.ClogHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.WidgetEvent;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.Drop;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -129,6 +132,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private KCService kcService;
+	
+    @Nullable
+    public Drop lastDrop = null;
 
 	@Inject
 	public ChatMessageManager msgManager;
@@ -161,8 +167,6 @@ public class DropTrackerPlugin extends Plugin {
 	);
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	private int timesTried = 0;
-	@Inject
-	public ChatMessageEvent chatMessageEventHandler;
 	@Inject
 	public ClogHandler clogHandler;
 	@Inject
@@ -511,7 +515,7 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
-		String npcName = chatMessageEventHandler.getStandardizedSource(lootReceived);
+		String npcName = NpcUtilities.getStandardizedSource(lootReceived);
 
 		if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
 
@@ -567,7 +571,7 @@ public class DropTrackerPlugin extends Plugin {
 					clogHandler.onChatMessage(chatMessage);
 				}
 			case FRIENDSCHATNOTIFICATION:
-				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
+				pbHandler.onFriendsChatNotification(chatMessage);
 			default:
 				break;
 		}
