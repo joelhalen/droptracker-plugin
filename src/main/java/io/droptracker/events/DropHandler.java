@@ -13,6 +13,7 @@ import com.google.common.eventbus.Subscribe;
 import io.droptracker.DebugLogger;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.Drop;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.KCService;
 import io.droptracker.util.NpcUtilities;
@@ -56,11 +57,6 @@ public class DropHandler {
     @Inject
     private Client client;
 
-    public DropHandler(ChatMessageUtil chatMessageUtil, DropTrackerPlugin plugin, ScheduledExecutorService executor) {
-        this.chatMessageUtil = chatMessageUtil;
-        this.plugin = plugin;
-        this.executor = executor;
-    }
     
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
@@ -70,7 +66,7 @@ public class DropHandler {
 		}
 		NPC npc = npcLootReceived.getNpc();
 		Collection<ItemStack> items = npcLootReceived.getItems();
-		processDropEvent(npc.getName(), "npc", items);
+		processDropEvent(npc.getName(), "npc", LootRecordType.NPC, items);
 		//sendChatReminder();
 	}
 
@@ -81,7 +77,7 @@ public class DropHandler {
 			return;
 		}
 		Collection<ItemStack> items = playerLootReceived.getItems();
-		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
+		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", LootRecordType.PLAYER, items);
 		kcService.onPlayerKill(playerLootReceived);
 		//sendChatReminder();
 	}
@@ -103,18 +99,18 @@ public class DropHandler {
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
-			processDropEvent(npcName, "npc", lootReceived.getItems());
+			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
 			return;
 		}
-		processDropEvent(npcName, "other", lootReceived.getItems());
+		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 		kcService.onLoot(lootReceived);
 		//sendChatReminder();
 	}
 
-    private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
+    private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		DebugLogger.logSubmission("processDropEvent called for " + npcName);
 		
 		chatMessageUtil.checkForMessage();
@@ -125,6 +121,7 @@ public class DropHandler {
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
+        plugin.lastDrop = new Drop(npcName, lootRecordType, items);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(items));

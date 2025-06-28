@@ -549,10 +549,7 @@ public class PbHandler {
                 bossData.set(trueBossNoti);
             }
             processKill(pending);
-        } else {
-            // Store the loot event info for later matching with chat message
-            plugin.lastDrop = new Drop(source, event.getType(), event.getItems());
-        }
+        } 
     }
 
     //Storing boss Time to either access at a later point or to move through sending the time

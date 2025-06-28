@@ -147,7 +147,6 @@ public class KCService {
 
             if (boss.equals(NpcUtilities.GAUNTLET_BOSS) || boss.equals(NpcUtilities.CG_BOSS) || boss.startsWith(NpcUtilities.TOA) || boss.startsWith(NpcUtilities.TOB) || boss.startsWith(NpcUtilities.COX)) {
                 // populate lastDrop to workaround loot tracker quirks
-                plugin.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
 
                 if (!isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {   
                     // onLoot will already increment kc, no need to schedule task below.
@@ -216,7 +215,6 @@ public class KCService {
                 return kc != null ? kc + 1 : null;
             }
         });
-        plugin.lastDrop = new Drop(sourceName, type, items);
     }
 
     /**
