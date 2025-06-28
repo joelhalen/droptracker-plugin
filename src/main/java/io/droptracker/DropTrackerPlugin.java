@@ -41,10 +41,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
-import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 
@@ -52,12 +50,13 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
+import io.droptracker.events.DropHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.WidgetEvent;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
 import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.util.NpcUtilities;
+import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -77,7 +76,6 @@ import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -90,7 +88,6 @@ import static net.runelite.http.api.RuneLiteAPI.GSON;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
-import net.runelite.http.api.loottracker.LootRecordType;
 import okhttp3.*;
 import okio.Buffer;
 
@@ -122,8 +119,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient httpClient;
-	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
-	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
 
 	@Inject
 	private DrawManager drawManager;
@@ -132,12 +127,12 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private KCService kcService;
-	
-    @Nullable
-    public Drop lastDrop = null;
 
 	@Inject
-	public ChatMessageManager msgManager;
+	private DropHandler dropHandler;
+	
+    public Drop lastDrop = null;
+
 	
 	public static List<String> endpointUrls = new ArrayList<>();
 
@@ -145,7 +140,7 @@ public class DropTrackerPlugin extends Plugin {
 	
 	public static Boolean usingBackups = false;
 
-	private static Boolean isTracking = true;
+	public Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
 
 	private final ExecutorService executor = new ThreadPoolExecutor(
@@ -203,7 +198,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, gson, httpClient);
+		api = new DropTrackerApi(config, gson, httpClient);
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
@@ -378,8 +373,8 @@ public class DropTrackerPlugin extends Plugin {
 				endpointUrls = backupUrls;
 				backupUrls.clear();
 				clientThread.invokeLater(() -> {
-					sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
-					sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
+					ChatMessageUtil.sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
+					ChatMessageUtil.sendChatMessage("Please consider enabling our API in the plugin configuration to continue tracking seamlessly.");
 				});
 
 				this.webhookResetCount++;
@@ -392,7 +387,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	}
 
-	private static String itemImageUrl(int itemId) {
+	public String itemImageUrl(int itemId) {
 		return "https://static.runelite.net/cache/item/icon/" + itemId + ".png";
 	}
 
@@ -483,58 +478,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	@Subscribe
-	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
-		checkForMessage();
-		if (!isTracking) {
-			return;
-		}
-		NPC npc = npcLootReceived.getNpc();
-		Collection<ItemStack> items = npcLootReceived.getItems();
-		kcService.onNpcKill(npcLootReceived);
-		processDropEvent(npc.getName(), "npc", items);
-		//sendChatReminder();
-	}
-
-	@Subscribe
-	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
-		checkForMessage();
-		if (!isTracking) {
-			return;
-		}
-		Collection<ItemStack> items = playerLootReceived.getItems();
-		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", items);
-		kcService.onPlayerKill(playerLootReceived);
-		//sendChatReminder();
-	}
-
-	@Subscribe
-	public void onLootReceived(LootReceived lootReceived) {
-		checkForMessage();
-		if (!isTracking) {
-			return;
-		}
-		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
-		String npcName = NpcUtilities.getStandardizedSource(lootReceived);
-
-		if (lootReceived.getType() == LootRecordType.NPC && SPECIAL_NPC_NAMES.contains(npcName)) {
-
-			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
-				npcName = "Royal Titans";
-			}
-			if(npcName.equals("Dusk")){
-				npcName = "Grotesque Guardians";
-			}
-			processDropEvent(npcName, "npc", lootReceived.getItems());
-			return;
-		}
-		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
-			return;
-		}
-		processDropEvent(npcName, "other", lootReceived.getItems());
-		kcService.onLoot(lootReceived);
-		//sendChatReminder();
-	}
+	
 
 	public String sanitize(String str) {
 		if (str == null || str.isEmpty()) return "";
@@ -551,6 +495,24 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded widget) {
 		widgetEventHandler.onWidgetLoaded(widget);
+	}
+
+	@Subscribe(priority=1)
+	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		dropHandler.onNpcLootReceived(npcLootReceived);
+		kcService.onNpcKill(npcLootReceived);
+	}
+
+	@Subscribe(priority=1)
+	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
+		dropHandler.onPlayerLootReceived(playerLootReceived);
+		kcService.onPlayerKill(playerLootReceived);
+	}
+
+	@Subscribe(priority=1)
+	public void onLootReceived(LootReceived lootReceived) {
+		dropHandler.onLootReceived(lootReceived);
+		kcService.onLoot(lootReceived);
 	}
 
 	@Subscribe(priority = 1)
@@ -587,94 +549,9 @@ public class DropTrackerPlugin extends Plugin {
 		widgetEventHandler.onGameTick(event);
 	}
 
-	private void checkForMessage() {
-		if (isMessageChecked) {
-			return;
-		}
+	
 
-		// determine whether the player needs to be notified about a possible change to the plugin
-		// based on the last version they loaded, and the currently stored version
-		String currentVersion = config.lastVersionNotified();
-		if (currentVersion != null && !this.pluginVersion.equals(currentVersion + "1")) {
-			executor.submit(() -> {
-				String newNotificationData = api.getLatestUpdateString();
-				sendChatMessage(newNotificationData);
-				// Update the internal config value of this update message
-				configManager.setConfiguration("droptracker", "lastVersionNotified", this.pluginVersion + "1");
-				// Add a flag to prevent multiple checks in the same session
-			});
-			isMessageChecked = true;
-
-		}
-	}
-
-	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
-		DebugLogger.logSubmission("processDropEvent called for " + npcName);
-		
-		checkForMessage();
-		if (!isTracking) {
-			DebugLogger.logSubmission("Not tracking - skipping drop event");
-			return;
-		}
-		if (LONG_TICK_NPC_NAMES.contains(npcName)){
-			ticksSinceNpcDataUpdate -= 30;
-		}
-		clientThread.invokeLater(() -> {
-			// Gather all game state info needed
-			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
-			String localPlayerName = getLocalPlayerName();
-			String accountHash = String.valueOf(client.getAccountHash());
-			AtomicInteger totalValue = new AtomicInteger(0);
-			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
-
-			for (ItemStack item : stackedItems) {
-				int itemId = item.getId();
-				int qty = item.getQuantity();
-				int price = itemManager.getItemPrice(itemId);
-				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
-				totalValue.addAndGet(qty * price);
-
-				CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
-				itemEmbed.setImage(itemImageUrl(itemId));
-				itemEmbed.addField("type", "drop", true);
-				itemEmbed.addField("source_type", sourceType, true);
-				itemEmbed.addField("acc_hash", accountHash, true);
-				itemEmbed.addField("item", itemComposition.getName(), true);
-				itemEmbed.addField("player", localPlayerName, true);
-				itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
-				itemEmbed.addField("quantity", String.valueOf(qty), true);
-				itemEmbed.addField("value", String.valueOf(price), true);
-				itemEmbed.addField("source", npcName, true);
-				itemEmbed.addField("type", sourceType, true);
-				itemEmbed.addField("p_v", pluginVersion, true);
-				if (npcName != null) {
-					Integer killCount = configManager.getRSProfileConfiguration("killcount", npcName.toLowerCase(), int.class);
-					itemEmbed.addField("killcount", String.valueOf(killCount), true);
-				}
-				itemEmbed.title = localPlayerName + " received some drops:";
-				embeds.add(itemEmbed);
-			}
-
-
-			// Now do the heavy work off the client thread
-			int valueToSend = totalValue.get();
-			executor.submit(() -> {
-				try {
-					CustomWebhookBody customWebhookBody = new CustomWebhookBody();
-					customWebhookBody.getEmbeds().addAll(embeds);
-					customWebhookBody.setContent(localPlayerName + " received some drops:");
-					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						sendDataToDropTracker(customWebhookBody, valueToSend);
-					}
-				} catch (Exception e) {
-					log.error("Error processing drop event", e);
-					// Optionally, add debug logging
-					DebugLogger.logSubmission("Drop processing failed: " + e.getMessage());
-				}
-			});
-		});
-	}
-
+	
 	public String getLocalPlayerName() {
 		if (client.getLocalPlayer() != null) {
 			return client.getLocalPlayer().getName();
@@ -834,13 +711,13 @@ public class DropTrackerPlugin extends Plugin {
 									if (jsonObject.has("notice")) {
 										String noticeMessage = jsonObject.get("notice").getAsString();
 										if (noticeMessage != null && !noticeMessage.isEmpty()) {
-											sendChatMessage(noticeMessage);
+											ChatMessageUtil.sendChatMessage(noticeMessage);
 										}
 									}
 									if (jsonObject.has("rank_update")) {
 										String updateMessage = jsonObject.get("rank_update").getAsString();
 										if (updateMessage != null && !updateMessage.isEmpty()) {
-											sendChatMessage(updateMessage);
+											ChatMessageUtil.sendChatMessage(updateMessage);
 										}
 									}
 								}
@@ -911,27 +788,7 @@ public class DropTrackerPlugin extends Plugin {
 			}
 		});
 	}
-	private static Collection<ItemStack> stack(Collection<ItemStack> items) {
-		final List<ItemStack> list = new ArrayList<>();
-
-		for (final ItemStack item : items) {
-			int quantity = 0;
-			for (final ItemStack i : list) {
-				if (i.getId() == item.getId()) {
-					quantity = i.getQuantity();
-					list.remove(i);
-					break;
-				}
-			}
-			if (quantity > 0) {
-				list.add(new ItemStack(item.getId(), item.getQuantity() + quantity, item.getLocation()));
-			} else {
-				list.add(item);
-			}
-		}
-
-		return list;
-	}
+	
 
 	public void sendRankChangeChatMessage(String rankChangeType, Integer currentRankNpc, Integer currentRankAll, Integer totalRankChange, String totalLootReceived,
 			Integer totalRankChangeAtNpc, String totalLootNpc, Integer totalMembers, Integer totalMembersNpc,
@@ -939,21 +796,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	}
 
-	public void sendChatMessage(String messageContent) {
-		ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
-		messageBuilder.append(ChatColorType.HIGHLIGHT)
-				.append("[")
-				.append(ChatColorType.NORMAL)
-				.append("DropTracker")
-				.append(ChatColorType.HIGHLIGHT)
-				.append("] ")
-				.append(ChatColorType.NORMAL);
-		messageBuilder.append(messageContent);
-		final String finalMessage = messageBuilder.build();
-		clientThread.invokeLater(() -> {
-			client.addChatMessage(ChatMessageType.CONSOLE, finalMessage, finalMessage,"DropTracker.io");
-		});
-	}
+
 
 	private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
 		// First hide DMs if configured

@@ -1,6 +1,5 @@
 package io.droptracker;
 
-import io.droptracker.DropTrackerPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 

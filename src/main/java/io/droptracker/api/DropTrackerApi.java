@@ -2,7 +2,6 @@ package io.droptracker.api;
 
 import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
-import net.runelite.client.chat.ChatMessageManager;
 import okhttp3.*;
 
 import javax.inject.Inject;
@@ -15,17 +14,14 @@ import java.util.concurrent.CompletionStage;
 public class DropTrackerApi {
     private final DropTrackerConfig config;
     @Inject
-    public ChatMessageManager msgManager;
-    @Inject
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
     private PanelDataLoadedCallback dataLoadedCallback;
     
     @Inject
-    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient) {
+    public DropTrackerApi(DropTrackerConfig config, Gson gson, OkHttpClient httpClient) {
             this.config = config;
-            this.msgManager = chatMessageManager;
             this.gson = gson;
             this.httpClient = httpClient;
         }

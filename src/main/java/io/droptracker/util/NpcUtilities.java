@@ -1,6 +1,7 @@
 package io.droptracker.util;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,6 +25,9 @@ public class NpcUtilities {
     public static final String TOA = "Tombs of Amascut";
     public static final String TOB = "Theatre of Blood";
     public static final String COX = "Chambers of Xeric";
+    
+	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
+	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
 
     private static final Pattern PRIMARY_REGEX = Pattern.compile(
         "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
@@ -41,6 +45,7 @@ public class NpcUtilities {
 
     @SuppressWarnings("null")
     public static String getStandardizedSource(LootReceived event) {
+        System.out.println("getStandardizedSource: " + event.getName());
         if (isCorruptedGauntlet(event)) {
             return CG_NAME;
         } else if (plugin.lastDrop != null && shouldUseChatName(event)) {
