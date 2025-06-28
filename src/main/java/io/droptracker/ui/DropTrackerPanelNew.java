@@ -41,7 +41,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 	static {
 		Image logoGif = ImageUtil.loadImageResource(DropTrackerPlugin.class, "brand/droptracker-small.gif");
-		Image logoResized = logoGif.getScaledInstance(128, 128, Image.SCALE_SMOOTH);
+		Image logoResized = logoGif.getScaledInstance(100, 100, Image.SCALE_SMOOTH);
 		LOGO_GIF = new ImageIcon(logoResized);
 	}
 
@@ -89,7 +89,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		tabbedPane.setForeground(Color.WHITE);
 
 		// Home tab
-		HomePanel homePanel = new HomePanel(config, api);
+		HomePanel homePanel = new HomePanel(config, api, client);
 		InfoPanel infoPanel2 = new InfoPanel(config);
 		JPanel welcomePanel = homePanel.create();	
 		JPanel apiInfoPanel = infoPanel2.create();
@@ -97,7 +97,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		// Stats tab
 		if (config.useApi()) {
 			PlayerStatsPanel statsPanel = new PlayerStatsPanel(client, clientThread, config, chatMessageUtil);
-			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil);
+			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api);
 			JPanel playerStatsPanel = statsPanel.create();
 			JPanel groupStatsPanel = groupPanel.create();
 			tabbedPane.addTab("Players", playerStatsPanel);
@@ -122,16 +122,19 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		headerPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
-		// Create a vertical panel for title and info
-		JPanel titleInfoPanel = new JPanel();
-		titleInfoPanel.setLayout(new BoxLayout(titleInfoPanel, BoxLayout.Y_AXIS));
-		titleInfoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		// Create a vertical panel for just the title
+		JPanel titlePanel = new JPanel();
+		titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS));
+		titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
 		// Main title
 		JLabel welcomeText = new JLabel("DropTracker");
 		welcomeText.setFont(FontManager.getRunescapeBoldFont());
 		welcomeText.setAlignmentX(Component.CENTER_ALIGNMENT);
 		welcomeText.setForeground(Color.WHITE);
+
+		// Add only the title to title panel
+		titlePanel.add(welcomeText);
 
 		// Create a subtle info panel for version and API status
 		JPanel infoPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
@@ -155,26 +158,23 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		infoPanel.add(separatorText);
 		infoPanel.add(apiEnabledText);
 
-		// Add components to title info panel
-		titleInfoPanel.add(welcomeText);
-		titleInfoPanel.add(Box.createRigidArea(new Dimension(0, 3))); // Small spacing
-		titleInfoPanel.add(infoPanel);
-
-		// Logo panel
-		JPanel logoPanel = new JPanel(new BorderLayout());
+		// Logo panel with logo and version info below it
+		JPanel logoPanel = new JPanel();
+		logoPanel.setLayout(new BoxLayout(logoPanel, BoxLayout.Y_AXIS));
 		logoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		
 		JLabel logoLabel = new JLabel(LOGO_GIF);
-		logoLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		logoPanel.add(logoLabel, BorderLayout.CENTER);
+		logoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		logoPanel.add(logoLabel);
+		logoPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Small spacing between logo and info
+		logoPanel.add(infoPanel);
 
 		// Add to header panel
-		headerPanel.add(titleInfoPanel, BorderLayout.NORTH);
+		headerPanel.add(titlePanel, BorderLayout.NORTH);
 		headerPanel.add(Box.createRigidArea(new Dimension(0, 10)), BorderLayout.CENTER); // Spacing
 		headerPanel.add(logoPanel, BorderLayout.SOUTH);
 	}
-
 	
-
 	public void deinit() {
 		removeAll();
 	}

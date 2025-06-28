@@ -93,22 +93,15 @@ public class CaHandler {
             int taskPoints = tier.getPoints();
             int totalPoints = client.getVarbitValue(TOTAL_POINTS_ID);
 
-            Integer nextUnlockPointsThreshold = cumulativeUnlockPoints.ceilingKey(totalPoints + 1);
             Map.Entry<Integer, CombatAchievement> prev = cumulativeUnlockPoints.floorEntry(totalPoints);
             int prevThreshold = prev != null ? prev.getKey() : 0;
 
-            Integer tierProgress, tierTotalPoints;
-            if (nextUnlockPointsThreshold != null) {
-                tierProgress = totalPoints - prevThreshold;
-                tierTotalPoints = nextUnlockPointsThreshold - prevThreshold;
-            } else {
-                tierProgress = tierTotalPoints = null;
-            }
-
             boolean crossedThreshold = prevThreshold > 0 && totalPoints - taskPoints < prevThreshold;
-            CombatAchievement completedTier = crossedThreshold ? prev.getValue() : null;
-            String completedTierName = completedTier != null ? completedTier.getDisplayName() : "N/A";
-
+            String completedTierName = "N/A";
+            if (prev != null) {
+                CombatAchievement completedTier = crossedThreshold ? prev.getValue() : null;
+                completedTierName = completedTier != null ? completedTier.getDisplayName() : "N/A";
+            }
             String player = client.getLocalPlayer().getName();
             String accountHash = String.valueOf(client.getAccountHash());
             CustomWebhookBody combatWebhook = new CustomWebhookBody();

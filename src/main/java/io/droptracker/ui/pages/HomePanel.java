@@ -18,6 +18,7 @@ import net.runelite.client.util.LinkBrowser;
 import io.droptracker.ui.PanelElements;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.DropTrackerConfig;
+import net.runelite.api.Client;
 
 public class HomePanel {
 
@@ -27,7 +28,10 @@ public class HomePanel {
     @Inject
     private DropTrackerApi api;
 
-    public HomePanel(DropTrackerConfig config, DropTrackerApi api) {
+    @Inject
+    private Client client;
+
+    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client) {
         this.config = config;
         this.api = api;
     }
@@ -60,6 +64,9 @@ public class HomePanel {
 
 		JPanel bottomButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
 		bottomButtonRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		// Create the global board button
+		// Create button to view lootboard
 
 		// Add buttons to the top row with proper sizing
 		JButton guideButton = new JButton("Read the Wiki");
@@ -134,6 +141,15 @@ public class HomePanel {
 		// Add all panels to home panel with proper spacing
 		homePanel.add(welcomeMessagePanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+		
+		JButton viewGlobalButton = new JButton("⇱ Global Lootboard");
+		viewGlobalButton.setFont(FontManager.getRunescapeSmallFont());
+		viewGlobalButton.setPreferredSize(new Dimension(150, 30));
+		viewGlobalButton.setToolTipText("Click to view the global lootboard");
+		
+		// Add click listener for popup - now uses group-based lootboard system
+		viewGlobalButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, 2));
+		homePanel.add(viewGlobalButton);
 		homePanel.add(patchNotesPanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		homePanel.add(quickAccessPanel);

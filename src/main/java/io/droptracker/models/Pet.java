@@ -32,105 +32,55 @@ import net.runelite.api.ItemID;
 @Getter
 public enum Pet
 {
-    @SuppressWarnings("deprecation")
     ABYSSAL_ORPHAN("Abyssal orphan", ItemID.ABYSSAL_ORPHAN),
-    @SuppressWarnings("deprecation")
     IKKLE_HYDRA("Ikkle hydra", ItemID.IKKLE_HYDRA),
-    @SuppressWarnings("deprecation")
     CALLISTO_CUB("Callisto cub", ItemID.CALLISTO_CUB),
-    @SuppressWarnings("deprecation")
     HELLPUPPY("Hellpuppy", ItemID.HELLPUPPY),
-    @SuppressWarnings("deprecation")
     PET_CHAOS_ELEMENTAL("Pet chaos elemental", ItemID.PET_CHAOS_ELEMENTAL),
-    @SuppressWarnings("deprecation")
     PET_ZILYANA("Pet zilyana", ItemID.PET_ZILYANA),
-    @SuppressWarnings("deprecation")
     PET_DARK_CORE("Pet dark core", ItemID.PET_DARK_CORE),
-    @SuppressWarnings("deprecation")
     PET_DAGANNOTH_PRIME("Pet dagannoth prime", ItemID.PET_DAGANNOTH_PRIME),
-    @SuppressWarnings("deprecation")
     PET_DAGANNOTH_SUPREME("Pet dagannoth supreme", ItemID.PET_DAGANNOTH_SUPREME),
-    @SuppressWarnings("deprecation")
     PET_DAGANNOTH_REX("Pet dagannoth rex", ItemID.PET_DAGANNOTH_REX),
-    @SuppressWarnings("deprecation")
     TZREKJAD("Tzrek-jad", ItemID.TZREKJAD),
-    @SuppressWarnings("deprecation")
     PET_GENERAL_GRAARDOR("Pet general graardor", ItemID.PET_GENERAL_GRAARDOR),
-    @SuppressWarnings("deprecation")
     BABY_MOLE("Baby mole", ItemID.BABY_MOLE),
-    @SuppressWarnings("deprecation")
     NOON("Noon", ItemID.NOON),
-    @SuppressWarnings("deprecation")
     JALNIBREK("Jal-nib-rek", ItemID.JALNIBREK),
-    @SuppressWarnings("deprecation")
     KALPHITE_PRINCESS("Kalphite princess", ItemID.KALPHITE_PRINCESS),
-    @SuppressWarnings("deprecation")
     PRINCE_BLACK_DRAGON("Prince black dragon", ItemID.PRINCE_BLACK_DRAGON),
-    @SuppressWarnings("deprecation")
     PET_KRAKEN("Pet kraken", ItemID.PET_KRAKEN),
-    @SuppressWarnings("deprecation")
     PET_KREEARRA("Pet kree'arra", ItemID.PET_KREEARRA),
-    @SuppressWarnings("deprecation")
     PET_KRIL_TSUTSAROTH("Pet k'ril tsutsaroth", ItemID.PET_KRIL_TSUTSAROTH),
-    @SuppressWarnings("deprecation")
     SCORPIAS_OFFSPRING("Scorpia's offspring", ItemID.SCORPIAS_OFFSPRING),
-    @SuppressWarnings("deprecation")
     SKOTOS("Skotos", ItemID.SKOTOS),
-    @SuppressWarnings("deprecation")
     PET_SMOKE_DEVIL("Pet smoke devil", ItemID.PET_SMOKE_DEVIL),
-    @SuppressWarnings("deprecation")
     VENENATIS_SPIDERLING("Venenatis spiderling", ItemID.VENENATIS_SPIDERLING),
-    @SuppressWarnings("deprecation")
     VETION_JR("Vet'ion jr.", ItemID.VETION_JR),
-    @SuppressWarnings("deprecation")
     VORKI("Vorki", ItemID.VORKI),
-    @SuppressWarnings("deprecation")
     PHOENIX("Phoenix", ItemID.PHOENIX),
-    @SuppressWarnings("deprecation")
     PET_SNAKELING("Pet snakeling", ItemID.PET_SNAKELING),
-    @SuppressWarnings("deprecation")
     OLMLET("Olmlet", ItemID.OLMLET),
-    @SuppressWarnings("deprecation")
     LIL_ZIK("Lil' zik", ItemID.LIL_ZIK),
-    @SuppressWarnings("deprecation")
     BLOODHOUND("Bloodhound", ItemID.BLOODHOUND),
-    @SuppressWarnings("deprecation")
     PET_PENANCE_QUEEN("Pet penance queen", ItemID.PET_PENANCE_QUEEN),
-    @SuppressWarnings("deprecation")
     HERON("Heron", ItemID.HERON),
-    @SuppressWarnings("deprecation")
     ROCK_GOLEM("Rock golem", ItemID.ROCK_GOLEM),
-    @SuppressWarnings("deprecation")
     BEAVER("Beaver", ItemID.BEAVER),
-    @SuppressWarnings("deprecation")
     BABY_CHINCHOMPA("Baby chinchompa", ItemID.BABY_CHINCHOMPA_13324),
-    @SuppressWarnings("deprecation")
     GIANT_SQUIRREL("Giant squirrel", ItemID.GIANT_SQUIRREL),
-    @SuppressWarnings("deprecation")
     TANGLEROOT("Tangleroot", ItemID.TANGLEROOT),
-    @SuppressWarnings("deprecation")
     ROCKY("Rocky", ItemID.ROCKY),
-    @SuppressWarnings("deprecation")
     RIFT_GUARDIAN("Rift guardian", ItemID.RIFT_GUARDIAN),
-    @SuppressWarnings("deprecation")
     HERBI("Herbi", ItemID.HERBI),
-    @SuppressWarnings("deprecation")
     CHOMPY_CHICK("Chompy chick", ItemID.CHOMPY_CHICK),
-    @SuppressWarnings("deprecation")
     SRARACHA("Sraracha", ItemID.SRARACHA),
-    @SuppressWarnings("deprecation")
     SMOLCANO("Smolcano", ItemID.SMOLCANO),
-    @SuppressWarnings("deprecation")
     YOUNGLLEF("Youngllef", ItemID.YOUNGLLEF),
-    @SuppressWarnings("deprecation")
     LITTLE_NIGHTMARE("Little nightmare", ItemID.LITTLE_NIGHTMARE),
-    @SuppressWarnings("deprecation")
     LIL_CREATOR("Lil' creator", ItemID.LIL_CREATOR),
-    @SuppressWarnings("deprecation")
     TINY_TEMPOR("Tiny tempor", ItemID.TINY_TEMPOR),
-    @SuppressWarnings("deprecation")
     NEXLING("Nexling", ItemID.NEXLING),
-    @SuppressWarnings("deprecation")
     ABYSSAL_PROTECTOR("Abyssal protector", ItemID.ABYSSAL_PROTECTOR),
     ;
 

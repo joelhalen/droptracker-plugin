@@ -1148,6 +1148,8 @@ public class WidgetEvent {
                     loadPets();
                 }
                 break;
+            default:
+                break;
         }
     }
     

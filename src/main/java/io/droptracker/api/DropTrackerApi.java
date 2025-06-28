@@ -2,6 +2,8 @@ package io.droptracker.api;
 
 import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.models.api.PlayerSearchResult;
 import okhttp3.*;
 
 import javax.inject.Inject;
@@ -31,8 +33,87 @@ public class DropTrackerApi {
     }
 
     /**
-     * Sends a request to the API to look up a player's data and returns a CompletionStage for async handling.
+     * Sends a request to the API to search for a group and returns the GroupSearchResult.
      */
+    @SuppressWarnings("null")
+    public GroupSearchResult searchGroup(String groupName) throws IOException {
+        // Check if the API is enabled
+        if (!config.useApi()) {
+            throw new IllegalStateException("API is not enabled in the plugin config");
+        }
+
+        String apiUrl = getApiUrl();
+        HttpUrl url = HttpUrl.parse(apiUrl + "/group_search/" + groupName);
+
+        if (url == null) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+
+        Request request = new Request.Builder().url(url).build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("API request failed with status: " + response.code());
+            }
+
+            if (response.body() == null) {
+                throw new IOException("Empty response body");
+            }
+
+            String responseData = response.body().string();
+            
+            // Try to parse as GroupSearchResult first
+            try {
+                return gson.fromJson(responseData, GroupSearchResult.class);
+            } catch (Exception e) {
+                // If direct parsing fails, try to parse as Map and convert
+                Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+                return GroupSearchResult.fromJsonMap(responseMap);
+            }
+        }
+    }
+
+    /**
+     * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
+     */
+    @SuppressWarnings("null")
+    public PlayerSearchResult lookupPlayerNew(String playerName) throws IOException {
+        // Check if the API is enabled
+        if (!config.useApi()) {
+            throw new IllegalStateException("API is not enabled in the plugin config");
+        }
+
+        String apiUrl = getApiUrl();
+        HttpUrl url = HttpUrl.parse(apiUrl + "/player_lookup_new/" + playerName);
+
+        if (url == null) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+
+        Request request = new Request.Builder().url(url).build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("API request failed with status: " + response.code());
+            }
+
+            if (response.body() == null) {
+                throw new IOException("Empty response body");
+            }
+
+            String responseData = response.body().string();
+            
+            // Try to parse as PlayerSearchResult first
+            try {
+                return gson.fromJson(responseData, PlayerSearchResult.class);
+            } catch (Exception e) {
+                // If direct parsing fails, try to parse as Map and convert
+                Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
+                return PlayerSearchResult.fromJsonMap(responseMap);
+            }
+        }
+    }
+
     public CompletionStage<Map<String, Object>> lookupPlayer(String playerName) {
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
 
@@ -59,7 +140,7 @@ public class DropTrackerApi {
                 future.completeExceptionally(e);
             }
 
-            @SuppressWarnings({ "null", "unchecked" })
+            @SuppressWarnings({ "null" })
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
@@ -83,8 +164,6 @@ public class DropTrackerApi {
 
         return future;
     }
-
-
 
     public String getApiUrl() {
         return config.useApi() ? "https://api.droptracker.io" : "";

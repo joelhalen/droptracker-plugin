@@ -120,16 +120,11 @@ public class ClogHandler {
         Integer itemId = itemIDFinder.findItemId(itemName);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
         Integer killCount = loot != null ? kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource()) : null;
-        OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC)) ?
+        OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC) && (itemId != null)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
         CustomWebhookBody collectionLogBody = new CustomWebhookBody();
         CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
         collEmbed.addField("type", "collection_log",true);
-        if (loot != null) {
-            if (loot.getSource() != null) {
-                Drop drop = getLootSource(itemId);
-            }
-        }
         collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
         collEmbed.addField("item", itemName, true);
         collEmbed.addField("kc", String.valueOf(killCount),true);
