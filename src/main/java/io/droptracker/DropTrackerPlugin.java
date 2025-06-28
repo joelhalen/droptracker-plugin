@@ -153,7 +153,23 @@ public class DropTrackerPlugin extends Plugin {
 	private static Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
 
-	private final ExecutorService executor = Executors.newCachedThreadPool();
+	private final ExecutorService executor = new ThreadPoolExecutor(
+		2, // core pool size
+		10, // maximum pool size
+		60L, TimeUnit.SECONDS, // keep alive time
+		new LinkedBlockingQueue<>(),
+		new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				Thread t = new Thread(r);
+				t.setUncaughtExceptionHandler((thread, ex) -> {
+					log.error("Uncaught exception in executor thread", ex);
+					DebugLogger.logSubmission("Executor thread died: " + ex.getMessage());
+				});
+				return t;
+			}
+		}
+	);
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	private int timesTried = 0;
 	@Inject
@@ -612,8 +628,11 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	private void processDropEvent(String npcName, String sourceType, Collection<ItemStack> items) {
+		DebugLogger.logSubmission("processDropEvent called for " + npcName);
+		
 		checkForMessage();
 		if (!isTracking) {
+			DebugLogger.logSubmission("Not tracking - skipping drop event");
 			return;
 		}
 		if (LONG_TICK_NPC_NAMES.contains(npcName)){
@@ -659,11 +678,17 @@ public class DropTrackerPlugin extends Plugin {
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
 			executor.submit(() -> {
-				CustomWebhookBody customWebhookBody = new CustomWebhookBody();
-				customWebhookBody.getEmbeds().addAll(embeds);
-				customWebhookBody.setContent(localPlayerName + " received some drops:");
-				if (!customWebhookBody.getEmbeds().isEmpty()) {
-					sendDataToDropTracker(customWebhookBody, valueToSend);
+				try {
+					CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+					customWebhookBody.getEmbeds().addAll(embeds);
+					customWebhookBody.setContent(localPlayerName + " received some drops:");
+					if (!customWebhookBody.getEmbeds().isEmpty()) {
+						sendDataToDropTracker(customWebhookBody, valueToSend);
+					}
+				} catch (Exception e) {
+					log.error("Error processing drop event", e);
+					// Optionally, add debug logging
+					DebugLogger.logSubmission("Drop processing failed: " + e.getMessage());
 				}
 			});
 		});
@@ -790,7 +815,9 @@ public class DropTrackerPlugin extends Plugin {
 			try {
 				url = getRandomUrl();
 			} catch (Exception e) {
-				throw new RuntimeException(e);
+				log.error("Failed to get webhook URL, skipping submission", e);
+				DebugLogger.logSubmission("Webhook submission skipped - no valid URL: " + e.getMessage());
+				return; // Exit gracefully
 			}
 		} else {
 			url = api.getApiUrl() + "/webhook";
