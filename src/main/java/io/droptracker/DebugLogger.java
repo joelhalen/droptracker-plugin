@@ -10,18 +10,30 @@ import net.runelite.client.RuneLite;
 
 public class DebugLogger {
     private static final File DT_DIRECTORY = new File(RuneLite.RUNELITE_DIR, "dt-logs");
-
     private static File LOG_FILE;
+    private static boolean initialized = false;
 
     private static void setupDirectory() {
+        if (initialized) {
+            return; // Only setup once per application instance
+        }
+        
         if (!DT_DIRECTORY.exists()) {
             DT_DIRECTORY.mkdirs();
         }
+        
         LOG_FILE = new File(DT_DIRECTORY, "droptracker.log");
+        
+        // Only rename existing log file once at startup
         if (LOG_FILE.exists()) {
-            LOG_FILE.renameTo(new File(DT_DIRECTORY, "droptracker-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss")) + ".log"));
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
+            File renamedFile = new File(DT_DIRECTORY, "droptracker-" + timestamp + ".log");
+            LOG_FILE.renameTo(renamedFile);
         }
+        
+        initialized = true;
     }
+    
     public static void logSubmission(String message) {
         setupDirectory();
         try {
