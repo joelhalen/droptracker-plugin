@@ -2,20 +2,12 @@ package io.droptracker.api;
 
 import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
 import okhttp3.*;
 
 import javax.inject.Inject;
-import javax.inject.Inject;
-import javax.swing.*;
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -25,24 +17,21 @@ public class DropTrackerApi {
     @Inject
     public ChatMessageManager msgManager;
     @Inject
-    private Client client;
-    @Inject
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
     private PanelDataLoadedCallback dataLoadedCallback;
-
+    
     @Inject
-    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient, Client client) {
-        this.config = config;
-        this.msgManager = chatMessageManager;
-        this.gson = gson;
-        this.httpClient = httpClient;
-        this.client = client;
-    }
-
-    public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
-        this.dataLoadedCallback = callback;
+    public DropTrackerApi(DropTrackerConfig config, ChatMessageManager chatMessageManager, Gson gson, OkHttpClient httpClient) {
+            this.config = config;
+            this.msgManager = chatMessageManager;
+            this.gson = gson;
+            this.httpClient = httpClient;
+        }
+    
+        public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
+            this.dataLoadedCallback = callback;
     }
 
     /**

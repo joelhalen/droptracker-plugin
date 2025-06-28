@@ -5,14 +5,16 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
+import io.droptracker.events.ChatMessageEvent;
 import io.droptracker.models.Drop;
+import io.droptracker.models.SerializedDrop;
+import io.droptracker.util.Rarity;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.NPC;
 import net.runelite.api.NpcID;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.config.RuneLiteConfig;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemStack;
@@ -52,19 +54,16 @@ public class KCService {
     private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
     private static final Pattern CLUE_SCROLL_REGEX = Pattern.compile("You have completed (?<scrollCount>\\d+) (?<scrollType>\\w+) Treasure Trails\\.");
 
-    @Inject
-    private static ConfigManager configManager;
+    private ConfigManager configManager;
 
     private ChatMessageEvent chatMessageEventHandler;
 
-    @Inject
-    private static Gson gson;
+    private Gson gson;
 
     @Inject
     private ScheduledExecutorService executor;
 
-    @Inject
-    private static Rarity rarityService;
+    private Rarity rarityService;
 
     private static final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
@@ -73,7 +72,7 @@ public class KCService {
 
     @Getter
     @Nullable
-    protected static Drop lastDrop = null;
+    public static Drop lastDrop = null;
 
     @Inject
     public KCService(ConfigManager configManager, Gson gson,
@@ -87,8 +86,8 @@ public class KCService {
     }
 
     public void reset() {
-        this.lastDrop = null;
-        this.killCounts.invalidateAll();
+        KCService.lastDrop = null;
+        KCService.killCounts.invalidateAll();
     }
 
     public void onNpcKill(NpcLootReceived event) {
@@ -157,9 +156,9 @@ public class KCService {
 
             if (boss.equals(GAUNTLET_BOSS) || boss.equals(CG_BOSS) || boss.startsWith(TOA) || boss.startsWith(TOB) || boss.startsWith(COX)) {
                 // populate lastDrop to workaround loot tracker quirks
-                this.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
+                KCService.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
 
-                if (!ConfigUtilities.isPluginDisabled(configManager, RL_LOOT_PLUGIN_NAME)) {
+                if (!isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {   
                     // onLoot will already increment kc, no need to schedule task below.
                     // this early return also simplifies our test code
                     return;
@@ -205,6 +204,13 @@ public class KCService {
     @Nullable
     public static Integer getKillCount(LootRecordType type, String sourceName) {
         if (sourceName == null) return null;
+        // This static method is deprecated - use instance method instead
+        return killCounts.getIfPresent(getCacheKey(type, sourceName));
+    }
+
+    @Nullable
+    public Integer getKillCountWithStorage(LootRecordType type, String sourceName) {
+        if (sourceName == null) return null;
         Integer stored = getStoredKillCount(type, sourceName);
         if (stored != null) {
             return killCounts.asMap().merge(getCacheKey(type, sourceName), stored, Math::max);
@@ -225,7 +231,7 @@ public class KCService {
                 return kc != null ? kc + 1 : null;
             }
         });
-        this.lastDrop = new Drop(sourceName, type, items);
+        KCService.lastDrop = new Drop(sourceName, type, items);
     }
 
     /**
@@ -234,16 +240,16 @@ public class KCService {
      * @return the kill count stored by base runelite plugins
      */
     @Nullable
-    private static Integer getStoredKillCount(@NotNull LootRecordType type, @NotNull String sourceName) {
+    private Integer getStoredKillCount(@NotNull LootRecordType type, @NotNull String sourceName) {
         // get kc from base runelite chat commands plugin (if enabled)
-        if (!ConfigUtilities.isPluginDisabled(configManager, RL_CHAT_CMD_PLUGIN_NAME)) {
+        if (!isPluginDisabled(RL_CHAT_CMD_PLUGIN_NAME)) {
             Integer kc = configManager.getRSProfileConfiguration("killcount", cleanBossName(sourceName), int.class);
             if (kc != null) {
                 return kc - 1; // decremented since chat event typically occurs before loot event
             }
         }
 
-        if (ConfigUtilities.isPluginDisabled(configManager, RL_LOOT_PLUGIN_NAME)) {
+        if (isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {
             // assume stored kc is useless if loot tracker plugin is disabled
             return null;
         }
@@ -312,5 +318,9 @@ public class KCService {
     public String ucFirst(@NotNull String text) {
         if (text.length() < 2) return text.toUpperCase();
         return Character.toUpperCase(text.charAt(0)) + text.substring(1).toLowerCase();
+    }
+
+    protected boolean isPluginDisabled(String simpleLowerClassName) {
+        return "false".equals(configManager.getConfiguration(RuneLiteConfig.GROUP_NAME, simpleLowerClassName));
     }
 }

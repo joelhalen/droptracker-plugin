@@ -26,7 +26,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package io.droptracker.util;
+package io.droptracker.events;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;

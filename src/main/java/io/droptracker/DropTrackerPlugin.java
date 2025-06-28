@@ -48,6 +48,11 @@ import javax.inject.Inject;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
+import io.droptracker.events.CaHandler;
+import io.droptracker.events.ChatMessageEvent;
+import io.droptracker.events.ClogHandler;
+import io.droptracker.events.PbHandler;
+import io.droptracker.events.WidgetEvent;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.*;
@@ -76,7 +81,6 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
-import net.runelite.client.util.ImageCapture;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
@@ -105,8 +109,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	private NavigationButton navButton;
 
-	private NavigationButton newNavButton;
-
 	@Inject
 	private Gson gson;
 	@Inject
@@ -114,12 +116,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient okHttpClient;
-
-	@Inject
-	private ImageCapture imageCapture;
-
-	@Inject
-	private DebugLogger debugLogger;
 
 	@Inject
 	private OkHttpClient httpClient;
@@ -136,13 +132,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	public ChatMessageManager msgManager;
-	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-	private String currentKillTime = "";
-	private String currentPbTime = "";
-	private String currentNpcName = "";
-	private boolean readyToSendPb = false;
-	private ScheduledFuture<?> skillDataResetTask = null;
-	private final Object lock = new Object();
 	
 	public static List<String> endpointUrls = new ArrayList<>();
 
@@ -210,7 +199,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, msgManager, gson, httpClient, client);
+		api = new DropTrackerApi(config, msgManager, gson, httpClient);
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
@@ -412,7 +401,9 @@ public class DropTrackerPlugin extends Plugin {
 		} else {
 			webUrl = HttpUrl.parse(destination);
 		}
-
+		if (webUrl == null) {
+			return null;
+		}
 		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
 		HttpUrl url = urlBuilder.build();
 		LinkBrowser.browse(url.toString());
@@ -577,6 +568,8 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			case FRIENDSCHATNOTIFICATION:
 				chatMessageEventHandler.onFriendsChatNotification(chatMessage);
+			default:
+				break;
 		}
 		kcService.onGameMessage(chatMessage);
 	}
@@ -590,22 +583,6 @@ public class DropTrackerPlugin extends Plugin {
 		widgetEventHandler.onGameTick(event);
 	}
 
-
-	private void scheduleKillTimeReset() {
-		if (skillDataResetTask != null) {
-			skillDataResetTask.cancel(false);
-		}
-		skillDataResetTask = scheduler.schedule(this::resetState, 500, TimeUnit.MILLISECONDS);
-	}
-
-	private void resetState() {
-		synchronized (lock) {
-			currentKillTime = "";
-			currentPbTime = "";
-			currentNpcName = "";
-			readyToSendPb = false;
-		}
-	}
 	private void checkForMessage() {
 		if (isMessageChecked) {
 			return;
@@ -843,25 +820,10 @@ public class DropTrackerPlugin extends Plugin {
 				if (config.useApi()) {
 					// Try to get response body, but don't consume it
 					ResponseBody body = response.peekBody(Long.MAX_VALUE);
-					JsonObject notificationData = new JsonObject();
-					Integer totalRankChange = 0;
-					Integer currentRankNpc = 0;
-					Integer currentRankAll = 0;
-					String totalLootReceived = "";
-					Integer totalRankChangeAtNpc = 0;
-					String totalLootNpc = "";
-					String totalLootNpcAllTime = "";
-					String totalReceivedAllTime = "";
-					Integer totalMembers = 0;
-					Integer totalMembersNpc = 0;
-					Integer totalRankChangeAllTime = 0;
-					Integer totalRankChangeAtNpcAllTime = 0;
-					Integer minChange = 5;
 					if (body != null) {
 						String bodyString = body.string();
 						if (!bodyString.isEmpty()) {
 							try {
-								Boolean shouldNotify = false;
 								JsonElement jsonElement = new JsonParser().parse(bodyString);
 								if (jsonElement.isJsonObject()) {
 									JsonObject jsonObject = jsonElement.getAsJsonObject();

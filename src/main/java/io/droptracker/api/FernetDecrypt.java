@@ -15,7 +15,6 @@ import javax.inject.Singleton;
 @Singleton
 public class FernetDecrypt {
     public static String ENCRYPTION_KEY = "";
-    private static final byte VERSION = (byte) 0x80;
 
     @Inject
     public FernetDecrypt() {
@@ -35,8 +34,6 @@ public class FernetDecrypt {
 
         // Extract components
         ByteBuffer buffer = ByteBuffer.wrap(token);
-        byte version = buffer.get();
-        long timestamp = buffer.getLong();
         byte[] iv = new byte[16];
         buffer.get(iv);
         

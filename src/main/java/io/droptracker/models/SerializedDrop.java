@@ -1,4 +1,4 @@
-package io.droptracker.util;
+package io.droptracker.models;
 
 /* Author: Dink Plugin */
 

@@ -1,4 +1,4 @@
-package io.droptracker.util;
+package io.droptracker.events;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Inject;
@@ -8,6 +8,7 @@ import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
+import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
