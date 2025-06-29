@@ -93,18 +93,6 @@ public class ClogHandler {
         }
     }
 
-    // private boolean isCorruptedGauntlet(LootReceived event) {
-    //     return event.getType() == LootRecordType.EVENT && lastDrop != null && "The Gauntlet".equals(event.getName())
-    //             && (CG_NAME.equals(lastDrop.getSource()) || CG_BOSS.equals(lastDrop.getSource()));
-    // }
-
-
-    // private boolean shouldUseChatName(LootReceived event) {
-    //     assert lastDrop != null;
-    //     String lastSource = lastDrop.getSource();
-    //     Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
-    //     return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
-    // }
 
 
 
@@ -135,6 +123,7 @@ public class ClogHandler {
         collEmbed.addField("p_v",plugin.pluginVersion,true);
         String accountHash = String.valueOf(client.getAccountHash());
         collEmbed.addField("acc_hash", accountHash, true);
+        collEmbed.title = client.getLocalPlayer().getName() + " received a collection log:";
         collectionLogBody.getEmbeds().add(collEmbed);
         plugin.sendDataToDropTracker(collectionLogBody, "2");
     }

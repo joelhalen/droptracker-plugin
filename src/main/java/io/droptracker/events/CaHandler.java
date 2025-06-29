@@ -121,12 +121,6 @@ public class CaHandler {
         });
     }
 
-    private int getKc(String boss)
-    {
-        Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
-        return killCount == null ? 0 : killCount;
-    }
-
     @VisibleForTesting
     static Optional<Pair<CombatAchievement, String>> parseCombatAchievement(String message) {
         Matcher matcher = ACHIEVEMENT_PATTERN.matcher(message);

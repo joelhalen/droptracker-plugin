@@ -136,7 +136,6 @@ public class DropHandler {
 				int price = itemManager.getItemPrice(itemId);
 				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
 				totalValue.addAndGet(qty * price);
-
 				CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
 				itemEmbed.setImage(plugin.itemImageUrl(itemId));
 				itemEmbed.addField("type", "drop", true);

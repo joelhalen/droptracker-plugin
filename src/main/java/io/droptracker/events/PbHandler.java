@@ -167,21 +167,6 @@ public class PbHandler {
     }
 
 
-
-
-    public void onWidget(WidgetLoaded event) {
-        if (!isEnabled())
-            return;
-        /* Handle BA events */
-        if (event.getGroupId() == InterfaceID.BA_REWARD) {
-            Widget widget = client.getWidget(ComponentID.BA_REWARD_REWARD_TEXT);
-            if (widget != null && widget.getText().contains("80 ") && widget.getText().contains("5 ")) {
-                int gambleCount = client.getVarbitValue(Varbits.BA_GC);
-                BossNotification notification = new BossNotification(BA_BOSS_NAME, gambleCount, "The Queen is dead!", null, null,null);
-                bossData.set(notification);
-            }
-        }
-    }
     public void onTick() {
         BossNotification data = this.bossData.get();
 
@@ -447,14 +432,6 @@ public class PbHandler {
     }
 
 
-    private static Optional<Pair<String, Integer>> result(String boss, String count) {
-        try {
-            return Optional.ofNullable(boss).map(k -> Pair.of(boss, Integer.parseInt(count)));
-        } catch (NumberFormatException e) {
-            log.debug("Failed to parse kill count [{}] for boss [{}]", count, boss);
-            return Optional.empty();
-        }
-    }
 
     @Nullable
     private static String parsePrimaryBoss(String boss, String type) {
@@ -524,33 +501,7 @@ public class PbHandler {
         return client.getVarbitValue(ENABLE_PRECISE_TIMING) > 0;
     }
 
-    @Nullable
-    private Drop getLootSource(int itemId) {
-        Drop drop = plugin.lastDrop;
-        if (drop == null) return null;
-        if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) return null;
-        for (ItemStack item : drop.getItems()) {
-            if (item.getId() == itemId) {
-                return drop;
-            }
-        }
-        return null;
-    }
 
-    public void onLootReceived(LootReceived event) {
-        String source = NpcUtilities.getStandardizedSource(event, plugin);
-        BossNotification pending = pendingNotifications.remove(source);
-
-        if (pending != null) {
-            // We found a pending notification for this boss, process it now
-            if (pending.getBoss().equals("")) {
-                String npcName = source;
-                BossNotification trueBossNoti = new BossNotification(npcName, pending.getCount(), pending.getGameMessage(), pending.getTime(), pending.getBestTime(), pending.isPersonalBest());
-                bossData.set(trueBossNoti);
-            }
-            processKill(pending);
-        } 
-    }
 
     //Storing boss Time to either access at a later point or to move through sending the time
     private void storeBossTime(String bossName, Duration time, Duration bestTime, boolean isPb){
