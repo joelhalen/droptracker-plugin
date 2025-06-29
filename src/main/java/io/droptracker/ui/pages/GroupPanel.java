@@ -85,12 +85,13 @@ public class GroupPanel {
 	// Add field for tracking leaderboard placeholder
 	private JPanel leaderboardPlaceholder;
 
-	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api) {
+	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager) {
 		this.client = client;
 		this.clientThread = clientThread;
 		this.config = config;
 		this.chatMessageUtil = chatMessageUtil;
 		this.api = api;
+		this.itemManager = itemManager;
 	}
 
 	public JPanel create() {
@@ -757,61 +758,101 @@ public class GroupPanel {
 		c.gridy = 0;
 		c.ipady = 5;
 
-		// Add each Unique Item icon to the panel
+		// Add each submission icon to the panel
 		for (GroupSearchResult.RecentSubmission submission : recentSubmissions) {
-			if (!submission.getSubmissionType().equalsIgnoreCase("pb")) {
-				final AsyncBufferedImage image = itemManager.getImage(submission.getDropItemId(), submission.getDropQuantity(), submission.getDropQuantity() > 1);
+			if (submission.getSubmissionType().equalsIgnoreCase("drops")) {
+				// Handle drops
+				Integer itemId = submission.getDropItemId();
+				Integer quantity = submission.getDropQuantity();
+				
+				if (itemId != null && quantity != null) {
+					final AsyncBufferedImage image = itemManager.getImage(itemId, quantity, quantity > 1);
+					final float alpha = (quantity > 0 ? 1.0f : 0.5f);
+					final BufferedImage opaque = ImageUtil.alphaOffset(image, alpha);
 
-				final float alpha = (submission.getDropQuantity() > 0 ? 1.0f : 0.5f);
-				final BufferedImage opaque = ImageUtil.alphaOffset(image, alpha);
+					final JLabel icon = new JLabel();
+					icon.setToolTipText(buildSubmissionTooltip(submission));
+					icon.setIcon(new ImageIcon(opaque));
+					icon.setVerticalAlignment(SwingConstants.CENTER);
+					icon.setHorizontalAlignment(SwingConstants.CENTER);
+					panel.add(icon, c);
+					c.gridx++;
 
-				final JLabel icon = new JLabel();
-				icon.setToolTipText(buildSubmissionTooltip(submission));
-				icon.setIcon(new ImageIcon(opaque));
-				icon.setVerticalAlignment(SwingConstants.CENTER);
-				icon.setHorizontalAlignment(SwingConstants.CENTER);
-				panel.add(icon, c);
-				c.gridx++;
-
-				// in case the image is blank we will refresh it upon load
-				// Should only trigger if image hasn't been added
-				image.onLoaded(() ->
-				{
-					icon.setIcon(new ImageIcon(ImageUtil.alphaOffset(image, alpha)));
-					icon.revalidate();
-					icon.repaint();
-				});
-			} else {
-				String imageUrl = submission.getImageUrl();
-				BufferedImage image;
-				try {
-					image = ImageIO.read(new URL(imageUrl));
-				} catch (IOException e) {
-					System.err.println("Failed to load image: " + e.getMessage());
-					continue;
+					image.onLoaded(() -> {
+						icon.setIcon(new ImageIcon(ImageUtil.alphaOffset(image, alpha)));
+						icon.revalidate();
+						icon.repaint();
+					});
 				}
-				JLabel icon = new JLabel(new ImageIcon(image));
-				panel.add(icon, c);
-				c.gridx++;
-				// No need to refresh image since it's already loaded from URL
-				icon.revalidate();
-				icon.repaint();
+			} else if (submission.getSubmissionType().equalsIgnoreCase("clogs")) {
+				// Handle collection log items
+				Integer itemId = submission.getClogItemId();
+				
+				if (itemId != null) {
+					final AsyncBufferedImage image = itemManager.getImage(itemId, 1, false);
+					final float alpha = 1.0f;
+					final BufferedImage opaque = ImageUtil.alphaOffset(image, alpha);
+
+					final JLabel icon = new JLabel();
+					icon.setToolTipText(buildSubmissionTooltip(submission));
+					icon.setIcon(new ImageIcon(opaque));
+					icon.setVerticalAlignment(SwingConstants.CENTER);
+					icon.setHorizontalAlignment(SwingConstants.CENTER);
+					panel.add(icon, c);
+					c.gridx++;
+
+					image.onLoaded(() -> {
+						icon.setIcon(new ImageIcon(ImageUtil.alphaOffset(image, alpha)));
+						icon.revalidate();
+						icon.repaint();
+					});
+				}
+			} else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+				// Handle personal best submissions with image URL
+				String imageUrl = submission.getImageUrl();
+				if (imageUrl != null && !imageUrl.isEmpty()) {
+					try {
+						BufferedImage image = ImageIO.read(new URL(imageUrl));
+						if (image != null) {
+							JLabel icon = new JLabel(new ImageIcon(image));
+							icon.setToolTipText(buildSubmissionTooltip(submission));
+							icon.setVerticalAlignment(SwingConstants.CENTER);
+							icon.setHorizontalAlignment(SwingConstants.CENTER);
+							panel.add(icon, c);
+							c.gridx++;
+							icon.revalidate();
+							icon.repaint();
+						}
+					} catch (IOException e) {
+						System.err.println("Failed to load PB image: " + e.getMessage());
+					}
+				}
 			}
 		}
+		
+		panel.revalidate();
+		panel.repaint();
 		return panel;	
 	}
 
 	private String buildSubmissionTooltip(GroupSearchResult.RecentSubmission submission) {
 		if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
-					+ submission.getDropItemName() + " - " + submission.getDropQuantity();
-		} else if (submission.getSubmissionType().equalsIgnoreCase("item")) {
-			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
-					+ submission.getDropItemName() + " - " + submission.getDropQuantity();
-		} else if (submission.getSubmissionType().equalsIgnoreCase("clog_item")) {
-			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
-					+ submission.getClogItemName() + " - " + submission.getClogKillCount();
+			String pbTime = submission.getPbTime();
+			return submission.getPlayerName() + " - PB: " + 
+				(pbTime != null ? pbTime : "Unknown Time") + " - " + submission.getSourceName();
+		} else if (submission.getSubmissionType().equalsIgnoreCase("drops")) {
+			String itemName = submission.getDropItemName();
+			Integer quantity = submission.getDropQuantity();
+			return submission.getPlayerName() + " - Drop: " + 
+				(itemName != null ? itemName : "Unknown Item") + 
+				(quantity != null ? " x" + quantity : "") + " - " + submission.getSourceName();
+		} else if (submission.getSubmissionType().equalsIgnoreCase("clogs")) {
+			String itemName = submission.getClogItemName();
+			Integer kc = submission.getClogKillCount();
+			return submission.getPlayerName() + " - Clog: " + 
+				(itemName != null ? itemName : "Unknown Item") + 
+				(kc != null ? " at " + kc + " KC" : "") + " - " + submission.getSourceName();
 		}
-		return "Failed to load submission data.";
+		return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
 	}
 }

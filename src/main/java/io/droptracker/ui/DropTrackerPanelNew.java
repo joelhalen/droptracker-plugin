@@ -17,6 +17,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ImageUtil;
 
 import javax.swing.border.EmptyBorder;
@@ -25,7 +26,6 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Image;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.awt.FlowLayout;
 import java.awt.Component;
 
@@ -57,7 +57,8 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	private Client client;
 	@Inject
 	private ClientThread clientThread;
-
+	@Inject
+	private ItemManager itemManager;
 	@Inject
 	private DropTrackerConfig config;
 
@@ -98,7 +99,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		// Stats tab
 		if (config.useApi()) {
 			PlayerStatsPanel statsPanel = new PlayerStatsPanel(client, clientThread, config, chatMessageUtil, api);
-			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api);
+			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api, itemManager);
 			JPanel playerStatsPanel = statsPanel.create();
 			JPanel groupStatsPanel = groupPanel.create();
 			tabbedPane.addTab("Players", playerStatsPanel);
