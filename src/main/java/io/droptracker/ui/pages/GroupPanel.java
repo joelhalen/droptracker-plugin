@@ -4,6 +4,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.BasicStroke;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -11,6 +12,7 @@ import java.awt.FontMetrics;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.util.concurrent.CompletableFuture;
+import java.util.Map;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.net.URL;
@@ -39,6 +41,7 @@ import io.droptracker.ui.PanelElements;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.models.api.TopGroupResult;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
@@ -69,6 +72,9 @@ public class GroupPanel {
 	private JPanel mainPanel;
 	private JPanel contentPanel;
 	private JTextField searchField;
+
+	// Add field for tracking leaderboard placeholder
+	private JPanel leaderboardPlaceholder;
 
 	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api) {
 		this.client = client;
@@ -175,11 +181,12 @@ public class GroupPanel {
 		defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
 		// Instructions text
-		JLabel instructionLabel = new JLabel("Search for a group above");
+		JLabel instructionLabel = new JLabel("Search for a group by name above");
 		instructionLabel.setFont(FontManager.getRunescapeFont());
 		instructionLabel.setForeground(Color.LIGHT_GRAY);
 		instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		instructionLabel.setHorizontalAlignment(JLabel.CENTER);
+
 		
 		JButton createGroupButton = PanelElements.createExternalLinkButton("⚡ Create a Group", "Click to visit the group creation documentation", false, () -> openCreateGroupPage());
 		
@@ -204,6 +211,28 @@ public class GroupPanel {
 		
 		defaultPanel.add(instructionLabel);
 		defaultPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+		
+		if (config.useApi()) {
+			// Create placeholder for leaderboard
+			leaderboardPlaceholder = new JPanel();
+			leaderboardPlaceholder.setLayout(new BoxLayout(leaderboardPlaceholder, BoxLayout.Y_AXIS));
+			leaderboardPlaceholder.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			leaderboardPlaceholder.setAlignmentX(Component.CENTER_ALIGNMENT);
+			
+			JLabel loadingLabel = new JLabel("Loading top groups...");
+			loadingLabel.setFont(FontManager.getRunescapeSmallFont());
+			loadingLabel.setForeground(Color.LIGHT_GRAY);
+			loadingLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+			
+			leaderboardPlaceholder.add(loadingLabel);
+			defaultPanel.add(leaderboardPlaceholder);
+			defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+			
+			// Start loading data
+			obtainLeaderboardData();
+		}
+		
 		defaultPanel.add(createButtonPanel);
 		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 		defaultPanel.add(groupButtonPanel);
@@ -212,6 +241,206 @@ public class GroupPanel {
 		contentPanel.add(defaultPanel);
 		contentPanel.revalidate();
 		contentPanel.repaint();
+	}
+
+	private JPanel showLeaderboard(TopGroupResult leaderboardData) {
+		JPanel leaderboardPanel = new JPanel();
+		leaderboardPanel.setLayout(new BoxLayout(leaderboardPanel, BoxLayout.Y_AXIS));
+		leaderboardPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		leaderboardPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		
+		// Title for the leaderboard
+		JLabel leaderboardTitle = new JLabel("Top Groups");
+		leaderboardTitle.setFont(FontManager.getRunescapeBoldFont());
+		leaderboardTitle.setForeground(Color.WHITE);
+		leaderboardTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+		leaderboardTitle.setHorizontalAlignment(JLabel.CENTER);
+		
+		// Create table container with border similar to other panels
+		JPanel tableContainer = new JPanel();
+		tableContainer.setLayout(new BoxLayout(tableContainer, BoxLayout.Y_AXIS));
+		tableContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		tableContainer.setBorder(new EmptyBorder(10, 10, 10, 10));
+		tableContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
+		tableContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 200));
+		
+		// Create table header
+		JPanel headerRow = new JPanel(new BorderLayout(5, 0));
+		headerRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		headerRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
+		headerRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
+		
+		JLabel rankHeader = new JLabel("Rank");
+		rankHeader.setFont(FontManager.getRunescapeBoldFont());
+		rankHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		rankHeader.setHorizontalAlignment(JLabel.LEFT);
+		rankHeader.setPreferredSize(new Dimension(40, 25));
+		
+		// Create sub-panel for name and loot columns
+		JPanel nameAndLootHeader = new JPanel(new BorderLayout(10, 0));
+		nameAndLootHeader.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		
+		JLabel nameHeader = new JLabel("Name");
+		nameHeader.setFont(FontManager.getRunescapeBoldFont());
+		nameHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		nameHeader.setHorizontalAlignment(JLabel.LEFT);
+		
+		JLabel lootHeader = new JLabel("Loot");
+		lootHeader.setFont(FontManager.getRunescapeBoldFont());
+		lootHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		lootHeader.setHorizontalAlignment(JLabel.RIGHT);
+		lootHeader.setPreferredSize(new Dimension(50, 25));
+		
+		nameAndLootHeader.add(nameHeader, BorderLayout.CENTER);
+		nameAndLootHeader.add(lootHeader, BorderLayout.EAST);
+		
+		headerRow.add(rankHeader, BorderLayout.WEST);
+		headerRow.add(nameAndLootHeader, BorderLayout.CENTER);
+		
+		// Create data rows
+		JPanel dataContainer = new JPanel();
+		dataContainer.setLayout(new BoxLayout(dataContainer, BoxLayout.Y_AXIS));
+		dataContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		dataContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
+		
+		// Display top groups from API response
+		if (leaderboardData != null && leaderboardData.getGroups() != null) {
+			int displayRank = 1;
+			for (TopGroupResult.TopGroup groupData : leaderboardData.getGroups()) {
+				if (displayRank > 5) break; // Only show top 5
+				
+				JPanel dataRow = new JPanel(new BorderLayout(5, 0));
+				dataRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+				dataRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
+				dataRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
+				
+				// Rank - use API rank if available, otherwise use display position
+				Integer apiRank = groupData.getRank();
+				int rankToShow = (apiRank != null) ? apiRank : displayRank;
+				
+				JLabel rankLabel = new JLabel("#" + rankToShow);
+				rankLabel.setFont(FontManager.getRunescapeSmallFont());
+				rankLabel.setForeground(rankToShow <= 3 ? ColorScheme.PROGRESS_COMPLETE_COLOR : Color.WHITE);
+				rankLabel.setHorizontalAlignment(JLabel.LEFT);
+				rankLabel.setPreferredSize(new Dimension(40, 25));
+				
+				// Create sub-panel for name and loot columns
+				JPanel nameAndLootData = new JPanel(new BorderLayout(10, 0));
+				nameAndLootData.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+				
+				// Group Name from API
+				final String groupName = groupData.getGroupName() == null || groupData.getGroupName().trim().isEmpty() 
+					? "Unknown Group" 
+					: groupData.getGroupName();
+				
+				JButton nameButton = new JButton("<html>" + groupName + "&nbsp;&nbsp;<img src='https://www.droptracker.io/img/external-8px-g.png'></html>");
+				nameButton.setFont(FontManager.getRunescapeSmallFont());
+				nameButton.setForeground(Color.WHITE);
+				nameButton.setHorizontalAlignment(JLabel.LEFT);
+				nameButton.setBorder(null);
+				nameButton.addActionListener(e -> {
+					
+					CompletableFuture.supplyAsync(() -> {	
+						try{
+							showLoadingState();
+							GroupSearchResult groupResult = api.searchGroup(groupName);
+							if (groupResult != null) {
+								showGroupDetails(groupResult);
+							}
+							return null;
+						} catch (Exception ex) {
+							System.err.println("Failed to search for group: " + ex.getMessage());
+							return null;
+						}
+					});
+				});
+				
+				// Total Loot from API
+				String totalLoot = groupData.getTotalLoot();
+				if (totalLoot == null || totalLoot.trim().isEmpty()) {
+					totalLoot = "0 GP";
+				}
+				
+				JLabel lootLabel = new JLabel(totalLoot);
+				lootLabel.setFont(FontManager.getRunescapeSmallFont());
+				lootLabel.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
+				lootLabel.setHorizontalAlignment(JLabel.RIGHT);
+				lootLabel.setPreferredSize(new Dimension(50, 25));
+				
+				nameAndLootData.add(nameButton, BorderLayout.CENTER);
+				nameAndLootData.add(lootLabel, BorderLayout.EAST);
+				
+				dataRow.add(rankLabel, BorderLayout.WEST);
+				dataRow.add(nameAndLootData, BorderLayout.CENTER);
+				
+				dataContainer.add(dataRow);
+				if (displayRank < 5) {
+					dataContainer.add(Box.createRigidArea(new Dimension(0, 3))); // Small spacing between rows
+				}
+				
+				displayRank++;
+			}
+		} else {
+			// Fallback if no data
+			JLabel noDataLabel = new JLabel("No leaderboard data available");
+			noDataLabel.setFont(FontManager.getRunescapeSmallFont());
+			noDataLabel.setForeground(Color.LIGHT_GRAY);
+			noDataLabel.setHorizontalAlignment(JLabel.CENTER);
+			noDataLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			dataContainer.add(noDataLabel);
+		}
+		
+		// Assemble the table
+		tableContainer.add(headerRow);
+		tableContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing after header
+		tableContainer.add(dataContainer);
+		
+		// Add to main panel
+		leaderboardPanel.add(leaderboardTitle);
+		leaderboardPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		leaderboardPanel.add(tableContainer);
+		
+		return leaderboardPanel;
+	}
+
+	private void obtainLeaderboardData() {
+		CompletableFuture.supplyAsync(() -> {
+			try {
+				TopGroupResult groupResult = api.getTopGroups();
+				if (groupResult != null) {
+					// Pre-build the leaderboard panel off the EDT to avoid latency
+					return showLeaderboard(groupResult);
+				}
+			} catch (Exception e) {
+				System.err.println("Failed to get top groups: " + e.getMessage());
+			}
+			return null;
+		}).thenAccept(leaderboardPanel -> {
+			SwingUtilities.invokeLater(() -> {
+				if (leaderboardPanel != null && leaderboardPlaceholder != null) {
+					// Get the parent panel (defaultPanel)
+					Container parent = leaderboardPlaceholder.getParent();
+					if (parent != null) {
+						// Find the index of the placeholder
+						int index = -1;
+						for (int i = 0; i < parent.getComponentCount(); i++) {
+							if (parent.getComponent(i) == leaderboardPlaceholder) {
+								index = i;
+								break;
+							}
+						}
+						
+						if (index != -1) {
+							// Remove placeholder and add the real leaderboard at the same position
+							parent.remove(index);
+							parent.add(leaderboardPanel, index);
+							parent.revalidate();
+							parent.repaint();
+						}
+					}
+				}
+			});
+		});
 	}
 	
 	private void performGroupSearch() {
@@ -225,14 +454,7 @@ public class GroupPanel {
 		System.out.println("Searching for group: " + searchQuery);
 		
 		// Show loading message
-		contentPanel.removeAll();
-		JLabel loadingLabel = new JLabel("Loading...");
-		loadingLabel.setFont(FontManager.getRunescapeFont());
-		loadingLabel.setForeground(Color.LIGHT_GRAY);
-		loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-		contentPanel.add(loadingLabel);
-		contentPanel.revalidate();
-		contentPanel.repaint();
+		showLoadingState();
 		
 		// Perform search in background
 		CompletableFuture.supplyAsync(() -> {
@@ -263,6 +485,17 @@ public class GroupPanel {
 				}
 			});
 		});
+	}
+
+	private void showLoadingState() {
+		contentPanel.removeAll();
+		JLabel loadingLabel = new JLabel("Loading...");
+		loadingLabel.setFont(FontManager.getRunescapeFont());
+		loadingLabel.setForeground(Color.LIGHT_GRAY);
+		loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+		contentPanel.add(loadingLabel);
+		contentPanel.revalidate();
+		contentPanel.repaint();
 	}
 	
 	private void showSearchError(String message) {

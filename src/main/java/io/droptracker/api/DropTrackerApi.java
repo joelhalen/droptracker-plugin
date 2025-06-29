@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.PlayerSearchResult;
+import io.droptracker.models.api.TopGroupResult;
 import okhttp3.*;
 
 import javax.inject.Inject;
@@ -30,6 +31,28 @@ public class DropTrackerApi {
     
         public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
             this.dataLoadedCallback = callback;
+    }
+
+    @SuppressWarnings("null")
+    public TopGroupResult getTopGroups() throws IOException {
+        String apiUrl = getApiUrl();
+        try{
+        HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
+        Request request = new Request.Builder().url(url).build();
+        Response response = httpClient.newCall(request).execute();
+        if (!response.isSuccessful()) {
+            throw new IOException("API request failed with status: " + response.code());
+        }
+        if (response.body() == null) {
+            throw new IOException("Empty response body");
+        } else {
+            String responseData = response.body().string();
+            return TopGroupResult.fromJson(responseData);
+        }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     /**
@@ -88,7 +111,6 @@ public class DropTrackerApi {
         long endTime = System.currentTimeMillis();
             return String.valueOf((int) (endTime - startTime)) + "ms";
         } catch (Exception e) {
-            e.printStackTrace();
             return "? ms";
         }
     }
