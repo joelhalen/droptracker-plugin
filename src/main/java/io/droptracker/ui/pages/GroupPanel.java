@@ -9,9 +9,12 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.util.concurrent.CompletableFuture;
+import java.util.List;
 import java.util.Map;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
@@ -27,6 +30,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
@@ -47,6 +51,9 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.util.AsyncBufferedImage;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 
 public class GroupPanel {
@@ -65,6 +72,8 @@ public class GroupPanel {
 
 	@Inject
 	private DropTrackerApi api;
+
+	private ItemManager itemManager;
 
 	private int currentGroupId = 2; // Track group ID instead of URL
 	
@@ -656,6 +665,12 @@ public class GroupPanel {
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		groupInfoPanel.add(statsPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		// Get recent submission data to draw 
+		List<GroupSearchResult.RecentSubmission> recentSubmissions = groupResult.getRecentSubmissions();
+		System.out.println("Recent submissions: " + recentSubmissions.size());
+		System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
+		groupInfoPanel.add(createRecentSubmissionPanel(recentSubmissions, itemManager));
+		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		groupInfoPanel.add(actionPanel);
 		
 		contentPanel.add(groupInfoPanel);
@@ -689,97 +704,6 @@ public class GroupPanel {
 		}
 	}
 
-	private void setTruncatedText(JTextArea textArea, String fullText, int maxWidth, int maxHeight) {
-		// First, configure the text area with the full text to see how much space it needs
-		textArea.setText(fullText);
-		textArea.setSize(new Dimension(maxWidth, Integer.MAX_VALUE));
-		
-		// Force the text area to calculate its layout
-		textArea.getDocument().putProperty("i18n", Boolean.FALSE);
-		textArea.revalidate();
-		
-		// Get the actual height needed for the full text
-		int actualHeight = textArea.getPreferredSize().height;
-		
-		// If it fits, we're done
-		if (actualHeight <= maxHeight) {
-			textArea.setToolTipText(null);
-			return;
-		}
-		
-		// Text is too long, need to truncate
-		// Calculate how many lines we can fit
-		FontMetrics fm = textArea.getFontMetrics(textArea.getFont());
-		int lineHeight = fm.getHeight();
-		int maxLines = Math.max(1, maxHeight / lineHeight);
-		
-		// Split into words and build text line by line
-		String[] words = fullText.split("\\s+");
-		StringBuilder result = new StringBuilder();
-		StringBuilder currentLine = new StringBuilder();
-		int linesUsed = 1;
-		
-		for (String word : words) {
-			// Test if adding this word would make the line too long
-			String testLine = currentLine.length() > 0 ? currentLine + " " + word : word;
-			int lineWidth = fm.stringWidth(testLine);
-			
-			if (lineWidth > maxWidth && currentLine.length() > 0) {
-				// Line would be too long, move to next line
-				if (result.length() > 0) result.append(" ");
-				result.append(currentLine);
-				currentLine = new StringBuilder(word);
-				linesUsed++;
-				
-				// Check if we've used all available lines
-				if (linesUsed > maxLines) {
-					// Need to truncate - remove some words to make room for "..."
-					String truncated = result.toString();
-					String ellipsis = "...";
-					
-					// Keep removing words until "..." fits on the last line
-					while (truncated.length() > 0) {
-						int lastSpace = truncated.lastIndexOf(' ');
-						if (lastSpace == -1) break;
-						
-						String testTruncated = truncated.substring(0, lastSpace) + " " + ellipsis;
-						
-						// Test if this fits
-						textArea.setText(testTruncated);
-						textArea.setSize(new Dimension(maxWidth, Integer.MAX_VALUE));
-						
-						if (textArea.getPreferredSize().height <= maxHeight) {
-							textArea.setText(testTruncated);
-							textArea.setToolTipText("<html><div style='width: 300px;'>" + 
-												   fullText.replace("\n", "<br>") + "</div></html>");
-							return;
-						}
-						
-						truncated = truncated.substring(0, lastSpace);
-					}
-					
-					// Fallback
-					textArea.setText(truncated + " " + ellipsis);
-					textArea.setToolTipText("<html><div style='width: 300px;'>" + 
-										   fullText.replace("\n", "<br>") + "</div></html>");
-					return;
-				}
-			} else {
-				currentLine.append(currentLine.length() > 0 ? " " : "").append(word);
-			}
-		}
-		
-		// Add the last line
-		if (currentLine.length() > 0) {
-			if (result.length() > 0) result.append(" ");
-			result.append(currentLine);
-		}
-		
-		// Set the final text
-		textArea.setText(result.toString());
-		textArea.setToolTipText(null);
-	}
-
 	/**
 	 * Downloads the group icon from the provided URL, scales it to 50×50, then swaps it into the given label.
 	 * This runs off the EDT to avoid blocking the UI.
@@ -806,5 +730,88 @@ public class GroupPanel {
 				SwingUtilities.invokeLater(() -> iconLabel.setIcon(icon));
 			}
 		});
+	}
+
+	private JPanel createRecentSubmissionPanel(List<GroupSearchResult.RecentSubmission> recentSubmissions,
+			ItemManager itemManager) {
+		JPanel panel = new JPanel();
+		panel.setLayout(new BorderLayout());
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(3, 0, 3, 0));
+		panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 10, 40));
+
+		panel.setLayout(new GridBagLayout());
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+
+
+		return updateRecentSubmissionPanel(panel, recentSubmissions, itemManager);
+	}
+
+	private JPanel updateRecentSubmissionPanel(JPanel panel, List<GroupSearchResult.RecentSubmission> recentSubmissions, ItemManager itemManager) {
+		panel.removeAll();
+
+		GridBagConstraints c = new GridBagConstraints();
+		c.fill = GridBagConstraints.BOTH;
+		c.weightx = 1;
+		c.gridx = 0;
+		c.gridy = 0;
+		c.ipady = 5;
+
+		// Add each Unique Item icon to the panel
+		for (GroupSearchResult.RecentSubmission submission : recentSubmissions) {
+			if (!submission.getSubmissionType().equalsIgnoreCase("pb")) {
+				final AsyncBufferedImage image = itemManager.getImage(submission.getDropItemId(), submission.getDropQuantity(), submission.getDropQuantity() > 1);
+
+				final float alpha = (submission.getDropQuantity() > 0 ? 1.0f : 0.5f);
+				final BufferedImage opaque = ImageUtil.alphaOffset(image, alpha);
+
+				final JLabel icon = new JLabel();
+				icon.setToolTipText(buildSubmissionTooltip(submission));
+				icon.setIcon(new ImageIcon(opaque));
+				icon.setVerticalAlignment(SwingConstants.CENTER);
+				icon.setHorizontalAlignment(SwingConstants.CENTER);
+				panel.add(icon, c);
+				c.gridx++;
+
+				// in case the image is blank we will refresh it upon load
+				// Should only trigger if image hasn't been added
+				image.onLoaded(() ->
+				{
+					icon.setIcon(new ImageIcon(ImageUtil.alphaOffset(image, alpha)));
+					icon.revalidate();
+					icon.repaint();
+				});
+			} else {
+				String imageUrl = submission.getImageUrl();
+				BufferedImage image;
+				try {
+					image = ImageIO.read(new URL(imageUrl));
+				} catch (IOException e) {
+					System.err.println("Failed to load image: " + e.getMessage());
+					continue;
+				}
+				JLabel icon = new JLabel(new ImageIcon(image));
+				panel.add(icon, c);
+				c.gridx++;
+				// No need to refresh image since it's already loaded from URL
+				icon.revalidate();
+				icon.repaint();
+			}
+		}
+		return panel;	
+	}
+
+	private String buildSubmissionTooltip(GroupSearchResult.RecentSubmission submission) {
+		if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
+					+ submission.getDropItemName() + " - " + submission.getDropQuantity();
+		} else if (submission.getSubmissionType().equalsIgnoreCase("item")) {
+			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
+					+ submission.getDropItemName() + " - " + submission.getDropQuantity();
+		} else if (submission.getSubmissionType().equalsIgnoreCase("clog_item")) {
+			return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - "
+					+ submission.getClogItemName() + " - " + submission.getClogKillCount();
+		}
+		return "Failed to load submission data.";
 	}
 }

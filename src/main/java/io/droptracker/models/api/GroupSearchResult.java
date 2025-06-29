@@ -7,6 +7,7 @@ import net.runelite.client.game.ItemStack;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class GroupSearchResult {
     @SerializedName("group_name")
@@ -113,7 +114,7 @@ public class GroupSearchResult {
         return groupTopPlayer;
     }
 
-    public List<RecentSubmission> getGroupRecentSubmissions() {
+    public List<RecentSubmission> getRecentSubmissions() {
         return groupRecentSubmissions;
     }
 
@@ -183,68 +184,248 @@ public class GroupSearchResult {
         @SerializedName("player_name")
         private String playerName;
         
-        @SerializedName("loot_value")
-        private long lootValue;
+        @SerializedName("submission_type") // pbs, clogs, drops
+        private String submissionType;
         
-        @SerializedName("boss_name")
-        private String bossName;
+        @SerializedName("source_name") // 
+        private String sourceName;
         
-        @SerializedName("submission_date")
-        private String submissionDate;
+        @SerializedName("date_received")
+        private String dateReceived;
         
-        @SerializedName("items")
-        private List<ItemStack> items;
+        @SerializedName("display_name") 
+        private String displayName;
+
+        @SerializedName("value") // if not a pb
+        private String value;
+
+        @SerializedName("data")
+        private List<Map<String, Object>> data;
+
+        @SerializedName("image_url")
+        private String imageUrl;
 
         // Constructors
-        public RecentSubmission() {}
+        public RecentSubmission() {} // Default constructor for Gson
+        
+        public RecentSubmission(String playerName, String submissionType, String sourceName, String dateReceived, String displayName, long value, List<Map<String, Object>> data, String imageUrl) {
+            this.playerName = playerName;
+            this.submissionType = submissionType;
+            this.sourceName = sourceName;
+            this.dateReceived = dateReceived;
+            this.displayName = displayName;
+            this.value = value == 0 ? "-1" : String.valueOf(value);
+            this.data = data;
+            this.imageUrl = imageUrl;
+        }
 
         // Getters and setters
         public String getPlayerName() { return playerName; }
         public void setPlayerName(String playerName) { this.playerName = playerName; }
         
-        public long getLootValue() { return lootValue; }
-        public void setLootValue(long lootValue) { this.lootValue = lootValue; }
+        public String getSubmissionType() { return submissionType; }
+        public void setSubmissionType(String submissionType) { this.submissionType = submissionType; }
         
-        public String getBossName() { return bossName; }
-        public void setBossName(String bossName) { this.bossName = bossName; }
+        public String getSourceName() { return sourceName; }
+        public void setSourceName(String sourceName) { this.sourceName = sourceName; }
         
-        public String getSubmissionDate() { return submissionDate; }
-        public void setSubmissionDate(String submissionDate) { this.submissionDate = submissionDate; }
+        public String getDateReceived() { return dateReceived; }
+        public void setDateReceived(String dateReceived) { this.dateReceived = dateReceived; }
         
-        public List<ItemStack> getItems() { return items; }
-        public void setItems(List<ItemStack> items) { this.items = items; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        
+        public String getValue() { return value == "-1" ? "0" : value; }
+        public void setValue(String value) { this.value = value == "0" ? "-1" : value; }
+        
+        public List<Map<String, Object>> getData() { return data; }
+        public void setData(List<Map<String, Object>> data) { this.data = data; }
+
+        public String getImageUrl() { return imageUrl; }
+        public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
+        // Generic method to extract data by type and key
+        private Object getDataValueByTypeAndKey(String dataType, String key) {
+            if (data == null || data.isEmpty()) {
+                return null;
+            }
+            
+            for (Map<String, Object> dataEntry : data) {
+                if (dataEntry != null && dataEntry.containsKey("type")) {
+                    String entryType = dataEntry.get("type").toString();
+                    if (entryType.equalsIgnoreCase(dataType) && dataEntry.containsKey(key)) {
+                        return dataEntry.get(key);
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Generic method to get all data entries of a specific type
+       
+
+        // Personal Best related methods
+        public String getPbTime() {
+            if (!submissionType.equalsIgnoreCase("pb")) {
+                return null;
+            }
+            
+            Object timeValue = getDataValueByTypeAndKey("best_time", "time");
+            return timeValue != null ? timeValue.toString() : null;
+        }
+
+        
+        // Drop related methods
+        public String getDropItemName() {
+            if (!submissionType.equalsIgnoreCase("drops")) {
+                return null;
+            }
+            
+            Object itemName = getDataValueByTypeAndKey("item", "name");
+            return itemName != null ? itemName.toString() : null;
+        }
+
+        public Integer getDropItemId() {
+            if (!submissionType.equalsIgnoreCase("drops")) {
+                return null;
+            }
+            
+            Object itemId = getDataValueByTypeAndKey("item", "id");
+            if (itemId != null) {
+                try {
+                    return Integer.valueOf(itemId.toString());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        public Integer getDropQuantity() {
+            if (!submissionType.equalsIgnoreCase("drops")) {
+                return null;
+            }
+            
+            Object quantity = getDataValueByTypeAndKey("item", "quantity");
+            if (quantity != null) {
+                try {
+                    return Integer.valueOf(quantity.toString());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        public Long getDropValue() {
+            if (!submissionType.equalsIgnoreCase("drops")) {
+                return null;
+            }
+            
+            Object dropValue = getDataValueByTypeAndKey("item", "value");
+            if (dropValue != null) {
+                try {
+                    return Long.valueOf(dropValue.toString());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        // Collection Log related methods
+        public String getClogItemName() {
+            if (!submissionType.equalsIgnoreCase("clogs")) {
+                return null;
+            }
+            
+            Object itemName = getDataValueByTypeAndKey("clog_item", "name");
+            return itemName != null ? itemName.toString() : null;
+        }
+
+        public Integer getClogItemId() {
+            if (!submissionType.equalsIgnoreCase("clogs")) {
+                return null;
+            }
+            
+            Object itemId = getDataValueByTypeAndKey("clog_item", "id");
+            if (itemId != null) {
+                try {
+                    return Integer.valueOf(itemId.toString());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        public Integer getClogKillCount() {
+            if (!submissionType.equalsIgnoreCase("clogs")) {
+                return null;
+            }
+            
+            Object kcValue = getDataValueByTypeAndKey("clog_item", "kill_count");
+            if (kcValue != null) {
+                try {
+                    return Integer.valueOf(kcValue.toString());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        // Utility methods for checking submission types
+        public boolean isPersonalBest() {
+            return submissionType != null && submissionType.equalsIgnoreCase("pb");
+        }
+
+        public boolean isDrop() {
+            return submissionType != null && submissionType.equalsIgnoreCase("drops");
+        }
+
+        public boolean isCollectionLog() {
+            return submissionType != null && submissionType.equalsIgnoreCase("clogs");
+        }
+
+        // Method to get a formatted display string based on submission type
+        public String getFormattedDisplay() {
+            if (isPersonalBest()) {
+                String time = getPbTime();
+                return time != null ? String.format("PB: %s", time) : "Personal Best";
+            } else if (isDrop()) {
+                String itemName = getDropItemName();
+                Integer quantity = getDropQuantity();
+                if (itemName != null && quantity != null) {
+                    return String.format("%s x%d", itemName, quantity);
+                } else if (itemName != null) {
+                    return itemName;
+                }
+                return "Drop";
+            } else if (isCollectionLog()) {
+                String itemName = getClogItemName();
+                return itemName != null ? String.format("Clog: %s", itemName) : "Collection Log";
+            }
+            return displayName != null ? displayName : "Unknown";
+        }
+
+        
+
+        // Method to get raw data entry by type (for custom processing)
+        public Map<String, Object> getDataEntryByType(String dataType) {
+            if (data == null || data.isEmpty()) {
+                return null;
+            }
+            
+            return data.stream()
+                .filter(entry -> entry != null && entry.containsKey("type"))
+                .filter(entry -> entry.get("type").toString().equalsIgnoreCase(dataType))
+                .findFirst()
+                .orElse(null);
+        }
     }
 
-    public static class GroupMember {
-        @SerializedName("player_name")
-        private String playerName;
-        
-        @SerializedName("total_loot")
-        private long totalLoot;
-        
-        @SerializedName("rank")
-        private int rank;
-        
-        @SerializedName("join_date")
-        private String joinDate;
-
-        // Constructors
-        public GroupMember() {}
-
-        // Getters and setters
-        public String getPlayerName() { return playerName; }
-        public void setPlayerName(String playerName) { this.playerName = playerName; }
-        
-        public long getTotalLoot() { return totalLoot; }
-        public void setTotalLoot(long totalLoot) { this.totalLoot = totalLoot; }
-        
-        public int getRank() { return rank; }
-        public void setRank(int rank) { this.rank = rank; }
-        
-        public String getJoinDate() { return joinDate; }
-        public void setJoinDate(String joinDate) { this.joinDate = joinDate; }
-    }
-
+    
     public static class GroupStats {
         @SerializedName("total_members")
         private int totalMembers;

@@ -126,7 +126,7 @@ public class DropTrackerApi {
         }
 
         String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/player_lookup_new/" + playerName);
+        HttpUrl url = HttpUrl.parse(apiUrl + "/player_search?name=" + playerName);
 
         if (url == null) {
             throw new IllegalArgumentException("Invalid URL");
