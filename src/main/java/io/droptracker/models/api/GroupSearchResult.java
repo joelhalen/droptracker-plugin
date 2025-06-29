@@ -250,10 +250,10 @@ public class GroupSearchResult {
         private int totalMembers;
         
         @SerializedName("monthly_loot")
-        private long monthlyLoot;
+        private String monthlyLoot;
         
         @SerializedName("global_rank")
-        private int globalRank;
+        private String globalRank;
         
         @SerializedName("total_submissions")
         private int totalSubmissions;
@@ -265,11 +265,11 @@ public class GroupSearchResult {
         public int getTotalMembers() { return totalMembers; }
         public void setTotalMembers(int totalMembers) { this.totalMembers = totalMembers; }
         
-        public long getMonthlyLoot() { return monthlyLoot; }
-        public void setMonthlyLoot(long monthlyLoot) { this.monthlyLoot = monthlyLoot; }
+        public String getMonthlyLoot() { return monthlyLoot; }
+        public void setMonthlyLoot(String monthlyLoot) { this.monthlyLoot = monthlyLoot; }
         
-        public int getGlobalRank() { return globalRank; }
-        public void setGlobalRank(int globalRank) { this.globalRank = globalRank; }
+        public String getGlobalRank() { return globalRank; }
+        public void setGlobalRank(String globalRank) { this.globalRank = globalRank; }
         
         public int getTotalSubmissions() { return totalSubmissions; }
         public void setTotalSubmissions(int totalSubmissions) { this.totalSubmissions = totalSubmissions; }

@@ -12,6 +12,11 @@ import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.concurrent.CompletableFuture;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.net.URL;
+import java.io.IOException;
+import javax.imageio.ImageIO;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -25,6 +30,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
 import javax.swing.JLayeredPane;
+import javax.swing.ImageIcon;
 
 import javax.inject.Inject;
 
@@ -179,10 +185,10 @@ public class GroupPanel {
 		defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
 		// Add some spacing
-		defaultPanel.add(Box.createRigidArea(new Dimension(0, 50)));
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 25)));
 		
 		// Instructions text
-		JLabel instructionLabel = new JLabel("Search for a group above or create your own");
+		JLabel instructionLabel = new JLabel("Search for a group above");
 		instructionLabel.setFont(FontManager.getRunescapeFont());
 		instructionLabel.setForeground(Color.LIGHT_GRAY);
 		instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -309,8 +315,8 @@ public class GroupPanel {
 		// Create demo stats
 		GroupSearchResult.GroupStats stats = new GroupSearchResult.GroupStats();
 		stats.setTotalMembers(5);
-		stats.setGlobalRank(127);
-		stats.setMonthlyLoot(15200000L); // 15.2M GP
+		stats.setGlobalRank("127");
+		stats.setMonthlyLoot("15.2M"); // 15.2M GP
 		demo.setGroupStats(stats);
 		demo.setGroupTopPlayer("DemoPlayer");
 		
@@ -372,10 +378,16 @@ public class GroupPanel {
 		groupHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 60));
 		groupHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
-		// Placeholder for group icon (would be replaced with actual icon)
-		JPanel iconPlaceholder = new JPanel();
-		iconPlaceholder.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-		iconPlaceholder.setPreferredSize(new Dimension(50, 50));
+		// Placeholder for group icon (gray square) while real image loads
+		BufferedImage placeholderImg = new BufferedImage(50, 50, BufferedImage.TYPE_INT_ARGB);
+		JLabel groupIcon = new JLabel(new ImageIcon(placeholderImg));
+		groupIcon.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+		groupIcon.setPreferredSize(new Dimension(50, 50));
+		groupIcon.setMaximumSize(new Dimension(50, 50));
+		groupIcon.setMinimumSize(new Dimension(50, 50));
+		
+		// Asynchronously load and scale the real icon
+		loadGroupIcon(groupIcon, groupResult.getGroupImageUrl());
 		
 		JPanel groupNamePanel = new JPanel();
 		groupNamePanel.setLayout(new BoxLayout(groupNamePanel, BoxLayout.Y_AXIS));
@@ -414,13 +426,11 @@ public class GroupPanel {
 		
 		groupNamePanel.add(groupNameLabel);
 		groupNamePanel.add(Box.createRigidArea(new Dimension(0, 3))); // Small spacing
+		
 		groupNamePanel.add(groupDescArea);
 		
-		groupHeaderPanel.add(iconPlaceholder, BorderLayout.WEST);
+		groupHeaderPanel.add(groupIcon, BorderLayout.WEST);
 		groupHeaderPanel.add(groupNamePanel, BorderLayout.CENTER);
-		
-		// Add lootboard button
-		JPanel buttonPanel = createGroupImagePanel();
 		
 		// Group stats in a table-like format
 		JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
@@ -441,30 +451,44 @@ public class GroupPanel {
 		statsPanel.add(lootBox);
 		statsPanel.add(topPlayerBox);
 		
-		// Action buttons
-		JPanel actionPanel = new JPanel();
-		actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
-		actionPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40)); // Account for groupInfoPanel padding
-		actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
-		actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().equals("")) {
-			JButton joinButton = new JButton("Join Group");
-			joinButton.setMargin(new Insets(0, 5, 0, 5));
-			joinButton.addActionListener(e -> {
-				JOptionPane.showMessageDialog(mainPanel, "Group joining will be implemented soon!");
-			});
-			actionPanel.add(joinButton);
-		} 
-		
 		// Add all sections to the group info panel
 		groupInfoPanel.add(groupHeaderPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		groupInfoPanel.add(statsPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		
+		// Create horizontal button panel for Discord and Lootboard buttons
+		JPanel buttonPanel = new JPanel(new BorderLayout(10, 0));
+		buttonPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
+		buttonPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
+		
+		// Add Discord Link button if present
+		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
+			JButton joinButton = new JButton("⇱ Discord");
+			joinButton.setPreferredSize(new Dimension(40, 20));
+			joinButton.setMargin(new Insets(5, 5, 5, 5));
+			joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
+			buttonPanel.add(joinButton, BorderLayout.WEST);
+		}
+		
+		// Add View Lootboard button (always present)
+		JButton viewLootboardButton = new JButton("⇱ View Lootboard");
+		viewLootboardButton.setFont(FontManager.getRunescapeSmallFont());
+		viewLootboardButton.setPreferredSize(new Dimension(180, 20));
+		viewLootboardButton.setToolTipText("Click to view the group's lootboard in full size");
+		viewLootboardButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, currentGroupId));
+		
+		// Position the lootboard button based on whether Discord button exists
+		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
+			buttonPanel.add(viewLootboardButton, BorderLayout.CENTER);
+		} else {
+			buttonPanel.add(viewLootboardButton, BorderLayout.WEST);
+		}
+		
+		// Add the button panel to the main layout
 		groupInfoPanel.add(buttonPanel);
-		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-		groupInfoPanel.add(actionPanel);
 		
 		// Calculate sizes after content is added
 		groupInfoPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, groupInfoPanel.getPreferredSize().height));
@@ -500,27 +524,6 @@ public class GroupPanel {
 		}
 	}
 
-	private JPanel createGroupImagePanel() {
-		JPanel imageContainer = new JPanel(new FlowLayout(FlowLayout.CENTER));
-		imageContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		imageContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
-		
-		// Create button to view lootboard
-		JButton viewLootboardButton = new JButton("⇱ View Lootboard");
-		viewLootboardButton.setFont(FontManager.getRunescapeSmallFont());
-		viewLootboardButton.setPreferredSize(new Dimension(150, 30));
-		viewLootboardButton.setToolTipText("Click to view the group's lootboard in full size");
-		
-		// Add click listener for popup - now uses cached image
-		viewLootboardButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, currentGroupId));
-		
-		imageContainer.add(viewLootboardButton);
-		imageContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40)); // Account for groupInfoPanel padding
-		
-		return imageContainer;
-	}
-	
-	
 	private void setTruncatedText(JTextArea textArea, String fullText, int maxWidth, int maxHeight) {
 		// First, configure the text area with the full text to see how much space it needs
 		textArea.setText(fullText);
@@ -610,5 +613,33 @@ public class GroupPanel {
 		// Set the final text
 		textArea.setText(result.toString());
 		textArea.setToolTipText(null);
+	}
+
+	/**
+	 * Downloads the group icon from the provided URL, scales it to 50×50, then swaps it into the given label.
+	 * This runs off the EDT to avoid blocking the UI.
+	 */
+	private void loadGroupIcon(JLabel iconLabel, String urlString) {
+		if (urlString == null || urlString.isEmpty()) {
+			return; // nothing to load
+		}
+
+		CompletableFuture.supplyAsync(() -> {
+			try {
+				BufferedImage img = ImageIO.read(new URL(urlString));
+				if (img == null) {
+					return null;
+				}
+				Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+				return new ImageIcon(scaled);
+			} catch (IOException e) {
+				System.err.println("Failed to load group icon: " + e.getMessage());
+				return null;
+			}
+		}).thenAccept(icon -> {
+			if (icon != null) {
+				SwingUtilities.invokeLater(() -> iconLabel.setIcon(icon));
+			}
+		});
 	}
 }
