@@ -466,8 +466,8 @@ public class GroupPanel {
 		
 		// Add Discord Link button if present
 		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
-			JButton joinButton = new JButton("⇱ Discord");
-			joinButton.setPreferredSize(new Dimension(40, 20));
+			JButton joinButton = new JButton("Discord");
+			joinButton.setPreferredSize(new Dimension(60, 20));
 			joinButton.setMargin(new Insets(5, 5, 5, 5));
 			joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
 			buttonPanel.add(joinButton, BorderLayout.WEST);
@@ -476,7 +476,7 @@ public class GroupPanel {
 		// Add View Lootboard button (always present)
 		JButton viewLootboardButton = new JButton("⇱ View Lootboard");
 		viewLootboardButton.setFont(FontManager.getRunescapeSmallFont());
-		viewLootboardButton.setPreferredSize(new Dimension(180, 20));
+		viewLootboardButton.setPreferredSize(new Dimension(160, 20));
 		viewLootboardButton.setToolTipText("Click to view the group's lootboard in full size");
 		viewLootboardButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, currentGroupId));
 		
