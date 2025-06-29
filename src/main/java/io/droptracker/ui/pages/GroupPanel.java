@@ -936,7 +936,7 @@ public class GroupPanel {
 				String itemName = submission.getClogItemName();
 				Integer kc = submission.getClogKillCount();
 				tooltip += "<b>New Collection Log</b><br>" +
-				submission.getPlayerName() + " - Clog: " + 
+				submission.getPlayerName() + " - " + 
 					(itemName != null ? itemName : "Unknown Item") + 
 					(kc != null ? " at " + kc + " KC" : "") + "<br>" + "<br>" +
 					"<i>" + submission.timeSinceReceived() + "</i>";
