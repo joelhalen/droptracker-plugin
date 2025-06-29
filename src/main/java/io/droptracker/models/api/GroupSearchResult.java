@@ -5,6 +5,9 @@ import com.google.gson.annotations.SerializedName;
 
 import net.runelite.client.game.ItemStack;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -184,10 +187,10 @@ public class GroupSearchResult {
         @SerializedName("player_name")
         private String playerName;
         
-        @SerializedName("submission_type") // pbs, clogs, drops
-        private String submissionType;
+        @SerializedName("submission_type") // pb, clog, drop    
+        private String submissionType;  
         
-        @SerializedName("source_name") // 
+        @SerializedName("source_name") 
         private String sourceName;
         
         @SerializedName("date_received")
@@ -219,6 +222,20 @@ public class GroupSearchResult {
             this.imageUrl = imageUrl;
         }
 
+        @Override
+        public String toString() {
+            return "RecentSubmission{" +
+                "playerName='" + playerName + '\'' +
+                ", submissionType='" + submissionType + '\'' +
+                ", sourceName='" + sourceName + '\'' +
+                ", dateReceived='" + dateReceived + '\'' +
+                ", displayName='" + displayName + '\'' +
+                ", value='" + value + '\'' +
+                ", data=" + data +
+                ", imageUrl='" + imageUrl + '\'' +
+                '}';
+        }
+
         // Getters and setters
         public String getPlayerName() { return playerName; }
         public void setPlayerName(String playerName) { this.playerName = playerName; }
@@ -243,6 +260,31 @@ public class GroupSearchResult {
 
         public String getImageUrl() { return imageUrl; }
         public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
+        public String timeSinceReceived() {
+            if (dateReceived == null) {
+                return "Unknown";
+            }
+            try {
+                DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+                LocalDateTime receivedDate = LocalDateTime.parse(dateReceived, formatter);
+                LocalDateTime now = LocalDateTime.now();
+                
+                Duration duration = Duration.between(receivedDate, now);
+                
+                if (duration.toDays() > 0) {
+                    return duration.toDays() + " days ago";
+                } else if (duration.toHours() > 0) {
+                    return duration.toHours() + " hours ago"; 
+                } else if (duration.toMinutes() > 0) {
+                    return duration.toMinutes() + " minutes ago";
+                } else {
+                    return "Just now";
+                }
+            } catch (Exception e) {
+                return "Unknown";
+            }
+        }
 
         // Generic method to extract data by type and key
         private Object getDataValueByTypeAndKey(String dataType, String key) {
@@ -277,7 +319,7 @@ public class GroupSearchResult {
         
         // Drop related methods
         public String getDropItemName() {
-            if (!submissionType.equalsIgnoreCase("drops")) {
+            if (!submissionType.equalsIgnoreCase("drop")) {
                 return null;
             }
             
@@ -286,15 +328,20 @@ public class GroupSearchResult {
         }
 
         public Integer getDropItemId() {
-            if (!submissionType.equalsIgnoreCase("drops")) {
+            if (!submissionType.equalsIgnoreCase("drop")) {
                 return null;
             }
             
             Object itemId = getDataValueByTypeAndKey("item", "id");
             if (itemId != null) {
                 try {
-                    return Integer.valueOf(itemId.toString());
+                    // Handle both Integer and Double/Float types from JSON
+                    if (itemId instanceof Number) {
+                        return ((Number) itemId).intValue();
+                    }
+                    return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
                 } catch (NumberFormatException e) {
+                    System.err.println("Failed to parse item ID: " + itemId + " - " + e.getMessage());
                     return null;
                 }
             }
@@ -302,31 +349,51 @@ public class GroupSearchResult {
         }
 
         public Integer getDropQuantity() {
-            if (!submissionType.equalsIgnoreCase("drops")) {
+            if (!submissionType.equalsIgnoreCase("drop")) {
                 return null;
             }
             
             Object quantity = getDataValueByTypeAndKey("item", "quantity");
             if (quantity != null) {
                 try {
-                    return Integer.valueOf(quantity.toString());
+                    // Handle both Integer and Double/Float types from JSON
+                    if (quantity instanceof Number) {
+                        return ((Number) quantity).intValue();
+                    }
+                    return Integer.valueOf(quantity.toString().replaceAll("\\.0*$", ""));
                 } catch (NumberFormatException e) {
-                    return null;
+                    System.err.println("Failed to parse quantity: " + quantity + " - " + e.getMessage());
+                    return 1; // Default to 1 if parsing fails
                 }
             }
-            return null;
+            // Default to 1 if quantity field is missing (as it appears to be in your API)
+            return 1;
         }
 
         public Long getDropValue() {
-            if (!submissionType.equalsIgnoreCase("drops")) {
+            if (!submissionType.equalsIgnoreCase("drop")) {
                 return null;
             }
             
             Object dropValue = getDataValueByTypeAndKey("item", "value");
             if (dropValue != null) {
                 try {
-                    return Long.valueOf(dropValue.toString());
+                    // Handle value with suffixes like "48.98M", "1.14M", etc.
+                    String valueStr = dropValue.toString();
+                    if (valueStr.contains("M")) {
+                        double millions = Double.parseDouble(valueStr.replace("M", ""));
+                        return (long) (millions * 1_000_000);
+                    } else if (valueStr.contains("K")) {
+                        double thousands = Double.parseDouble(valueStr.replace("K", ""));
+                        return (long) (thousands * 1_000);
+                    } else if (valueStr.contains("B")) {
+                        double billions = Double.parseDouble(valueStr.replace("B", ""));
+                        return (long) (billions * 1_000_000_000);
+                    } else {
+                        return Long.valueOf(valueStr.replaceAll("\\.0*$", ""));
+                    }
                 } catch (NumberFormatException e) {
+                    System.err.println("Failed to parse drop value: " + dropValue + " - " + e.getMessage());
                     return null;
                 }
             }
@@ -335,7 +402,7 @@ public class GroupSearchResult {
 
         // Collection Log related methods
         public String getClogItemName() {
-            if (!submissionType.equalsIgnoreCase("clogs")) {
+            if (!submissionType.equalsIgnoreCase("clog")) {
                 return null;
             }
             
@@ -344,15 +411,20 @@ public class GroupSearchResult {
         }
 
         public Integer getClogItemId() {
-            if (!submissionType.equalsIgnoreCase("clogs")) {
+            if (!submissionType.equalsIgnoreCase("clog")) {
                 return null;
             }
             
             Object itemId = getDataValueByTypeAndKey("clog_item", "id");
             if (itemId != null) {
                 try {
-                    return Integer.valueOf(itemId.toString());
+                    // Handle both Integer and Double/Float types from JSON
+                    if (itemId instanceof Number) {
+                        return ((Number) itemId).intValue();
+                    }
+                    return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
                 } catch (NumberFormatException e) {
+                    System.err.println("Failed to parse clog item ID: " + itemId + " - " + e.getMessage());
                     return null;
                 }
             }
@@ -360,15 +432,20 @@ public class GroupSearchResult {
         }
 
         public Integer getClogKillCount() {
-            if (!submissionType.equalsIgnoreCase("clogs")) {
+            if (!submissionType.equalsIgnoreCase("clog")) {
                 return null;
             }
             
             Object kcValue = getDataValueByTypeAndKey("clog_item", "kill_count");
             if (kcValue != null) {
                 try {
-                    return Integer.valueOf(kcValue.toString());
+                    // Handle both Integer and Double/Float types from JSON
+                    if (kcValue instanceof Number) {
+                        return ((Number) kcValue).intValue();
+                    }
+                    return Integer.valueOf(kcValue.toString().replaceAll("\\.0*$", ""));
                 } catch (NumberFormatException e) {
+                    System.err.println("Failed to parse kill count: " + kcValue + " - " + e.getMessage());
                     return null;
                 }
             }
@@ -381,11 +458,11 @@ public class GroupSearchResult {
         }
 
         public boolean isDrop() {
-            return submissionType != null && submissionType.equalsIgnoreCase("drops");
+            return submissionType != null && submissionType.equalsIgnoreCase("drop");
         }
 
         public boolean isCollectionLog() {
-            return submissionType != null && submissionType.equalsIgnoreCase("clogs");
+            return submissionType != null && submissionType.equalsIgnoreCase("clog");
         }
 
         // Method to get a formatted display string based on submission type
