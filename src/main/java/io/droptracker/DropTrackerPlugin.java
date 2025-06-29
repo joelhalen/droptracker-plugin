@@ -66,7 +66,6 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.callback.ClientThread;
@@ -83,6 +82,7 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.api.gameval.InterfaceID;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
@@ -195,7 +195,7 @@ public class DropTrackerPlugin extends Plugin {
 	private int timeToRetry = 0;
 
 	public String pluginVersion = "4.0";
-	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PRIVATE_CHAT, 0);
+	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PM_CHAT, 0);
 
 	// Add a future to track loading state
 	private CompletableFuture<Void> endpointUrlsLoaded = new CompletableFuture<>();

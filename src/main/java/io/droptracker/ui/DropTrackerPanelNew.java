@@ -25,6 +25,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Image;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.awt.FlowLayout;
 import java.awt.Component;
 
@@ -71,7 +72,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		setBorder(new EmptyBorder(10, 10, 10, 10));
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
 
-		init();
+		// init() will be called by the plugin - don't call it here to avoid double initialization
 	}
 
 	public void init() {
@@ -96,7 +97,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 		// Stats tab
 		if (config.useApi()) {
-			PlayerStatsPanel statsPanel = new PlayerStatsPanel(client, clientThread, config, chatMessageUtil);
+			PlayerStatsPanel statsPanel = new PlayerStatsPanel(client, clientThread, config, chatMessageUtil, api);
 			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api);
 			JPanel playerStatsPanel = statsPanel.create();
 			JPanel groupStatsPanel = groupPanel.create();
@@ -148,16 +149,27 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		separatorText.setFont(FontManager.getRunescapeSmallFont());
 		separatorText.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 
-		JLabel apiEnabledText = new JLabel("API " + (config.useApi() ? "ON" : "OFF"));
-		apiEnabledText.setFont(FontManager.getRunescapeSmallFont());
-		apiEnabledText.setForeground(
-				config.useApi() ? ColorScheme.PROGRESS_COMPLETE_COLOR : ColorScheme.PROGRESS_ERROR_COLOR);
+		// Create API status label
+		String apiStatus = config.useApi() ? "ENABLED" : "DISABLED";
+		JLabel apiStatusText = new JLabel("API: " + apiStatus);
+		apiStatusText.setFont(FontManager.getRunescapeSmallFont());
+		apiStatusText.setForeground(config.useApi() ? ColorScheme.PROGRESS_COMPLETE_COLOR : ColorScheme.PROGRESS_ERROR_COLOR);
+		
+
+		JButton refreshButton = new JButton("↻ Refresh Panel");
+		refreshButton.setFont(FontManager.getRunescapeSmallFont());
+		refreshButton.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		refreshButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		refreshButton.setBorder(new EmptyBorder(5, 8, 5, 8));
+		refreshButton.setPreferredSize(new Dimension(100, 30));
+		refreshButton.setMaximumSize(new Dimension(100, 30));
+
 
 		// Add info components to info panel
 		infoPanel.add(versionText);
 		infoPanel.add(separatorText);
-		infoPanel.add(apiEnabledText);
-
+		infoPanel.add(apiStatusText);
+		
 		// Logo panel with logo and version info below it
 		JPanel logoPanel = new JPanel();
 		logoPanel.setLayout(new BoxLayout(logoPanel, BoxLayout.Y_AXIS));

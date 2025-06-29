@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "gradle build", // This label matches "preLaunchTask" in launch.json
+            "type": "shell",
+            "command": "./gradlew build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always", // Shows the terminal output for the build
+                "panel": "new"
+            },
+            "problemMatcher": [] // Adjust problemMatcher if you want to parse build errors
+        }
+    ]
+}

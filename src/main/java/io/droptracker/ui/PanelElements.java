@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import javax.imageio.ImageIO;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -27,7 +28,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
 
-import com.google.inject.Inject;
 
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -40,22 +40,33 @@ import net.runelite.api.Client;
 
 public class PanelElements {
 
-    @Inject
-    private Client client;
 
     private static ImageIcon COLLAPSED_ICON;
     private static ImageIcon EXPANDED_ICON;
+    private static ImageIcon BOARD_ICON;
+    private static ImageIcon EXTERNAL_LINK_ICON;
     public static BufferedImage cachedLootboardImage;
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
+    public static String cachedGroupName = "All Players";
 
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
         Image expandedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/expand.png");
+        Image boardIcon = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/board.png");
+        Image extLinkIcon = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/external-link.png");
+        Image boardResized = boardIcon.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+        Image extRecolored = ImageUtil.recolorImage(extLinkIcon, ColorScheme.LIGHT_GRAY_COLOR);
+        Image extLinkResized = extRecolored.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+
         Image collapsedResized = collapsedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
         Image expandedResized = expandedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-        COLLAPSED_ICON = new ImageIcon(collapsedResized);
-        EXPANDED_ICON = new ImageIcon(expandedResized);
+        Image collapsedRecolored = ImageUtil.recolorImage(collapsedResized, ColorScheme.LIGHT_GRAY_COLOR);
+        Image expandedRecolored = ImageUtil.recolorImage(expandedResized, ColorScheme.LIGHT_GRAY_COLOR);
+        COLLAPSED_ICON = new ImageIcon(collapsedRecolored);
+        EXPANDED_ICON = new ImageIcon(expandedRecolored);
+        BOARD_ICON = new ImageIcon(boardResized);
+        EXTERNAL_LINK_ICON = new ImageIcon(extLinkResized);
         
         // Initialize with default global group lootboard (group 2)
         loadLootboardForGroup(2);
@@ -136,8 +147,11 @@ public class PanelElements {
 
     // Method to show lootboard popup for a specific group ID
     public static void showLootboardForGroup(Client client, int groupId) {
+        if (cachedGroupName == null) {
+            cachedGroupName = "All Players";
+        }
         final JFrame parentFrame = getParentFrame(client);
-        JDialog imageDialog = new JDialog(parentFrame, "Group " + groupId + " Lootboard", true);
+        JDialog imageDialog = new JDialog(parentFrame, cachedGroupName + " - Lootboard", true);
         imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         // Check if we already have the right group cached
@@ -426,21 +440,9 @@ public class PanelElements {
     }
 
     public static JLabel createSuperscriptWarningLabel() {
-        // The HTML structure:
-        // <html> - Required wrapper for HTML content in JLabel.
-        // <font color='orange'>!</font> - The first, normal-sized orange exclamation
-        // mark.
-        // <sup> - Superscript tag.
-        // <font color='orange'>!</font> - The second, superscripted orange exclamation
-        // mark.
-        // </sup>
-        // </html>
         String htmlText = "<html><font color='orange'>!</font><sup><font color='orange'>!</font></sup></html>";
 
         JLabel warningLabel = new JLabel(htmlText);
-
-        // Optional: You might want to adjust the font for better visibility
-        // For example, making it a bit larger and bold if it's meant to be prominent.
         // warningLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
 
         return warningLabel;
@@ -455,6 +457,28 @@ public class PanelElements {
             System.err.println("Could not find parent frame: " + e.getMessage());
         }
         return null;
+    }
+
+    public static JButton createExternalLinkButton(String text, String tooltip, boolean withIcon, Runnable action) {
+        JButton button = new JButton(text);
+        if (withIcon) {
+            button.setIcon(EXTERNAL_LINK_ICON);
+        }
+        button.setText(text);
+        button.setToolTipText(tooltip);		
+        button.setFont(FontManager.getRunescapeSmallFont());
+		button.setPreferredSize(new Dimension(150, 30));
+        button.addActionListener(e -> action.run());
+        return button;
+    }
+
+    public static JButton createLootboardButton(String text, String tooltip, Runnable action) {
+        JButton button = new JButton(text);
+        button.setIcon(BOARD_ICON);
+        button.setText("<html>" + text + "&nbsp;&nbsp;<img src='https://www.droptracker.io/img/external-16px-g.png'></img></html>");
+        button.setToolTipText(tooltip);
+        button.addActionListener(e -> action.run());
+        return button;
     }
 
     public static void showLoadingDialog(JDialog imageDialog, JFrame parentFrame) {
@@ -504,58 +528,7 @@ public class PanelElements {
         }
     }
 
-    public static void showLoadingDialogForGroup(JDialog imageDialog, JFrame parentFrame, int groupId) {
-        // Create loading label
-        JLabel loadingLabel = new JLabel("Loading group " + groupId + " lootboard...");
-        loadingLabel.setForeground(Color.WHITE);
-        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        loadingLabel.setVerticalAlignment(JLabel.CENTER);
-        loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        loadingLabel.setOpaque(true);
-
-        // Add click to close
-        addCloseListener(loadingLabel, imageDialog);
-
-        imageDialog.add(loadingLabel);
-        imageDialog.pack();
-        imageDialog.setLocationRelativeTo(parentFrame);
-        imageDialog.setVisible(true);
-
-        // Wait for the async load to complete and check periodically
-        CompletableFuture.runAsync(() -> {
-            int attempts = 0;
-            while (attempts < 50) { // Wait up to 5 seconds (50 * 100ms)
-                try {
-                    Thread.sleep(100);
-                    if (cachedLootboardImage != null && cachedGroupId != null && cachedGroupId == groupId) {
-                        SwingUtilities.invokeLater(() -> {
-                            System.out.println("Group " + groupId + " image loaded, updating dialog");
-                            imageDialog.getContentPane().removeAll();
-                            displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
-                        });
-                        return;
-                    }
-                    attempts++;
-                } catch (InterruptedException e) {
-                    break;
-                }
-            }
-            
-            // Timeout or failure
-            SwingUtilities.invokeLater(() -> {
-                System.err.println("Failed to load group " + groupId + " lootboard");
-                loadingLabel.setText("Failed to load group " + groupId + " lootboard");
-                loadingLabel.setForeground(Color.RED);
-            });
-        });
-    }
-
-    public static void displayImage(JDialog imageDialog, BufferedImage image, JFrame parentFrame) {
-        displayImageInDialog(imageDialog, image, parentFrame);
-        imageDialog.setVisible(true);
-    }
+    
 
     private static void displayImageInDialog(JDialog imageDialog, BufferedImage originalImage, JFrame parentFrame) {
         // Calculate display size based on screen dimensions
@@ -633,21 +606,6 @@ public class PanelElements {
                 }
             }
         });
-    }
-
-    public static void showCachedImagePopup(Client client) {
-        final JFrame parentFrame = getParentFrame(client);
-
-        JDialog imageDialog = new JDialog(parentFrame, "Group Lootboard", true);
-        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-
-        if (cachedLootboardImage != null) {
-            System.out.println("Displaying cached lootboard image");
-            displayImage(imageDialog, cachedLootboardImage, parentFrame);
-        } else {
-            System.out.println("No cached image available, showing loading message");
-            showLoadingDialog(imageDialog, parentFrame);
-        }
     }
     
 }

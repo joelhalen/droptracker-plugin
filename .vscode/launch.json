@@ -11,7 +11,8 @@
                 "RUNELITE_PLUGIN_DEVELOPMENT": "true",
                 "RUNELITE_PLUGIN_DEVELOPMENT_MODE": "true"
             },
-            "vmArgs": "-ea"
+            "vmArgs": "-ea",
+            "preLaunchTask": "gradle build"
         }
     ]
 }

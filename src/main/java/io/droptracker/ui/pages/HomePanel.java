@@ -143,16 +143,11 @@ public class HomePanel {
 		homePanel.add(welcomeMessagePanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		
-		JButton viewGlobalButton = new JButton("⇱🗖 Global Lootboard");
-		viewGlobalButton.setFont(FontManager.getRunescapeSmallFont());
-		viewGlobalButton.setMinimumSize(new Dimension(220, 30));
-		viewGlobalButton.setMaximumSize(new Dimension(220, 30));
+		JButton viewGlobalButton = PanelElements.createLootboardButton("Global Lootboard", "Click to view the global lootboard", () -> PanelElements.showLootboardForGroup(client, 2));
+		
 		viewGlobalButton.setMargin(new Insets(3, 3, 3, 3));
 		viewGlobalButton.setAlignmentX(Component.LEFT_ALIGNMENT);
-		viewGlobalButton.setToolTipText("Click to view the global lootboard");
-		
-		// Add click listener for popup - now uses group-based lootboard system
-		viewGlobalButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, 2));
+
 		JPanel buttonPanel = new JPanel(new BorderLayout(10, 0));
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
 		buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);

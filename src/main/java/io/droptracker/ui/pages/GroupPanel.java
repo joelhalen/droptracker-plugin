@@ -6,11 +6,10 @@ import java.awt.BasicStroke;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GridLayout;
 import java.awt.Insets;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.util.concurrent.CompletableFuture;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
@@ -31,6 +30,7 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
 import javax.swing.JLayeredPane;
 import javax.swing.ImageIcon;
+import javax.swing.event.DocumentListener;
 
 import javax.inject.Inject;
 
@@ -82,27 +82,20 @@ public class GroupPanel {
 		mainPanel = new JPanel();
 		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
 		mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		// Ensure main panel takes full width
-		mainPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		mainPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 0)); // Height will grow as needed
-		mainPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
-		mainPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH, 0));
 		
 		// Header section with title and search
 		JPanel headerPanel = createHeaderPanel();
 		
-		// Content panel that will change based on state
+		// Content panel that will change based on state - fix alignment
 		contentPanel = new JPanel();
 		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
 		contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		contentPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		contentPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 0));
-		contentPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
 		
-		// Show default state (Create a Group button)
+		// Show default state
 		showDefaultState();
 		
-		// Add components to main panel
+		// Add components to main panel - match PlayerStatsPanel structure
 		mainPanel.add(headerPanel);
 		mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		mainPanel.add(contentPanel);
@@ -133,35 +126,32 @@ public class GroupPanel {
 		groupTitle.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
 		groupTitle.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
 		
-		// Search field for groups - fix alignment in BoxLayout
+		// Search field for groups - ORIGINAL structure
 		JPanel searchPanel = new JPanel(new BorderLayout(5, 0));
 		searchPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		searchPanel.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		// Use proper alignment for BoxLayout
 		searchPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		// Set width to match parent container exactly
-		searchPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35)); // Account for header padding
+		searchPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
 		searchPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
 		searchPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
 		
 		searchField = new JTextField();
 		searchField.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
 		searchField.setToolTipText("Search for a group");
-		// Fix text alignment and positioning
 		searchField.setHorizontalAlignment(JTextField.LEFT);
-		searchField.setMargin(new Insets(5, 8, 5, 8)); // Add proper padding inside the field
-		searchField.setFont(FontManager.getRunescapeSmallFont()); // Ensure consistent font
-		// Ensure the text field expands properly
-		searchField.setPreferredSize(new Dimension(200, 35)); // Minimum reasonable width
-		searchField.setMinimumSize(new Dimension(100, 35)); // Absolute minimum
+		searchField.setMargin(new Insets(5, 8, 5, 8));
+		searchField.setFont(FontManager.getRunescapeSmallFont());
+		searchField.setPreferredSize(new Dimension(200, 35));
+		searchField.setMinimumSize(new Dimension(100, 35));
 		
 		JButton searchButton = new JButton("Search");
-		searchButton.setPreferredSize(new Dimension(70, 35)); // Slightly smaller button
+		searchButton.setPreferredSize(new Dimension(70, 35));
 		searchButton.setMaximumSize(new Dimension(70, 35));
 		searchButton.setMinimumSize(new Dimension(70, 35));
 		searchButton.setMargin(new Insets(5, 5, 5, 5));
 		searchButton.addActionListener(e -> performGroupSearch());
 		
+		// ORIGINAL simple layout
 		searchPanel.add(searchField, BorderLayout.CENTER);
 		searchPanel.add(searchButton, BorderLayout.EAST);
 		
@@ -184,9 +174,6 @@ public class GroupPanel {
 		defaultPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
-		// Add some spacing
-		defaultPanel.add(Box.createRigidArea(new Dimension(0, 25)));
-		
 		// Instructions text
 		JLabel instructionLabel = new JLabel("Search for a group above");
 		instructionLabel.setFont(FontManager.getRunescapeFont());
@@ -194,25 +181,32 @@ public class GroupPanel {
 		instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		instructionLabel.setHorizontalAlignment(JLabel.CENTER);
 		
-		// Create button panel
-		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-		buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		JButton createGroupButton = PanelElements.createExternalLinkButton("⚡ Create a Group", "Click to visit the group creation documentation", false, () -> openCreateGroupPage());
 		
-		// Create Group button (same style as View Lootboard)
-		JButton createGroupButton = new JButton("⚡ Create a Group");
-		createGroupButton.setFont(FontManager.getRunescapeSmallFont());
-		createGroupButton.setPreferredSize(new Dimension(150, 30));
-		createGroupButton.setToolTipText("Click to visit the group creation documentation");
+		JButton groupPageButton = PanelElements.createExternalLinkButton("View All Groups", "Click to visit the group page", true, () -> openGroupPage());
+
 		
-		// Add click listener to open the URL
-		createGroupButton.addActionListener(e -> openCreateGroupPage());
+		// Panel for first button - centered horizontally
+		JPanel createButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		createButtonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		createButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		createButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+		createButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
+		createButtonPanel.add(createGroupButton);
 		
-		buttonPanel.add(createGroupButton);
+		// Panel for second button - centered horizontally  
+		JPanel groupButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		groupButtonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		groupButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		groupButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+		groupButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
+		groupButtonPanel.add(groupPageButton);
 		
 		defaultPanel.add(instructionLabel);
-		defaultPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-		defaultPanel.add(buttonPanel);
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+		defaultPanel.add(createButtonPanel);
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+		defaultPanel.add(groupButtonPanel);
 		defaultPanel.add(Box.createVerticalGlue());
 		
 		contentPanel.add(defaultPanel);
@@ -224,7 +218,7 @@ public class GroupPanel {
 		String searchQuery = searchField.getText().trim();
 		
 		if (searchQuery.isEmpty()) {
-			JOptionPane.showMessageDialog(mainPanel, "Please enter a group name to search for.");
+			JOptionPane.showMessageDialog(contentPanel, "Please enter a group name to search for.");
 			return;
 		}
 		
@@ -232,7 +226,7 @@ public class GroupPanel {
 		
 		// Show loading message
 		contentPanel.removeAll();
-		JLabel loadingLabel = new JLabel("Searching for group...");
+		JLabel loadingLabel = new JLabel("Loading...");
 		loadingLabel.setFont(FontManager.getRunescapeFont());
 		loadingLabel.setForeground(Color.LIGHT_GRAY);
 		loadingLabel.setHorizontalAlignment(JLabel.CENTER);
@@ -258,6 +252,7 @@ public class GroupPanel {
 						currentGroupId = groupResult.getGroupDropTrackerId();
 						PanelElements.loadLootboardForGroup(currentGroupId);
 					}
+					PanelElements.cachedGroupName = groupResult.getGroupName();
 				} else {
 					// Fallback to demo data for testing
 					if (searchQuery.equalsIgnoreCase("test") || searchQuery.equalsIgnoreCase("demo")) {
@@ -326,69 +321,29 @@ public class GroupPanel {
 	private void showGroupDetails(GroupSearchResult groupResult) {
 		contentPanel.removeAll();
 		
-		// Create main container using JLayeredPane for floating close button
-		JLayeredPane layeredContainer = new JLayeredPane();
-		layeredContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		layeredContainer.setOpaque(true);
-		layeredContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
-		
-		// Group info section - this will be the main content
+		// Match PlayerStatsPanel structure exactly - no custom borders
 		JPanel groupInfoPanel = new JPanel();
 		groupInfoPanel.setLayout(new BoxLayout(groupInfoPanel, BoxLayout.Y_AXIS));
 		groupInfoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		groupInfoPanel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Full padding since close button won't interfere
-		groupInfoPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		groupInfoPanel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Same as playerInfoPanel
 		
-		// Create floating close button
-		JButton closeButton = new JButton("×");
-		closeButton.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 14));
-		closeButton.setForeground(Color.LIGHT_GRAY);
-		closeButton.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
-		closeButton.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.MEDIUM_GRAY_COLOR));
-		closeButton.setSize(22, 22); // Use setSize for absolute positioning
-		closeButton.setMargin(new Insets(0, 0, 0, 0));
-		closeButton.setToolTipText("Close group details");
-		closeButton.setFocusPainted(false);
-		
-		// Add hover effect
-		closeButton.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseEntered(MouseEvent e) {
-				closeButton.setBackground(ColorScheme.BRAND_ORANGE);
-				closeButton.setForeground(Color.WHITE);
-			}
-			
-			@Override
-			public void mouseExited(MouseEvent e) {
-				closeButton.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
-				closeButton.setForeground(Color.LIGHT_GRAY);
-			}
-		});
-		
-		// Add click action
-		closeButton.addActionListener(e -> {
-			searchField.setText("");
-			showDefaultState();
-		});
-
-		// Group icon and name
+		// Group header panel - exactly like playerHeaderPanel with clear button
 		JPanel groupHeaderPanel = new JPanel(new BorderLayout(10, 0));
 		groupHeaderPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		groupHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 60)); // Account for groupInfoPanel padding (10px each side)
-		groupHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 60));
+		groupHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
+		groupHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
 		groupHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
-		// Placeholder for group icon (gray square) while real image loads
+		// Group icon
 		BufferedImage placeholderImg = new BufferedImage(50, 50, BufferedImage.TYPE_INT_ARGB);
 		JLabel groupIcon = new JLabel(new ImageIcon(placeholderImg));
 		groupIcon.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
 		groupIcon.setPreferredSize(new Dimension(50, 50));
 		groupIcon.setMaximumSize(new Dimension(50, 50));
 		groupIcon.setMinimumSize(new Dimension(50, 50));
-		
-		// Asynchronously load and scale the real icon
 		loadGroupIcon(groupIcon, groupResult.getGroupImageUrl());
 		
+		// Group name and description
 		JPanel groupNamePanel = new JPanel();
 		groupNamePanel.setLayout(new BoxLayout(groupNamePanel, BoxLayout.Y_AXIS));
 		groupNamePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
@@ -398,49 +353,43 @@ public class GroupPanel {
 		groupNameLabel.setForeground(Color.WHITE);
 		groupNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
-		// Group description with proper text wrapping
-		String fullDescription = groupResult.getGroupDescription();
-
-		JTextArea groupDescArea = new JTextArea();
-		groupDescArea.setWrapStyleWord(true);
-		groupDescArea.setLineWrap(true);
-		groupDescArea.setOpaque(false);
-		groupDescArea.setEditable(false);
-		groupDescArea.setFocusable(false);
-		groupDescArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		groupDescArea.setForeground(Color.LIGHT_GRAY);
-		groupDescArea.setFont(FontManager.getRunescapeSmallFont());
-		groupDescArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-		groupDescArea.setMargin(new Insets(0, 0, 5, 0));
-
-		// Calculate available space (total width minus groupInfo padding, icon and spacing)
-		int availableWidth = PluginPanel.PANEL_WIDTH - 20 - 50 - 10; // panel width - groupInfo padding - icon - spacing
-		int maxHeight = 50; // Allow for about 3-4 lines
-
-		// Set the text and handle truncation
-		setTruncatedText(groupDescArea, fullDescription, availableWidth, maxHeight);
-
-		// Set final size after text is set
-		groupDescArea.setPreferredSize(new Dimension(availableWidth, groupDescArea.getPreferredSize().height));
-		groupDescArea.setMaximumSize(new Dimension(availableWidth, maxHeight));
+		JLabel groupDescLabel = new JLabel("<html>" + groupResult.getGroupDescription() + "</html>");
+		groupDescLabel.setFont(FontManager.getRunescapeSmallFont());
+		groupDescLabel.setForeground(Color.LIGHT_GRAY);
+		groupDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
 		groupNamePanel.add(groupNameLabel);
-		groupNamePanel.add(Box.createRigidArea(new Dimension(0, 3))); // Small spacing
+		groupNamePanel.add(groupDescLabel);
 		
-		groupNamePanel.add(groupDescArea);
-		
+		// Clear button for closing the search result
+		JButton clearButton = new JButton("×");
+		clearButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+		clearButton.setForeground(Color.LIGHT_GRAY);
+		clearButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		clearButton.setBorder(new EmptyBorder(5, 8, 5, 8));
+		clearButton.setPreferredSize(new Dimension(30, 30));
+		clearButton.setMaximumSize(new Dimension(30, 30));
+		clearButton.setMinimumSize(new Dimension(30, 30));
+		clearButton.setToolTipText("Clear search");
+		clearButton.setOpaque(false);
+		clearButton.setContentAreaFilled(false);
+		clearButton.addActionListener(e -> {
+			searchField.setText("");
+			showDefaultState();
+		});
+
 		groupHeaderPanel.add(groupIcon, BorderLayout.WEST);
 		groupHeaderPanel.add(groupNamePanel, BorderLayout.CENTER);
+		groupHeaderPanel.add(clearButton, BorderLayout.EAST);
 		
-		// Group stats in a table-like format
+		// Stats panel - exactly like playerStatsPanel
 		JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
 		statsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
-		statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 100)); // Account for groupInfoPanel padding
-		statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 100));
+		statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0)); // Same as playerStatsPanel
+		statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 100));
+		statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
 		statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
-		// Create stat boxes with fixed sizes
 		JPanel membersBox = PanelElements.createStatBox("Members", String.valueOf(groupResult.getGroupStats().getTotalMembers()));
 		JPanel rankBox = PanelElements.createStatBox("Global Rank", "#" + groupResult.getGroupStats().getGlobalRank());
 		JPanel lootBox = PanelElements.createStatBox("Monthly Loot", groupResult.getGroupStats().getMonthlyLoot() + " GP");
@@ -451,73 +400,56 @@ public class GroupPanel {
 		statsPanel.add(lootBox);
 		statsPanel.add(topPlayerBox);
 		
-		// Add all sections to the group info panel
+		// Action buttons - exactly like actionPanel
+		JPanel actionPanel = new JPanel();
+		actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
+		actionPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
+		actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
+		actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		
+		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
+			JButton joinButton = new JButton("Discord");
+			joinButton.setMargin(new Insets(0, 5, 0, 5));
+			joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
+			actionPanel.add(joinButton);
+		}
+		
+		JButton viewLootboardButton = PanelElements.createLootboardButton("View Lootboard", "Click to view the lootboard", () -> PanelElements.showLootboardForGroup(client, currentGroupId));
+		actionPanel.add(viewLootboardButton);
+		
+		// Add components exactly like PlayerStatsPanel
 		groupInfoPanel.add(groupHeaderPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		groupInfoPanel.add(statsPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		groupInfoPanel.add(actionPanel);
 		
-		// Create horizontal button panel for Discord and Lootboard buttons
-		JPanel buttonPanel = new JPanel(new BorderLayout(10, 0));
-		buttonPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
-		buttonPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
-		
-		// Add Discord Link button if present
-		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
-			JButton joinButton = new JButton("Discord");
-			joinButton.setPreferredSize(new Dimension(60, 20));
-			joinButton.setMargin(new Insets(5, 5, 5, 5));
-			joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
-			buttonPanel.add(joinButton, BorderLayout.WEST);
-		}
-		
-		// Add View Lootboard button (always present)
-		JButton viewLootboardButton = new JButton("⇱ View Lootboard");
-		viewLootboardButton.setFont(FontManager.getRunescapeSmallFont());
-		viewLootboardButton.setPreferredSize(new Dimension(160, 20));
-		viewLootboardButton.setToolTipText("Click to view the group's lootboard in full size");
-		viewLootboardButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, currentGroupId));
-		
-		// Position the lootboard button based on whether Discord button exists
-		if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
-			buttonPanel.add(viewLootboardButton, BorderLayout.CENTER);
-		} else {
-			buttonPanel.add(viewLootboardButton, BorderLayout.WEST);
-		}
-		
-		// Add the button panel to the main layout
-		groupInfoPanel.add(buttonPanel);
-		
-		// Calculate sizes after content is added
-		groupInfoPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, groupInfoPanel.getPreferredSize().height));
-		
-		// Set bounds for layered pane components
-		groupInfoPanel.setBounds(0, 0, PluginPanel.PANEL_WIDTH, groupInfoPanel.getPreferredSize().height);
-		closeButton.setLocation(PluginPanel.PANEL_WIDTH - 32, 10); // 10px from top, 10px from right edge (22 + 10)
-		
-		// Set the layered container size
-		layeredContainer.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, groupInfoPanel.getPreferredSize().height));
-		layeredContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, groupInfoPanel.getPreferredSize().height));
-		
-		// Add components to layered pane
-		layeredContainer.add(groupInfoPanel, JLayeredPane.DEFAULT_LAYER);
-		layeredContainer.add(closeButton, JLayeredPane.PALETTE_LAYER);
-		
-		// Add the layered container to the content panel
-		contentPanel.add(layeredContainer);
+		contentPanel.add(groupInfoPanel);
 		contentPanel.revalidate();
 		contentPanel.repaint();
 	}
 	
+	private void openGroupPage() {
+		try {
+			LinkBrowser.browse("https://www.droptracker.io/groups");
+		} catch (Exception e) {
+			System.err.println("Failed to open browser: " + e.getMessage());
+			// Fallback: copy URL to clipboard or show message
+			JOptionPane.showMessageDialog(contentPanel, 
+				"Could not open browser. Please visit:\nhttps://www.droptracker.io/groups", 
+				"Group Page", 
+				JOptionPane.INFORMATION_MESSAGE);
+		}
+	}
+
 	private void openCreateGroupPage() {
 		try {
 			LinkBrowser.browse("https://www.droptracker.io/wiki/create-group");
 		} catch (Exception e) {
 			System.err.println("Failed to open browser: " + e.getMessage());
 			// Fallback: copy URL to clipboard or show message
-			JOptionPane.showMessageDialog(mainPanel, 
+			JOptionPane.showMessageDialog(contentPanel, 
 				"Could not open browser. Please visit:\nhttps://droptracker.io/wiki/create-group", 
 				"Create Group Guide", 
 				JOptionPane.INFORMATION_MESSAGE);
