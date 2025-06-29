@@ -143,7 +143,10 @@ public class PanelElements {
         // Check if we already have the right group cached
         if (cachedLootboardImage != null && cachedGroupId != null && cachedGroupId == groupId) {
             System.out.println("Displaying cached lootboard for group " + groupId);
-            displayImage(imageDialog, cachedLootboardImage, parentFrame);
+            displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
+            imageDialog.revalidate();
+            imageDialog.repaint();
+            imageDialog.setVisible(true);
             return;
         }
 
@@ -163,14 +166,15 @@ public class PanelElements {
         imageDialog.add(loadingLabel);
         imageDialog.pack();
         imageDialog.setLocationRelativeTo(parentFrame);
-        imageDialog.setVisible(true);
 
-        // Load the image with callback to update dialog when done
+        // Start loading BEFORE showing the dialog to avoid modality blocking
         loadLootboardForGroup(groupId, () -> {
             if (cachedLootboardImage != null) {
                 System.out.println("Group " + groupId + " image loaded, updating dialog");
                 imageDialog.getContentPane().removeAll();
-                displayImage(imageDialog, cachedLootboardImage, parentFrame);
+                displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
+                imageDialog.revalidate();
+                imageDialog.repaint();
             } else {
                 System.err.println("Failed to load group " + groupId + " lootboard");
                 loadingLabel.setText("Failed to load group " + groupId + " lootboard");
@@ -179,6 +183,9 @@ public class PanelElements {
                 imageDialog.repaint();
             }
         });
+
+        // Now show the modal dialog (this blocks, but image loading is already underway)
+        imageDialog.setVisible(true);
     }
 
     // Method to get currently cached group ID
