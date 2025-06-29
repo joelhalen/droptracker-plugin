@@ -1,5 +1,6 @@
 package io.droptracker.ui.pages;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridLayout;
@@ -142,14 +143,22 @@ public class HomePanel {
 		homePanel.add(welcomeMessagePanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		
-		JButton viewGlobalButton = new JButton("⇱ Global Lootboard");
+		JButton viewGlobalButton = new JButton("⇱🗖 Global Lootboard");
 		viewGlobalButton.setFont(FontManager.getRunescapeSmallFont());
-		viewGlobalButton.setPreferredSize(new Dimension(150, 30));
+		viewGlobalButton.setMinimumSize(new Dimension(220, 30));
+		viewGlobalButton.setMaximumSize(new Dimension(220, 30));
+		viewGlobalButton.setMargin(new Insets(3, 3, 3, 3));
+		viewGlobalButton.setAlignmentX(Component.LEFT_ALIGNMENT);
 		viewGlobalButton.setToolTipText("Click to view the global lootboard");
 		
 		// Add click listener for popup - now uses group-based lootboard system
 		viewGlobalButton.addActionListener(e -> PanelElements.showLootboardForGroup(client, 2));
-		homePanel.add(viewGlobalButton);
+		JPanel buttonPanel = new JPanel(new BorderLayout(10, 0));
+		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+		buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		buttonPanel.add(viewGlobalButton);
+		homePanel.add(buttonPanel);
+		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		homePanel.add(patchNotesPanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		homePanel.add(quickAccessPanel);
