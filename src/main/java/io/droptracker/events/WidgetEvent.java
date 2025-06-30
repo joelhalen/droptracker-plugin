@@ -33,8 +33,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Pet;
 import net.runelite.api.Client;
@@ -45,10 +43,10 @@ import net.runelite.api.events.*;
 import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import io.droptracker.service.SubmissionManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.Text;
@@ -56,16 +54,12 @@ import org.apache.commons.text.WordUtils;
 
 import java.awt.image.BufferedImage;
 import java.util.*;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class WidgetEvent {
 
-    @Inject
-    private final DropTrackerPlugin plugin;
-    private final DropTrackerConfig config;
 
     @Inject
     protected Client client;
@@ -74,19 +68,17 @@ public class WidgetEvent {
     private ConfigManager configManager;
 
     @Inject
-    private ClientThread clientThread;
-
-    @Inject
     private ItemManager itemManager;
 
     @Inject
     private Gson gson;
 
+    @Inject
+    private SubmissionManager submissionManager;
+
     private int petsIconIdx = -1;
     private int[] pets;
 
-    @Inject
-    private ScheduledExecutorService executor;
 
     private boolean advLogLoaded = false;
     private boolean bossLogLoaded = false;
@@ -124,14 +116,8 @@ public class WidgetEvent {
         }
     }
 
-    @Inject
-    public WidgetEvent(DropTrackerPlugin plugin, DropTrackerConfig config,
-                            ScheduledExecutorService executor) {
-        this.plugin = plugin;
-        this.config = config;
-        this.executor = executor;
-    }
 
+    @SuppressWarnings("deprecation")
     public void onWidgetLoaded(WidgetLoaded widget)
     {
         switch (widget.getGroupId())
@@ -148,6 +134,7 @@ public class WidgetEvent {
         }
     }
 
+    @SuppressWarnings({ "deprecation", "null" })
     @Subscribe
     public void onGameTick(GameTick event)
     {
@@ -162,7 +149,7 @@ public class WidgetEvent {
 
             Widget adventureLog = client.getWidget(ComponentID.ADVENTURE_LOG_CONTAINER);
 
-            if (adventureLog != null)
+            if (adventureLog != null && adventureLog.getChild(ADV_LOG_EXPLOITS_TEXT_INDEX) != null)
             {
                 Matcher advLogExploitsText = ADVENTURE_LOG_TITLE_PATTERN.matcher(adventureLog.getChild(ADV_LOG_EXPLOITS_TEXT_INDEX).getText());
                 if (advLogExploitsText.find())
@@ -186,17 +173,6 @@ public class WidgetEvent {
                 return;
             }
 
-            Widget[] bossChildren = bossMonster.getChildren();
-            Widget[] killsChildren = bossKills.getChildren();
-
-            for (int i = 0; i < bossChildren.length; ++i)
-            {
-                Widget boss = bossChildren[i];
-                Widget kill = killsChildren[i];
-
-                String bossName = boss.getText().replace(":", "");
-                int kc = Integer.parseInt(kill.getText().replace(",", ""));
-            }
         }
 
         // Adventure log - Counters
@@ -225,6 +201,7 @@ public class WidgetEvent {
     }
 
     // Method to collect all PBs from the adventure log
+    @SuppressWarnings({ "null", "deprecation" })
     private void collectAndSendAdventureLogPBs() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || pohOwner == null) {
             return;
@@ -340,22 +317,8 @@ public class WidgetEvent {
         customWebhookBody.getEmbeds().add(pbEmbed);
         
         // Use the main plugin class' sendWebhook method
-        plugin.sendDataToDropTracker(customWebhookBody, 0);
+        submissionManager.sendDataToDropTracker(customWebhookBody, 0);
     }
-
-    private double getPb(String boss)
-    {
-        Double personalBest = configManager.getRSProfileConfiguration("personalbest", boss.toLowerCase(), double.class);
-        return personalBest == null ? 0 : personalBest;
-    }
-
-
-    private int getKc(String boss)
-    {
-        Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
-        return killCount == null ? 0 : killCount;
-    }
-
     /**
      * Formats a time in seconds to a string in the format mm:ss or h:mm:ss
      */

@@ -2,7 +2,7 @@ package io.droptracker.ui;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
-import io.droptracker.util.ChatMessageUtil;
+import io.droptracker.service.SubmissionManager;
 
 import javax.inject.Inject;
 import javax.swing.*;
@@ -10,10 +10,10 @@ import javax.swing.*;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.ui.pages.GroupPanel;
 import io.droptracker.ui.pages.HomePanel;
-import io.droptracker.ui.pages.InfoPanel;
+import io.droptracker.ui.pages.ApiPanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
+
 import net.runelite.api.Client;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -33,8 +33,6 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 	private static final ImageIcon LOGO_GIF;
 
-	@Inject
-	private ChatMessageUtil chatMessageUtil;
 
 	static {
 		Image logoGif = ImageUtil.loadImageResource(DropTrackerPlugin.class, "brand/droptracker-small.gif");
@@ -49,15 +47,15 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	@Inject
 	private Client client;
 	@Inject
-	private ClientThread clientThread;
-	@Inject
 	private ItemManager itemManager;
 	@Inject
 	private DropTrackerConfig config;
-
+	@Inject
+	private SubmissionManager submissionManager;
+	
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
-	private InfoPanel infoPanel;
+	private ApiPanel apiPanel;
 	private HomePanel homePanel;
 	private JTabbedPane tabbedPane;
 	
@@ -73,7 +71,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		this.api = api;
 		this.plugin = plugin;
 		this.client = client;
-
+		
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(10, 10, 10, 10));
 		setBackground(ColorScheme.DARK_GRAY_COLOR);
@@ -97,14 +95,16 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 		// Home tab
 		homePanel = new HomePanel(config, api, client, this);
-		infoPanel = new InfoPanel(config, api);
 		welcomePanel = homePanel.create();	// Store reference
-		apiInfoPanel = infoPanel.create();   // Store reference
 
-		// Stats tab
+		// API Info tab (always created)
+		apiPanel = new ApiPanel(config, api, submissionManager);
+		apiInfoPanel = apiPanel.create();   // Store reference
+
+		// Stats tab (only if API enabled)
 		if (config.useApi()) {
-			statsPanel = new PlayerStatsPanel(client, plugin, clientThread, config, chatMessageUtil, api, itemManager);
-			groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api, itemManager, this);
+			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
+			groupPanel = new GroupPanel(client, config, api, itemManager, this);
 			playerStatsPanel = statsPanel.create(); // Store reference
 			groupStatsPanel = groupPanel.create();   // Store reference
 			tabbedPane.addTab("Players", playerStatsPanel);
@@ -266,6 +266,18 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	public void updateGroupPanel(String groupToLoad) {
 		if (groupPanel != null) {
 			groupPanel.performGroupSearch("");
+		}
+	}
+
+
+	// Update the API panel with the current session's valid submissions
+	public void updateSentSubmissions() {
+		System.out.println("DropTrackerPanelNew.updateSentSubmissions() called");
+		if (apiPanel != null) {
+			System.out.println("Calling apiPanel.refresh()");
+			apiPanel.refresh();
+		} else {
+			System.out.println("apiPanel is null");
 		}
 	}
 

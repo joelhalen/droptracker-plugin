@@ -27,10 +27,10 @@ public class NpcUtilities {
 	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
 	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
 
-    private static final Pattern PRIMARY_REGEX = Pattern.compile(
+    public static final Pattern PRIMARY_REGEX = Pattern.compile(
         "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
     );
-    private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
+    public static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
     private static Pair<String, Integer> mostRecentNpcData = null;
 
     @SuppressWarnings("null")

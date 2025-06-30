@@ -2,13 +2,10 @@ package io.droptracker.ui.pages;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.BasicStroke;
 import java.awt.Component;
-import java.awt.Container;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.MouseAdapter;
@@ -30,7 +27,6 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.StrokeBorder;
 import javax.swing.ImageIcon;
 
 import javax.inject.Inject;
@@ -39,13 +35,11 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.ui.PanelElements;
 import io.droptracker.ui.components.LeaderboardComponents;
-import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.RecentSubmission;
 import io.droptracker.models.api.TopGroupResult;
 import net.runelite.api.Client;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -58,13 +52,8 @@ public class GroupPanel {
 	private Client client;
 
 	@Inject
-	private ClientThread clientThread;
-
-	@Inject
 	private DropTrackerConfig config;
 
-	@Inject
-	private ChatMessageUtil chatMessageUtil;
 
 	@Inject
 	private DropTrackerPanelNew panel;
@@ -84,11 +73,9 @@ public class GroupPanel {
 	// Add field for tracking leaderboard placeholder
 	private JPanel leaderboardPlaceholder;
 
-	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager, DropTrackerPanelNew panel) {
+	public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanelNew panel) {
 		this.client = client;
-		this.clientThread = clientThread;
 		this.config = config;
-		this.chatMessageUtil = chatMessageUtil;
 		this.api = api;
 		this.itemManager = itemManager;
 		this.panel = panel;

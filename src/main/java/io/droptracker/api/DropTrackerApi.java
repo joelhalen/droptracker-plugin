@@ -1,16 +1,23 @@
 package io.droptracker.api;
 
 import com.google.gson.Gson;
+
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.DropTrackerPlugin;
+import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
+import io.droptracker.util.UUIDv7Generator;
 import okhttp3.*;
+import net.runelite.api.Client;
 
 import javax.inject.Inject;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -21,15 +28,101 @@ public class DropTrackerApi {
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
+    @Inject
+    private DropTrackerPlugin plugin;
+
+    @Inject
+    private Client client;
+
+    public List<GroupConfig> groupConfigs = new ArrayList<>();
+
+    private int lastGroupConfigUpdateUnix = 0;
+    private boolean isLoadingGroupConfigs = false;
 
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
     
     @Inject
-    public DropTrackerApi(DropTrackerConfig config, Gson gson, OkHttpClient httpClient) {
+    public DropTrackerApi(DropTrackerConfig config, Gson gson, OkHttpClient httpClient, DropTrackerPlugin plugin, Client client) {
             this.config = config;
             this.gson = gson;
             this.httpClient = httpClient;
+            this.plugin = plugin;
+            this.client = client;
+    }
+
+
+    /* Group Configs */
+    @SuppressWarnings({ "null", "unchecked" })
+    public synchronized void loadGroupConfigs(String playerName) throws IOException {
+        if (client.getAccountHash() == -1 || playerName == null) {
+            return;
         }
+        
+        // Prevent concurrent loading
+        if (isLoadingGroupConfigs) {
+            return;
+        }
+        
+        isLoadingGroupConfigs = true;
+        CompletableFuture.runAsync(() -> {
+            try {
+                String apiUrl = getApiUrl();
+                HttpUrl url = HttpUrl.parse(apiUrl + "/load_config?player_name=" + playerName + "&acc_hash=" + client.getAccountHash());
+                Request request = new Request.Builder().url(url).build();
+                
+                try (Response response = httpClient.newCall(request).execute()) {
+                    lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                    
+                    if (!response.isSuccessful()) {
+                        throw new IOException("API request failed with status: " + response.code());
+                    }
+                    
+                    if (response.body() == null) {
+                        throw new IOException("Empty response body");
+                    }
+                    
+                    String responseData = response.body().string();
+                    groupConfigs = gson.fromJson(responseData, List.class);
+                    lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
+                    
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } finally {
+                isLoadingGroupConfigs = false;
+            }
+        });
+    }
+
+    /* Get all players' group configs from memory */
+    public List<GroupConfig> getGroupConfigs() {
+        /* Reload group configs if they haven't been updated in the last 120 seconds */
+        if (lastGroupConfigUpdateUnix < (int) (System.currentTimeMillis() / 1000) - 120 && !isLoadingGroupConfigs) {
+            try {
+                loadGroupConfigs(plugin.getLocalPlayerName());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return groupConfigs;
+    }
+
+    /* Get a specific group config from memory */
+    public GroupConfig getGroupConfig(String groupName) {
+        return this.getGroupConfigs().stream()
+            .filter(groupConfig -> groupConfig.getGroupName().equals(groupName))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /* Submissions */
+    public String generateGuidForSubmission() {
+        return UUIDv7Generator.getInstance().generateAsString();
+    }
+    
+
 
     @SuppressWarnings("null")
     public TopGroupResult getTopGroups() throws IOException {
@@ -80,7 +173,7 @@ public class DropTrackerApi {
     /**
      * Sends a request to the API to search for a group and returns the GroupSearchResult.
      */
-    @SuppressWarnings("null")
+    @SuppressWarnings({ "null", "unchecked" })
     public GroupSearchResult searchGroup(String groupName) throws IOException {
         // Check if the API is enabled
         if (!config.useApi()) {
@@ -173,6 +266,7 @@ public class DropTrackerApi {
                 return gson.fromJson(responseData, PlayerSearchResult.class);
             } catch (Exception e) {
                 // If direct parsing fails, try to parse as Map and convert
+                @SuppressWarnings("unchecked")
                 Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
                 return PlayerSearchResult.fromJsonMap(responseMap);
             }
@@ -210,6 +304,7 @@ public class DropTrackerApi {
             public void onResponse(Call call, Response response) throws IOException {
                 try (ResponseBody responseBody = response.body()) {
                     String responseData = responseBody.string();
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
 
                     if (!response.isSuccessful()) {
@@ -229,6 +324,7 @@ public class DropTrackerApi {
 
         return future;
     }
+
 
     public String getApiUrl() {
         return config.useApi() ? "https://api.droptracker.io" : "";

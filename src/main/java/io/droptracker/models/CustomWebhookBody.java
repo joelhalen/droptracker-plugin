@@ -47,4 +47,13 @@ public class CustomWebhookBody
 		final String value;
 		final boolean inline;
 	}
+
+	public String getField(CustomWebhookBody.Embed embed, String fieldName) {
+        for (CustomWebhookBody.Field field : embed.getFields()) {
+            if (field.getName().equals(fieldName)) {
+                return field.getValue();
+            }   
+        }
+        return null;
+    }
 }

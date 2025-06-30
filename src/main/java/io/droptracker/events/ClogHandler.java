@@ -1,7 +1,6 @@
 package io.droptracker.events;
 
 import com.google.inject.Inject;
-import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
 import io.droptracker.util.ItemIDSearch;
@@ -10,7 +9,6 @@ import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varp;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemStack;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.jetbrains.annotations.Nullable;
@@ -21,22 +19,12 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.ScheduledExecutorService;
 
 
 @Slf4j
-public class ClogHandler {
-    @Inject
-    private final DropTrackerPlugin plugin;
-
-    @Inject
-    protected Client client;
-
+public class ClogHandler extends BaseEventHandler {
     @Inject
     private Rarity rarity;
-
-    @Inject
-    private ClientThread clientThread;
 
     @Inject
     private KCService kcService;
@@ -46,11 +34,12 @@ public class ClogHandler {
     public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
+    
     @Inject
-    public ClogHandler(DropTrackerPlugin plugin, ItemIDSearch itemIDFinder,
-                            ScheduledExecutorService executor) {
-        this.plugin = plugin;
+    public ClogHandler(ItemIDSearch itemIDFinder, Rarity rarity, KCService kcService) {
         this.itemIDFinder = itemIDFinder;
+        this.rarity = rarity;
+        this.kcService = kcService;
     }
 
 
@@ -61,14 +50,13 @@ public class ClogHandler {
     // private static final String TOB = "Theatre of Blood";
     // private static final String COX = "Chambers of Xeric";
 
-
-
-
-    public boolean isEnabled() {
-        return true;
+    @Override
+    public void process(Object... args) {
+        /* does not need an override */
     }
 
 
+    @SuppressWarnings("deprecation")
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
             // require notifier enabled without popup mode to use chat event
@@ -87,7 +75,7 @@ public class ClogHandler {
         } else if (scriptId == ScriptID.NOTIFICATION_DELAY) {
             String topText = client.getVarcStrValue(VarClientStr.NOTIFICATION_TOP_TEXT);
             if (popupStarted.getAndSet(false) && "Collection log".equalsIgnoreCase(topText) && isEnabled()) {
-                String bottomText = plugin.sanitize(client.getVarcStrValue(VarClientStr.NOTIFICATION_BOTTOM_TEXT));
+                String bottomText = submissionManager.sanitize(client.getVarcStrValue(VarClientStr.NOTIFICATION_BOTTOM_TEXT));
                 processCollection(bottomText.substring(POPUP_PREFIX_LENGTH).trim());
             }
         }
@@ -105,27 +93,29 @@ public class ClogHandler {
             // This occurs if the player doesn't have the character summary tab selected
             log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
         }
+        
         Integer itemId = itemIDFinder.findItemId(itemName);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
         Integer killCount = loot != null ? kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource()) : null;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC) && (itemId != null)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
-        CustomWebhookBody collectionLogBody = new CustomWebhookBody();
-        CustomWebhookBody.Embed collEmbed = new CustomWebhookBody.Embed();
-        collEmbed.addField("type", "collection_log",true);
-        collEmbed.addField("source", loot != null ? loot.getSource() : "unknown", true);
-        collEmbed.addField("item", itemName, true);
-        collEmbed.addField("kc", String.valueOf(killCount),true);
-        collEmbed.addField("rarity", String.valueOf(itemRarity),true);
-        collEmbed.addField("item_id", String.valueOf(itemId),true);
-        collEmbed.addField("player", client.getLocalPlayer().getName(), true);
-        collEmbed.addField("slots", completed + "/" + total, true);
-        collEmbed.addField("p_v",plugin.pluginVersion,true);
-        String accountHash = String.valueOf(client.getAccountHash());
-        collEmbed.addField("acc_hash", accountHash, true);
-        collEmbed.title = client.getLocalPlayer().getName() + " received a collection log:";
+                
+        String player = getPlayerName();
+        CustomWebhookBody collectionLogBody = createWebhookBody(player + " received a collection log:");
+        CustomWebhookBody.Embed collEmbed = createEmbed(player + " received a collection log:", "collection_log");
+        
+        Map<String, Object> fieldData = new HashMap<>();
+        fieldData.put("source", loot != null ? loot.getSource() : "unknown");
+        fieldData.put("item", itemName);
+        fieldData.put("kc", killCount);
+        fieldData.put("rarity", itemRarity);
+        fieldData.put("item_id", itemId);
+        fieldData.put("slots", completed + "/" + total);
+        
+        addFields(collEmbed, fieldData);
+        
         collectionLogBody.getEmbeds().add(collEmbed);
-        plugin.sendDataToDropTracker(collectionLogBody, "2");
+        sendData(collectionLogBody, "2");
     }
 
     @Nullable

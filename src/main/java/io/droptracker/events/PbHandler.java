@@ -1,25 +1,11 @@
 package io.droptracker.events;
 
-import com.google.inject.Inject;
-import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.BossNotification;
-import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.Drop;
-import io.droptracker.util.ItemIDSearch;
-import io.droptracker.util.Rarity;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
-import net.runelite.api.events.WidgetLoaded;
-import net.runelite.api.widgets.ComponentID;
-import net.runelite.api.widgets.InterfaceID;
-import net.runelite.api.widgets.Widget;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.config.ConfigManager;
-import net.runelite.client.game.ItemStack;
-import net.runelite.client.plugins.loottracker.LootReceived;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.commons.lang3.tuple.Triple;
@@ -36,58 +22,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static java.time.temporal.ChronoField.*;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 @Slf4j
-public class PbHandler {
-    @Inject
-    private final DropTrackerPlugin plugin;
-    private final DropTrackerConfig config;
-
-    @Inject
-    protected Client client;
-
-    @Inject
-    private Rarity rarity;
-
-    @Inject
-    private ConfigManager configManager;
-
-    @Inject
-    private ClientThread clientThread;
-
-    private ItemIDSearch itemIDFinder;
-
-
-    private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
-    @Inject
-    public PbHandler(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder,
-                            ScheduledExecutorService executor, ConfigManager configManager) {
-        this.plugin = plugin;
-        this.config = config;
-        this.itemIDFinder = itemIDFinder;
-        this.executor = executor;
-        this.configManager = configManager;
-    }
-
-
-    private static final Pattern PRIMARY_REGEX = Pattern.compile(
-            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
-    );
-    private static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
-
-
-    private static final String BA_BOSS_NAME = "Penance Queen";
-    public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
-
-    public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
-    private static final String TOA = "Tombs of Amascut";
-    private static final String TOB = "Theatre of Blood";
-    private static final String COX = "Chambers of Xeric";
+public class PbHandler extends BaseEventHandler {
 
     @VisibleForTesting
     static final int MAX_BAD_TICKS = 10;
@@ -99,7 +40,6 @@ public class PbHandler {
 
     private static final long MESSAGE_LOOT_WINDOW = 15000; // 15 seconds
     private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
-    private final ScheduledExecutorService executor;
 
     private static final Duration PB_MESSAGE_WINDOW = Duration.ofSeconds(5); // Adjust window as needed
     private final Map<String, Triple<Duration, Duration, Boolean>> recentTimeMessages = new HashMap<>();
@@ -147,9 +87,8 @@ public class PbHandler {
     private static final long DUPLICATE_THRESHOLD = 5000;
     private String teamSize = null;
 
-    public boolean isEnabled() {
-        return true;
-    }
+    @Override
+    public void process(Object... args) { /* does not need an override */ }
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
@@ -204,12 +143,9 @@ public class PbHandler {
         );
     }
 
-    private int getKc(String boss)
-    {
-        Integer killCount = configManager.getRSProfileConfiguration("killcount", boss.toLowerCase(), int.class);
-        return killCount == null ? 0 : killCount;
-    }
 
+
+    @SuppressWarnings("unlikely-arg-type")
     private void processKill(BossNotification data) {
         if (data == null) {
             return;
@@ -226,16 +162,13 @@ public class PbHandler {
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;
-        String player = plugin.getLocalPlayerName();
+        String player = getPlayerName();
         final String[] timeRef = {null};
         final String[] bestTimeRef = {null};
         clientThread.invokeLater(() -> {
             timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
             bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
-            String accountHash = String.valueOf(client.getAccountHash());
-            CustomWebhookBody.Embed killEmbed = null;
-            CustomWebhookBody killWebhook = new CustomWebhookBody();
-            killEmbed = new CustomWebhookBody.Embed();
+            
             String bossName = "";
             if (teamSize == null || teamSize.equals("")) {
                 teamSize = "Solo";
@@ -251,23 +184,27 @@ public class PbHandler {
             if (bossName == null || bossName.equalsIgnoreCase("")){
                 return;
             }
+            
             Integer killCount = 0;
-            killEmbed.setTitle(player + " has killed a boss:");
-            killEmbed.addField("type", "npc_kill", true);
-            killEmbed.addField("boss_name", bossName, true);
-            killEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
-            killEmbed.addField("kill_time", timeRef[0], true);
-            killEmbed.addField("best_time", bestTimeRef[0], true);
-            killEmbed.addField("is_pb", String.valueOf(isPb), true);
-            killEmbed.addField("team_size", teamSize,true);
-            killEmbed.addField("acc_hash", accountHash, true);
-            killEmbed.addField("p_v",plugin.pluginVersion,true);
+            CustomWebhookBody killWebhook = createWebhookBody(player + " has killed a boss:");
+            CustomWebhookBody.Embed killEmbed = createEmbed(player + " has killed a boss:", "npc_kill");
+            
+            Map<String, Object> fieldData = new HashMap<>();
+            fieldData.put("boss_name", bossName);
+            fieldData.put("kill_time", timeRef[0]);
+            fieldData.put("best_time", bestTimeRef[0]);
+            fieldData.put("is_pb", isPb);
+            fieldData.put("team_size", teamSize);
+            
             if (bossName != null) {
-                killCount = getKc(bossName);
-                killEmbed.addField("killcount", String.valueOf(killCount), true);
+                killCount = getKillCount(bossName);
+                fieldData.put("killcount", killCount);
             }
+            
+            addFields(killEmbed, fieldData);
+            
             killWebhook.getEmbeds().add(killEmbed);
-            plugin.sendDataToDropTracker(killWebhook, "1");
+            sendData(killWebhook, "1");
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
@@ -398,8 +335,8 @@ public class PbHandler {
     }
 
     public Optional<Pair<String, Integer>> parseBoss(String message) {
-        Matcher primary = PRIMARY_REGEX.matcher(message);
-        Matcher secondary = SECONDARY_REGEX.matcher(message);
+        Matcher primary = NpcUtilities.PRIMARY_REGEX.matcher(message);
+        Matcher secondary = NpcUtilities.SECONDARY_REGEX.matcher(message);
 
 
         if (primary.find()) {
@@ -444,10 +381,10 @@ public class PbHandler {
                 return null;
 
             case "completion":
-                if (GAUNTLET_NAME.equalsIgnoreCase(boss))
-                    return GAUNTLET_BOSS;
-                if (CG_NAME.equalsIgnoreCase(boss))
-                    return CG_BOSS;
+                if (NpcUtilities.GAUNTLET_NAME.equalsIgnoreCase(boss))
+                    return NpcUtilities.GAUNTLET_BOSS;
+                if (NpcUtilities.CG_NAME.equalsIgnoreCase(boss))
+                    return NpcUtilities.CG_BOSS;
                 return null;
 
             case "kill":
@@ -536,17 +473,11 @@ public class PbHandler {
         final Duration time;
         final Duration bestTime;
         final boolean isPb;
-        final Instant timestamp;
 
         TimeData(Duration time, Duration bestTime, boolean isPb) {
             this.time = time;
             this.bestTime = bestTime;
             this.isPb = isPb;
-            this.timestamp = Instant.now();
-        }
-
-        boolean isRecent() {
-            return Duration.between(timestamp, Instant.now()).compareTo(Duration.ofSeconds(2)) <= 0;
         }
         @Override
         public String toString(){
@@ -672,6 +603,7 @@ public class PbHandler {
     /*
         We can obtain the group size for TOB/TOA using the player orb varbits
     */
+    @SuppressWarnings("deprecation")
     private String tobTeamSize() {
 
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
@@ -686,6 +618,7 @@ public class PbHandler {
     }
     
 
+    @SuppressWarnings("deprecation")
     private String toaTeamSize() {
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1 +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
@@ -713,6 +646,7 @@ public class PbHandler {
                 teamSize = teamMatch.group(1);
 
         }else if(bossName.contains("Royal Titans")){
+            @SuppressWarnings("deprecation")
             int size = client.getPlayers().size();
             if(size == 1){
                 teamSize = "Solo";

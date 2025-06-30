@@ -1,52 +1,19 @@
 package io.droptracker.events;
 import com.google.common.collect.ImmutableMap;
-import com.google.inject.Inject;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.util.ItemIDSearch;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.config.ConfigManager;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.ScheduledExecutorService;
 
 
 @Slf4j
-public class CaHandler {
-    @Inject
-    private final DropTrackerPlugin plugin;
-    private final DropTrackerConfig config;
-
-    @Inject
-    protected Client client;
-    
-
-    @Inject
-    private ConfigManager configManager;
-
-    @Inject
-    private ClientThread clientThread;
-
-    private ItemIDSearch itemIDFinder;
-
-    @Inject
-    public CaHandler(DropTrackerPlugin plugin, DropTrackerConfig config, ItemIDSearch itemIDFinder,
-                            ScheduledExecutorService executor, ConfigManager configManager) {
-        this.plugin = plugin;
-        this.config = config;
-        this.itemIDFinder = itemIDFinder;
-        this.executor = executor;
-        this.configManager = configManager;
-    }
+public class CaHandler extends BaseEventHandler {
     private static final Pattern ACHIEVEMENT_PATTERN = Pattern.compile("Congratulations, you've completed an? (?<tier>\\w+) combat task: (?<task>.+)\\.");
     private static final Pattern TASK_POINTS = Pattern.compile("\\s+\\(\\d+ points?\\)$");
     @Varbit
@@ -71,11 +38,9 @@ public class CaHandler {
     @Varbit
     public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
 
-    private final ScheduledExecutorService executor;
-
-
-    public boolean isEnabled() {
-        return true;
+    @Override
+    public void process(Object... args) {
+        /* does not need an override */
     }
 
     public void onGameMessage(String message) {
@@ -102,22 +67,22 @@ public class CaHandler {
                 CombatAchievement completedTier = crossedThreshold ? prev.getValue() : null;
                 completedTierName = completedTier != null ? completedTier.getDisplayName() : "N/A";
             }
-            String player = client.getLocalPlayer().getName();
-            String accountHash = String.valueOf(client.getAccountHash());
-            CustomWebhookBody combatWebhook = new CustomWebhookBody();
-            combatWebhook.setContent(player + " has completed a new combat task:");
-            CustomWebhookBody.Embed combatAchievementEmbed = new CustomWebhookBody.Embed();
-            combatAchievementEmbed.addField("type", "combat_achievement",true);
-            combatAchievementEmbed.addField("tier", tier.toString(),true);
-            combatAchievementEmbed.addField("task", task,true);
-            combatAchievementEmbed.addField("player_name", plugin.getLocalPlayerName(), true);
-            combatAchievementEmbed.addField("acc_hash", accountHash, true);
-            combatAchievementEmbed.addField("points", String.valueOf(taskPoints),true);
-            combatAchievementEmbed.addField("total_points", String.valueOf(totalPoints),true);
-            combatAchievementEmbed.addField("completed", completedTierName,true);
-            combatAchievementEmbed.addField("p_v", plugin.pluginVersion,true);
+            
+            String player = getPlayerName();
+            CustomWebhookBody combatWebhook = createWebhookBody(player + " has completed a new combat task:");
+            CustomWebhookBody.Embed combatAchievementEmbed = createEmbed(null, "combat_achievement");
+            
+            Map<String, Object> fieldData = new HashMap<>();
+            fieldData.put("tier", tier.toString());
+            fieldData.put("task", task);
+            fieldData.put("points", taskPoints);
+            fieldData.put("total_points", totalPoints);
+            fieldData.put("completed", completedTierName);
+            
+            addFields(combatAchievementEmbed, fieldData);
+            
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
-            plugin.sendDataToDropTracker(combatWebhook, "3");
+            sendData(combatWebhook, "3");
         });
     }
 
@@ -133,14 +98,6 @@ public class CaHandler {
                                 matcher.group("task")
                         ).replaceFirst("") // remove points suffix
                 ));
-    }
-
-    private void initThresholds() {
-        CUM_POINTS_VARBIT_BY_TIER.forEach((tier, varbitId) -> {
-            int cumulativePoints = client.getVarbitValue(varbitId);
-            if (cumulativePoints > 0)
-                cumulativeUnlockPoints.put(cumulativePoints, tier);
-        });
     }
     static {
         CUM_POINTS_VARBIT_BY_TIER = ImmutableMap.<CombatAchievement, Integer>builderWithExpectedSize(6)

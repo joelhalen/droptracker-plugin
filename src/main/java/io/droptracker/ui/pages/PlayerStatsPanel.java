@@ -26,13 +26,11 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.ui.PanelElements;
 import io.droptracker.ui.components.LeaderboardComponents;
-import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.RecentSubmission;
 import io.droptracker.models.api.TopPlayersResult;
 import net.runelite.api.Client;
-import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -45,13 +43,8 @@ public class PlayerStatsPanel {
 	private Client client;
 
 	@Inject
-	private ClientThread clientThread;
-
-	@Inject
 	private DropTrackerConfig config;
 	
-	@Inject
-	private ChatMessageUtil chatMessageUtil;
 
 	@Inject
 	private DropTrackerApi api;
@@ -67,12 +60,10 @@ public class PlayerStatsPanel {
 	private JTextField searchField;
 	private JPanel leaderboardPlaceholder;
 
-	public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager) {
+	public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager) {
 		this.client = client;
 		this.plugin = plugin;
-		this.clientThread = clientThread;
 		this.config = config;
-		this.chatMessageUtil = chatMessageUtil;
 		this.api = api;
 		this.itemManager = itemManager;
 	}
@@ -514,24 +505,6 @@ public class PlayerStatsPanel {
 		}
 		
 		return groupsContainer;
-	}
-
-	private String buildGroupsDisplayText(List<PlayerSearchResult.PlayerGroup> groups) {
-		if (groups == null || groups.isEmpty()) {
-			return "";
-		}
-		
-		StringBuilder groupsText = new StringBuilder("<html>Groups:<br>");
-		for (PlayerSearchResult.PlayerGroup group : groups) {
-			groupsText.append("• ").append(group.getName());
-			if (group.getMembers() != null) {
-				groupsText.append(" (").append(group.getMembers()).append(" members)");
-			}
-			groupsText.append("<br>");
-		}
-		groupsText.append("</html>");
-		
-		return groupsText.toString();
 	}
 
 }

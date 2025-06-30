@@ -33,4 +33,16 @@ public class DurationAdapter extends TypeAdapter<Duration> {
         }
         return null;
     }
+
+    public static String formatDuration(Duration duration) {
+        if (duration.toDays() > 0) {
+			return duration.toDays() + " day ago";
+		} else if (duration.toHours() > 0) {
+			return duration.toHours() + " hr ago"; 
+		} else if (duration.toMinutes() > 0) {
+			return duration.toMinutes() + " min ago";
+		} else {    
+			return "just now";
+		}
+    }
 }

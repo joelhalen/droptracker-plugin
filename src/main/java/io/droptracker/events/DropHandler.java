@@ -2,8 +2,9 @@ package io.droptracker.events;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
@@ -11,18 +12,14 @@ import javax.inject.Inject;
 import com.google.common.eventbus.Subscribe;
 
 import io.droptracker.DebugLogger;
-import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.KCService;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.NPC;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.config.ConfigManager;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemStack;
@@ -31,13 +28,10 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 
 @Slf4j
-public class DropHandler {
+public class DropHandler extends BaseEventHandler {
 
     @Inject
     private ChatMessageUtil chatMessageUtil;
-
-    @Inject
-    private DropTrackerPlugin plugin;
 
     @Inject
     private KCService kcService;
@@ -45,19 +39,11 @@ public class DropHandler {
     @Inject
     private ItemManager itemManager;
 
-    @Inject
-    private ClientThread clientThread;
+    @Override
+    public void process(Object... args) {
+        /* does not need an override */
+    }
 
-    @Inject
-    private ConfigManager configManager;
-
-    @Inject
-    private ScheduledExecutorService executor;
-
-    @Inject
-    private Client client;
-
-    
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
 		chatMessageUtil.checkForMessage();
@@ -125,10 +111,10 @@ public class DropHandler {
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
-			String localPlayerName = plugin.getLocalPlayerName();
-			String accountHash = String.valueOf(client.getAccountHash());
+			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
+			AtomicInteger singleValue = new AtomicInteger(0);
 
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
@@ -136,37 +122,36 @@ public class DropHandler {
 				int price = itemManager.getItemPrice(itemId);
 				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
 				totalValue.addAndGet(qty * price);
-				CustomWebhookBody.Embed itemEmbed = new CustomWebhookBody.Embed();
+				singleValue.addAndGet(price);
+				CustomWebhookBody.Embed itemEmbed = createEmbed(localPlayerName + " received some drops:", "drop");
 				itemEmbed.setImage(plugin.itemImageUrl(itemId));
-				itemEmbed.addField("type", "drop", true);
-				itemEmbed.addField("source_type", sourceType, true);
-				itemEmbed.addField("acc_hash", accountHash, true);
-				itemEmbed.addField("item", itemComposition.getName(), true);
-				itemEmbed.addField("player", localPlayerName, true);
-				itemEmbed.addField("id", String.valueOf(itemComposition.getId()), true);
-				itemEmbed.addField("quantity", String.valueOf(qty), true);
-				itemEmbed.addField("value", String.valueOf(price), true);
-				itemEmbed.addField("source", npcName, true);
-				itemEmbed.addField("type", sourceType, true);
-				itemEmbed.addField("p_v", plugin.pluginVersion, true);
+				
+				Map<String, Object> fieldData = new HashMap<>();
+				fieldData.put("source_type", sourceType);
+				fieldData.put("item", itemComposition.getName());
+				fieldData.put("id", itemComposition.getId());
+				fieldData.put("quantity", qty);
+				fieldData.put("value", price);
+				fieldData.put("source", npcName);
+				
 				if (npcName != null) {
-					Integer killCount = configManager.getRSProfileConfiguration("killcount", npcName.toLowerCase(), int.class);
-					itemEmbed.addField("killcount", String.valueOf(killCount), true);
+					Integer killCount = getKillCount(npcName);
+					fieldData.put("killcount", killCount);
 				}
-				itemEmbed.title = localPlayerName + " received some drops:";
+				
+				addFields(itemEmbed, fieldData);
 				embeds.add(itemEmbed);
 			}
-
 
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
 			executor.submit(() -> {
 				try {
-					CustomWebhookBody customWebhookBody = new CustomWebhookBody();
+					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
-					customWebhookBody.setContent(localPlayerName + " received some drops:");
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						plugin.sendDataToDropTracker(customWebhookBody, valueToSend);
+						// ValidSubmission creation is now handled by SubmissionManager.sendDataToDropTracker()
+						sendData(customWebhookBody, valueToSend, singleValue.get());
 					}
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);
@@ -177,7 +162,8 @@ public class DropHandler {
 		});
 	}
 
-    private static Collection<ItemStack> stack(Collection<ItemStack> items) {
+    @SuppressWarnings("deprecation")
+	private static Collection<ItemStack> stack(Collection<ItemStack> items) {
 		final List<ItemStack> list = new ArrayList<>();
 
 		for (final ItemStack item : items) {

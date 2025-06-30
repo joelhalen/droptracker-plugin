@@ -62,8 +62,6 @@ public class PanelElements {
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     public static String cachedGroupName = "All Players";
 
-    private static ItemManager itemManager;
-
     private static Client client;
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
@@ -865,7 +863,6 @@ public class PanelElements {
                     "<i>" + submission.timeSinceReceived() + "</i>";
                 } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
                     String itemName = submission.getDropItemName();
-                    Integer quantity = submission.getDropQuantity();
                     tooltip += "<b>" + itemName + "</b><br>" +
                         submission.getPlayerName() + "<br>" +
                         "from: <i>" + submission.getSourceName() + "</i><br>" +
