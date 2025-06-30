@@ -5,19 +5,23 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.border.EmptyBorder;
 
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.api.DropTrackerApi;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -28,10 +32,13 @@ import net.runelite.client.util.LinkBrowser;
 public class InfoPanel {
 
     @Inject
-    private DropTrackerConfig config;
+    private DropTrackerConfig config;	
+    @Inject
+    private DropTrackerApi api;
 
-    public InfoPanel(DropTrackerConfig config) {
+    public InfoPanel(DropTrackerConfig config, DropTrackerApi api) {
         this.config = config;
+        this.api = api;
     }
 
     public JPanel create() {
@@ -48,7 +55,7 @@ public class InfoPanel {
 		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 40));
 		titlePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		JLabel apiTitle = new JLabel("API Features");
+		JLabel apiTitle = new JLabel("DropTracker - About");
 		apiTitle.setFont(FontManager.getRunescapeBoldFont());
 		apiTitle.setForeground(Color.WHITE);
 
@@ -61,10 +68,26 @@ public class InfoPanel {
 		statusPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 40));
 		statusPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		JLabel statusLabel = new JLabel("API Status: " + (config.useApi() ? "Enabled" : "Disabled"));
-		statusLabel.setForeground(config.useApi() ? Color.GREEN : Color.RED);
-		statusLabel.setFont(FontManager.getRunescapeSmallFont());
-		statusPanel.add(statusLabel, BorderLayout.CENTER);
+		if (config.useApi()) {
+			String lastCommunicationTime = "";
+			LocalDateTime now = LocalDateTime.now();
+			LocalDateTime lastCommunicationDate = LocalDateTime.ofEpochSecond(api.lastCommunicationTime, 0, ZoneOffset.UTC);
+			Duration duration = Duration.between(lastCommunicationDate, now);
+			
+			if (duration.toDays() > 0) {
+				lastCommunicationTime = duration.toDays() + " day ago";
+			} else if (duration.toHours() > 0) {
+				lastCommunicationTime = duration.toHours() + " hr ago"; 
+			} else if (duration.toMinutes() > 0) {
+				lastCommunicationTime = duration.toMinutes() + " min ago";
+			} else {
+				lastCommunicationTime = "just now";
+			}
+			JLabel statusLabel = new JLabel("Last communication with API: " + lastCommunicationTime);
+			statusLabel.setForeground(config.useApi() ? Color.GREEN : Color.RED);
+			statusLabel.setFont(FontManager.getRunescapeSmallFont());
+			statusPanel.add(statusLabel, BorderLayout.CENTER);
+		}
 
 		// API features list
 		JPanel featuresPanel = new JPanel();
@@ -161,15 +184,9 @@ public class InfoPanel {
 		apiPanel.add(buttonPanel);
 		apiPanel.add(Box.createVerticalGlue());
 
-		// Wrap in scroll pane with proper insets
-		JScrollPane scrollPane = new JScrollPane(apiPanel);
-		scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-		scrollPane.setBorder(null);
-		scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
 		JPanel wrapperPanel = new JPanel(new BorderLayout());
-		wrapperPanel.add(scrollPane, BorderLayout.CENTER);
+		wrapperPanel.add(apiPanel, BorderLayout.CENTER);
 		return wrapperPanel;
 	}
     

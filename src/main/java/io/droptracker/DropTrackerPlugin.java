@@ -697,6 +697,9 @@ public class DropTrackerPlugin extends Plugin {
 				.url(url)
 				.post(requestBody)
 				.build();
+		if (config.useApi()) {
+			api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000); // Update the last communication time if the api is being used
+		}
 		okHttpClient.newCall(request).enqueue(new Callback() {
 			@Override
 			public void onFailure(Call call, IOException e) {

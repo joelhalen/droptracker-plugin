@@ -20,7 +20,8 @@ public class DropTrackerApi {
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
-    private PanelDataLoadedCallback dataLoadedCallback;
+
+    public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
     
     @Inject
     public DropTrackerApi(DropTrackerConfig config, Gson gson, OkHttpClient httpClient) {
@@ -28,10 +29,6 @@ public class DropTrackerApi {
             this.gson = gson;
             this.httpClient = httpClient;
         }
-    
-        public void setDataLoadedCallback(PanelDataLoadedCallback callback) {
-            this.dataLoadedCallback = callback;
-    }
 
     @SuppressWarnings("null")
     public TopGroupResult getTopGroups() throws IOException {
@@ -40,6 +37,7 @@ public class DropTrackerApi {
         HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
         Request request = new Request.Builder().url(url).build();
         Response response = httpClient.newCall(request).execute();
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
         if (!response.isSuccessful()) {
             throw new IOException("API request failed with status: " + response.code());
         }
@@ -73,6 +71,7 @@ public class DropTrackerApi {
         }
 
         Request request = new Request.Builder().url(url).build();
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
@@ -133,7 +132,7 @@ public class DropTrackerApi {
         }
 
         Request request = new Request.Builder().url(url).build();
-
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("API request failed with status: " + response.code());
@@ -174,7 +173,7 @@ public class DropTrackerApi {
         }
 
         Request request = new Request.Builder().url(url).build();
-
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);  
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {

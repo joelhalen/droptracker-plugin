@@ -11,6 +11,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.awt.Cursor;
 import java.net.URL;
 import java.util.concurrent.CompletableFuture;
 
@@ -24,6 +25,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
@@ -144,6 +146,39 @@ public class PanelElements {
             });
         });
     }
+    /**
+	 * Creates a styled container for submission icons with border and background
+	 */
+	public static JLabel createStyledIconContainer() {
+		JLabel container = new JLabel();
+		container.setVerticalAlignment(SwingConstants.CENTER);
+		container.setHorizontalAlignment(SwingConstants.CENTER);
+		container.setPreferredSize(new Dimension(32, 32));
+		container.setMinimumSize(new Dimension(32, 32));
+		container.setMaximumSize(new Dimension(32, 32));
+		
+		// Add styling with border and background
+		container.setOpaque(true);
+		container.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		container.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.BORDER_COLOR));
+		
+		// Add hover effect
+		container.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				container.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+				container.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			}
+			
+			@Override
+			public void mouseExited(MouseEvent e) {
+				container.setBackground(ColorScheme.DARK_GRAY_COLOR);
+				container.setCursor(Cursor.getDefaultCursor());
+			}
+		});
+		
+		return container;
+	}
 
     // Method to show lootboard popup for a specific group ID
     public static void showLootboardForGroup(Client client, int groupId) {

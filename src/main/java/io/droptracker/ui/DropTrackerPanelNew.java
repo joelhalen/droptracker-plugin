@@ -92,7 +92,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 		// Home tab
 		HomePanel homePanel = new HomePanel(config, api, client);
-		InfoPanel infoPanel2 = new InfoPanel(config);
+		InfoPanel infoPanel2 = new InfoPanel(config, api);
 		JPanel welcomePanel = homePanel.create();	
 		JPanel apiInfoPanel = infoPanel2.create();
 
