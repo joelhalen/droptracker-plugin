@@ -5,6 +5,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
+import io.droptracker.models.api.TopPlayersResult;
 import okhttp3.*;
 
 import javax.inject.Inject;
@@ -46,6 +47,29 @@ public class DropTrackerApi {
         } else {
             String responseData = response.body().string();
             return TopGroupResult.fromJson(responseData);
+        }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    @SuppressWarnings("null")
+    public TopPlayersResult getTopPlayers() throws IOException {
+        String apiUrl = getApiUrl();
+        try{
+        HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
+        Request request = new Request.Builder().url(url).build();
+        Response response = httpClient.newCall(request).execute();
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        if (!response.isSuccessful()) {
+            throw new IOException("API request failed with status: " + response.code());
+        }
+        if (response.body() == null) {
+            throw new IOException("Empty response body");
+        } else {
+            String responseData = response.body().string();
+            return gson.fromJson(responseData, TopPlayersResult.class);
         }
         } catch (IOException e) {
             e.printStackTrace();

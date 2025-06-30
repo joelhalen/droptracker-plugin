@@ -5,17 +5,24 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Image;
+import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.awt.Cursor;
 import java.net.URL;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -30,15 +37,18 @@ import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
 
-
+import net.runelite.api.Client;
+import net.runelite.client.game.ItemManager;    
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.models.api.RecentSubmission;
+
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
-import net.runelite.api.Client;
 
 public class PanelElements {
 
@@ -52,6 +62,9 @@ public class PanelElements {
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     public static String cachedGroupName = "All Players";
 
+    private static ItemManager itemManager;
+
+    private static Client client;
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
         Image expandedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/expand.png");
@@ -236,6 +249,88 @@ public class PanelElements {
         // Now show the modal dialog (this blocks, but image loading is already underway)
         imageDialog.setVisible(true);
     }
+
+    // Method to show submission image popup
+    public static void showSubmissionImage(Client client, String submissionType, String submissionImageUrl, String tooltip) {
+        final JFrame parentFrame = getParentFrame(client);
+        String dialogTitle = getSubmissionDialogTitle(submissionType);
+        JDialog imageDialog = new JDialog(parentFrame, dialogTitle, true);
+        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        // Show loading dialog first
+        JLabel loadingLabel = new JLabel("Loading " + submissionType + " image...");
+        loadingLabel.setForeground(Color.WHITE);
+        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
+        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+        loadingLabel.setVerticalAlignment(JLabel.CENTER);
+        loadingLabel.setPreferredSize(new Dimension(400, 300));
+        loadingLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        loadingLabel.setOpaque(true);
+
+        // Add click to close
+        addCloseListener(loadingLabel, imageDialog);
+
+        imageDialog.add(loadingLabel);
+        imageDialog.pack();
+        imageDialog.setLocationRelativeTo(parentFrame);
+
+        // Load image from submission URL (similar to lootboard loading)
+        loadUrlImage(submissionImageUrl, imageDialog, loadingLabel, parentFrame, tooltip);
+
+        // Show the modal dialog
+        imageDialog.setVisible(true);
+    }
+
+    private static String getSubmissionDialogTitle(String submissionType) {
+        switch (submissionType.toLowerCase()) {
+            case "drop":
+                return "Drop Submission";
+            case "clog":
+                return "Collection Log Submission";
+            case "pb":
+                return "Personal Best Submission";
+            default:
+                return "Submission";
+        }
+    }
+
+
+
+    private static void loadUrlImage(String imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame, String tooltip) {
+        if (imageUrl == null || imageUrl.isEmpty()) {
+            loadingLabel.setText("No image URL available");
+            loadingLabel.setForeground(Color.RED);
+            return;
+        }
+
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                URL url = new URL(imageUrl);
+                return ImageIO.read(url);
+            } catch (IOException e) {
+                System.err.println("Failed to load image from URL: " + e.getMessage());
+                return null;
+            }
+        }).thenAccept(image -> {
+            SwingUtilities.invokeLater(() -> {
+                if (image != null) {
+                    System.out.println("URL image loaded, updating dialog");
+                    imageDialog.getContentPane().removeAll();
+                    displayImageInDialog(imageDialog, image, parentFrame);
+                    imageDialog.revalidate();
+                    imageDialog.repaint();
+                } else {
+                    System.err.println("Failed to load image from URL");
+                    loadingLabel.setText("Failed to load image from URL");
+                    loadingLabel.setForeground(Color.RED);
+                    imageDialog.revalidate();
+                    imageDialog.repaint();
+                }
+            });
+        });
+    }
+
+
 
     // Method to get currently cached group ID
     public static Integer getCachedGroupId() {
@@ -515,6 +610,302 @@ public class PanelElements {
         button.addActionListener(e -> action.run());
         return button;
     }
+
+    public static JPanel createRecentSubmissionPanel(List<RecentSubmission> recentSubmissions,
+			ItemManager itemManager, Client client, boolean forGroup) {
+		System.out.println("Creating recent submission panel...");
+		
+		// Main container with title and submissions
+		JPanel container = new JPanel();
+		container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
+		container.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		container.setBorder(new EmptyBorder(10, 0, 10, 0));
+		container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Adjusted height
+		container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+		container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
+		
+		// Title panel to ensure centering
+		JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+		titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+		
+		JLabel title = new JLabel("Recent Submissions");
+		title.setFont(FontManager.getRunescapeSmallFont());
+		title.setForeground(Color.WHITE);
+		titlePanel.add(title);
+		
+		// Submissions panel - use FlowLayout wrapper to center the GridBagLayout
+		JPanel submissionWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		submissionWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+		submissionWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+		
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridBagLayout());
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); 
+		
+		submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager, forGroup));
+
+		// Add components to container
+		container.add(titlePanel);
+		container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
+		container.add(submissionWrapper);
+		
+		return container;
+	}
+
+	private static JPanel updateRecentSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, boolean forGroup) {
+		panel.removeAll();
+		
+		// Debug logging
+		System.out.println("Starting updateRecentSubmissionPanel with " + recentSubmissions.size() + " submissions");
+		System.out.println("ItemManager is null: " + (itemManager == null));
+
+		GridBagConstraints c = new GridBagConstraints();
+		c.fill = GridBagConstraints.NONE;
+		c.anchor = GridBagConstraints.CENTER;
+		c.weightx = 0.2; // Equal weight for 5 columns
+		c.weighty = 0.5; // Equal weight for 2 rows
+		c.gridx = 0;
+		c.gridy = 0;	
+		c.insets = new Insets(1, 1, 1, 1); // Padding around each icon
+
+		int successfullyAdded = 0;
+		final int ITEMS_PER_ROW = 5;
+		final int MAX_ITEMS = 10;
+
+		// Add each submission icon to the panel (limit to 10 items)
+		for (int i = 0; i < Math.min(recentSubmissions.size(), MAX_ITEMS); i++) {
+			RecentSubmission submission = recentSubmissions.get(i);
+			
+			try {
+				JLabel iconContainer = null;
+				
+				if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
+					// Handle drops
+					Integer itemId = submission.getDropItemId();
+					Integer quantity = submission.getDropQuantity();
+					
+					System.out.println(submission.toString());
+					
+					
+					if (itemId != null && quantity != null && itemManager != null) {
+						final AsyncBufferedImage originalImage = itemManager.getImage(itemId, quantity, quantity > 1);
+						final float alpha = (quantity > 0 ? 1.0f : 0.5f);
+						
+						// Create a scaled version of the image for initial display
+						BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+						BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);		
+
+						final JLabel dropContainer = PanelElements.createStyledIconContainer();
+						dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
+						dropContainer.setIcon(new ImageIcon(opaque));
+						iconContainer = dropContainer;
+
+						originalImage.onLoaded(() -> {
+							// Scale the loaded image to 16x16
+							Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
+							BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+							Graphics g = scaledBuffered.getGraphics();
+							g.drawImage(scaled, 0, 0, null);
+							g.dispose(); // Clean up graphics resources
+							
+							BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
+							dropContainer.setIcon(new ImageIcon(finalImage));
+							dropContainer.revalidate();
+							dropContainer.repaint();
+						});
+					} 
+				} else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
+					// Handle collection log items
+					Integer itemId = submission.getClogItemId();
+					
+					System.out.println("  Clog - itemId=" + itemId);
+					
+					if (itemId != null && itemManager != null) {
+						final AsyncBufferedImage originalImage = itemManager.getImage(itemId, 1, false);
+						final float alpha = 1.0f;
+						
+						// Create a scaled version of the image for initial display
+						BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+						BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
+
+						final JLabel clogContainer = PanelElements.createStyledIconContainer();
+						clogContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
+						clogContainer.setIcon(new ImageIcon(opaque));
+						iconContainer = clogContainer;
+
+						originalImage.onLoaded(() -> {
+							// Scale the loaded image to 16x16
+							Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
+							BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+							Graphics g = scaledBuffered.getGraphics();
+							g.drawImage(scaled, 0, 0, null);
+							g.dispose(); // Clean up graphics resources
+							
+							BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
+							clogContainer.setIcon(new ImageIcon(finalImage));
+							clogContainer.revalidate();
+							clogContainer.repaint();
+						});
+						
+						System.out.println("  Successfully added clog icon");
+					} else {
+						System.out.println("  Skipped clog - missing data or null itemManager");
+					}
+				} else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+					// Handle personal best submissions with image URL
+					String imageUrl = submission.getImageUrl();
+					System.out.println("  PB - imageUrl=" + imageUrl);
+					
+					if (imageUrl != null && !imageUrl.isEmpty()) {
+						final JLabel pbContainer = PanelElements.createStyledIconContainer();
+						pbContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
+						pbContainer.setText("PB");
+						pbContainer.setFont(FontManager.getRunescapeSmallFont());
+						pbContainer.setForeground(Color.WHITE);
+						iconContainer = pbContainer;
+						
+						// Load image asynchronously
+						CompletableFuture.supplyAsync(() -> {
+							try {
+								BufferedImage image = ImageIO.read(new URL(imageUrl));
+								if (image != null) {
+									Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+									return new ImageIcon(scaled);
+								}
+							} catch (IOException e) {
+								System.err.println("Failed to load PB image: " + e.getMessage());
+							}
+							return null;
+						}).thenAccept(imageIcon -> {
+							if (imageIcon != null) {
+								SwingUtilities.invokeLater(() -> {
+									pbContainer.setText(""); // Remove text
+									pbContainer.setIcon(imageIcon);
+									pbContainer.revalidate();
+									pbContainer.repaint();
+								});
+							}
+						});
+						
+						System.out.println("  Successfully added PB placeholder");
+					} else {
+						System.out.println("  Skipped PB - no image URL");
+					}
+				} else {
+					System.out.println("  Unknown submission type: " + submission.getSubmissionType());
+				}
+				
+				
+				// Add the icon container if it was created successfully
+				if (iconContainer != null) {
+					if (submission.getSubmissionImageUrl() != null && !submission.getSubmissionImageUrl().isEmpty()) {
+						// Capture submission data for the click listener
+						final String submissionTypeForListener = submission.getSubmissionType();
+						final String submissionImageUrlForListener = submission.getSubmissionImageUrl();
+						final String tooltipForListener = buildSubmissionTooltip(submission, forGroup);
+						
+						// Add hover effect and click listener
+						iconContainer.addMouseListener(new MouseAdapter() {
+							@Override
+							public void mouseClicked(MouseEvent e) {
+								PanelElements.showSubmissionImage(client, submissionTypeForListener, submissionImageUrlForListener, tooltipForListener);
+							}
+						});
+					}
+					
+					panel.add(iconContainer, c);
+					successfullyAdded++;
+					
+					// Move to next position
+					c.gridx++;
+					if (c.gridx >= ITEMS_PER_ROW) {
+						c.gridx = 0;
+						c.gridy++;
+					}
+				}
+			} catch (Exception e) {
+				System.err.println("Error processing submission " + i + ": " + e.getMessage());
+				e.printStackTrace();
+			}
+		}
+		
+		System.out.println("Successfully added " + successfullyAdded + " icons to panel");
+        
+		// If no icons were added, show a message
+		if (successfullyAdded == 0) {
+			JLabel debugLabel = new JLabel("No recent submissions to display");
+			debugLabel.setForeground(Color.LIGHT_GRAY);
+			debugLabel.setFont(FontManager.getRunescapeSmallFont());
+			c.gridx = 0;
+			c.gridy = 0;
+			c.gridwidth = ITEMS_PER_ROW;
+			c.gridheight = 2;
+			panel.add(debugLabel, c);
+		}
+		
+		panel.revalidate();
+		panel.repaint();
+		return panel;	
+	}
+	
+	
+
+	public static String buildSubmissionTooltip(RecentSubmission submission, boolean forGroup) {
+		try {
+			String tooltip = "<html>";
+            if (forGroup) {
+                if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+                    String pbTime = submission.getPbTime();
+                    tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
+                    submission.getPlayerName() + " - new personal best!<br>" + "<br>" +
+                    "<i>" + submission.timeSinceReceived() + "</i>";
+                } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
+                    String itemName = submission.getDropItemName();
+                    Integer quantity = submission.getDropQuantity();
+                    tooltip += "<b>" + itemName + "</b><br>" +
+                        submission.getPlayerName() + "<br>" +
+                        "from: <i>" + submission.getSourceName() + "</i><br>" +
+                        "<i>" + submission.timeSinceReceived() + "</i>";
+                } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
+                    String itemName = submission.getClogItemName();
+                    tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
+                        "<b>" + itemName + "</b><br>" +
+                        "<i>from: " + submission.getSourceName() + "</i><br>" +
+                        "<i>" + submission.timeSinceReceived() + "</i>";
+                }
+            else {
+                if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+                    String pbTime = submission.getPbTime();
+                    tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
+                    submission.getPlayerName() + " - new personal best!<br>" + "<br>" +
+                    "<i>" + submission.timeSinceReceived() + "</i>";
+                } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
+                    String itemName = submission.getDropItemName();
+                    tooltip += "<b>" + itemName + "</b><br>" +
+                        submission.getPlayerName() + "<br>" +
+                        "from: <i>" + submission.getSourceName() + "</i><br>" +
+                        "<i>" + submission.timeSinceReceived() + "</i>";
+                } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
+                    String itemName = submission.getClogItemName();
+                    tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
+                        "<b>" + itemName + "</b><br>" +
+                        "<i>from: " + submission.getSourceName() + "</i><br>" +
+                        "<i>" + submission.timeSinceReceived() + "</i>";
+                }
+            }
+			tooltip += "</html>";
+			return tooltip;
+        }
+		} catch (Exception e) {
+			System.err.println("Error building tooltip: " + e.getMessage());
+		}
+		return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
+	}
+
 
     public static void showLoadingDialog(JDialog imageDialog, JFrame parentFrame) {
         // Create loading label

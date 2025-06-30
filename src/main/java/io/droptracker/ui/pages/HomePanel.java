@@ -15,11 +15,12 @@ import javax.swing.JPanel;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.util.LinkBrowser;
+import net.runelite.client.util.LinkBrowser;	
 import io.droptracker.ui.PanelElements;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.DropTrackerConfig;
 import net.runelite.api.Client;
+import io.droptracker.ui.DropTrackerPanelNew;
 
 public class HomePanel {
 
@@ -32,13 +33,22 @@ public class HomePanel {
     @Inject
     private Client client;
 
-    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client) {
+    @Inject
+    private DropTrackerPanelNew panel;
+    
+    // Store references for dynamic updates
+    private JPanel homePanel;
+    private JPanel playerButtonRow;
+    private int playerButtonIndex = -1; // Tracks where to insert the button
+
+    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanelNew panel) {
         this.config = config;
         this.api = api;
+        this.panel = panel;
     }
 
     public JPanel create() {
-		JPanel homePanel = new JPanel();
+		homePanel = new JPanel();
 		homePanel.setLayout(new BoxLayout(homePanel, BoxLayout.Y_AXIS));
 		homePanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		
@@ -65,6 +75,8 @@ public class HomePanel {
 
 		JPanel bottomButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
 		bottomButtonRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
+
+		
 
 		// Create the global board button
 		// Create button to view lootboard
@@ -152,7 +164,15 @@ public class HomePanel {
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
 		buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		buttonPanel.add(viewGlobalButton);
+		
 		homePanel.add(buttonPanel);
+		
+		// Note: playerButtonIndex will be set to the next component index
+		playerButtonIndex = homePanel.getComponentCount();
+		
+		// Initialize player button (will add if config is available)
+		updatePlayerButton();
+
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		homePanel.add(patchNotesPanel);
 		homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
@@ -161,5 +181,46 @@ public class HomePanel {
 		homePanel.add(featurePanelsContainer);
 		
 		return homePanel;
+	}
+	
+	/**
+	 * Updates the player button based on current config state.
+	 * Can be called dynamically when the config changes.
+	 */
+	public void updatePlayerButton() {
+		if (homePanel == null) {
+			return; // Panel not initialized yet
+		}
+		
+		// Remove existing player button if it exists
+		if (playerButtonRow != null) {
+			homePanel.remove(playerButtonRow);
+			playerButtonRow = null;
+		}
+		
+		// Add player button if config is available
+		if (config.lastAccountName() != null && !config.lastAccountName().isEmpty()) {
+			playerButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
+			playerButtonRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			playerButtonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+			
+			JButton playerStatsButton = new JButton("View your Stats");
+			playerStatsButton.setFocusPainted(false);
+			playerStatsButton.setFont(FontManager.getRunescapeSmallFont());
+			playerStatsButton.addActionListener(e -> {
+				panel.selectPanel("players");
+				panel.updatePlayerPanel(config.lastAccountName());
+			});
+			playerStatsButton.setMargin(new Insets(0, 0, 0, 0));
+			
+			playerButtonRow.add(playerStatsButton);
+			
+			// Insert at the correct position (after the global lootboard button)
+			homePanel.add(playerButtonRow, playerButtonIndex);
+		}
+		
+		// Refresh the panel
+		homePanel.revalidate();
+		homePanel.repaint();
 	}
 }

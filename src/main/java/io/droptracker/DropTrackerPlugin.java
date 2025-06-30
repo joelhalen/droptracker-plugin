@@ -46,6 +46,7 @@ import java.util.function.BiConsumer;
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.FernetDecrypt;
@@ -140,6 +141,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Nullable
     public Drop lastDrop = null;
 
+	private boolean statsLoaded = false;
 	
 	public static List<String> endpointUrls = new ArrayList<>();
 
@@ -202,6 +204,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	// Flag to prevent multiple message checks in the same session
 	private boolean isMessageChecked = false;
+
+	// Add a new flag to track when we need to update on next available tick
+	private boolean needsPanelUpdateOnLogin = false;
 
 	@Override
 	protected void startUp() {
@@ -321,6 +326,16 @@ public class DropTrackerPlugin extends Plugin {
 		Random randomP = new Random();
 		String randomUrl = endpointUrls.get(randomP.nextInt(endpointUrls.size()));
 		return randomUrl;
+	}
+
+
+
+	public void updatePanelOnLogin(String chatMessage) {
+		if (chatMessage.contains("Welcome to Old School RuneScape.")) {
+			System.out.println("Welcome message detected, setting flag for panel update");
+			// Instead of updating immediately, set a flag to update when player is available
+			needsPanelUpdateOnLogin = true;
+		}
 	}
 
 	public void fetchNewList() throws Exception {
@@ -530,6 +545,11 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		String chatMessage = sanitize(message.getMessage());
 		switch (message.getType()) {
+			case WELCOME:
+				if (!statsLoaded) {
+					updatePanelOnLogin(chatMessage);
+				}
+				break;
 			case GAMEMESSAGE:
 				if(config.pbEmbeds()){
 					pbHandler.onGameMessage(chatMessage);
@@ -553,6 +573,37 @@ public class DropTrackerPlugin extends Plugin {
 		if (!isTracking) {
 			return;
 		}
+		
+		// Check if we need to update panel on login and player is now available
+		if (needsPanelUpdateOnLogin && client.getLocalPlayer() != null && client.getLocalPlayer().getName() != null) {
+			System.out.println("Player is now available, updating panel");
+			needsPanelUpdateOnLogin = false; // Clear the flag
+			
+			// Use SwingUtilities to ensure UI updates happen on EDT
+			SwingUtilities.invokeLater(() -> {
+				try {
+					System.out.println("About to call updatePlayerPanel...");
+					if (newPanel != null) {
+						String playerName = client.getLocalPlayer().getName();
+						System.out.println("Updating config with player name: " + playerName);
+						configManager.setConfiguration("droptracker", "lastAccountName", playerName);
+						newPanel.updatePlayerPanel();
+						
+						// Also update the home player button since config might now have player name
+						newPanel.updateHomePlayerButton();
+						System.out.println("updatePlayerPanel and updateHomePlayerButton called successfully");
+						statsLoaded = true;
+					} else {
+						System.out.println("newPanel is null!");
+					}
+				} catch (Exception e) {
+					System.err.println("Error updating player panel: " + e.getMessage());
+					e.printStackTrace();
+					statsLoaded = true;
+				}
+			});
+		}
+		
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
 	}

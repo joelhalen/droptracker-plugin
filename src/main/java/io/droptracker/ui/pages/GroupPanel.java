@@ -9,17 +9,12 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.concurrent.CompletableFuture;
 import java.util.List;
-import java.util.Map;
-import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.net.URL;
@@ -32,23 +27,22 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.StrokeBorder;
-import javax.swing.JLayeredPane;
 import javax.swing.ImageIcon;
-import javax.swing.event.DocumentListener;
 
 import javax.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.ui.PanelElements;
+import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.models.api.RecentSubmission;
 import io.droptracker.models.api.TopGroupResult;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
@@ -56,8 +50,6 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.util.AsyncBufferedImage;
-import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 
 public class GroupPanel {
@@ -75,6 +67,9 @@ public class GroupPanel {
 	private ChatMessageUtil chatMessageUtil;
 
 	@Inject
+	private DropTrackerPanelNew panel;
+
+	@Inject
 	private DropTrackerApi api;
 
 	private ItemManager itemManager;
@@ -89,13 +84,14 @@ public class GroupPanel {
 	// Add field for tracking leaderboard placeholder
 	private JPanel leaderboardPlaceholder;
 
-	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager) {
+	public GroupPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager, DropTrackerPanelNew panel) {
 		this.client = client;
 		this.clientThread = clientThread;
 		this.config = config;
 		this.chatMessageUtil = chatMessageUtil;
 		this.api = api;
 		this.itemManager = itemManager;
+		this.panel = panel;
 	}
 
 	public JPanel create() {
@@ -103,8 +99,13 @@ public class GroupPanel {
 		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
 		mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		
-		// Header section with title and search
-		JPanel headerPanel = createHeaderPanel();
+		// Header section with title and search using LeaderboardComponents
+		LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
+			"DropTracker - Groups", 
+			"Search for a group", 
+			() -> performGroupSearch("")
+		);
+		searchField = headerResult.searchField;
 		
 		// Content panel that will change based on state - fix alignment
 		contentPanel = new JPanel();
@@ -116,7 +117,7 @@ public class GroupPanel {
 		showDefaultState();
 		
 		// Add components to main panel - match PlayerStatsPanel structure
-		mainPanel.add(headerPanel);
+		mainPanel.add(headerResult.panel);
 		mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		mainPanel.add(contentPanel);
 		mainPanel.add(Box.createVerticalGlue());
@@ -124,66 +125,7 @@ public class GroupPanel {
 		return mainPanel;
 	}
 	
-	private JPanel createHeaderPanel() {
-		JPanel headerPanel = new JPanel(new BorderLayout());
-		headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		headerPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-		headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		headerPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		headerPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		
-		// Create a vertical panel for title and search
-		JPanel titleAndSearchPanel = new JPanel();
-		titleAndSearchPanel.setLayout(new BoxLayout(titleAndSearchPanel, BoxLayout.Y_AXIS));
-		titleAndSearchPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		
-		JLabel groupTitle = new JLabel("DropTracker - Groups");
-		groupTitle.setFont(FontManager.getRunescapeBoldFont());
-		groupTitle.setForeground(Color.WHITE);
-		groupTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-		groupTitle.setHorizontalAlignment(JLabel.CENTER);
-		groupTitle.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		groupTitle.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		
-		// Search field for groups - ORIGINAL structure
-		JPanel searchPanel = new JPanel(new BorderLayout(5, 0));
-		searchPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		searchPanel.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		searchPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		searchPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		searchPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		searchPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		
-		searchField = new JTextField();
-		searchField.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		searchField.setToolTipText("Search for a group");
-		searchField.setHorizontalAlignment(JTextField.LEFT);
-		searchField.setMargin(new Insets(5, 8, 5, 8));
-		searchField.setFont(FontManager.getRunescapeSmallFont());
-		searchField.setPreferredSize(new Dimension(200, 35));
-		searchField.setMinimumSize(new Dimension(100, 35));
-		
-		JButton searchButton = new JButton("Search");
-		searchButton.setPreferredSize(new Dimension(70, 35));
-		searchButton.setMaximumSize(new Dimension(70, 35));
-		searchButton.setMinimumSize(new Dimension(70, 35));
-		searchButton.setMargin(new Insets(5, 5, 5, 5));
-		searchButton.addActionListener(e -> performGroupSearch());
-		
-		// ORIGINAL simple layout
-		searchPanel.add(searchField, BorderLayout.CENTER);
-		searchPanel.add(searchButton, BorderLayout.EAST);
-		
-		titleAndSearchPanel.add(groupTitle);
-		titleAndSearchPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-		titleAndSearchPanel.add(searchPanel);
-		
-		// Add the panel to the center of the BorderLayout
-		headerPanel.add(titleAndSearchPanel, BorderLayout.CENTER);
-		
-		return headerPanel;
-	}
+
 	
 	private void showDefaultState() {
 		contentPanel.removeAll();
@@ -224,22 +166,11 @@ public class GroupPanel {
 		groupButtonPanel.add(groupPageButton);
 		
 		defaultPanel.add(instructionLabel);
-		defaultPanel.add(Box.createRigidArea(new Dimension(0, 15)));
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 		
 		if (config.useApi()) {
-			// Create placeholder for leaderboard
-			leaderboardPlaceholder = new JPanel();
-			leaderboardPlaceholder.setLayout(new BoxLayout(leaderboardPlaceholder, BoxLayout.Y_AXIS));
-			leaderboardPlaceholder.setBackground(ColorScheme.DARK_GRAY_COLOR);
-			leaderboardPlaceholder.setAlignmentX(Component.CENTER_ALIGNMENT);
-			
-			JLabel loadingLabel = new JLabel("Loading top groups...");
-			loadingLabel.setFont(FontManager.getRunescapeSmallFont());
-			loadingLabel.setForeground(Color.LIGHT_GRAY);
-			loadingLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-			
-			leaderboardPlaceholder.add(loadingLabel);
+			// Create placeholder for leaderboard using LeaderboardComponents
+			leaderboardPlaceholder = LeaderboardComponents.createLoadingPlaceholder("Loading top groups...");
 			defaultPanel.add(leaderboardPlaceholder);
 			defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 			
@@ -258,106 +189,36 @@ public class GroupPanel {
 	}
 
 	private JPanel showLeaderboard(TopGroupResult leaderboardData) {
-		JPanel leaderboardPanel = new JPanel();
-		leaderboardPanel.setLayout(new BoxLayout(leaderboardPanel, BoxLayout.Y_AXIS));
-		leaderboardPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		leaderboardPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		
-		// Title for the leaderboard
-		JLabel leaderboardTitle = new JLabel("Top Groups");
-		leaderboardTitle.setFont(FontManager.getRunescapeBoldFont());
-		leaderboardTitle.setForeground(Color.WHITE);
-		leaderboardTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-		leaderboardTitle.setHorizontalAlignment(JLabel.CENTER);
-		
-		// Create table container with border similar to other panels
-		JPanel tableContainer = new JPanel();
-		tableContainer.setLayout(new BoxLayout(tableContainer, BoxLayout.Y_AXIS));
-		tableContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		tableContainer.setBorder(new EmptyBorder(10, 10, 10, 10));
-		tableContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
-		tableContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 200));
-		
-		// Create table header
-		JPanel headerRow = new JPanel(new BorderLayout(5, 0));
-		headerRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		headerRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		headerRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		
-		JLabel rankHeader = new JLabel("Rank");
-		rankHeader.setFont(FontManager.getRunescapeBoldFont());
-		rankHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		rankHeader.setHorizontalAlignment(JLabel.LEFT);
-		rankHeader.setPreferredSize(new Dimension(40, 25));
-		
-		// Create sub-panel for name and loot columns
-		JPanel nameAndLootHeader = new JPanel(new BorderLayout(10, 0));
-		nameAndLootHeader.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		
-		JLabel nameHeader = new JLabel("Name");
-		nameHeader.setFont(FontManager.getRunescapeBoldFont());
-		nameHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		nameHeader.setHorizontalAlignment(JLabel.LEFT);
-		
-		JLabel lootHeader = new JLabel("Loot");
-		lootHeader.setFont(FontManager.getRunescapeBoldFont());
-		lootHeader.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-		lootHeader.setHorizontalAlignment(JLabel.RIGHT);
-		lootHeader.setPreferredSize(new Dimension(50, 25));
-		
-		nameAndLootHeader.add(nameHeader, BorderLayout.CENTER);
-		nameAndLootHeader.add(lootHeader, BorderLayout.EAST);
-		
-		headerRow.add(rankHeader, BorderLayout.WEST);
-		headerRow.add(nameAndLootHeader, BorderLayout.CENTER);
-		
-		// Create data rows
-		JPanel dataContainer = new JPanel();
-		dataContainer.setLayout(new BoxLayout(dataContainer, BoxLayout.Y_AXIS));
-		dataContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		dataContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
-		
-		// Display top groups from API response
-		if (leaderboardData != null && leaderboardData.getGroups() != null) {
-			int displayRank = 1;
-			for (TopGroupResult.TopGroup groupData : leaderboardData.getGroups()) {
-				if (displayRank > 5) break; // Only show top 5
-				
-				JPanel dataRow = new JPanel(new BorderLayout(5, 0));
-				dataRow.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-				dataRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-				dataRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-				
-				// Rank - use API rank if available, otherwise use display position
-				Integer apiRank = groupData.getRank();
-				int rankToShow = (apiRank != null) ? apiRank : displayRank;
-				
-				JLabel rankLabel = new JLabel("#" + rankToShow);
-				rankLabel.setFont(FontManager.getRunescapeSmallFont());
-				rankLabel.setForeground(rankToShow <= 3 ? ColorScheme.PROGRESS_COMPLETE_COLOR : Color.WHITE);
-				rankLabel.setHorizontalAlignment(JLabel.LEFT);
-				rankLabel.setPreferredSize(new Dimension(40, 25));
-				
-				// Create sub-panel for name and loot columns
-				JPanel nameAndLootData = new JPanel(new BorderLayout(10, 0));
-				nameAndLootData.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-				
-				// Group Name from API
-				final String groupName = groupData.getGroupName() == null || groupData.getGroupName().trim().isEmpty() 
-					? "Unknown Group" 
-					: groupData.getGroupName();
-				
-				JButton nameButton = new JButton("<html>" + groupName + "&nbsp;&nbsp;<img src='https://www.droptracker.io/img/external-8px-g.png'></html>");
-				nameButton.setFont(FontManager.getRunescapeSmallFont());
-				nameButton.setForeground(Color.WHITE);
-				nameButton.setHorizontalAlignment(JLabel.LEFT);
-				nameButton.setBorder(null);
-				nameButton.addActionListener(e -> {
-					
+		return LeaderboardComponents.createLeaderboardTable(
+			"Top Groups",
+			"Name",
+			leaderboardData != null ? leaderboardData.getGroups() : null,
+			new LeaderboardComponents.LeaderboardItemRenderer<TopGroupResult.TopGroup>() {
+				@Override
+				public String getName(TopGroupResult.TopGroup group) {
+					return group.getGroupName() != null && !group.getGroupName().trim().isEmpty() 
+						? group.getGroupName() 
+						: "Unknown Group";
+				}
+
+				@Override
+				public String getLootValue(TopGroupResult.TopGroup group) {
+					String loot = group.getTotalLoot();
+					return (loot != null && !loot.trim().isEmpty()) ? loot : "0 GP";
+				}
+
+				@Override
+				public Integer getRank(TopGroupResult.TopGroup group) {
+					return group.getRank();
+				}
+
+				@Override
+				public void onItemClick(TopGroupResult.TopGroup group) {
+					// Search for this group when clicked
 					CompletableFuture.supplyAsync(() -> {	
 						try{
 							showLoadingState();
-							GroupSearchResult groupResult = api.searchGroup(groupName);
+							GroupSearchResult groupResult = api.searchGroup(group.getGroupName());
 							if (groupResult != null) {
 								showGroupDetails(groupResult);
 							}
@@ -367,98 +228,33 @@ public class GroupPanel {
 							return null;
 						}
 					});
-				});
-				
-				// Total Loot from API
-				String totalLoot = groupData.getTotalLoot();
-				if (totalLoot == null || totalLoot.trim().isEmpty()) {
-					totalLoot = "0 GP";
 				}
-				
-				JLabel lootLabel = new JLabel(totalLoot);
-				lootLabel.setFont(FontManager.getRunescapeSmallFont());
-				lootLabel.setForeground(ColorScheme.GRAND_EXCHANGE_PRICE);
-				lootLabel.setHorizontalAlignment(JLabel.RIGHT);
-				lootLabel.setPreferredSize(new Dimension(50, 25));
-				
-				nameAndLootData.add(nameButton, BorderLayout.CENTER);
-				nameAndLootData.add(lootLabel, BorderLayout.EAST);
-				
-				dataRow.add(rankLabel, BorderLayout.WEST);
-				dataRow.add(nameAndLootData, BorderLayout.CENTER);
-				
-				dataContainer.add(dataRow);
-				if (displayRank < 5) {
-					dataContainer.add(Box.createRigidArea(new Dimension(0, 3))); // Small spacing between rows
-				}
-				
-				displayRank++;
 			}
-		} else {
-			// Fallback if no data
-			JLabel noDataLabel = new JLabel("No leaderboard data available");
-			noDataLabel.setFont(FontManager.getRunescapeSmallFont());
-			noDataLabel.setForeground(Color.LIGHT_GRAY);
-			noDataLabel.setHorizontalAlignment(JLabel.CENTER);
-			noDataLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			dataContainer.add(noDataLabel);
-		}
-		
-		// Assemble the table
-		tableContainer.add(headerRow);
-		tableContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing after header
-		tableContainer.add(dataContainer);
-		
-		// Add to main panel
-		leaderboardPanel.add(leaderboardTitle);
-		leaderboardPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-		leaderboardPanel.add(tableContainer);
-		
-		return leaderboardPanel;
+		);
 	}
 
 	private void obtainLeaderboardData() {
-		CompletableFuture.supplyAsync(() -> {
-			try {
-				TopGroupResult groupResult = api.getTopGroups();
-				if (groupResult != null) {
-					// Pre-build the leaderboard panel off the EDT to avoid latency
-					return showLeaderboard(groupResult);
+		LeaderboardComponents.loadLeaderboardAsync(
+			leaderboardPlaceholder,
+			() -> {
+				try {
+					return api.getTopGroups();
+				} catch (Exception e) {
+					System.err.println("Failed to get top groups: " + e.getMessage());
+					return null;
 				}
-			} catch (Exception e) {
-				System.err.println("Failed to get top groups: " + e.getMessage());
-			}
-			return null;
-		}).thenAccept(leaderboardPanel -> {
-			SwingUtilities.invokeLater(() -> {
-				if (leaderboardPanel != null && leaderboardPlaceholder != null) {
-					// Get the parent panel (defaultPanel)
-					Container parent = leaderboardPlaceholder.getParent();
-					if (parent != null) {
-						// Find the index of the placeholder
-						int index = -1;
-						for (int i = 0; i < parent.getComponentCount(); i++) {
-							if (parent.getComponent(i) == leaderboardPlaceholder) {
-								index = i;
-								break;
-							}
-						}
-						
-						if (index != -1) {
-							// Remove placeholder and add the real leaderboard at the same position
-							parent.remove(index);
-							parent.add(leaderboardPanel, index);
-							parent.revalidate();
-							parent.repaint();
-						}
-					}
-				}
-			});
-		});
+			},
+			this::showLeaderboard
+		);
 	}
 	
-	private void performGroupSearch() {
-		String searchQuery = searchField.getText().trim();
+	public void performGroupSearch(String directQuery) {
+		String searchQuery;
+		if (directQuery.equalsIgnoreCase("")) {
+			searchQuery = searchField.getText().trim();
+		} else {
+			searchQuery = directQuery;
+		}
 		
 		if (searchQuery.isEmpty()) {
 			JOptionPane.showMessageDialog(contentPanel, "Please enter a group name to search for.");
@@ -515,30 +311,10 @@ public class GroupPanel {
 	private void showSearchError(String message) {
 		contentPanel.removeAll();
 		
-		JPanel errorPanel = new JPanel();
-		errorPanel.setLayout(new BoxLayout(errorPanel, BoxLayout.Y_AXIS));
-		errorPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		errorPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		
-		errorPanel.add(Box.createRigidArea(new Dimension(0, 50)));
-		
-		JLabel errorLabel = new JLabel(message);
-		errorLabel.setFont(FontManager.getRunescapeFont());
-		errorLabel.setForeground(Color.RED);
-		errorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		errorLabel.setHorizontalAlignment(JLabel.CENTER);
-		
-		JButton backButton = new JButton("Back to Search");
-		backButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-		backButton.addActionListener(e -> {
+		JPanel errorPanel = LeaderboardComponents.createErrorPanel(message, () -> {
 			searchField.setText("");
 			showDefaultState();
 		});
-		
-		errorPanel.add(errorLabel);
-		errorPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-		errorPanel.add(backButton);
-		errorPanel.add(Box.createVerticalGlue());
 		
 		contentPanel.add(errorPanel);
 		contentPanel.revalidate();
@@ -609,24 +385,13 @@ public class GroupPanel {
 		groupNamePanel.add(groupDescLabel);
 		
 		// Clear button for closing the search result
-		JButton clearButton = new JButton("×");
-		clearButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-		clearButton.setForeground(Color.LIGHT_GRAY);
-		clearButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		clearButton.setBorder(new EmptyBorder(5, 8, 5, 8));
-		clearButton.setPreferredSize(new Dimension(30, 30));
-		clearButton.setMaximumSize(new Dimension(30, 30));
-		clearButton.setMinimumSize(new Dimension(30, 30));
-		clearButton.setToolTipText("Clear search");
-		clearButton.setOpaque(false);
-		clearButton.setContentAreaFilled(false);
-		clearButton.addActionListener(e -> {
+		JButton clearButton = LeaderboardComponents.createClearButton(() -> {
 			searchField.setText("");
 			showDefaultState();
 		});
 
 		groupHeaderPanel.add(groupIcon, BorderLayout.WEST);
-		groupHeaderPanel.add(groupNamePanel, BorderLayout.CENTER);
+		groupHeaderPanel.add(groupNamePanel, BorderLayout.CENTER);	
 		groupHeaderPanel.add(clearButton, BorderLayout.EAST);
 		
 		// Stats panel - exactly like playerStatsPanel
@@ -642,13 +407,14 @@ public class GroupPanel {
 		JPanel lootBox = PanelElements.createStatBox("Monthly Loot", groupResult.getGroupStats().getMonthlyLoot() + " GP");
 		JPanel topPlayerBox = PanelElements.createStatBox("Top Player", groupResult.getGroupTopPlayer());
 		topPlayerBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		// topPlayerBox.addMouseListener(new MouseAdapter() {
-		// 	@Override
-		// 	public void mouseClicked(MouseEvent e) {
-		// 		searchField.setText(groupResult.getGroupTopPlayer());
-		// 		performGroupSearch();
-		// 	}
-		// }); TODO -- send to player stats panel for this player
+		topPlayerBox.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				panel.selectPanel("players");
+				String topPlayer = groupResult.getGroupTopPlayer().split("\\(")[0].trim();
+				panel.updatePlayerPanel(topPlayer);
+			}
+		});
 		
 		statsPanel.add(membersBox);
 		statsPanel.add(rankBox);
@@ -679,10 +445,52 @@ public class GroupPanel {
 		groupInfoPanel.add(statsPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		// Get recent submission data to draw 
-		List<GroupSearchResult.RecentSubmission> recentSubmissions = groupResult.getRecentSubmissions();
-		System.out.println("Recent submissions: " + recentSubmissions.size());
-		System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
-		groupInfoPanel.add(createRecentSubmissionPanel(recentSubmissions, itemManager));
+		List<RecentSubmission> recentSubmissions = groupResult.getRecentSubmissions();
+		if (recentSubmissions != null && !recentSubmissions.isEmpty()) {
+			System.out.println("Recent submissions: " + recentSubmissions.size());
+			System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
+			groupInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, true));
+		} else {
+			System.out.println("No recent submissions found for this group");
+			// Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
+			JPanel noSubmissionsContainer = new JPanel();
+			noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));
+			noSubmissionsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			noSubmissionsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
+			noSubmissionsContainer.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Match original
+			noSubmissionsContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+			noSubmissionsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+			
+			// Title panel to match original structure
+			JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+			titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+			titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+			
+			JLabel title = new JLabel("Recent Submissions");
+			title.setFont(FontManager.getRunescapeSmallFont());
+			title.setForeground(Color.WHITE);
+			titlePanel.add(title);
+			
+			// Content panel to match original structure
+			JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+			contentWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+			contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+			
+			JLabel noSubmissionsLabel = new JLabel("No recent submissions available");
+			noSubmissionsLabel.setFont(FontManager.getRunescapeSmallFont());
+			noSubmissionsLabel.setForeground(Color.LIGHT_GRAY);
+			noSubmissionsLabel.setHorizontalAlignment(JLabel.CENTER);
+			contentWrapper.add(noSubmissionsLabel);
+			
+			// Assemble the container exactly like the original
+			noSubmissionsContainer.add(titlePanel);
+			noSubmissionsContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Match original spacing
+			noSubmissionsContainer.add(contentWrapper);
+			
+			groupInfoPanel.add(noSubmissionsContainer);
+		}
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		groupInfoPanel.add(actionPanel);
 		
@@ -721,289 +529,63 @@ public class GroupPanel {
 	 * Downloads the group icon from the provided URL, scales it to 50×50, then swaps it into the given label.
 	 * This runs off the EDT to avoid blocking the UI.
 	 */
-	private void loadGroupIcon(JLabel iconLabel, String urlString) {
-		if (urlString == null || urlString.isEmpty()) {
+	private void loadGroupIcon(JLabel iconLabel, String inputString) {
+		if (inputString == null || inputString.trim().isEmpty()) {
+			System.out.println("Group icon URL is null or empty, skipping icon load");
 			return; // nothing to load
+		}
+		
+		// we can't load gifs in swing panels natively, so we swap for a png alternative hoping it exists
+		String urlString = inputString.replace(".gif", ".png");
+		
+		// Validate URL format
+		try {
+			new URL(urlString); // This will throw if URL is malformed
+		} catch (Exception e) {
+			System.err.println("Invalid group icon URL format: " + urlString + " - " + e.getMessage());
+			return;
 		}
 
 		CompletableFuture.supplyAsync(() -> {
 			try {
+				System.out.println("Attempting to load group icon from: " + urlString);
 				BufferedImage img = ImageIO.read(new URL(urlString));
 				if (img == null) {
+					System.err.println("ImageIO.read returned null for URL: " + urlString);
 					return null;
 				}
 				Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+				System.out.println("Successfully loaded and scaled group icon");
 				return new ImageIcon(scaled);
 			} catch (IOException e) {
-				System.err.println("Failed to load group icon: " + e.getMessage());
+				System.err.println("Failed to load group icon from URL: " + urlString + " - " + e.getMessage());
+				// Try the original URL if the .png replacement failed
+				if (urlString.endsWith(".png") && !inputString.endsWith(".png")) {
+					try {
+						System.out.println("Attempting to load original URL: " + inputString);
+						BufferedImage img = ImageIO.read(new URL(inputString));
+						if (img != null) {
+							Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+							System.out.println("Successfully loaded original group icon");
+							return new ImageIcon(scaled);
+						}
+					} catch (IOException ex) {
+						System.err.println("Failed to load original group icon: " + ex.getMessage());
+					}
+				}
+				return null;
+			} catch (Exception e) {
+				System.err.println("Unexpected error loading group icon: " + e.getMessage());
 				return null;
 			}
 		}).thenAccept(icon -> {
 			if (icon != null) {
 				SwingUtilities.invokeLater(() -> iconLabel.setIcon(icon));
+			} else {
+				System.out.println("No icon loaded, keeping placeholder");
 			}
 		});
 	}
 
-	private JPanel createRecentSubmissionPanel(List<GroupSearchResult.RecentSubmission> recentSubmissions,
-			ItemManager itemManager) {
-		System.out.println("Creating recent submission panel...");
-		
-		// Main container with title and submissions
-		JPanel container = new JPanel();
-		container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-		container.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		container.setBorder(new EmptyBorder(10, 0, 10, 0));
-		container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Adjusted height
-		container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
-		container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
-		
-		// Title panel to ensure centering
-		JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-		titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-		titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-		
-		JLabel title = new JLabel("Recent Submissions");
-		title.setFont(FontManager.getRunescapeSmallFont());
-		title.setForeground(Color.WHITE);
-		titlePanel.add(title);
-		
-		// Submissions panel - use FlowLayout wrapper to center the GridBagLayout
-		JPanel submissionWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-		submissionWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-		submissionWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-		
-		JPanel panel = new JPanel();
-		panel.setLayout(new GridBagLayout());
-		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); 
-		
-		submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager));
-
-		// Add components to container
-		container.add(titlePanel);
-		container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
-		container.add(submissionWrapper);
-		
-		return container;
-	}
-
-	private JPanel updateRecentSubmissionPanel(JPanel panel, List<GroupSearchResult.RecentSubmission> recentSubmissions, ItemManager itemManager) {
-		panel.removeAll();
-		
-		// Debug logging
-		System.out.println("Starting updateRecentSubmissionPanel with " + recentSubmissions.size() + " submissions");
-		System.out.println("ItemManager is null: " + (itemManager == null));
-
-		GridBagConstraints c = new GridBagConstraints();
-		c.fill = GridBagConstraints.NONE;
-		c.anchor = GridBagConstraints.CENTER;
-		c.weightx = 0.2; // Equal weight for 5 columns
-		c.weighty = 0.5; // Equal weight for 2 rows
-		c.gridx = 0;
-		c.gridy = 0;	
-		c.insets = new Insets(1, 1, 1, 1); // Padding around each icon
-
-		int successfullyAdded = 0;
-		final int ITEMS_PER_ROW = 5;
-		final int MAX_ITEMS = 10;
-
-		// Add each submission icon to the panel (limit to 10 items)
-		for (int i = 0; i < Math.min(recentSubmissions.size(), MAX_ITEMS); i++) {
-			GroupSearchResult.RecentSubmission submission = recentSubmissions.get(i);
-			System.out.println("Processing submission " + i + ": type=" + submission.getSubmissionType() + 
-				", player=" + submission.getPlayerName());
-			
-			try {
-				JLabel iconContainer = null;
-				
-				if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-					// Handle drops
-					Integer itemId = submission.getDropItemId();
-					Integer quantity = submission.getDropQuantity();
-					
-					System.out.println(submission.toString());
-					
-					if (itemId != null && quantity != null && itemManager != null) {
-						final AsyncBufferedImage originalImage = itemManager.getImage(itemId, quantity, quantity > 1);
-						final float alpha = (quantity > 0 ? 1.0f : 0.5f);
-						
-						// Create a scaled version of the image for initial display
-						BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-						BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);		
-
-						final JLabel dropContainer = PanelElements.createStyledIconContainer();
-						dropContainer.setToolTipText(buildSubmissionTooltip(submission));
-						dropContainer.setIcon(new ImageIcon(opaque));
-						iconContainer = dropContainer;
-
-						originalImage.onLoaded(() -> {
-							// Scale the loaded image to 16x16
-							Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
-							BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-							Graphics g = scaledBuffered.getGraphics();
-							g.drawImage(scaled, 0, 0, null);
-							g.dispose(); // Clean up graphics resources
-							
-							BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
-							dropContainer.setIcon(new ImageIcon(finalImage));
-							dropContainer.revalidate();
-							dropContainer.repaint();
-						});
-						
-						System.out.println("  Successfully added drop icon");
-					} else {
-						System.out.println("  Skipped drop - missing data or null itemManager");
-					}
-				} else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-					// Handle collection log items
-					Integer itemId = submission.getClogItemId();
-					
-					System.out.println("  Clog - itemId=" + itemId);
-					
-					if (itemId != null && itemManager != null) {
-						final AsyncBufferedImage originalImage = itemManager.getImage(itemId, 1, false);
-						final float alpha = 1.0f;
-						
-						// Create a scaled version of the image for initial display
-						BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-						BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
-
-						final JLabel clogContainer = PanelElements.createStyledIconContainer();
-						clogContainer.setToolTipText(buildSubmissionTooltip(submission));
-						clogContainer.setIcon(new ImageIcon(opaque));
-						iconContainer = clogContainer;
-
-						originalImage.onLoaded(() -> {
-							// Scale the loaded image to 16x16
-							Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
-							BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-							Graphics g = scaledBuffered.getGraphics();
-							g.drawImage(scaled, 0, 0, null);
-							g.dispose(); // Clean up graphics resources
-							
-							BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
-							clogContainer.setIcon(new ImageIcon(finalImage));
-							clogContainer.revalidate();
-							clogContainer.repaint();
-						});
-						
-						System.out.println("  Successfully added clog icon");
-					} else {
-						System.out.println("  Skipped clog - missing data or null itemManager");
-					}
-				} else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-					// Handle personal best submissions with image URL
-					String imageUrl = submission.getImageUrl();
-					System.out.println("  PB - imageUrl=" + imageUrl);
-					
-					if (imageUrl != null && !imageUrl.isEmpty()) {
-						final JLabel pbContainer = PanelElements.createStyledIconContainer();
-						pbContainer.setToolTipText(buildSubmissionTooltip(submission));
-						pbContainer.setText("PB");
-						pbContainer.setFont(FontManager.getRunescapeSmallFont());
-						pbContainer.setForeground(Color.WHITE);
-						iconContainer = pbContainer;
-						
-						// Load image asynchronously
-						CompletableFuture.supplyAsync(() -> {
-							try {
-								BufferedImage image = ImageIO.read(new URL(imageUrl));
-								if (image != null) {
-									Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-									return new ImageIcon(scaled);
-								}
-							} catch (IOException e) {
-								System.err.println("Failed to load PB image: " + e.getMessage());
-							}
-							return null;
-						}).thenAccept(imageIcon -> {
-							if (imageIcon != null) {
-								SwingUtilities.invokeLater(() -> {
-									pbContainer.setText(""); // Remove text
-									pbContainer.setIcon(imageIcon);
-									pbContainer.revalidate();
-									pbContainer.repaint();
-								});
-							}
-						});
-						
-						System.out.println("  Successfully added PB placeholder");
-					} else {
-						System.out.println("  Skipped PB - no image URL");
-					}
-				} else {
-					System.out.println("  Unknown submission type: " + submission.getSubmissionType());
-				}
-				
-				// Add the icon container if it was created successfully
-				if (iconContainer != null) {
-					panel.add(iconContainer, c);
-					successfullyAdded++;
-					
-					// Move to next position
-					c.gridx++;
-					if (c.gridx >= ITEMS_PER_ROW) {
-						c.gridx = 0;
-						c.gridy++;
-					}
-				}
-			} catch (Exception e) {
-				System.err.println("Error processing submission " + i + ": " + e.getMessage());
-				e.printStackTrace();
-			}
-		}
-		
-		System.out.println("Successfully added " + successfullyAdded + " icons to panel");
-		
-		// If no icons were added, show a message
-		if (successfullyAdded == 0) {
-			JLabel debugLabel = new JLabel("No recent submissions to display");
-			debugLabel.setForeground(Color.LIGHT_GRAY);
-			debugLabel.setFont(FontManager.getRunescapeSmallFont());
-			c.gridx = 0;
-			c.gridy = 0;
-			c.gridwidth = ITEMS_PER_ROW;
-			c.gridheight = 2;
-			panel.add(debugLabel, c);
-		}
-		
-		panel.revalidate();
-		panel.repaint();
-		return panel;	
-	}
 	
-	
-
-	private String buildSubmissionTooltip(GroupSearchResult.RecentSubmission submission) {
-		try {
-			String tooltip = "<html>";
-			if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-				String pbTime = submission.getPbTime();
-				tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
-				submission.getPlayerName() + " - new personal best!<br>" + "<br>" +
-				"<i>" + submission.timeSinceReceived() + "</i>";
-			} else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-				String itemName = submission.getDropItemName();
-				Integer quantity = submission.getDropQuantity();
-				tooltip += "<b>" + itemName + "</b><br>" +
-					submission.getPlayerName() + "<br>" +
-					"from: <i>" + submission.getSourceName() + "</i><br>" +
-					"<i>" + submission.timeSinceReceived() + "</i>";
-			} else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-				String itemName = submission.getClogItemName();
-				tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
-					"<b>" + itemName + "</b><br>" +
-					"<i>from: " + submission.getSourceName() + "</i><br>" +
-					"<i>" + submission.timeSinceReceived() + "</i>";
-			}
-			tooltip += "</html>";
-			return tooltip;
-		} catch (Exception e) {
-			System.err.println("Error building tooltip: " + e.getMessage());
-		}
-		return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
-	}
 }

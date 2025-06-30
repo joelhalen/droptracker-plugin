@@ -243,4 +243,14 @@ public interface DropTrackerConfig extends Config {
     default String lastVersionNotified() {
         return "0";
     }
+
+    @ConfigItem(
+        name = "lastAccountName",
+        keyName = "lastAccountName",
+        description = "lastAccountName",
+        hidden = true
+    )
+    default String lastAccountName() {
+        return null;
+    }
 }

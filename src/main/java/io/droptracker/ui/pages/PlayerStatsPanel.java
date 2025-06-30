@@ -2,35 +2,38 @@ package io.droptracker.ui.pages;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.BasicStroke;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.StrokeBorder;
 
 import javax.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.DropTrackerPlugin;
 import io.droptracker.ui.PanelElements;
+import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.PlayerSearchResult;
+import io.droptracker.models.api.RecentSubmission;
+import io.droptracker.models.api.TopPlayersResult;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -53,19 +56,25 @@ public class PlayerStatsPanel {
 	@Inject
 	private DropTrackerApi api;
 
-	private int currentPlayerId = -1;
+	@Inject
+	private DropTrackerPlugin plugin;
+
+	private ItemManager itemManager;
 	
 	// UI components that we need to update
 	private JPanel mainPanel;
 	private JPanel contentPanel;
 	private JTextField searchField;
+	private JPanel leaderboardPlaceholder;
 
-	public PlayerStatsPanel(Client client, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api) {
+	public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, ClientThread clientThread, DropTrackerConfig config, ChatMessageUtil chatMessageUtil, DropTrackerApi api, ItemManager itemManager) {
 		this.client = client;
+		this.plugin = plugin;
 		this.clientThread = clientThread;
 		this.config = config;
 		this.chatMessageUtil = chatMessageUtil;
 		this.api = api;
+		this.itemManager = itemManager;
 	}
 
 	public JPanel create() {
@@ -73,8 +82,13 @@ public class PlayerStatsPanel {
 		mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
 		mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		
-		// Header section with title and search
-		JPanel headerPanel = createHeaderPanel();
+		// Header section with title and search using LeaderboardComponents
+		LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
+			"DropTracker - Players", 
+			"Search for a player", 
+			() -> performPlayerSearch("")
+		);
+		searchField = headerResult.searchField;
 		
 		// Content panel that will change based on state
 		contentPanel = new JPanel();
@@ -86,7 +100,7 @@ public class PlayerStatsPanel {
 		showDefaultState();
 		
 		// Add components to main panel - match GroupPanel structure
-		mainPanel.add(headerPanel);
+		mainPanel.add(headerResult.panel);
 		mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		mainPanel.add(contentPanel);
 		mainPanel.add(Box.createVerticalGlue());
@@ -94,130 +108,59 @@ public class PlayerStatsPanel {
 		return mainPanel;
 	}
 	
-	private JPanel createHeaderPanel() {
-		JPanel headerPanel = new JPanel(new BorderLayout());
-		headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		headerPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
-		headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		headerPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		headerPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
-		
-		// Create a vertical panel for title and search
-		JPanel titleAndSearchPanel = new JPanel();
-		titleAndSearchPanel.setLayout(new BoxLayout(titleAndSearchPanel, BoxLayout.Y_AXIS));
-		titleAndSearchPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		
-		JLabel playerTitle = new JLabel("DropTracker - Players");
-		playerTitle.setFont(FontManager.getRunescapeBoldFont());
-		playerTitle.setForeground(Color.WHITE);
-		playerTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-		playerTitle.setHorizontalAlignment(JLabel.CENTER);
-		playerTitle.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		playerTitle.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
-		
-		// Search field for players
-		JPanel searchPanel = new JPanel(new BorderLayout(5, 0));
-		searchPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		searchPanel.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		searchPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		searchPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		searchPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		searchPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
-		
-		searchField = new JTextField();
-		searchField.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.DARKER_GRAY_HOVER_COLOR));
-		searchField.setToolTipText("Search for a player");
-		searchField.setHorizontalAlignment(JTextField.LEFT);
-		searchField.setMargin(new Insets(5, 8, 5, 8));
-		searchField.setFont(FontManager.getRunescapeSmallFont());
-		searchField.setPreferredSize(new Dimension(200, 35));
-		searchField.setMinimumSize(new Dimension(100, 35));
-		
-		JButton searchButton = new JButton("Search");
-		searchButton.setPreferredSize(new Dimension(70, 35));
-		searchButton.setMaximumSize(new Dimension(70, 35));
-		searchButton.setMinimumSize(new Dimension(70, 35));
-		searchButton.setMargin(new Insets(5, 5, 5, 5));
-		searchButton.addActionListener(e -> performPlayerSearch());
-		
-		searchPanel.add(searchField, BorderLayout.CENTER);
-		searchPanel.add(searchButton, BorderLayout.EAST);
-		
-		titleAndSearchPanel.add(playerTitle);
-		titleAndSearchPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-		titleAndSearchPanel.add(searchPanel);
-		
-		// Add the panel to the center of the BorderLayout
-		headerPanel.add(titleAndSearchPanel, BorderLayout.CENTER);
-		
-		return headerPanel;
-	}
+
 	
 	private void showDefaultState() {
 		contentPanel.removeAll();
 		
-		// Create center panel for current player info
+		// Create center panel for instructions and leaderboard
 		JPanel defaultPanel = new JPanel();
 		defaultPanel.setLayout(new BoxLayout(defaultPanel, BoxLayout.Y_AXIS));
 		defaultPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
 		// Add some spacing
-		defaultPanel.add(Box.createRigidArea(new Dimension(0, 25)));
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 		
-		// Get current player or show message
-		String playerName = (client.getLocalPlayer() != null) ? client.getLocalPlayer().getName() : "Not logged in";
+		// Instructions text
+		JLabel instructionLabel = new JLabel("Search for a player by name above");
+		instructionLabel.setFont(FontManager.getRunescapeFont());
+		instructionLabel.setForeground(Color.LIGHT_GRAY);
+		instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+		instructionLabel.setHorizontalAlignment(JLabel.CENTER);
 		
-		if (!"Not logged in".equals(playerName)) {
-			// Show current player info
-			JLabel currentPlayerLabel = new JLabel("Current Player: " + playerName);
-			currentPlayerLabel.setFont(FontManager.getRunescapeBoldFont());
-			currentPlayerLabel.setForeground(Color.WHITE);
-			currentPlayerLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			currentPlayerLabel.setHorizontalAlignment(JLabel.CENTER);
-			
-			JLabel instructionLabel = new JLabel("Search for other players above");
-			instructionLabel.setFont(FontManager.getRunescapeSmallFont());
-			instructionLabel.setForeground(Color.LIGHT_GRAY);
-			instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			instructionLabel.setHorizontalAlignment(JLabel.CENTER);
-			
+		defaultPanel.add(instructionLabel);
+		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+		
+		// Get current player and add button if logged in
+		String playerName = (client.getLocalPlayer() != null) ? client.getLocalPlayer().getName() : null;
+		
+		if (playerName != null && !"Not logged in".equals(playerName)) {
 			// Button to view current player stats
 			JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 			buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 			buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+			buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
 			
-			JButton viewStatsButton = new JButton("⚡ View My Stats");
+			JButton viewStatsButton = new JButton("⚡ View My Stats (" + playerName + ")");
 			viewStatsButton.setFont(FontManager.getRunescapeSmallFont());
-			viewStatsButton.setPreferredSize(new Dimension(150, 30));
+			viewStatsButton.setPreferredSize(new Dimension(200, 30));
 			viewStatsButton.setToolTipText("View your DropTracker statistics");
 			viewStatsButton.addActionListener(e -> performPlayerSearch(playerName));
 			
 			buttonPanel.add(viewStatsButton);
-			
-			defaultPanel.add(currentPlayerLabel);
-			defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-			defaultPanel.add(instructionLabel);
-			defaultPanel.add(Box.createRigidArea(new Dimension(0, 20)));
 			defaultPanel.add(buttonPanel);
-		} else {
-			// Instructions text for not logged in
-			JLabel instructionLabel = new JLabel("Log in to see your stats");
-			instructionLabel.setFont(FontManager.getRunescapeFont());
-			instructionLabel.setForeground(Color.LIGHT_GRAY);
-			instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			instructionLabel.setHorizontalAlignment(JLabel.CENTER);
-			
-			JLabel searchLabel = new JLabel("Or search for a player above");
-			searchLabel.setFont(FontManager.getRunescapeSmallFont());
-			searchLabel.setForeground(Color.LIGHT_GRAY);
-			searchLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-			searchLabel.setHorizontalAlignment(JLabel.CENTER);
-			
-			defaultPanel.add(instructionLabel);
 			defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-			defaultPanel.add(searchLabel);
+		}
+		
+		if (config.useApi()) {
+			// Create placeholder for leaderboard (same pattern as GroupPanel)
+			leaderboardPlaceholder = LeaderboardComponents.createLoadingPlaceholder("Loading top players...");
+			defaultPanel.add(leaderboardPlaceholder);
+			
+			// Start loading data
+			obtainPlayerLeaderboardData();
 		}
 		
 		defaultPanel.add(Box.createVerticalGlue());
@@ -226,19 +169,91 @@ public class PlayerStatsPanel {
 		contentPanel.revalidate();
 		contentPanel.repaint();
 	}
-	
-	private void performPlayerSearch() {
-		String searchQuery = searchField.getText().trim();
-		performPlayerSearch(searchQuery);
+
+	// New method to obtain player leaderboard data (similar to GroupPanel)
+	private void obtainPlayerLeaderboardData() {
+		LeaderboardComponents.loadLeaderboardAsync(
+			leaderboardPlaceholder,
+			() -> {
+				try {
+					return api.getTopPlayers();
+				} catch (Exception e) {
+					System.err.println("Failed to get top players: " + e.getMessage());
+					// Fallback to demo data for testing
+					return createDemoTopPlayersResult();
+				}
+			},
+			this::showPlayerLeaderboard
+		);
+	}
+
+	// New method to show player leaderboard using LeaderboardComponents
+	private JPanel showPlayerLeaderboard(TopPlayersResult leaderboardData) {
+		return LeaderboardComponents.createLeaderboardTable(
+			"Top Players",
+			"Player",
+			leaderboardData != null ? leaderboardData.getPlayers() : null,
+			new LeaderboardComponents.LeaderboardItemRenderer<TopPlayersResult.TopPlayer>() {
+				@Override
+				public String getName(TopPlayersResult.TopPlayer player) {
+					return player.getPlayerName() != null ? player.getPlayerName() : "Unknown Player";
+				}
+
+				@Override
+				public String getLootValue(TopPlayersResult.TopPlayer player) {
+					String loot = player.getTotalLoot();
+					return (loot != null && !loot.trim().isEmpty()) ? loot : "0 GP";
+				}
+
+				@Override
+				public Integer getRank(TopPlayersResult.TopPlayer player) {
+					return player.getRank();
+				}
+
+				@Override
+				public void onItemClick(TopPlayersResult.TopPlayer player) {
+					// Search for this player when clicked
+					performPlayerSearch(player.getPlayerName());
+				}
+			}
+		);
+	}
+
+	// Create demo data for testing (same as before)
+	private TopPlayersResult createDemoTopPlayersResult() {
+		TopPlayersResult demo = new TopPlayersResult();
+		List<TopPlayersResult.TopPlayer> players = new ArrayList<>();
+		
+		players.add(new TopPlayersResult.TopPlayer("Woox", 1, "2.1B"));
+		players.add(new TopPlayersResult.TopPlayer("Lynx Titan", 2, "1.8B"));
+		players.add(new TopPlayersResult.TopPlayer("Zezima", 3, "1.2B"));
+		players.add(new TopPlayersResult.TopPlayer("B0aty", 4, "890M"));
+		players.add(new TopPlayersResult.TopPlayer("Framed", 5, "650M"));
+		
+		demo.setPlayers(players);
+		return demo;
 	}
 	
-	private void performPlayerSearch(String searchQuery) {
+	public void performPlayerSearch(String searchQuery) {
+		System.out.println("performPlayerSearch called with searchQuery: " + searchQuery);
+		String toSearch;
 		if (searchQuery.isEmpty()) {
-			JOptionPane.showMessageDialog(contentPanel, "Please enter a player name to search for.");
-			return;
+			if (searchField != null && searchField.getText() != null && !searchField.getText().isEmpty()) {
+				toSearch = searchField.getText().trim();
+			} else {
+				System.out.println("Search query is empty, checking for local player");
+				if (plugin.getLocalPlayerName() != null && !plugin.getLocalPlayerName().isEmpty()) {
+					toSearch = plugin.getLocalPlayerName();
+				} else {
+					System.out.println("No local player found and no search query provided");
+					return;
+				}
+			}
+		} else {
+			toSearch = searchQuery;
 		}
 		
-		System.out.println("Searching for player: " + searchQuery);
+		System.out.println("Searching for player: " + toSearch);
 		
 		// Show loading message
 		contentPanel.removeAll();
@@ -253,7 +268,15 @@ public class PlayerStatsPanel {
 		// Perform search in background
 		CompletableFuture.supplyAsync(() -> {
 			try {
-				PlayerSearchResult playerResult = api.lookupPlayerNew(searchQuery);
+				PlayerSearchResult playerResult = api.lookupPlayerNew(toSearch);
+				System.out.println("Got player search result -- recent submissions: ");
+				if (playerResult.getRecentSubmissions() != null) {
+					for (RecentSubmission submission : playerResult.getRecentSubmissions()) {
+						System.out.println("Submission: " + submission.toString());
+					}
+				} else {
+					System.out.println("No recent submissions found");
+				}
 				return playerResult;
 			} catch (Exception e) {
 				System.err.println("Failed to search for player: " + e.getMessage());
@@ -264,12 +287,7 @@ public class PlayerStatsPanel {
 				if (playerResult != null) {
 					showPlayerDetails(playerResult);
 				} else {
-					// Fallback to demo data for testing
-					if (searchQuery.equalsIgnoreCase("test") || searchQuery.equalsIgnoreCase("demo")) {
-						showPlayerDetails(createDemoPlayerResult());
-					} else {
-						showSearchError("Player '" + searchQuery + "' not found. API search failed.");
-					}
+					showSearchError("Player '" + toSearch + "' not found. API search failed.");
 				}
 			});
 		});
@@ -278,60 +296,15 @@ public class PlayerStatsPanel {
 	private void showSearchError(String message) {
 		contentPanel.removeAll();
 		
-		JPanel errorPanel = new JPanel();
-		errorPanel.setLayout(new BoxLayout(errorPanel, BoxLayout.Y_AXIS));
-		errorPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		errorPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		
-		errorPanel.add(Box.createRigidArea(new Dimension(0, 50)));
-		
-		JLabel errorLabel = new JLabel(message);
-		errorLabel.setFont(FontManager.getRunescapeFont());
-		errorLabel.setForeground(Color.RED);
-		errorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-		errorLabel.setHorizontalAlignment(JLabel.CENTER);
-		
-		JButton backButton = new JButton("Back to Search");
-		backButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-		backButton.addActionListener(e -> {
+		JPanel errorPanel = LeaderboardComponents.createErrorPanel(message, () -> {
 			searchField.setText("");
 			showDefaultState();
 		});
-		
-		errorPanel.add(errorLabel);
-		errorPanel.add(Box.createRigidArea(new Dimension(0, 20)));
-		errorPanel.add(backButton);
-		errorPanel.add(Box.createVerticalGlue());
 		
 		contentPanel.add(errorPanel);
 		contentPanel.revalidate();
 		contentPanel.repaint();
 	}
-	
-	private PlayerSearchResult createDemoPlayerResult() {
-		// Create demo data for testing
-		PlayerSearchResult demo = new PlayerSearchResult();
-		demo.setPlayerName("Demo Player");
-		demo.setDropTrackerPlayerId(123);
-		demo.setRegistered(true);
-		demo.setTotalLoot(50000000L); // 50M GP
-		demo.setGlobalRank(456);
-		demo.setTopNpc("Vorkath");
-		demo.setBestPbRank(12);
-		
-		// Create demo stats
-		PlayerSearchResult.PlayerStats stats = new PlayerSearchResult.PlayerStats();
-		stats.setTotalSubmissions(125);
-		stats.setTotalLootValue(50000000L);
-		stats.setAverageDropValue(400000L);
-		stats.setBestDropValue(5000000L);
-		stats.setFavoriteBoss("Vorkath");
-		stats.setDaysActive(45);
-		demo.setPlayerStats(stats);
-		
-		return demo;
-	}
-	
 	private void showPlayerDetails(PlayerSearchResult playerResult) {
 		contentPanel.removeAll();
 		
@@ -365,21 +338,17 @@ public class PlayerStatsPanel {
 		playerDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
 		playerNamePanel.add(playerNameLabel);
+		playerNamePanel.add(Box.createRigidArea(new Dimension(0, 5)));
 		playerNamePanel.add(playerDescLabel);
 		
+		// Add groups information if available
+		if (playerResult.getGroups() != null && !playerResult.getGroups().isEmpty()) {
+			JPanel groupsPanel = createGroupsPanel(playerResult.getGroups());
+			playerNamePanel.add(groupsPanel);
+		}
+		
 		// Clear button for closing the search result
-		JButton clearButton = new JButton("×");
-		clearButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-		clearButton.setForeground(Color.LIGHT_GRAY);
-		clearButton.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		clearButton.setBorder(new EmptyBorder(5, 8, 5, 8));
-		clearButton.setPreferredSize(new Dimension(30, 30));
-		clearButton.setMaximumSize(new Dimension(30, 30));
-		clearButton.setMinimumSize(new Dimension(30, 30));
-		clearButton.setToolTipText("Clear search");
-		clearButton.setOpaque(false);
-		clearButton.setContentAreaFilled(false);
-		clearButton.addActionListener(e -> {
+		JButton clearButton = LeaderboardComponents.createClearButton(() -> {
 			searchField.setText("");
 			showDefaultState();
 		});
@@ -396,13 +365,23 @@ public class PlayerStatsPanel {
 		statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
 		// Format numbers nicely
-		String totalLootFormatted = String.format("%,.0f", (double)playerResult.getTotalLoot()) + " GP";
 		String globalRankFormatted = "#" + playerResult.getGlobalRank();
 		String bestPbRankFormatted = playerResult.getBestPbRank() != null ? "#" + playerResult.getBestPbRank() : "N/A";
 		
-		JPanel totalLootBox = PanelElements.createStatBox("Total Loot", totalLootFormatted);
+		// Format top NPC information
+		String topNpcFormatted = "N/A";
+		if (playerResult.getTopNpc() != null) {
+			PlayerSearchResult.TopNpc topNpc = playerResult.getTopNpc();
+			if (topNpc.getRank() != null && topNpc.getLoot() != null) {
+				topNpcFormatted = "#" + topNpc.getRank() + " - " + topNpc.getName();
+			} else if (topNpc.getLoot() != null) {
+				topNpcFormatted = topNpc.getLoot();
+			}
+		}
+		
+		JPanel totalLootBox = PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP");
 		JPanel globalRankBox = PanelElements.createStatBox("Global Rank", globalRankFormatted);
-		JPanel topNpcBox = PanelElements.createStatBox("Top NPC", playerResult.getTopNpc() != null ? playerResult.getTopNpc() : "N/A");
+		JPanel topNpcBox = PanelElements.createStatBox("Top NPC Rank", topNpcFormatted);
 		JPanel bestPbBox = PanelElements.createStatBox("Best PB Rank", bestPbRankFormatted);
 		
 		statsPanel.add(totalLootBox);
@@ -443,10 +422,116 @@ public class PlayerStatsPanel {
 		playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		playerInfoPanel.add(statsPanel);
 		playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		
+		// Add recent submissions panel if available
+		if (playerResult.getRecentSubmissions() != null && !playerResult.getRecentSubmissions().isEmpty()) {
+			List<RecentSubmission> recentSubmissions = playerResult.getRecentSubmissions();
+			System.out.println("Recent submissions: " + recentSubmissions.size());
+			System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
+			playerInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, false));
+			playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		} else {
+			System.out.println("No recent submissions found for this player");
+			// Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
+			JPanel noSubmissionsContainer = new JPanel();
+			noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));
+			noSubmissionsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			noSubmissionsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
+			noSubmissionsContainer.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Match original
+			noSubmissionsContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+			noSubmissionsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+			
+			// Title panel to match original structure
+			JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+			titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+			titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+			
+			JLabel title = new JLabel("Recent Submissions");
+			title.setFont(FontManager.getRunescapeSmallFont());
+			title.setForeground(Color.WHITE);
+			titlePanel.add(title);
+			
+			// Content panel to match original structure
+			JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+			contentWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+			contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+			
+			JLabel noSubmissionsLabel = new JLabel("No recent submissions available");
+			noSubmissionsLabel.setFont(FontManager.getRunescapeSmallFont());
+			noSubmissionsLabel.setForeground(Color.LIGHT_GRAY);
+			noSubmissionsLabel.setHorizontalAlignment(JLabel.CENTER);
+			contentWrapper.add(noSubmissionsLabel);
+			
+			// Assemble the container exactly like the original
+			noSubmissionsContainer.add(titlePanel);
+			noSubmissionsContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Match original spacing
+			noSubmissionsContainer.add(contentWrapper);
+			
+			playerInfoPanel.add(noSubmissionsContainer);
+			playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		}
+		
 		playerInfoPanel.add(actionPanel);
 		
 		contentPanel.add(playerInfoPanel);
 		contentPanel.revalidate();
 		contentPanel.repaint();
 	}
+	
+	private JPanel createGroupsPanel(List<PlayerSearchResult.PlayerGroup> groups) {
+		if (groups == null || groups.isEmpty()) {
+			return new JPanel(); // Return empty panel if no groups
+		}
+		
+		JPanel groupsContainer = new JPanel();
+		groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
+		groupsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		groupsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
+		
+		// Groups header
+		JLabel groupsHeaderLabel = new JLabel("Groups:");
+		groupsHeaderLabel.setFont(FontManager.getRunescapeSmallFont());
+		groupsHeaderLabel.setForeground(Color.LIGHT_GRAY);
+		groupsHeaderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		groupsContainer.add(groupsHeaderLabel);
+		
+		// Add each group as a separate label for proper scaling
+		for (PlayerSearchResult.PlayerGroup group : groups) {
+			StringBuilder groupText = new StringBuilder("• ");
+			groupText.append(group.getName());
+			if (group.getMembers() != null) {
+				groupText.append(" (").append(group.getMembers()).append(" members)");
+			}
+			
+			JLabel groupLabel = new JLabel(groupText.toString());
+			groupLabel.setFont(FontManager.getRunescapeSmallFont());
+			groupLabel.setForeground(Color.LIGHT_GRAY);
+			groupLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+			
+			groupsContainer.add(groupLabel);
+		}
+		
+		return groupsContainer;
+	}
+
+	private String buildGroupsDisplayText(List<PlayerSearchResult.PlayerGroup> groups) {
+		if (groups == null || groups.isEmpty()) {
+			return "";
+		}
+		
+		StringBuilder groupsText = new StringBuilder("<html>Groups:<br>");
+		for (PlayerSearchResult.PlayerGroup group : groups) {
+			groupsText.append("• ").append(group.getName());
+			if (group.getMembers() != null) {
+				groupsText.append(" (").append(group.getMembers()).append(" members)");
+			}
+			groupsText.append("<br>");
+		}
+		groupsText.append("</html>");
+		
+		return groupsText.toString();
+	}
+
 }

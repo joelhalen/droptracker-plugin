@@ -30,10 +30,6 @@ import java.awt.FlowLayout;
 import java.awt.Component;
 
 public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.PanelDataLoadedCallback {
-	private static final String PATREON_LINK = "https://patreon.com/droptracker";
-	private static final String WIKI_LINK = "https://www.droptracker.io/wiki";
-	private static final String SUGGESTION_LINK = "https://www.droptracker.io/forums/suggestions";
-	private static final String BUG_REPORT_LINK = "https://www.droptracker.io/forums/bug-reports/";
 
 	private static final ImageIcon LOGO_GIF;
 
@@ -47,10 +43,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	}
 
 	private final DropTrackerPlugin plugin;
-	private JPanel contentPanel;
 	private final DropTrackerApi api;
-	private JPanel patchNotesContent;
-	private boolean patchNotesCollapsed = false;
 	private JPanel headerPanel;
 
 	@Inject
@@ -61,6 +54,18 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	private ItemManager itemManager;
 	@Inject
 	private DropTrackerConfig config;
+
+	private PlayerStatsPanel statsPanel;
+	private GroupPanel groupPanel;
+	private InfoPanel infoPanel;
+	private HomePanel homePanel;
+	private JTabbedPane tabbedPane;
+	
+	// Add references to the actual panel components added to tabs
+	private JPanel welcomePanel;
+	private JPanel apiInfoPanel;
+	private JPanel playerStatsPanel;
+	private JPanel groupStatsPanel;
 
 	@Inject
 	public DropTrackerPanelNew(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
@@ -86,22 +91,22 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		addHeaderElements();
 
 		// Create tabbed pane
-		JTabbedPane tabbedPane = new JTabbedPane();
+		tabbedPane = new JTabbedPane();
 		tabbedPane.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		tabbedPane.setForeground(Color.WHITE);
 
 		// Home tab
-		HomePanel homePanel = new HomePanel(config, api, client);
-		InfoPanel infoPanel2 = new InfoPanel(config, api);
-		JPanel welcomePanel = homePanel.create();	
-		JPanel apiInfoPanel = infoPanel2.create();
+		homePanel = new HomePanel(config, api, client, this);
+		infoPanel = new InfoPanel(config, api);
+		welcomePanel = homePanel.create();	// Store reference
+		apiInfoPanel = infoPanel.create();   // Store reference
 
 		// Stats tab
 		if (config.useApi()) {
-			PlayerStatsPanel statsPanel = new PlayerStatsPanel(client, clientThread, config, chatMessageUtil, api);
-			GroupPanel groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api, itemManager);
-			JPanel playerStatsPanel = statsPanel.create();
-			JPanel groupStatsPanel = groupPanel.create();
+			statsPanel = new PlayerStatsPanel(client, plugin, clientThread, config, chatMessageUtil, api, itemManager);
+			groupPanel = new GroupPanel(client, clientThread, config, chatMessageUtil, api, itemManager, this);
+			playerStatsPanel = statsPanel.create(); // Store reference
+			groupStatsPanel = groupPanel.create();   // Store reference
 			tabbedPane.addTab("Players", playerStatsPanel);
 			tabbedPane.addTab("Groups", groupStatsPanel);
 		}
@@ -192,17 +197,90 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		removeAll();
 	}
 
-	public void updateStats(Map<String, Object> stats) {
-		// Update the player stats panel using the data retrieved from the API
+	public void selectPanel(String panelToSelect) {
+		if (tabbedPane == null) {
+			System.out.println("TabbedPane is null, cannot select panel");
+			return;
+		}
+		
+		switch (panelToSelect.toLowerCase()) {
+			case "home":
+			case "welcome":
+				if (welcomePanel != null) {
+					tabbedPane.setSelectedComponent(welcomePanel);
+					System.out.println("Selected Welcome tab");
+				} else {
+					System.out.println("Welcome panel is null");
+				}
+				break;
+				
+			case "players":
+			case "stats":
+				if (playerStatsPanel != null && config.useApi()) {
+					tabbedPane.setSelectedComponent(playerStatsPanel);
+					System.out.println("Selected Players tab");
+				} else {
+					System.out.println("Players panel is null or API disabled");
+				}
+				break;
+				
+			case "groups":
+				if (groupStatsPanel != null && config.useApi()) {
+					tabbedPane.setSelectedComponent(groupStatsPanel);
+					System.out.println("Selected Groups tab");
+				} else {
+					System.out.println("Groups panel is null or API disabled");
+				}
+				break;
+				
+			case "info":
+				if (apiInfoPanel != null) {
+					tabbedPane.setSelectedComponent(apiInfoPanel);
+					System.out.println("Selected Info tab");
+				} else {
+					System.out.println("Info panel is null");
+				}
+				break;
+				
+			default:
+				System.out.println("Unknown panel: " + panelToSelect);
+				break;
+		}
 	}
 
-	public void updateGroup(Map<String, Object> data) {
-		// Update the Group panel using the data retrieved from the API
+	// Allow searched for player by name (Perhaps for right-click lookups later, etc)
+	public void updatePlayerPanel(String playerToLoad) {
+		if (statsPanel != null) {
+			statsPanel.performPlayerSearch(playerToLoad);
+		}
+	}
+
+	// Update the player panel with the current player's name
+	public void updatePlayerPanel() {
+		if (statsPanel != null) {
+			statsPanel.performPlayerSearch("");
+		}
+	}
+
+	// Update the group panel from sources other than direct searches
+	public void updateGroupPanel(String groupToLoad) {
+		if (groupPanel != null) {
+			groupPanel.performGroupSearch("");
+		}
+	}
+
+	/**
+	 * Updates the player button on the home panel if a local name becomes available after initial render
+	 */
+	public void updateHomePlayerButton() {
+		if (homePanel != null) {
+			homePanel.updatePlayerButton();
+		}
 	}
 
 	@Override
 	public void onDataLoaded(Map<String, Object> data) {
-		updateStats(data);
-		updateGroup(data);
+		updatePlayerPanel();
+		updateGroupPanel("");
 	}
 }

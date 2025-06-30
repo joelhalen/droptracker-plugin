@@ -3,8 +3,6 @@ package io.droptracker.models.api;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
-import net.runelite.client.game.ItemStack;
-
 import java.util.List;
 import java.util.Map;
 
@@ -19,19 +17,19 @@ public class PlayerSearchResult {
     private boolean registered;
     
     @SerializedName("total_loot")
-    private long totalLoot;
+    private String totalLoot;
     
     @SerializedName("global_rank")
     private int globalRank;
     
     @SerializedName("top_npc")
-    private String topNpc;
+    private TopNpc topNpc;
     
     @SerializedName("best_pb_rank")
     private Integer bestPbRank;
     
-    @SerializedName("group_names")
-    private List<String> groupNames;
+    @SerializedName("groups")
+    private List<PlayerGroup> groups;
     
     @SerializedName("recent_submissions")
     private List<RecentSubmission> recentSubmissions;
@@ -52,7 +50,7 @@ public class PlayerSearchResult {
 
     // Constructor for manual creation
     public PlayerSearchResult(String playerName, Integer dropTrackerPlayerId, boolean registered, 
-                            long totalLoot, int globalRank, String topNpc, Integer bestPbRank) {
+                            String totalLoot, int globalRank, TopNpc topNpc, Integer bestPbRank) {
         this.playerName = playerName;
         this.dropTrackerPlayerId = dropTrackerPlayerId;
         this.registered = registered;
@@ -91,7 +89,7 @@ public class PlayerSearchResult {
         return registered;
     }
 
-    public long getTotalLoot() {
+    public String getTotalLoot() {
         return totalLoot;
     }
 
@@ -99,7 +97,7 @@ public class PlayerSearchResult {
         return globalRank;
     }
 
-    public String getTopNpc() {
+    public TopNpc getTopNpc() {
         return topNpc;
     }
 
@@ -107,8 +105,8 @@ public class PlayerSearchResult {
         return bestPbRank;
     }
 
-    public List<String> getGroupNames() {
-        return groupNames;
+    public List<PlayerGroup> getGroups() {
+        return groups;
     }
 
     public List<RecentSubmission> getRecentSubmissions() {
@@ -140,7 +138,7 @@ public class PlayerSearchResult {
         this.registered = registered;
     }
 
-    public void setTotalLoot(long totalLoot) {
+    public void setTotalLoot(String totalLoot) {
         this.totalLoot = totalLoot;
     }
 
@@ -148,7 +146,7 @@ public class PlayerSearchResult {
         this.globalRank = globalRank;
     }
 
-    public void setTopNpc(String topNpc) {
+    public void setTopNpc(TopNpc topNpc) {
         this.topNpc = topNpc;
     }
 
@@ -156,8 +154,8 @@ public class PlayerSearchResult {
         this.bestPbRank = bestPbRank;
     }
 
-    public void setGroupNames(List<String> groupNames) {
-        this.groupNames = groupNames;
+    public void setGroups(List<PlayerGroup> groups) {
+        this.groups = groups;
     }
 
     public void setRecentSubmissions(List<RecentSubmission> recentSubmissions) {
@@ -176,49 +174,7 @@ public class PlayerSearchResult {
         this.additionalData = additionalData;
     }
 
-    // Nested classes for complex JSON structures
-    public static class RecentSubmission {
-        @SerializedName("submission_id")
-        private Integer submissionId;
-        
-        @SerializedName("loot_value")
-        private long lootValue;
-        
-        @SerializedName("boss_name")
-        private String bossName;
-        
-        @SerializedName("submission_date")
-        private String submissionDate;
-        
-        @SerializedName("items")
-        private List<ItemStack> items;
-        
-        @SerializedName("kill_count")
-        private Integer killCount;
-
-        // Constructors
-        public RecentSubmission() {}
-
-        // Getters and setters
-        public Integer getSubmissionId() { return submissionId; }
-        public void setSubmissionId(Integer submissionId) { this.submissionId = submissionId; }
-        
-        public long getLootValue() { return lootValue; }
-        public void setLootValue(long lootValue) { this.lootValue = lootValue; }
-        
-        public String getBossName() { return bossName; }
-        public void setBossName(String bossName) { this.bossName = bossName; }
-        
-        public String getSubmissionDate() { return submissionDate; }
-        public void setSubmissionDate(String submissionDate) { this.submissionDate = submissionDate; }
-        
-        public List<ItemStack> getItems() { return items; }
-        public void setItems(List<ItemStack> items) { this.items = items; }
-        
-        public Integer getKillCount() { return killCount; }
-        public void setKillCount(Integer killCount) { this.killCount = killCount; }
-    }
-
+    
     public static class TopNpcByLoot {
         @SerializedName("npc_name")
         private String npcName;
@@ -268,17 +224,9 @@ public class PlayerSearchResult {
         @SerializedName("total_loot_value")
         private long totalLootValue;
         
-        @SerializedName("average_drop_value")
-        private long averageDropValue;
-        
-        @SerializedName("best_drop_value")
-        private long bestDropValue;
-        
         @SerializedName("favorite_boss")
         private String favoriteBoss;
         
-        @SerializedName("days_active")
-        private int daysActive;
         
         @SerializedName("registration_date")
         private String registrationDate;
@@ -293,19 +241,77 @@ public class PlayerSearchResult {
         public long getTotalLootValue() { return totalLootValue; }
         public void setTotalLootValue(long totalLootValue) { this.totalLootValue = totalLootValue; }
         
-        public long getAverageDropValue() { return averageDropValue; }
-        public void setAverageDropValue(long averageDropValue) { this.averageDropValue = averageDropValue; }
-        
-        public long getBestDropValue() { return bestDropValue; }
-        public void setBestDropValue(long bestDropValue) { this.bestDropValue = bestDropValue; }
-        
         public String getFavoriteBoss() { return favoriteBoss; }
         public void setFavoriteBoss(String favoriteBoss) { this.favoriteBoss = favoriteBoss; }
         
-        public int getDaysActive() { return daysActive; }
-        public void setDaysActive(int daysActive) { this.daysActive = daysActive; }
-        
         public String getRegistrationDate() { return registrationDate; }
         public void setRegistrationDate(String registrationDate) { this.registrationDate = registrationDate; }
+    }
+
+    public static class TopNpc {
+        @SerializedName("name")
+        private String name;
+        
+        @SerializedName("rank")
+        private Integer rank;
+        
+        @SerializedName("loot")
+        private String loot;
+
+        // Constructors
+        public TopNpc() {}
+
+        public TopNpc(String name, Integer rank, String loot) {
+            this.name = name;
+            this.rank = rank;
+            this.loot = loot;
+        }
+
+        // Getters and setters
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        
+        public Integer getRank() { return rank; }
+        public void setRank(Integer rank) { this.rank = rank; }
+        
+        public String getLoot() { return loot; }
+        public void setLoot(String loot) { this.loot = loot; }
+    }
+
+    public static class PlayerGroup {
+        @SerializedName("name")
+        private String name;
+        
+        @SerializedName("id")
+        private Integer id;
+        
+        @SerializedName("loot")
+        private String loot;
+        
+        @SerializedName("members")
+        private Integer members;
+
+        // Constructors
+        public PlayerGroup() {}
+
+        public PlayerGroup(String name, Integer id, String loot, Integer members) {
+            this.name = name;
+            this.id = id;
+            this.loot = loot;
+            this.members = members;
+        }
+
+        // Getters and setters
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        
+        public Integer getId() { return id; }
+        public void setId(Integer id) { this.id = id; }
+        
+        public String getLoot() { return loot; }
+        public void setLoot(String loot) { this.loot = loot; }
+        
+        public Integer getMembers() { return members; }
+        public void setMembers(Integer members) { this.members = members; }
     }
 }
