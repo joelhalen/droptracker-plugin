@@ -2,6 +2,7 @@ package io.droptracker.events;
 
 import io.droptracker.models.BossNotification;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.SubmissionType;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -204,7 +205,7 @@ public class PbHandler extends BaseEventHandler {
             addFields(killEmbed, fieldData);
             
             killWebhook.getEmbeds().add(killEmbed);
-            sendData(killWebhook, "1");
+            sendData(killWebhook, SubmissionType.KILL_TIME);
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);

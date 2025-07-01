@@ -1,4 +1,4 @@
-package io.droptracker.util;
+package io.droptracker.service;
 /* Author: https://github.com/pajlads/DinkPlugin */
 
 import com.google.common.cache.Cache;
@@ -7,8 +7,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
 import io.droptracker.DropTrackerPlugin;
-import io.droptracker.models.Drop;
 import io.droptracker.models.SerializedDrop;
+import io.droptracker.util.NpcUtilities;
+import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.NPC;
 import net.runelite.api.NpcID;
@@ -29,12 +30,10 @@ import org.jetbrains.annotations.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -81,6 +80,7 @@ public class KCService {
         KCService.killCounts.invalidateAll();
     }
 
+    @SuppressWarnings("deprecation")
     public void onNpcKill(NpcLootReceived event) {
         NPC npc = event.getNpc();
         int id = npc.getId();
@@ -164,29 +164,8 @@ public class KCService {
         });
     }
 
-    
-
-    private boolean shouldUseChatName(LootReceived event) {
-        assert plugin.lastDrop != null;
-        String lastSource = plugin.lastDrop.getSource();
-        Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
-        return coincides.test(NpcUtilities.TOA) || coincides.test(NpcUtilities.TOB) || coincides.test(NpcUtilities.COX);
-    }
-
-    /**
-     * @param event a loot received event that was just fired
-     * @return whether the event represents corrupted gauntlet
-     * @apiNote Useful to distinguish normal vs. corrupted gauntlet since the base loot tracker plugin does not,
-     * which was <a href="https://github.com/pajlads/DinkPlugin/issues/469">reported</a> to our issue tracker.
-     */
-    @SuppressWarnings("null")
-    private boolean isCorruptedGauntlet(LootReceived event) {
-        return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null && "The Gauntlet".equals(event.getName())
-                && (NpcUtilities.CG_NAME.equals(plugin.lastDrop.getSource()) || NpcUtilities.CG_BOSS.equals(plugin.lastDrop.getSource()));
-    }
-
     @Nullable
-    public static Integer getKillCount(LootRecordType type, String sourceName) {
+    public Integer getKillCount(LootRecordType type, String sourceName) {
         if (sourceName == null) return null;
         // This static method is deprecated - use instance method instead
         return killCounts.getIfPresent(getCacheKey(type, sourceName));

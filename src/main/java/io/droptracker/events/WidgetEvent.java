@@ -35,6 +35,7 @@ import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Pet;
+import io.droptracker.models.SubmissionType;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
@@ -317,7 +318,7 @@ public class WidgetEvent {
         customWebhookBody.getEmbeds().add(pbEmbed);
         
         // Use the main plugin class' sendWebhook method
-        submissionManager.sendDataToDropTracker(customWebhookBody, 0);
+        submissionManager.sendDataToDropTracker(customWebhookBody, SubmissionType.ADVENTURE_LOG);
     }
     /**
      * Formats a time in seconds to a string in the format mm:ss or h:mm:ss

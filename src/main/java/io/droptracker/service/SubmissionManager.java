@@ -31,7 +31,9 @@ import io.droptracker.api.UrlManager;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.ValidSubmission;
+import io.droptracker.models.SubmissionType;
 import io.droptracker.util.ChatMessageUtil;
+
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
@@ -138,16 +140,15 @@ public class SubmissionManager {
         }
     }
 
-    public void sendDataToDropTracker(CustomWebhookBody webhook, String type) {
-        /*
-         * Requires a type ID to be passed
-         * "1" = a "Kill Time" or "KC" submission
-         * "2" = a "Collection Log" submission
-         * "3" = a "Combat Achievement" submission
-         */
+    public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
+        /* Drops are still handled in a separate method due to the way values are handled */
         System.out.println("Sending data to DropTracker API with type: " + type);
         Boolean requiredScreenshot = false;
-        if (type.equalsIgnoreCase("1")) {
+        Boolean shouldHideDm = config.hideDMs();
+        if (type == SubmissionType.DROP) {
+            sendDataToDropTracker(webhook, (byte[]) null);
+        }
+        if (type == SubmissionType.KILL_TIME) {
             // Kc / kill time
             List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
             if (!config.pbEmbeds()) {
@@ -186,7 +187,7 @@ public class SubmissionManager {
                     }
                 }
             }
-        } else if (type.equalsIgnoreCase("2")) {
+        } else if (type == SubmissionType.COLLECTION_LOG) {
             if (!config.clogEmbeds()) {
                 return;
             }
@@ -212,7 +213,7 @@ public class SubmissionManager {
                     }
                 }
             }
-        } else if (type.equalsIgnoreCase("3")) { // combat achievements
+        } else if (type == SubmissionType.COMBAT_ACHIEVEMENT) { // combat achievements
             if (!config.caEmbeds()) {
                 return;
             }
@@ -238,12 +239,42 @@ public class SubmissionManager {
                     }
                 }
             }
+        } else if (type == SubmissionType.ADVENTURE_LOG) {
+            sendDataToDropTracker(webhook, (byte[]) null);
+        } else if (type == SubmissionType.EXPERIENCE || type == SubmissionType.EXPERIENCE_MILESTONE) {
+            /* We don't need to take screenshots for experience or experience milestones */
+            sendDataToDropTracker(webhook, (byte[]) null);
+        } else if (type == SubmissionType.LEVEL_UP) {
+            CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
+            // Check the skills that leveled up
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                String fieldName = field.getName();
+                if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
+                    int newLevel = Integer.parseInt(field.getValue());
+                    
+                    // Check if this level qualifies for a screenshot
+                    if (newLevel >= config.minLevelToScreenshot()) {
+                        requiredScreenshot = true;
+                        break;
+                    }
+                }
+            }
+        } else if (type == SubmissionType.QUEST_COMPLETION) {
+            if (!config.trackQuests()) {
+                return;
+            }
+            if (config.screenshotQuests()) {
+                requiredScreenshot = true;
+            }
+        } else if (type == SubmissionType.PET) {
+            if (config.screenshotPets()) {
+                requiredScreenshot = true;
+            }
         }
 
         // UI notification is handled by addSubmissionToMemory() when submissions are actually added
 
         if (requiredScreenshot) {
-            boolean shouldHideDm = config.hideDMs();
             captureScreenshotWithPrivacy(webhook, shouldHideDm);
         } else {
             sendDataToDropTracker(webhook, (byte[]) null);

@@ -3,8 +3,9 @@ package io.droptracker.events;
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Drop;
+import io.droptracker.models.SubmissionType;
+import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
-import io.droptracker.util.KCService;
 import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -115,7 +116,7 @@ public class ClogHandler extends BaseEventHandler {
         addFields(collEmbed, fieldData);
         
         collectionLogBody.getEmbeds().add(collEmbed);
-        sendData(collectionLogBody, "2");
+        sendData(collectionLogBody, SubmissionType.COLLECTION_LOG);
     }
 
     @Nullable

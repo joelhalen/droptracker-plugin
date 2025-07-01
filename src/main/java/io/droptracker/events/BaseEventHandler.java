@@ -5,6 +5,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.SubmissionType;
 import io.droptracker.service.SubmissionManager;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -187,7 +188,7 @@ public abstract class BaseEventHandler {
      * @param webhook the webhook body to send
      * @param type the event type identifier
      */
-    protected void sendData(CustomWebhookBody webhook, String type) {
+    protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
         System.out.println("Sending data to DropTracker API with type: " + type);
         if (webhook != null && !webhook.getEmbeds().isEmpty()) {
             submissionManager.sendDataToDropTracker(webhook, type);

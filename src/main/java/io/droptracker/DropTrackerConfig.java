@@ -165,10 +165,21 @@ public interface DropTrackerConfig extends Config {
     String miscSettings = "Additional Settings";
 
     @ConfigItem(
+        keyName = "screenshotPets",
+        name = "Screenshot Pets",
+        description = "Do you want to send screenshots when you acquire a pet?",
+        position = 2,
+        section = miscSettings
+    )
+    default boolean screenshotPets() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "trackExperience",
         name = "Track Experience",
         description = "Do you want to send experience gains to the DropTracker?",
-        position = 1,
+        position = 3,
         section = miscSettings
     )
     default boolean trackExperience() {
@@ -176,10 +187,22 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "minLevelToScreenshot",
+        name = "Minimum Level to Screenshot",
+        description = "<html>What minimum level should we take screenshots for you achieving?<br />"
+            + "<i>set above 99 to disable</i></html>",
+        position = 4,
+        section = miscSettings
+    )
+    default int minLevelToScreenshot() {
+        return 1;
+    }
+
+    @ConfigItem(
         keyName = "trackQuests",
         name = "Track Quests",
         description = "Do you want to send quest completions to the DropTracker?",
-        position = 2,
+        position = 5,
         section = miscSettings
     )
     default boolean trackQuests() {
@@ -187,10 +210,21 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "screenshotQuests",
+        name = "Screenshot Quests",
+        description = "Do you want to send screenshots when you complete a quest?",
+        position = 6,
+        section = miscSettings
+    )
+    default boolean screenshotQuests() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "hideWhispers",
         name = "Hide PMs",
         description = "Do you want your private chat to be\n" + "hidden when screenshots are taken?",
-        position = 2,
+        position = 7,
         section = miscSettings
     )
     default boolean hideDMs() {

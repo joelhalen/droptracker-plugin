@@ -14,6 +14,7 @@ import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.SubmissionType;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -296,7 +297,7 @@ public class ExperienceHandler extends BaseEventHandler {
         xpChanged.clear();
         
         // Send the data
-        sendData(webhook, "xp_update");
+        sendData(webhook, SubmissionType.EXPERIENCE);
     }
 
     private void notifyXp() {
@@ -350,10 +351,12 @@ public class ExperienceHandler extends BaseEventHandler {
         webhook.getEmbeds().add(embed);
         
         // Send the data
-        sendData(webhook, "xp_milestone");
+        sendData(webhook, SubmissionType.EXPERIENCE_MILESTONE);
     }
 
     private void notifyLevels() {
+
+        /* For level ups specifically  */
         int n = levelledSkills.size();
         if (n == 0) return;
 
@@ -415,7 +418,7 @@ public class ExperienceHandler extends BaseEventHandler {
         webhook.getEmbeds().add(embed);
         
         // Send the data
-        sendData(webhook, "level");
+        sendData(webhook, SubmissionType.LEVEL_UP);
     }
 
     private boolean checkLevelInterval(int previous, int level, boolean skipVirtualCheck) {

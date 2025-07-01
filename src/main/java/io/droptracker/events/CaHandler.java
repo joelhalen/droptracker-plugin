@@ -2,6 +2,7 @@ package io.droptracker.events;
 import com.google.common.collect.ImmutableMap;
 import io.droptracker.models.CombatAchievement;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.annotations.Varbit;
 import org.apache.commons.lang3.tuple.Pair;
@@ -82,7 +83,7 @@ public class CaHandler extends BaseEventHandler {
             addFields(combatAchievementEmbed, fieldData);
             
             combatWebhook.getEmbeds().add(combatAchievementEmbed);
-            sendData(combatWebhook, "3");
+            sendData(combatWebhook, SubmissionType.COMBAT_ACHIEVEMENT);
         });
     }
 
