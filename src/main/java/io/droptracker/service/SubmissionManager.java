@@ -144,6 +144,7 @@ public class SubmissionManager {
         System.out.println("Sending data to DropTracker API with type: " + type);
         Boolean requiredScreenshot = false;
         Boolean shouldHideDm = config.hideDMs();
+        
         if (type == SubmissionType.DROP) {
             sendDataToDropTracker(webhook, (byte[]) null);
         }
@@ -178,7 +179,7 @@ public class SubmissionManager {
                         
                         // Create or find existing submission for this webhook
                         if (pbSubmission == null) {
-                            pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), "pb");
+                            pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
                             addSubmissionToMemory(pbSubmission);
                         } else {
                             pbSubmission.addGroupId(groupConfig.getGroupId());
@@ -205,7 +206,7 @@ public class SubmissionManager {
                     
                     // Create or find existing submission for this webhook
                     if (clogSubmission == null) {
-                        clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), "clog");
+                        clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
                         addSubmissionToMemory(clogSubmission);
                     } else {
                         clogSubmission.addGroupId(groupConfig.getGroupId());
@@ -231,7 +232,7 @@ public class SubmissionManager {
                     
                     // Create or find existing submission for this webhook
                     if (caSubmission == null) {
-                        caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), "ca");
+                        caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
                         addSubmissionToMemory(caSubmission);
                     } else {
                         caSubmission.addGroupId(groupConfig.getGroupId());
@@ -317,7 +318,7 @@ public class SubmissionManager {
                 
                 // Create or find existing submission for this webhook
                 if (dropSubmission == null) {
-                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), "drop");
+                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
                     addSubmissionToMemory(dropSubmission);
                 } else {
                     dropSubmission.addGroupId(groupConfig.getGroupId());
@@ -480,6 +481,7 @@ public class SubmissionManager {
         validSubmissions.add(validSubmission);
         System.out.println("Submission added to memory: " + validSubmission.getUuid() + " on instance: " + this.hashCode());
         notifyUpdateCallback();
+        System.out.println("Notified update callback.");
     }
 
     public List<ValidSubmission> getValidSubmissions() {

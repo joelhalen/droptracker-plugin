@@ -11,10 +11,10 @@ import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.CustomWebhookBody.Embed;
-import io.droptracker.models.CustomWebhookBody.Field;
+import io.droptracker.ui.components.PanelElements;
 import lombok.Getter;
 import lombok.Setter;
+import net.runelite.client.util.AsyncBufferedImage;
 
 @Getter
 @Setter
@@ -31,7 +31,7 @@ public class ValidSubmission {
     // uuidv7 generated ID
     private String uuid;
     // type of submission
-    private String type;
+    private SubmissionType type;
     // group ID(s) that the submission should have been sent to
     private String[] groupIds;
     // account hash
@@ -46,7 +46,6 @@ public class ValidSubmission {
     private String description;
     // time since submission was created on the client-side
     private String timeReceived;
-    
 
     // message or response from the API on initial submission
     private String initialResponse;
@@ -70,7 +69,7 @@ public class ValidSubmission {
     }
 
     // Constructor that takes a webhook and extracts relevant data
-    public ValidSubmission(CustomWebhookBody webhook, String groupId, String type) {
+    public ValidSubmission(CustomWebhookBody webhook, String groupId, SubmissionType type) {
         this();
         this.originalWebhook = webhook;
         this.type = type;
@@ -79,7 +78,7 @@ public class ValidSubmission {
         // Extract data from webhook
         extractDataFromWebhook(webhook);
     }
-    
+
     /* @param uuid - uuidv7 generated ID
      * @param type - type of submission
      * @param groupIds - group ID(s) that the submission should have been sent to
@@ -91,12 +90,12 @@ public class ValidSubmission {
      * @param timeProcessedAt - time that the API responded with a successful processing of the submission
      * @param retryResponses - array of responses from the API on retry attempts
      */
-    public ValidSubmission(String uuid, String type, String groupIds, 
+    public ValidSubmission(String uuid, SubmissionType type, String[] groupIds, 
                            String accountHash, String itemId, String itemName, String npcName, String description, String status, 
-                           String timeReceived, String timeProcessedAt) {
+                           String timeReceived, String timeProcessedAt, String[] retryResponses) {
         this.uuid = uuid;
         this.type = type;
-        this.groupIds = new String[] {groupIds};
+        this.groupIds = groupIds;
         this.accountHash = accountHash;
         this.itemId = itemId;
         this.itemName = itemName;
@@ -105,7 +104,7 @@ public class ValidSubmission {
         this.status = status;
         this.timeReceived = timeReceived;
         this.timeProcessedAt = timeProcessedAt;
-        this.retryResponses = new String[0];
+        this.retryResponses = retryResponses;
     }
 
     private void extractDataFromWebhook(CustomWebhookBody webhook) {
@@ -167,21 +166,38 @@ public class ValidSubmission {
     public JPanel toSubmissionPanel() {
         JPanel entryPanel = new JPanel();
         entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
+
+        // Create a text area to display the submission information
         JTextArea textArea = new JTextArea();
         String text = "";
         switch (this.type) {
-            case "drop":
+            case DROP:
                 text = "Drop: " + this.itemName + " - " + this.timeSinceReceived();
                 break;
-            case "pb":
+            case KILL_TIME:
                 text = "Personal Best: " + this.itemName + " - " + this.timeSinceReceived();
                 break;
-            case "clog":
+            case COLLECTION_LOG:
                 text = "Collection Log: " + this.itemName + " - " + this.timeSinceReceived();
                 break;
-            case "ca":
+            case COMBAT_ACHIEVEMENT:
                 text = "Combat Achievement: " + this.itemName + " - " + this.timeSinceReceived();
                 break;
+            case LEVEL_UP:
+                text = "Level Up: " + this.itemName + " - " + this.timeSinceReceived();
+                break;
+            case QUEST_COMPLETION:
+                text = "Quest Completion: " + this.itemName + " - " + this.timeSinceReceived();
+                break;
+            case EXPERIENCE:
+                text = "Experience: " + this.itemName + " - " + this.timeSinceReceived();
+                break;
+            case EXPERIENCE_MILESTONE:
+                text = "Experience Milestone: " + this.itemName + " - " + this.timeSinceReceived();
+                break;  
+            case PET:
+                text = "Pet: " + this.itemName + " - " + this.timeSinceReceived();
+                break;  
             default:
                 text = "Unknown submission type: " + this.type;
                 break;
@@ -193,6 +209,10 @@ public class ValidSubmission {
         textArea.setFont(new Font("Arial", Font.PLAIN, 12));    
         entryPanel.add(textArea);
         return entryPanel;
+    }
+
+    private AsyncBufferedImage getPanelImage() {
+        return PanelElements.getImageForSubmission(this);
     }
 
     @Override

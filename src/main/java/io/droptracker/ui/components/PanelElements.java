@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
+import javax.inject.Inject;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -46,6 +47,7 @@ import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
+import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 
@@ -61,7 +63,11 @@ public class PanelElements {
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     public static String cachedGroupName = "All Players";
 
+    @Inject
     private static Client client;
+    @Inject
+    private static ItemManager itemManager;
+
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
         Image expandedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/expand.png");
@@ -849,8 +855,6 @@ public class PanelElements {
 		return panel;	
 	}
 	
-	
-
 	public static String buildSubmissionTooltip(RecentSubmission submission, boolean forGroup) {
 		try {
 			String tooltip = "<html>";
@@ -902,7 +906,6 @@ public class PanelElements {
 		return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
 	}
 
-
     public static void showLoadingDialog(JDialog imageDialog, JFrame parentFrame) {
         // Create loading label
         JLabel loadingLabel = new JLabel("Loading lootboard...");
@@ -949,8 +952,6 @@ public class PanelElements {
             });
         }
     }
-
-    
 
     private static void displayImageInDialog(JDialog imageDialog, BufferedImage originalImage, JFrame parentFrame) {
         // Calculate display size based on screen dimensions
@@ -1006,6 +1007,18 @@ public class PanelElements {
         SwingUtilities.invokeLater(() -> imageLabel.requestFocusInWindow());
 
         System.out.println("Image dialog setup complete");
+    }
+
+
+    public static AsyncBufferedImage getImageForSubmission(ValidSubmission submission) {
+        switch (submission.getType()) {
+            case DROP:
+                return itemManager.getImage(Integer.parseInt(submission.getItemId()), 1, false);
+            case COLLECTION_LOG:
+                return itemManager.getImage(Integer.parseInt(submission.getItemId()), 1, false);
+            default:
+                return null;
+        }
     }
 
     // Helper methods to reduce code duplication
