@@ -1,4 +1,4 @@
-package io.droptracker.models;
+package io.droptracker.models.submissions;
 /*
 *  Author: https://github.com/pajlads/DinkPlugin
 * */

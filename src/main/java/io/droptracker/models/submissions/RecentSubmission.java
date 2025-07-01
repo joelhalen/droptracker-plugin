@@ -1,4 +1,4 @@
-package io.droptracker.models.api;
+package io.droptracker.models.submissions;
 
 import java.time.Duration;
 import java.time.LocalDateTime;

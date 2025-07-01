@@ -1,4 +1,4 @@
-package io.droptracker.ui;
+package io.droptracker.ui.components;
 
 import javax.swing.*;
 import java.awt.*;

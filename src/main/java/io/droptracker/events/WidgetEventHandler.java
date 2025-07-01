@@ -35,7 +35,7 @@ import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Pet;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
@@ -59,7 +59,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class WidgetEvent {
+public class WidgetEventHandler {
 
 
     @Inject

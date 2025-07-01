@@ -1,4 +1,4 @@
-package io.droptracker.ui;
+package io.droptracker.ui.components;
 
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
@@ -45,8 +45,7 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import io.droptracker.api.DropTrackerApi;
-import io.droptracker.models.api.RecentSubmission;
-
+import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 

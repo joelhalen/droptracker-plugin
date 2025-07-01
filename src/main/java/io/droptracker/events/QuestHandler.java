@@ -14,7 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.google.common.collect.ImmutableList;
 
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.events.WidgetLoaded;

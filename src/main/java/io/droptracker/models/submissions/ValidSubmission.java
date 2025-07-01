@@ -1,4 +1,4 @@
-package io.droptracker.models;
+package io.droptracker.models.submissions;
 
 import java.awt.Font;
 import java.time.Duration;
@@ -10,6 +10,9 @@ import javax.swing.BoxLayout;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
+import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.CustomWebhookBody.Embed;
+import io.droptracker.models.CustomWebhookBody.Field;
 import lombok.Getter;
 import lombok.Setter;
 

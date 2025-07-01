@@ -24,16 +24,15 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import io.droptracker.DebugLogger;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.api.GroupConfig;
-import io.droptracker.models.ValidSubmission;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
-
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;

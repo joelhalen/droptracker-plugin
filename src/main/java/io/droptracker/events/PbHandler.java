@@ -2,7 +2,7 @@ package io.droptracker.events;
 
 import io.droptracker.models.BossNotification;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;

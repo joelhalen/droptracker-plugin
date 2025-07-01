@@ -14,7 +14,7 @@ import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;

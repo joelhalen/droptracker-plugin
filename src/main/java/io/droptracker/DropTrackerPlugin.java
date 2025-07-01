@@ -47,12 +47,13 @@ import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.QuestHandler;
-import io.droptracker.events.WidgetEvent;
-import io.droptracker.models.Drop;
+import io.droptracker.events.WidgetEventHandler;
+import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageUtil;
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -157,7 +158,7 @@ public class DropTrackerPlugin extends Plugin {
 	
 
 	@Inject
-	public WidgetEvent widgetEventHandler;
+	public WidgetEventHandler widgetEventHandler;
 
 	@Inject
 	private ClientToolbar clientToolbar;

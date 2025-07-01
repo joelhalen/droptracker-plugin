@@ -3,6 +3,8 @@ package io.droptracker.models.api;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
+import io.droptracker.models.submissions.RecentSubmission;
+
 import java.util.List;
 import java.util.Map;
 

@@ -2,8 +2,8 @@ package io.droptracker.events;
 
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.Drop;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.Drop;
+import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.Rarity;

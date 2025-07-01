@@ -1,4 +1,4 @@
-package io.droptracker;
+package io.droptracker.util;
 
 import java.io.File;
 import java.io.FileWriter;

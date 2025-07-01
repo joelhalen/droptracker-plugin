@@ -17,10 +17,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import io.droptracker.models.SubmissionType;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

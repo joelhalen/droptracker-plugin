@@ -33,12 +33,12 @@ import javax.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.ui.DropTrackerPanelNew;
-import io.droptracker.ui.PanelElements;
 import io.droptracker.ui.components.LeaderboardComponents;
+import io.droptracker.ui.components.PanelElements;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupSearchResult;
-import io.droptracker.models.api.RecentSubmission;
 import io.droptracker.models.api.TopGroupResult;
+import io.droptracker.models.submissions.RecentSubmission;
 import net.runelite.api.Client;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;

@@ -1,4 +1,4 @@
-package io.droptracker.models;
+package io.droptracker.models.submissions;
 
 public enum SubmissionType {
     DROP,

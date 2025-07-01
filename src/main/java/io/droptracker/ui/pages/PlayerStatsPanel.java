@@ -24,12 +24,12 @@ import javax.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
-import io.droptracker.ui.PanelElements;
 import io.droptracker.ui.components.LeaderboardComponents;
+import io.droptracker.ui.components.PanelElements;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.PlayerSearchResult;
-import io.droptracker.models.api.RecentSubmission;
 import io.droptracker.models.api.TopPlayersResult;
+import io.droptracker.models.submissions.RecentSubmission;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;

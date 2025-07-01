@@ -5,7 +5,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.SubmissionManager;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;

@@ -1,8 +1,9 @@
 package io.droptracker.events;
 import com.google.common.collect.ImmutableMap;
-import io.droptracker.models.CombatAchievement;
+
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.SubmissionType;
+import io.droptracker.models.submissions.CombatAchievement;
+import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.annotations.Varbit;
 import org.apache.commons.lang3.tuple.Pair;
