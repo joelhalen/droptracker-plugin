@@ -14,6 +14,7 @@ import org.apache.commons.lang3.StringUtils;
 import com.google.common.collect.ImmutableList;
 
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.events.WidgetLoaded;
@@ -106,7 +107,7 @@ public class QuestHandler extends BaseEventHandler {
         webhook.getEmbeds().add(embed);
         
         // Send the data
-        sendData(webhook, "quest");
+        sendData(webhook, SubmissionType.QUEST_COMPLETION);
     }
 
     /* Helper methods */

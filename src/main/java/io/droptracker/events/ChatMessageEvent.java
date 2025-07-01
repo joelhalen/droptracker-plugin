@@ -52,11 +52,6 @@ public class ChatMessageEvent {
         this.configManager = configManager;
     }
 
-
-
-   
-
-
     private static final String BA_BOSS_NAME = "Penance Queen";
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
 
