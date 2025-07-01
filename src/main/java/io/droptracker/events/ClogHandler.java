@@ -96,7 +96,7 @@ public class ClogHandler extends BaseEventHandler {
         
         Integer itemId = itemIDFinder.findItemId(itemName);
         Drop loot = itemId != null ? getLootSource(itemId) : null;
-        Integer killCount = loot != null ? kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource()) : null;
+        Integer killCount = loot != null ? kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource()) : 0;
         OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC) && (itemId != null)) ?
                 rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
                 

@@ -251,7 +251,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
-		System.out.println("Config changed - Group: " + configChanged.getGroup() + ", Key: " + configChanged.getKey() + ", Old: " + configChanged.getOldValue() + ", New: " + configChanged.getNewValue());
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				System.out.println("Config changed: useApi");
