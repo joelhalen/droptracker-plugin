@@ -306,8 +306,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event) {
+		System.out.println("onScriptPreFired called");
 		if(config.clogEmbeds()) {
 			clogHandler.onScript(event.getScriptId());
+			System.out.println("onScriptPreFired completed");
 		}
 	}
 
@@ -339,6 +341,7 @@ public class DropTrackerPlugin extends Plugin {
 		if (!isTracking) {
 			return;
 		}
+        clogHandler.sendFakeLogData("Twisted Bow");
 		String chatMessage = submissionManager.sanitize(message.getMessage());
 		switch (message.getType()) {
 			case WELCOME:

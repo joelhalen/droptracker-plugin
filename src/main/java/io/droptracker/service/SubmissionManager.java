@@ -145,6 +145,8 @@ public class SubmissionManager {
          * "2" = a "Collection Log" submission
          * "3" = a "Combat Achievement" submission
          */
+        System.out.println("Sending data to DropTracker API with type: " + type);
+        System.out.println("Webhook: " + webhook.toString());
         Boolean requiredScreenshot = false;
         List<ValidSubmission> validSubmissions = new ArrayList<>();
         if (type.equalsIgnoreCase("1")) {

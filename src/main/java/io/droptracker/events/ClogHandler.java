@@ -118,6 +118,22 @@ public class ClogHandler extends BaseEventHandler {
         sendData(collectionLogBody, "2");
     }
 
+    public void sendFakeLogData(String itemName) {
+        CustomWebhookBody collectionLogBody = createWebhookBody("joelhalen received a collection log:");
+        CustomWebhookBody.Embed collEmbed = createEmbed("joelhalen received a collection log:", "collection_log");
+        Map<String, Object> fieldData = new HashMap<>();
+        fieldData.put("item", "Twisted Bow");
+        fieldData.put("kc", 1);
+        fieldData.put("rarity", 1.0);
+        fieldData.put("item_id", 20997);
+        fieldData.put("slots", "1/1");
+        
+        addFields(collEmbed, fieldData);
+        
+        collectionLogBody.getEmbeds().add(collEmbed);
+        sendData(collectionLogBody, "2");
+    }
+
     @Nullable
     private Drop getLootSource(int itemId) {
         Drop drop = plugin.lastDrop;
