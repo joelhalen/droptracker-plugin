@@ -146,9 +146,7 @@ public class SubmissionManager {
          * "3" = a "Combat Achievement" submission
          */
         System.out.println("Sending data to DropTracker API with type: " + type);
-        System.out.println("Webhook: " + webhook.toString());
         Boolean requiredScreenshot = false;
-        List<ValidSubmission> validSubmissions = new ArrayList<>();
         if (type.equalsIgnoreCase("1")) {
             // Kc / kill time
             List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
@@ -253,12 +251,14 @@ public class SubmissionManager {
     }
 
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue) {
+        System.out.println("Sending data to DropTracker API with type: " + "drop");
         // Handles sending drops exclusively - for individual items use sendDataToDropTracker(webhook, totalValue, singleValue)
         sendDataToDropTracker(customWebhookBody, totalValue, totalValue);
     }
     
 
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
+        System.out.println("Sending data to DropTracker API with type: " + "drop (total and singlevalue call)");
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
@@ -270,44 +270,42 @@ public class SubmissionManager {
         }
         
         // Create ValidSubmission for drops
-        ValidSubmission dropSubmission = new ValidSubmission(customWebhookBody, "2", "drop");
-        addSubmissionToMemory(dropSubmission);
-        return;
         /* Temporarily returning here for testing purposes -- will not send to server */
-        // for (GroupConfig groupConfig : api.getGroupConfigs()) {
-        //     if (groupConfig.isSendDrops() == true && totalValue >= groupConfig.getMinimumDropValue()) {
-        //         // Check if group allows stacked items
-        //         if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
-        //             continue; // Skip this group if items were stacked but group disabled that
-        //         }
+        ValidSubmission dropSubmission = null;
+        for (GroupConfig groupConfig : api.getGroupConfigs()) {
+            if (groupConfig.isSendDrops() == true && totalValue >= groupConfig.getMinimumDropValue()) {
+                // Check if group allows stacked items
+                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
+                    continue; // Skip this group if items were stacked but group disabled that
+                }
                 
-        //         if (groupConfig.isOnlyScreenshots() == true) {
-        //             if (requiredScreenshot == false) {
-        //                 continue; // Skip this group if screenshots required but not happening
-        //             }
-        //         }
+                if (groupConfig.isOnlyScreenshots() == true) {
+                    if (requiredScreenshot == false) {
+                        continue; // Skip this group if screenshots required but not happening
+                    }
+                }
                 
-        //         // Create or find existing submission for this webhook
-        //         if (dropSubmission == null) {
-        //             dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), "drop");
-        //             addSubmissionToMemory(dropSubmission);
-        //         } else {
-        //             dropSubmission.addGroupId(groupConfig.getGroupId());
-        //         }
-        //     }
-        // }
+                // Create or find existing submission for this webhook
+                if (dropSubmission == null) {
+                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), "drop");
+                    addSubmissionToMemory(dropSubmission);
+                } else {
+                    dropSubmission.addGroupId(groupConfig.getGroupId());
+                }
+            }
+        }
         
         // Notify UI if submissions were added
-        // if (dropSubmission != null) {
-        //     notifyUpdateCallback();
-        // }
+        if (dropSubmission != null) {
+            notifyUpdateCallback();
+        }
 
-        // if (requiredScreenshot) {
-        //     boolean shouldHideDm = config.hideDMs();
-        //     captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
-        // } else {
-        //     sendDataToDropTracker(customWebhookBody, (byte[]) null);
-        // }
+        if (requiredScreenshot) {
+            boolean shouldHideDm = config.hideDMs();
+            captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
+        } else {
+            sendDataToDropTracker(customWebhookBody, (byte[]) null);
+        }
     }
 
     private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {

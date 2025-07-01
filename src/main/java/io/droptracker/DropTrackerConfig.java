@@ -165,10 +165,32 @@ public interface DropTrackerConfig extends Config {
     String miscSettings = "Additional Settings";
 
     @ConfigItem(
+        keyName = "trackExperience",
+        name = "Track Experience",
+        description = "Do you want to send experience gains to the DropTracker?",
+        position = 1,
+        section = miscSettings
+    )
+    default boolean trackExperience() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "trackQuests",
+        name = "Track Quests",
+        description = "Do you want to send quest completions to the DropTracker?",
+        position = 2,
+        section = miscSettings
+    )
+    default boolean trackQuests() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "hideWhispers",
         name = "Hide PMs",
         description = "Do you want your private chat to be\n" + "hidden when screenshots are taken?",
-        position = -1,
+        position = 2,
         section = miscSettings
     )
     default boolean hideDMs() {

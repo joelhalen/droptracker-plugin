@@ -44,7 +44,9 @@ import io.droptracker.api.UrlManager;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
 import io.droptracker.events.DropHandler;
+import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
+import io.droptracker.events.QuestHandler;
 import io.droptracker.events.WidgetEvent;
 import io.droptracker.models.Drop;
 import io.droptracker.service.SubmissionManager;
@@ -55,7 +57,9 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptPreFired;
+import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -105,11 +109,23 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private KCService kcService;
 
+	/* Event Handlers */
 	@Inject
 	private DropHandler dropHandler;
-	
+	@Inject
+	private QuestHandler questHandler;
+	@Inject
+	public ClogHandler clogHandler;
+	@Inject
+	public CaHandler caHandler;
+	@Inject
+	public PbHandler pbHandler;
+
+	@Inject
+	public ExperienceHandler experienceHandler;
 	@Inject
 	private SubmissionManager submissionManager;
+
 
 	@Nullable
     public Drop lastDrop = null;
@@ -138,12 +154,7 @@ public class DropTrackerPlugin extends Plugin {
 	);
 
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
-	@Inject
-	public ClogHandler clogHandler;
-	@Inject
-	public CaHandler caHandler;
-	@Inject
-	public PbHandler pbHandler;
+	
 
 	@Inject
 	public WidgetEvent widgetEventHandler;
@@ -157,7 +168,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private Client client;
 
-	public String pluginVersion = "4.0";
+	public String pluginVersion = "4.1";
 
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
@@ -306,16 +317,16 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event) {
-		System.out.println("onScriptPreFired called");
 		if(config.clogEmbeds()) {
 			clogHandler.onScript(event.getScriptId());
-			System.out.println("onScriptPreFired completed");
 		}
 	}
 
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded widget) {
 		widgetEventHandler.onWidgetLoaded(widget);
+		// Also check for quest completion widgets
+		questHandler.onWidgetLoaded(widget);
 	}
 
 	@Subscribe(priority=1)
@@ -341,7 +352,6 @@ public class DropTrackerPlugin extends Plugin {
 		if (!isTracking) {
 			return;
 		}
-        clogHandler.sendFakeLogData("Twisted Bow");
 		String chatMessage = submissionManager.sanitize(message.getMessage());
 		switch (message.getType()) {
 			case WELCOME:
@@ -414,8 +424,31 @@ public class DropTrackerPlugin extends Plugin {
 			});
 		}
 		
+		/* Call individual event handlers */
+        experienceHandler.onTick();
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
+		
+		// Also tick the experience handler
+		if (config.trackExperience()) {
+			experienceHandler.onTick();
+		}
+	}
+
+	@Subscribe
+	public void onStatChanged(StatChanged statChanged) {
+		if (!isTracking || !config.trackExperience()) {
+			return;
+		}
+		experienceHandler.onStatChanged(statChanged);
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged gameStateChanged) {
+		if (!isTracking || !config.trackExperience()) {
+			return;
+		}
+		experienceHandler.onGameStateChanged(gameStateChanged);
 	}
 
 	
