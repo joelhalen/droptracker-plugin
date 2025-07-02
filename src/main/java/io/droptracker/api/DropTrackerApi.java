@@ -1,6 +1,8 @@
 package io.droptracker.api;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonSyntaxException;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
@@ -64,10 +66,18 @@ public class DropTrackerApi {
         }
         
         isLoadingGroupConfigs = true;
+        
         CompletableFuture.runAsync(() -> {
+            String responseData = null;
             try {
                 String apiUrl = getApiUrl();
-                HttpUrl url = HttpUrl.parse(apiUrl + "/load_config?player_name=" + playerName + "&acc_hash=" + client.getAccountHash());
+                String fullUrl = apiUrl + "/load_config?player_name=" + playerName + "&acc_hash=" + client.getAccountHash();
+                
+                HttpUrl url = HttpUrl.parse(fullUrl);
+                if (url == null) {
+                    return;
+                }
+                
                 Request request = new Request.Builder().url(url).build();
                 
                 try (Response response = httpClient.newCall(request).execute()) {
@@ -81,11 +91,20 @@ public class DropTrackerApi {
                         throw new IOException("Empty response body");
                     }
                     
-                    String responseData = response.body().string();
-                    groupConfigs = gson.fromJson(responseData, List.class);
+                    responseData = response.body().string();
+                    
+                    // Parse the response
+                    List<GroupConfig> parsedConfigs = gson.fromJson(responseData, new TypeToken<List<GroupConfig>>(){}.getType());
+                    
+                    if (parsedConfigs != null) {
+                        groupConfigs = parsedConfigs;
+                    }
+                    
                     lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
                     
                 } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (JsonSyntaxException e) {
                     e.printStackTrace();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -93,6 +112,10 @@ public class DropTrackerApi {
             } finally {
                 isLoadingGroupConfigs = false;
             }
+        }).exceptionally(ex -> {
+            ex.printStackTrace();
+            isLoadingGroupConfigs = false;
+            return null;
         });
     }
 
@@ -106,6 +129,7 @@ public class DropTrackerApi {
                 e.printStackTrace();
             }
         }
+        
         return groupConfigs;
     }
 

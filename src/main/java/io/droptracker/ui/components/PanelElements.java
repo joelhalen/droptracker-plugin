@@ -454,7 +454,7 @@ public class PanelElements {
         return contentPanel;
     }
 
-    private static JTextArea collapsibleSubText(String inputString) {
+    public static JTextArea collapsibleSubText(String inputString) {
         JTextArea textArea = new JTextArea();
         textArea.setText(inputString);
         textArea.setWrapStyleWord(true);
@@ -504,6 +504,8 @@ public class PanelElements {
 
         return panel;
     }
+
+
 
     public static JPanel createCollapsiblePanel(String title, JPanel content, boolean isUnderlined) {
         JPanel panel = new JPanel();

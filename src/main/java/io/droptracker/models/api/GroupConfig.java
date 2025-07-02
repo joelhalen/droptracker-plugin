@@ -26,6 +26,8 @@ public class GroupConfig {
     private boolean sendClogs;
     @SerializedName("send_cas")
     private boolean sendCAs;
+    @SerializedName("minimum_ca_tier")
+    private String minimumCATier;
     @SerializedName("minimum_drop_value")
     private Integer minimumDropValue;
     @SerializedName("send_stacked_items")
@@ -43,7 +45,7 @@ public class GroupConfig {
     private int lastUpdateUnix;
     
 
-    public GroupConfig(String groupId, String groupName, int minValue, boolean onlyScreenshots, boolean sendDrops, boolean sendPbs, boolean sendClogs, boolean sendCAs, Integer minimumDropValue, boolean sendStackedItems, boolean sendPets, boolean sendKills, boolean sendDeaths) {
+    public GroupConfig(String groupId, String groupName, int minValue, boolean onlyScreenshots, boolean sendDrops, boolean sendPbs, boolean sendClogs, boolean sendCAs, String minimumCATier, Integer minimumDropValue, boolean sendStackedItems, boolean sendPets, boolean sendKills, boolean sendDeaths) {
         this.groupId = groupId;
         this.groupName = groupName;
         this.minValue = minValue;
@@ -52,6 +54,7 @@ public class GroupConfig {
         this.sendPbs = sendPbs;
         this.sendClogs = sendClogs;
         this.sendCAs = sendCAs;
+        this.minimumCATier = minimumCATier;
         this.minimumDropValue = minimumDropValue;
         this.sendStackedItems = sendStackedItems;
         this.sendPets = false;

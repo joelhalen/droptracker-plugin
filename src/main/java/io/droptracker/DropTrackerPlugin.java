@@ -366,6 +366,26 @@ public class DropTrackerPlugin extends Plugin {
 				if (config.useApi()) {
 					try {
 						api.loadGroupConfigs(getLocalPlayerName());
+						// Refresh the API panel to show updated group configs
+						// Since loading is async, we need to delay the refresh
+						if (newPanel != null) {
+							// Initial refresh to show loading state
+							SwingUtilities.invokeLater(() -> {
+								newPanel.updateSentSubmissions();
+							});
+							
+							// Delayed refresh after configs should be loaded
+							executor.submit(() -> {
+								try {
+									Thread.sleep(2000); // Wait 2 seconds for async load
+									SwingUtilities.invokeLater(() -> {
+										newPanel.updateSentSubmissions();
+									});
+								} catch (InterruptedException e) {
+									Thread.currentThread().interrupt();
+								}
+							});
+						}
 					} catch (IOException e) {
 						e.printStackTrace();
 					}

@@ -97,23 +97,26 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 		homePanel = new HomePanel(config, api, client, this);
 		welcomePanel = homePanel.create();	// Store reference
 
-		// API Info tab (always created)
-		apiPanel = new ApiPanel(config, api, submissionManager);
-		apiInfoPanel = apiPanel.create();   // Store reference
 
-		// Stats tab (only if API enabled)
+
+
+		// Tabs for users with API enabled
 		if (config.useApi()) {
+			// API Info tab
+			apiPanel = new ApiPanel(config, api, submissionManager);
+			apiInfoPanel = apiPanel.create();   // Store reference
 			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
 			playerStatsPanel = statsPanel.create(); // Store reference
 			groupStatsPanel = groupPanel.create();   // Store reference
+			tabbedPane.addTab("API", apiInfoPanel); // added first to place it at the top
 			tabbedPane.addTab("Players", playerStatsPanel);
 			tabbedPane.addTab("Groups", groupStatsPanel);
 		}
 
-		// API Info tab
+		// Welcome tab
 		tabbedPane.addTab("Welcome", welcomePanel);
-		tabbedPane.addTab("Info", apiInfoPanel);
+
 
 		// Add components to main panel
 		add(headerPanel, BorderLayout.NORTH);
@@ -195,6 +198,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	
 	public void deinit() {
 		removeAll();
+		
 	}
 
 	public void selectPanel(String panelToSelect) {
@@ -233,7 +237,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 				}
 				break;
 				
-			case "info":
+			case "api":
 				if (apiInfoPanel != null) {
 					tabbedPane.setSelectedComponent(apiInfoPanel);
 					System.out.println("Selected Info tab");
@@ -272,12 +276,8 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 	// Update the API panel with the current session's valid submissions
 	public void updateSentSubmissions() {
-		System.out.println("DropTrackerPanelNew.updateSentSubmissions() called");
 		if (apiPanel != null) {
-			System.out.println("Calling apiPanel.refresh()");
 			apiPanel.refresh();
-		} else {
-			System.out.println("apiPanel is null");
 		}
 	}
 

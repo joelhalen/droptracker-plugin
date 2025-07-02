@@ -4,9 +4,12 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -20,20 +23,30 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.border.EmptyBorder;
+import javax.swing.JSeparator;
+import javax.swing.ImageIcon;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingUtilities;
 
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.util.DurationAdapter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;	
-
-
+import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.ImageUtil;
+import java.awt.Cursor;
+import java.awt.event.MouseAdapter;
+import java.awt.Image;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ApiPanel {
 
@@ -49,6 +62,11 @@ public class ApiPanel {
 	private JTextArea statusLabel;
 	private JPanel submissionsPanel;
 	private Timer statusUpdateTimer;
+	private JPanel groupConfigPanel;
+	private JPanel groupsContainerPanel;
+	private JScrollPane groupsScrollPane;
+	private Map<String, Boolean> groupExpandStates = new HashMap<>(); // Track expand/collapse state by group ID
+
 
     public ApiPanel(DropTrackerConfig config, DropTrackerApi api, SubmissionManager submissionManager) {
         this.config = config;
@@ -63,7 +81,6 @@ public class ApiPanel {
 		apiPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
 		// Create a panel for the title with proper alignment
-		JTextArea textArea = new JTextArea("");
 		// API status panel
 		statusLabel = new JTextArea("Last communication with API: loading...");
 		statusLabel.setForeground(config.useApi() ? Color.GREEN : Color.RED);
@@ -76,33 +93,30 @@ public class ApiPanel {
 		statusLabel.setBorder(new EmptyBorder(0, 0, 0, 0));
 		statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BorderLayout());
-        contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        contentPanel.add(textArea, BorderLayout.CENTER);
-		contentPanel.add(statusLabel, BorderLayout.SOUTH);
-		JPanel titlePanel = PanelElements.createCollapsiblePanel("DropTracker - API", contentPanel, false);
-		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 150));
-		titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 150));
-		titlePanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 150));
+		JPanel configPanel = initializeConfigPanel();	
 
 
 		// Initialize submissions panel
 		initializeSubmissionsPanel();
 
 		// Add all components to the API panel
-		apiPanel.add(titlePanel);
-		apiPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		apiPanel.add(submissionsPanel);
+		apiPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+		// Add configs beneath the submissions panel
+		apiPanel.add(configPanel);
 		apiPanel.add(Box.createVerticalGlue());
 
 		// Initial update
 		updateStatusLabel();
 		refreshSubmissions();
+		refreshGroupConfigs();
 
 		// Start timer to update status every 10 seconds
 		if (config.pollUpdates()) {
-			statusUpdateTimer = new Timer(10000, e -> updateStatusLabel());
+			statusUpdateTimer = new Timer(10000, e -> {
+				updateStatusLabel();
+				refreshGroupConfigs();
+			});
 			statusUpdateTimer.start();
 		}
 
@@ -143,29 +157,401 @@ public class ApiPanel {
 		submissionsPanel.add(Box.createRigidArea(new Dimension(0, 3)));
 	}
 
+
+	private JPanel initializeConfigPanel() {
+		// Create a wrapper panel to contain the group configs
+		JPanel wrapperPanel = new JPanel();
+		wrapperPanel.setLayout(new BoxLayout(wrapperPanel, BoxLayout.Y_AXIS));
+		wrapperPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		wrapperPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 400)); // Limit wrapper size
+		
+		// Add status label at the top
+		statusLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
+		wrapperPanel.add(statusLabel);
+		wrapperPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+		
+		// Create the content panel that will hold all group configs
+		JPanel groupsContainer = new JPanel();
+		groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
+		groupsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		
+		// Build the group config panels
+		buildGroupConfigPanels(groupsContainer);
+		
+		// Create scroll pane for the groups
+		groupsScrollPane = new JScrollPane(groupsContainer);
+		groupsScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		groupsScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+		groupsScrollPane.setBorder(null);
+		groupsScrollPane.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		groupsScrollPane.getViewport().setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		groupsScrollPane.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 150)); // Limit scroll pane height
+		groupsScrollPane.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 150));
+		
+		// Add the scroll pane to wrapper
+		wrapperPanel.add(groupsScrollPane);
+		
+		// Store reference to groups container for refresh
+		this.groupsContainerPanel = groupsContainer;
+		
+		// Create the main collapsible panel - use custom method for consistent behavior
+		groupConfigPanel = createMainCollapsiblePanel("Group Configurations", wrapperPanel);
+		
+		return groupConfigPanel;
+	}
+	
+	/**
+	 * Creates the main collapsible panel with consistent sizing behavior
+	 */
+	private JPanel createMainCollapsiblePanel(String title, JPanel content) {
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Standard padding for main panel
+		
+		// Set initial size constraints
+		panel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 200));
+		panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 200));
+
+		JPanel headerPanel = new JPanel(new BorderLayout());
+		headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+
+		// Create title
+		JLabel titleLabel = new JLabel(title);
+		titleLabel.setFont(FontManager.getRunescapeBoldFont());
+		titleLabel.setForeground(Color.WHITE);
+
+		// Get the static icons from PanelElements using reflection
+		ImageIcon expandedIcon = null;
+		ImageIcon collapsedIcon = null;
+		try {
+			java.lang.reflect.Field expandedField = PanelElements.class.getDeclaredField("EXPANDED_ICON");
+			expandedField.setAccessible(true);
+			expandedIcon = (ImageIcon) expandedField.get(null);
+			
+			java.lang.reflect.Field collapsedField = PanelElements.class.getDeclaredField("COLLAPSED_ICON");
+			collapsedField.setAccessible(true);
+			collapsedIcon = (ImageIcon) collapsedField.get(null);
+		} catch (Exception e) {
+			// Use default if reflection fails
+		}
+		
+		final ImageIcon finalExpandedIcon = expandedIcon;
+		final ImageIcon finalCollapsedIcon = collapsedIcon;
+		final JLabel toggleIcon = new JLabel(expandedIcon);
+
+		headerPanel.add(titleLabel, BorderLayout.WEST);
+		headerPanel.add(toggleIcon, BorderLayout.EAST);
+
+		// Store initial expanded state
+		final boolean[] isCollapsed = { false };
+
+		// Add click listener for collapsing/expanding
+		headerPanel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				isCollapsed[0] = !isCollapsed[0];
+				toggleIcon.setIcon(isCollapsed[0] ? finalCollapsedIcon : finalExpandedIcon);
+				content.setVisible(!isCollapsed[0]);
+
+				// Maintain consistent sizing
+				if (isCollapsed[0]) {
+					panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, headerPanel.getPreferredSize().height + 20));
+					panel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, headerPanel.getPreferredSize().height + 20));
+				} else {
+					panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 200));
+					panel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 200));
+				}
+				
+				panel.revalidate();
+				panel.repaint();
+			}
+			
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				headerPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+			}
+			
+			@Override
+			public void mouseExited(MouseEvent e) {
+				headerPanel.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+			}
+		});
+
+		// Add separator
+		JSeparator separator = new JSeparator();
+		separator.setBackground(ColorScheme.LIGHT_GRAY_COLOR);
+		separator.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+
+		panel.add(headerPanel);
+		panel.add(separator);
+		panel.add(content);
+
+		return panel;
+	}
+	
+	/**
+	 * Builds individual collapsible panels for each group configuration
+	 */
+	private void buildGroupConfigPanels(JPanel parentPanel) {
+		parentPanel.removeAll();
+		
+		List<GroupConfig> groupConfigs = api.getGroupConfigs();
+		if (groupConfigs != null && groupConfigs.size() > 0) {
+			for (GroupConfig groupConfig : groupConfigs) {
+				// Create content for this group
+				JPanel groupContentPanel = createGroupConfigPanel(groupConfig);
+				
+				// Create collapsible panel for this group with reduced padding
+				String groupTitle = groupConfig.getGroupName() + " (ID: " + groupConfig.getGroupId() + ")";
+				String groupKey = String.valueOf(groupConfig.getGroupId());
+				
+				// Check if we have a saved state for this group, default to collapsed (true)
+				boolean isCollapsed = groupExpandStates.getOrDefault(groupKey, true);
+				
+				JPanel collapsibleGroup = createCompactCollapsiblePanel(groupTitle, groupContentPanel, groupKey, isCollapsed);
+				
+				parentPanel.add(collapsibleGroup);
+				parentPanel.add(Box.createRigidArea(new Dimension(0, 2))); // Reduced space between groups
+			}
+		} else {
+			// Show "no configs" message with minimal height
+			JPanel emptyPanel = new JPanel();
+			emptyPanel.setLayout(new BoxLayout(emptyPanel, BoxLayout.Y_AXIS));
+			emptyPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+			emptyPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+			emptyPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 30));
+			
+			JLabel noConfigsLabel = new JLabel("No group configurations loaded.");
+			noConfigsLabel.setFont(FontManager.getRunescapeSmallFont());
+			noConfigsLabel.setForeground(Color.GRAY);
+			noConfigsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			emptyPanel.add(Box.createVerticalGlue());
+			emptyPanel.add(noConfigsLabel);
+			emptyPanel.add(Box.createVerticalGlue());
+			
+			parentPanel.add(emptyPanel);
+		}
+	}
+	
+	/**
+	 * Creates a compact collapsible panel with reduced padding
+	 */
+	private JPanel createCompactCollapsiblePanel(String title, JPanel content, String groupKey, boolean isCollapsed) {
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(2, 5, 2, 5)); // Further reduced padding
+		
+		// Set maximum size when expanded
+		panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 130)); // Limit total height
+
+		JPanel headerPanel = new JPanel(new BorderLayout());
+		headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18)); // Reduced header height
+		headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 18));
+
+		// Create title
+		JLabel titleLabel = new JLabel(title);
+		titleLabel.setFont(FontManager.getRunescapeSmallFont()); // Use small font for group titles
+		titleLabel.setForeground(Color.WHITE);
+
+		// Get the static icons from PanelElements using reflection
+		ImageIcon expandedIcon = null;
+		ImageIcon collapsedIcon = null;
+		try {
+			java.lang.reflect.Field expandedField = PanelElements.class.getDeclaredField("EXPANDED_ICON");
+			expandedField.setAccessible(true);
+			expandedIcon = (ImageIcon) expandedField.get(null);
+			
+			java.lang.reflect.Field collapsedField = PanelElements.class.getDeclaredField("COLLAPSED_ICON");
+			collapsedField.setAccessible(true);
+			collapsedIcon = (ImageIcon) collapsedField.get(null);
+		} catch (Exception e) {
+			// Fallback to loading icons directly if reflection fails
+			Image collapsedImg = ImageUtil.loadImageResource(getClass(), "/io/droptracker/util/collapse.png");
+			Image expandedImg = ImageUtil.loadImageResource(getClass(), "/io/droptracker/util/expand.png");
+			if (collapsedImg != null && expandedImg != null) {
+				Image collapsedResized = collapsedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+				Image expandedResized = expandedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+				Image collapsedRecolored = ImageUtil.recolorImage(collapsedResized, ColorScheme.LIGHT_GRAY_COLOR);
+				Image expandedRecolored = ImageUtil.recolorImage(expandedResized, ColorScheme.LIGHT_GRAY_COLOR);
+				collapsedIcon = new ImageIcon(collapsedRecolored);
+				expandedIcon = new ImageIcon(expandedRecolored);
+			}
+		}
+		
+		// Toggle icon - set initial state based on isCollapsed parameter
+		final ImageIcon finalExpandedIcon = expandedIcon;
+		final ImageIcon finalCollapsedIcon = collapsedIcon;
+		final JLabel toggleIcon = new JLabel(isCollapsed ? collapsedIcon : expandedIcon);
+
+		headerPanel.add(titleLabel, BorderLayout.WEST);
+		headerPanel.add(toggleIcon, BorderLayout.EAST);
+
+		// Set initial visibility based on collapsed state
+		content.setVisible(!isCollapsed);
+		
+		// Set initial panel size based on collapsed state
+		if (isCollapsed) {
+			panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+			panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 24));
+		}
+
+		// Create a final reference to the content for use in the listener
+		final boolean[] isCollapsedRef = { isCollapsed };
+
+		// Add click listener for collapsing/expanding
+		MouseAdapter clickListener = new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				isCollapsedRef[0] = !isCollapsedRef[0];
+				toggleIcon.setIcon(isCollapsedRef[0] ? finalCollapsedIcon : finalExpandedIcon);
+				content.setVisible(!isCollapsedRef[0]);
+				
+				// Save the state
+				groupExpandStates.put(groupKey, isCollapsedRef[0]);
+				
+				// Update panel size
+				if (isCollapsedRef[0]) {
+					panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24)); // Just header + borders
+					panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 24));
+				} else {
+					panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 130)); // Limited height when expanded
+					panel.setPreferredSize(null);
+				}
+				
+				// Force the parent to re-layout
+				panel.revalidate();
+				panel.repaint();
+				if (panel.getParent() != null) {
+					panel.getParent().revalidate();
+					panel.getParent().repaint();
+				}
+			}
+			
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				headerPanel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+			}
+			
+			@Override
+			public void mouseExited(MouseEvent e) {
+				headerPanel.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+			}
+		};
+		
+		headerPanel.addMouseListener(clickListener);
+
+		// Add separator
+		JSeparator separator = new JSeparator();
+		separator.setBackground(ColorScheme.LIGHT_GRAY_COLOR);
+		separator.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		separator.setMaximumSize(new Dimension(Integer.MAX_VALUE, 1));
+
+		panel.add(headerPanel);
+		panel.add(separator);
+		panel.add(content);
+
+		return panel;
+	}
+	
+	/**
+	 * Creates the configuration panel for a single group
+	 */
+	private JPanel createGroupConfigPanel(GroupConfig groupConfig) {
+		JPanel panel = new JPanel();
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		panel.setBorder(new EmptyBorder(2, 5, 2, 5));
+		
+		// Notifications header
+		JLabel notificationsLabel = new JLabel("Notifications:");
+		notificationsLabel.setFont(FontManager.getRunescapeSmallFont());
+		notificationsLabel.setForeground(Color.WHITE);
+		panel.add(notificationsLabel);
+		panel.add(Box.createRigidArea(new Dimension(0, 2)));
+		
+		// Drops configuration
+		panel.add(createConfigRow("Drops", 
+			groupConfig.isSendDrops(), 
+			"Min: " + groupConfig.getMinimumDropValue()));
+		
+		// CAs configuration
+		panel.add(createConfigRow("CAs",
+			groupConfig.isSendCAs(), 
+			"Min Tier: " + groupConfig.getMinimumCATier()));
+		
+		// PBs configuration
+		panel.add(createConfigRow("PBs",
+			groupConfig.isSendPbs(), 
+			null));
+		
+		// CLogs configuration
+		panel.add(createConfigRow("CLogs",
+			groupConfig.isSendClogs(), 
+			null));
+		
+		return panel;
+	}
+	
+	/**
+	 * Creates a configuration row with label, status, and optional details
+	 */
+	private JPanel createConfigRow(String label, boolean enabled, String details) {
+		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+		row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18)); // Reduced from 20
+		row.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 70, 18));
+		
+		// Label
+		JLabel nameLabel = new JLabel(label + ":");
+		nameLabel.setFont(FontManager.getRunescapeSmallFont());
+		nameLabel.setForeground(Color.LIGHT_GRAY);
+		row.add(nameLabel);
+		
+		// Status
+		JLabel statusLabel = new JLabel(enabled ? "On" : "Off");
+		statusLabel.setFont(FontManager.getRunescapeSmallFont());
+		statusLabel.setForeground(enabled ? Color.GREEN : Color.RED);
+		row.add(statusLabel);
+		
+		// Optional details
+		if (details != null && !details.isEmpty()) {
+			JLabel detailsLabel = new JLabel("(" + details + ")");
+			detailsLabel.setFont(FontManager.getRunescapeSmallFont());
+			detailsLabel.setForeground(Color.GRAY);
+			row.add(detailsLabel);
+		}
+		
+		return row;
+	}
+
 	public void updateStatusLabel() {
 		LocalDateTime now = LocalDateTime.now();
 		LocalDateTime lastCommunicationDate = LocalDateTime.ofEpochSecond(api.lastCommunicationTime, 0, ZoneOffset.UTC);
 		Duration duration = Duration.between(lastCommunicationDate, now);
 		
 		String lastCommunicationTime = DurationAdapter.formatDuration(duration);
-		String statusText = "Last communication with API: " + lastCommunicationTime;
-		
-		// Update the text content
-		statusLabel.setText(statusText);
-		
-		// Set color based on duration
+		String statusText;
 		Color statusColor;
-		if (duration.toSeconds() < 30) {
-			statusColor = Color.GREEN;
-		} else if (duration.toSeconds() < 60) {
-			statusColor = Color.YELLOW;
+		if (config.useApi()) {
+			if (duration.toSeconds() < 30) {
+				statusText = "Connected - last ping: " + lastCommunicationTime;
+				statusColor = Color.GREEN;
+			} else {
+				statusText = "May be disconnected! Last ping: " + lastCommunicationTime;
+				statusColor = Color.YELLOW;
+			}
 		} else {
+			statusText = "API disabled - check plugin config";
 			statusColor = Color.RED;
 		}
 		
-		// Apply color only if API is enabled, otherwise use red
-		statusLabel.setForeground(config.useApi() ? statusColor : Color.RED);
+		
+		// Update the text content
+		statusLabel.setText(statusText);
+		statusLabel.setForeground(statusColor);
 		
 		// repaint and revalidate to update the UI
 		if (apiPanel != null) {
@@ -178,18 +564,11 @@ public class ApiPanel {
 	 * Refreshes the submissions display with current data from SubmissionManager
 	 */
 	public void refreshSubmissions() {
-		System.out.println("ApiPanel.refreshSubmissions() called");
 		if (submissionManager != null) {
 			List<ValidSubmission> validSubmissions = submissionManager.getValidSubmissions();
-			System.out.println("Got " + (validSubmissions != null ? validSubmissions.size() : 0) + " submissions from SubmissionManager");
 			if (validSubmissions != null) {
-				for (ValidSubmission submission : validSubmissions) {
-					System.out.println("Submission: " + submission.toString());
-				}
+				updateSentSubmissions(validSubmissions);
 			}
-			updateSentSubmissions(validSubmissions);
-		} else {
-			System.out.println("submissionManager is null");
 		}
 	}
 
@@ -329,10 +708,9 @@ public class ApiPanel {
 	 * Can be called from outside to update the display
 	 */
 	public void refresh() {
-		System.out.println("ApiPanel.refresh() called");
 		updateStatusLabel();
 		refreshSubmissions();
-		System.out.println("ApiPanel.refresh() completed");
+		refreshGroupConfigs();
 	}
 
 	/**
@@ -341,6 +719,34 @@ public class ApiPanel {
 	public void cleanup() {
 		if (statusUpdateTimer != null && statusUpdateTimer.isRunning()) {
 			statusUpdateTimer.stop();
+		}
+	}
+
+	/**
+	 * Refreshes the group configurations display
+	 */
+	public void refreshGroupConfigs() {
+		if (groupsContainerPanel == null || groupsScrollPane == null) {
+			return;
+		}
+		
+		// Save current scroll position
+		int scrollPosition = groupsScrollPane.getVerticalScrollBar().getValue();
+		
+		// Rebuild all group config panels
+		buildGroupConfigPanels(groupsContainerPanel);
+		groupsContainerPanel.revalidate();
+		groupsContainerPanel.repaint();
+		
+		// Restore scroll position after a brief delay to allow layout
+		SwingUtilities.invokeLater(() -> {
+			groupsScrollPane.getVerticalScrollBar().setValue(scrollPosition);
+		});
+		
+		// Also update the parent panel
+		if (groupConfigPanel != null) {
+			groupConfigPanel.revalidate();
+			groupConfigPanel.repaint();
 		}
 	}
 }
