@@ -63,6 +63,7 @@ public class QuestHandler extends BaseEventHandler {
 
     @SuppressWarnings("deprecation")
     private void handleQuestCompletion(String questText) {
+        log.debug("Handling quest completion: {}", questText);
         // Get quest completion stats
         int completedQuests = client.getVarbitValue(VARBIT_QUESTS_COMPLETED_COUNT);
         int totalQuests = client.getVarbitValue(VARBIT_QUESTS_TOTAL_COUNT);
@@ -114,6 +115,7 @@ public class QuestHandler extends BaseEventHandler {
 
     @Nullable
     private String parseQuestWidget(final String text) {
+        log.debug("Parsing quest widget with passed text: {}", text);
         if (text == null || text.isEmpty()) {
             return null;
         }
@@ -157,6 +159,8 @@ public class QuestHandler extends BaseEventHandler {
             return null;
         }
 
+        log.debug("Getting matcher for text: {}", text);
+
         // "You have completed The Corsair Curse!"
         Matcher questMatch1 = QUEST_PATTERN_1.matcher(text);
         if (questMatch1.matches()) {
@@ -179,9 +183,10 @@ public class QuestHandler extends BaseEventHandler {
         cleaned = cleaned.replaceAll("^Congratulations! You've completed ", "");
         cleaned = cleaned.replaceAll("[!.]$", "");
         cleaned = cleaned.trim();
-        
+        log.debug("Cleaned quest name: {}", cleaned);
         // If it's still empty or too short, return null
         if (cleaned.isEmpty() || cleaned.length() < 3) {
+            log.debug("Cleaned quest name is empty or too short: {}", cleaned);
             return null;
         }
         
