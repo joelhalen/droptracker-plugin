@@ -18,6 +18,7 @@ import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.VarPlayer;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetID;
 
@@ -53,7 +54,7 @@ public class QuestHandler extends BaseEventHandler {
     public void onWidgetLoaded(WidgetLoaded event) {
         if (event.getGroupId() == WidgetID.QUEST_COMPLETED_GROUP_ID && isEnabled()) {
             System.out.println("Widget loaded: " + event.getGroupId());
-            Widget questTitle = client.getWidget(WidgetID.QUEST_COMPLETED_GROUP_ID, 2); // Quest title widget
+            Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE); // Quest title widget
             System.out.println("Quest title widget found");
             if (questTitle != null) {
                 String questText = questTitle.getText();
