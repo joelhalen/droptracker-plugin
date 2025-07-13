@@ -240,10 +240,11 @@ public class SubmissionManager {
                 }
             }
         } else if (type == SubmissionType.ADVENTURE_LOG) {
-            sendDataToDropTracker(webhook, (byte[]) null);
+            // Nothing extra needs to be done for adventure log data
+            requiredScreenshot = false;
         } else if (type == SubmissionType.EXPERIENCE || type == SubmissionType.EXPERIENCE_MILESTONE) {
             /* We don't need to take screenshots for experience or experience milestones */
-            sendDataToDropTracker(webhook, (byte[]) null);
+            requiredScreenshot = false;
         } else if (type == SubmissionType.LEVEL_UP) {
             CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
             // Check the skills that leveled up
