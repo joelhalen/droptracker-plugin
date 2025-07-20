@@ -53,7 +53,6 @@ import io.droptracker.service.KCService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanelNew;
 import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -147,7 +146,6 @@ public class DropTrackerPlugin extends Plugin {
 				Thread t = new Thread(r);
 				t.setUncaughtExceptionHandler((thread, ex) -> {
 					log.error("Uncaught exception in executor thread", ex);
-					DebugLogger.logSubmission("Executor thread died: " + ex.getMessage());
 				});
 				return t;
 			}

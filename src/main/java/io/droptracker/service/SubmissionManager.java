@@ -32,7 +32,6 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
@@ -93,7 +92,6 @@ public class SubmissionManager {
                     Thread t = new Thread(r);
                     t.setUncaughtExceptionHandler((thread, ex) -> {
                         log.error("Uncaught exception in executor thread", ex);
-                        DebugLogger.logSubmission("Executor thread died: " + ex.getMessage());
                     });
                     return t;
                 }
@@ -343,8 +341,6 @@ public class SubmissionManager {
             return;
         }
         String logText = String.valueOf(gson.toJson(customWebhookBody));
-        DebugLogger.logSubmission("Submission with API " + (config.useApi() ? "enabled" : "disabled")
-                + " and screenshot " + (screenshot != null ? "true" : "false") + " -- raw json: " + logText);
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
@@ -384,8 +380,6 @@ public class SubmissionManager {
             try {
                 url = UrlManager.getRandomUrl();
             } catch (Exception e) {
-                DebugLogger.logSubmission("Failed to get webhook URL, skipping submission: " + e.getMessage());
-                DebugLogger.logSubmission("Webhook submission skipped - no valid URL: " + e.getMessage());
                 return; // Exit gracefully
             }
         } else {
@@ -501,7 +495,6 @@ public class SubmissionManager {
         sendDataToDropTracker(validSubmission.getOriginalWebhook(), (byte[]) null);
         
         // Log the retry attempt
-        DebugLogger.logSubmission("Retrying submission with UUID: " + validSubmission.getUuid());
     }
 
     /**

@@ -15,7 +15,6 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.DebugLogger;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
@@ -97,11 +96,9 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		DebugLogger.logSubmission("processDropEvent called for " + npcName);
 		
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
-			DebugLogger.logSubmission("Not tracking - skipping drop event");
 			return;
 		}
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
@@ -156,7 +153,6 @@ public class DropHandler extends BaseEventHandler {
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);
 					// Optionally, add debug logging
-					DebugLogger.logSubmission("Drop processing failed: " + e.getMessage());
 				}
 			});
 		});
