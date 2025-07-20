@@ -2,6 +2,7 @@ package io.droptracker.models.api;
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
+import com.google.inject.Inject;
 
 import io.droptracker.models.submissions.RecentSubmission;
 
@@ -40,7 +41,8 @@ public class PlayerSearchResult {
     // Raw JSON data for any additional fields not explicitly mapped
     private transient Map<String, Object> additionalData;
     
-    private static final Gson gson = new Gson();
+    @Inject
+    private static Gson gson;
 
     // Default constructor for Gson
     public PlayerSearchResult() {}

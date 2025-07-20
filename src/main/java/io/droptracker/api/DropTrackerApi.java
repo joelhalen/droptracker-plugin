@@ -163,7 +163,7 @@ public class DropTrackerApi {
             throw new IOException("Empty response body");
         } else {
             String responseData = response.body().string();
-            return TopGroupResult.fromJson(responseData);
+            return this.gson.fromJson(responseData, TopGroupResult.class);
         }
         } catch (IOException e) {
             e.printStackTrace();

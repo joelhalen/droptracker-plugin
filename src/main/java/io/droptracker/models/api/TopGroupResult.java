@@ -3,12 +3,10 @@ package io.droptracker.models.api;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 
 public class TopGroupResult {
     // Defines the top groups as returned by the API when the panel initially loads, or when the user refreshes the group page
-    private static final Gson gson = new Gson();  // Used to parse the JSON response from the API
 
     @SerializedName("groups")
     private List<TopGroup> groups;
@@ -16,19 +14,7 @@ public class TopGroupResult {
     // Default constructor for Gson
     public TopGroupResult() {}
 
-    // Static factory methods
-    public static TopGroupResult fromJson(String json) {
-        return gson.fromJson(json, TopGroupResult.class);
-    }
-    
-    public static TopGroupResult fromJsonMap(Map<String, Object> jsonMap) {
-        return gson.fromJson(gson.toJson(jsonMap), TopGroupResult.class);
-    }
-
-    // Convert back to JSON string
-    public String toJson() {
-        return gson.toJson(this);
-    }
+    // Remove the static gson field and static methods - they don't work with @Inject
 
     // Getter and setter
     public List<TopGroup> getGroups() {

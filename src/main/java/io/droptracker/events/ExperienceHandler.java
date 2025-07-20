@@ -68,7 +68,8 @@ public class ExperienceHandler extends BaseEventHandler {
     @Inject
     private ClientThread clientThread;
     
-    private static final Gson gson = new Gson();
+    @Inject 
+    private static Gson gson;
 
     @Override
     public void process(Object... args) {
