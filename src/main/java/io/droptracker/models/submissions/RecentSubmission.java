@@ -175,7 +175,6 @@ public class RecentSubmission {
                 }
                 return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
             } catch (NumberFormatException e) {
-                System.err.println("Failed to parse item ID: " + itemId + " - " + e.getMessage());
                 return null;
             }
         }
@@ -196,7 +195,6 @@ public class RecentSubmission {
                 }
                 return Integer.valueOf(quantity.toString().replaceAll("\\.0*$", ""));
             } catch (NumberFormatException e) {
-                System.err.println("Failed to parse quantity: " + quantity + " - " + e.getMessage());
                 return 1; // Default to 1 if parsing fails
             }
         }
@@ -227,7 +225,6 @@ public class RecentSubmission {
                     return Long.valueOf(valueStr.replaceAll("\\.0*$", ""));
                 }
             } catch (NumberFormatException e) {
-                System.err.println("Failed to parse drop value: " + dropValue + " - " + e.getMessage());
                 return null;
             }
         }
@@ -258,7 +255,6 @@ public class RecentSubmission {
                 }
                 return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
             } catch (NumberFormatException e) {
-                System.err.println("Failed to parse clog item ID: " + itemId + " - " + e.getMessage());
                 return null;
             }
         }
@@ -279,7 +275,6 @@ public class RecentSubmission {
                 }
                 return Integer.valueOf(kcValue.toString().replaceAll("\\.0*$", ""));
             } catch (NumberFormatException e) {
-                System.err.println("Failed to parse kill count: " + kcValue + " - " + e.getMessage());
                 return null;
             }
         }

@@ -213,7 +213,6 @@ public class GroupPanel {
 							}
 							return null;
 						} catch (Exception ex) {
-							System.err.println("Failed to search for group: " + ex.getMessage());
 							return null;
 						}
 					});
@@ -229,7 +228,6 @@ public class GroupPanel {
 				try {
 					return api.getTopGroups();
 				} catch (Exception e) {
-					System.err.println("Failed to get top groups: " + e.getMessage());
 					return null;
 				}
 			},
@@ -260,7 +258,6 @@ public class GroupPanel {
 				GroupSearchResult groupResult = api.searchGroup(searchQuery);
 				return groupResult;
 			} catch (Exception e) {
-				System.err.println("Failed to search for group: " + e.getMessage());
 				return null;
 			}
 		}).thenAccept(groupResult -> {
@@ -488,7 +485,6 @@ public class GroupPanel {
 		try {
 			LinkBrowser.browse("https://www.droptracker.io/groups");
 		} catch (Exception e) {
-			System.err.println("Failed to open browser: " + e.getMessage());
 			// Fallback: copy URL to clipboard or show message
 			JOptionPane.showMessageDialog(contentPanel, 
 				"Could not open browser. Please visit:\nhttps://www.droptracker.io/groups", 
@@ -501,7 +497,6 @@ public class GroupPanel {
 		try {
 			LinkBrowser.browse("https://www.droptracker.io/wiki/create-group");
 		} catch (Exception e) {
-			System.err.println("Failed to open browser: " + e.getMessage());
 			// Fallback: copy URL to clipboard or show message
 			JOptionPane.showMessageDialog(contentPanel, 
 				"Could not open browser. Please visit:\nhttps://droptracker.io/wiki/create-group", 
@@ -526,7 +521,6 @@ public class GroupPanel {
 		try {
 			new URL(urlString); // This will throw if URL is malformed
 		} catch (Exception e) {
-			System.err.println("Invalid group icon URL format: " + urlString + " - " + e.getMessage());
 			return;
 		}
 
@@ -539,7 +533,6 @@ public class GroupPanel {
 				Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
 				return new ImageIcon(scaled);
 			} catch (IOException e) {
-				System.err.println("Failed to load group icon from URL: " + urlString + " - " + e.getMessage());
 				// Try the original URL if the .png replacement failed
 				if (urlString.endsWith(".png") && !inputString.endsWith(".png")) {
 					try {

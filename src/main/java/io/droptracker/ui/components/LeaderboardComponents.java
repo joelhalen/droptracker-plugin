@@ -360,7 +360,6 @@ public class LeaderboardComponents {
                     return panelCreator.apply(data);
                 }
             } catch (Exception e) {
-                System.err.println("Failed to load leaderboard data: " + e.getMessage());
             }
             return null;
         }).thenAccept(leaderboardPanel -> {

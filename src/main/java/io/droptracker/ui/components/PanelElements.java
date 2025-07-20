@@ -134,7 +134,6 @@ public class PanelElements {
                 URL url = new URL(imageUrl);
                 return ImageIO.read(url);
             } catch (IOException e) {
-                System.err.println("Failed to load lootboard for group " + groupId + ": " + e.getMessage());
                 return null;
             }
         }).thenAccept(image -> {
@@ -143,9 +142,7 @@ public class PanelElements {
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
                 if (image != null) {
-                } else {
-                    System.err.println("Failed to cache lootboard for group " + groupId);
-                }
+                } 
                 // Call the completion callback
                 if (onComplete != null) {
                     onComplete.run();
@@ -230,7 +227,6 @@ public class PanelElements {
                 imageDialog.revalidate();
                 imageDialog.repaint();
             } else {
-                System.err.println("Failed to load group " + groupId + " lootboard");
                 loadingLabel.setText("Failed to load group " + groupId + " lootboard");
                 loadingLabel.setForeground(Color.RED);
                 imageDialog.revalidate();
@@ -300,7 +296,6 @@ public class PanelElements {
                 URL url = new URL(imageUrl);
                 return ImageIO.read(url);
             } catch (IOException e) {
-                System.err.println("Failed to load image from URL: " + e.getMessage());
                 return null;
             }
         }).thenAccept(image -> {
@@ -311,7 +306,6 @@ public class PanelElements {
                     imageDialog.revalidate();
                     imageDialog.repaint();
                 } else {
-                    System.err.println("Failed to load image from URL");
                     loadingLabel.setText("Failed to load image from URL");
                     loadingLabel.setForeground(Color.RED);
                     imageDialog.revalidate();
@@ -577,7 +571,6 @@ public class PanelElements {
                 return (JFrame) SwingUtilities.getWindowAncestor(client.getCanvas());
             }
         } catch (Exception e) {
-            System.err.println("Could not find parent frame: " + e.getMessage());
         }
         return null;
     }
@@ -786,7 +779,6 @@ public class PanelElements {
 									return new ImageIcon(scaled);
 								}
 							} catch (IOException e) {
-								System.err.println("Failed to load PB image: " + e.getMessage());
 							}
 							return null;
 						}).thenAccept(imageIcon -> {
@@ -832,7 +824,6 @@ public class PanelElements {
 					}
 				}
 			} catch (Exception e) {
-				System.err.println("Error processing submission " + i + ": " + e.getMessage());
 				e.printStackTrace();
 			}
 		}
@@ -900,7 +891,6 @@ public class PanelElements {
 			return tooltip;
         
 		} catch (Exception e) {
-			System.err.println("Error building tooltip: " + e.getMessage());
             return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
 		}
 	}
@@ -931,7 +921,6 @@ public class PanelElements {
                     URL url = new URL(currentImageUrl);
                     return ImageIO.read(url);
                 } catch (IOException e) {
-                    System.err.println("Failed to reload image: " + e.getMessage());
                     return null;
                 }
             }).thenAccept(image -> {
@@ -941,7 +930,6 @@ public class PanelElements {
                         imageDialog.getContentPane().removeAll();
                         displayImageInDialog(imageDialog, image, parentFrame);
                     } else {
-                        System.err.println("Failed to reload image");
                         loadingLabel.setText("Failed to load lootboard");
                         loadingLabel.setForeground(Color.RED);
                     }

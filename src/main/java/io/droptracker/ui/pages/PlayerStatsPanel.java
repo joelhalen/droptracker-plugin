@@ -169,7 +169,6 @@ public class PlayerStatsPanel {
 				try {
 					return api.getTopPlayers();
 				} catch (Exception e) {
-					System.err.println("Failed to get top players: " + e.getMessage());
 					// Fallback to demo data for testing
 					return createDemoTopPlayersResult();
 				}
@@ -258,7 +257,6 @@ public class PlayerStatsPanel {
 				PlayerSearchResult playerResult = api.lookupPlayerNew(toSearch);
 				return playerResult;
 			} catch (Exception e) {
-				System.err.println("Failed to search for player: " + e.getMessage());
 				return null;
 			}
 		}).thenAccept(playerResult -> {
