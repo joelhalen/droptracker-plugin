@@ -16,23 +16,15 @@ Tracked events:
 - Collection Log slot unlocks
 - Combat Achievement completions
 - Personal Best times
+- Quest completions
+- Pets
+- Experience
 
   
 ![image](https://www.droptracker.io/img/drop_embed.png)
 ---
 ## **Getting Started**:
-### Players
-Players can track their drops and achievements instantly by simply installing our plugin. No further configuration is needed.
-- You can, optionally, enable **Use API Connections** in the plugin configuration to allow looking up other players inside the DropTracker side panel.
-
-    If you are part of a group, you can optionally **claim your accounts** within your group's Discord server, using the `/claim-rsn` command.
-
-### Groups
-For groups, to begin tracking you'll first need to join our [support discord server](https://www.droptracker.io/discord) and invite the **DropTracker.io Discord Bot** to your server.
-
-    Creating a group has a pre-requisite of obtaining your group's WiseOldMan ID. This is a 3-6 digit code, with no special characters. Please DO NOT share your group's verification code with us!
-
-- Once you've invited the bot to your server, please [click here to read more](https://www.droptracker.io/wiki/create-group) about creating and configuring your group.
+### We highly recommend that you read our [Wiki Documentation](https://www.droptracker.io/wiki) to learn how to interact with our Discord bot/plugin.
 
 ---
 If you're still left looking for more answers, feel free to join our **[Discord Server](https://www.droptracker.io/discord)**.
