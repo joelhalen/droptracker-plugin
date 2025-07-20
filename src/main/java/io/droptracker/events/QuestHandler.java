@@ -53,12 +53,9 @@ public class QuestHandler extends BaseEventHandler {
     @SuppressWarnings("deprecation")
     public void onWidgetLoaded(WidgetLoaded event) {
         if (event.getGroupId() == WidgetID.QUEST_COMPLETED_GROUP_ID && isEnabled()) {
-            System.out.println("Widget loaded: " + event.getGroupId());
             Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE); // Quest title widget
-            System.out.println("Quest title widget found");
             if (questTitle != null) {
                 String questText = questTitle.getText();
-                System.out.println("Quest text: " + questText);
                 // 1 tick delay to ensure relevant varbits have been processed by the client
                 clientThread.invokeLater(() -> handleQuestCompletion(questText));
             }
@@ -67,7 +64,6 @@ public class QuestHandler extends BaseEventHandler {
 
     @SuppressWarnings("deprecation")
     private void handleQuestCompletion(String questText) {
-        System.out.println("Handling quest completion: " + questText);
         // Get quest completion stats
         int completedQuests = client.getVarbitValue(VARBIT_QUESTS_COMPLETED_COUNT);
         int totalQuests = client.getVarbitValue(VARBIT_QUESTS_TOTAL_COUNT);
@@ -81,7 +77,6 @@ public class QuestHandler extends BaseEventHandler {
         // Parse the quest name
         String parsedQuestName = parseQuestWidget(questText);
         if (parsedQuestName == null) {
-            System.out.println("Unable to parse quest name from: " + questText);
             return;
         }
 
@@ -119,7 +114,6 @@ public class QuestHandler extends BaseEventHandler {
 
     @Nullable
     private String parseQuestWidget(final String text) {
-        System.out.println("Parsing quest widget with passed text: " + text);
         if (text == null || text.isEmpty()) {
             return null;
         }
@@ -138,7 +132,6 @@ public class QuestHandler extends BaseEventHandler {
         String verb = StringUtils.defaultString(matcher.group("verb"));
 
         if (verb.contains("kind of")) {
-            System.out.println("Skipping partial completion of quest: " + quest);
             return null;
         } else if (verb.contains("completely")) {
             quest += " II";
@@ -163,7 +156,6 @@ public class QuestHandler extends BaseEventHandler {
             return null;
         }
 
-        System.out.println("Getting matcher for text: " + text);
 
         // "You have completed The Corsair Curse!"
         Matcher questMatch1 = QUEST_PATTERN_1.matcher(text);
@@ -187,10 +179,8 @@ public class QuestHandler extends BaseEventHandler {
         cleaned = cleaned.replaceAll("^Congratulations! You've completed ", "");
         cleaned = cleaned.replaceAll("[!.]$", "");
         cleaned = cleaned.trim();
-        System.out.println("Cleaned quest name: " + cleaned);
         // If it's still empty or too short, return null
         if (cleaned.isEmpty() || cleaned.length() < 3) {
-            System.out.println("Cleaned quest name is empty or too short: " + cleaned);
             return null;
         }
         

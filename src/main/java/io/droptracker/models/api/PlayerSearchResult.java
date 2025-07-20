@@ -24,11 +24,6 @@ public class PlayerSearchResult {
     @SerializedName("global_rank")
     private int globalRank;
     
-    @SerializedName("top_npc")
-    private TopNpc topNpc;
-    
-    @SerializedName("best_pb_rank")
-    private Integer bestPbRank;
     
     @SerializedName("groups")
     private List<PlayerGroup> groups;
@@ -52,14 +47,12 @@ public class PlayerSearchResult {
 
     // Constructor for manual creation
     public PlayerSearchResult(String playerName, Integer dropTrackerPlayerId, boolean registered, 
-                            String totalLoot, int globalRank, TopNpc topNpc, Integer bestPbRank) {
+                            String totalLoot, int globalRank) {
         this.playerName = playerName;
         this.dropTrackerPlayerId = dropTrackerPlayerId;
         this.registered = registered;
         this.totalLoot = totalLoot;
         this.globalRank = globalRank;
-        this.topNpc = topNpc;
-        this.bestPbRank = bestPbRank;
     }
 
     // Static factory method to create from JSON string
@@ -97,14 +90,6 @@ public class PlayerSearchResult {
 
     public int getGlobalRank() {
         return globalRank;
-    }
-
-    public TopNpc getTopNpc() {
-        return topNpc;
-    }
-
-    public Integer getBestPbRank() {
-        return bestPbRank;
     }
 
     public List<PlayerGroup> getGroups() {
@@ -146,14 +131,6 @@ public class PlayerSearchResult {
 
     public void setGlobalRank(int globalRank) {
         this.globalRank = globalRank;
-    }
-
-    public void setTopNpc(TopNpc topNpc) {
-        this.topNpc = topNpc;
-    }
-
-    public void setBestPbRank(Integer bestPbRank) {
-        this.bestPbRank = bestPbRank;
     }
 
     public void setGroups(List<PlayerGroup> groups) {

@@ -85,14 +85,12 @@ public class PetHandler extends BaseEventHandler {
             
             if (petName == null) {
                 if (PET_REGEX.matcher(chatMessage).matches()) {
-                    System.out.println("PetHandler: onGameMessage -- regex matched: " + chatMessage);
                     // Prime the notifier to trigger next tick
                     this.petName = PRIMED_NAME;
                     this.duplicate = chatMessage.contains("would have been");
                     this.backpack = chatMessage.contains(" backpack");
                 }
             } else if (PRIMED_NAME.equals(petName) || !collection) {
-                System.out.println("PetHandler: petName is not null -- " + petName + " collection: " + collection);
                 parseItemFromGameMessage(chatMessage)
                 .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
                     .ifPresent(parseResult -> {
@@ -109,13 +107,11 @@ public class PetHandler extends BaseEventHandler {
             // We have not received the normal message about a pet drop, so this clan message cannot be relevant to us
             return;
         }
-        System.out.println("PetHandler: petName is stored & we are seeing a onFriendsChatNotification -- message: " + message);
 
         Matcher matcher = CLAN_REGEX.matcher(message);
         if (matcher.find()) {
             String user = matcher.group("user").trim();
             if (user.equals(getPlayerName())) {
-                System.out.println("PetHandler: onFriendsChatNotification -- user matched: " + user + " petName: " + matcher.group("pet") + " milestone: " + matcher.group("milestone"));
                 this.petName = matcher.group("pet");
                 this.milestone = StringUtils.removeEnd(matcher.group("milestone"), ".");
             }

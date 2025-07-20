@@ -35,15 +35,12 @@ public class NpcUtilities {
 
     @SuppressWarnings("null")
     public static String getStandardizedSource(LootReceived event, DropTrackerPlugin plugin) {
-        System.out.println("getStandardizedSource: " + event.getName());
         if (isCorruptedGauntlet(event, plugin)) {
             return CG_NAME;
         } 
         if (plugin.lastDrop == null) {
-            System.out.println("lastDrop is null, returning event.getName()");
             return event.getName();
         } else if (shouldUseChatName(event, plugin) && plugin.lastDrop.getSource() != null) {
-            System.out.println("lastDrop is not null, returning lastDrop.getSource()");
             return plugin.lastDrop.getSource(); // distinguish entry/expert/challenge modes
         }
         return event.getName();

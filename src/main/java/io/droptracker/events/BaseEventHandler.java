@@ -189,7 +189,6 @@ public abstract class BaseEventHandler {
      * @param type the event type identifier
      */
     protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
-        System.out.println("Sending data to DropTracker API with type: " + type);
         if (webhook != null && !webhook.getEmbeds().isEmpty()) {
             submissionManager.sendDataToDropTracker(webhook, type);
         }

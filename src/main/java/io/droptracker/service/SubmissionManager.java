@@ -110,7 +110,6 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
-        System.out.println("SubmissionManager instance created: " + this.hashCode());
     }
 
     /**
@@ -118,9 +117,7 @@ public class SubmissionManager {
      * @param callback The callback to notify when submissions are updated
      */
     public void setUpdateCallback(SubmissionUpdateCallback callback) {
-        System.out.println("setUpdateCallback called with: " + (callback != null ? "non-null callback" : "null callback") + " on instance: " + this.hashCode());
         if (callback == null) {
-            System.out.println("Stack trace for null callback:");
             Thread.dumpStack();
         }
         this.updateCallback = callback;
@@ -130,18 +127,19 @@ public class SubmissionManager {
      * Notifies the UI callback that submissions have been updated
      */
     private void notifyUpdateCallback() {
-        System.out.println("called notifyUpdateCallback on instance: " + this.hashCode());
         if (updateCallback != null) {
-            System.out.println("Callback is non-null, invoking callback");
             updateCallback.onSubmissionsUpdated();
-        } else {
-            System.out.println("updateCallback is null - no UI update will occur on instance: " + this.hashCode());
-        }
+        } 
     }
 
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
         /* Drops are still handled in a separate method due to the way values are handled */
-        System.out.println("Sending data to DropTracker API with type: " + type);
+        /* Here, we send the webhook and submission type, and check against the stored group config values
+         * to determine whether the submission "should" create a notification on Discord based on their group settings.
+         * If so, we create a ValidSubmission object and add it to the in-memory list, allowing the UI to display the submission,
+         * and later updating the status of it with whether or not it properly got sent to the API and had its notifications
+         * processed properly for the target group(s).
+         */
         Boolean requiredScreenshot = false;
         Boolean shouldHideDm = config.hideDMs();
         
@@ -252,7 +250,6 @@ public class SubmissionManager {
                 String fieldName = field.getName();
                 if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
                     int newLevel = Integer.parseInt(field.getValue());
-                    
                     // Check if this level qualifies for a screenshot
                     if (newLevel >= config.minLevelToScreenshot()) {
                         requiredScreenshot = true;
@@ -261,13 +258,16 @@ public class SubmissionManager {
                 }
             }
         } else if (type == SubmissionType.QUEST_COMPLETION) {
+            // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
             if (!config.trackQuests()) {
                 return;
             }
             if (config.screenshotQuests()) {
+                // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
                 requiredScreenshot = true;
             }
         } else if (type == SubmissionType.PET) {
+            // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
             if (config.screenshotPets()) {
                 requiredScreenshot = true;
             }
@@ -283,14 +283,12 @@ public class SubmissionManager {
     }
 
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue) {
-        System.out.println("Sending data to DropTracker API with type: " + "drop");
         // Handles sending drops exclusively - for individual items use sendDataToDropTracker(webhook, totalValue, singleValue)
         sendDataToDropTracker(customWebhookBody, totalValue, totalValue);
     }
     
 
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
-        System.out.println("Sending data to DropTracker API with type: " + "drop (total and singlevalue call)");
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
@@ -474,15 +472,12 @@ public class SubmissionManager {
 
 
     public void addSubmissionToMemory(ValidSubmission validSubmission) {
-        System.out.println("Adding submission to memory: " + validSubmission.getUuid() + " on instance: " + this.hashCode());
         if (validSubmissions.size() > 20) {
             // Remove oldest submissions once the list starts to exceed 20
             validSubmissions.remove(0);
         }
         validSubmissions.add(validSubmission);
-        System.out.println("Submission added to memory: " + validSubmission.getUuid() + " on instance: " + this.hashCode());
         notifyUpdateCallback();
-        System.out.println("Notified update callback.");
     }
 
     public List<ValidSubmission> getValidSubmissions() {

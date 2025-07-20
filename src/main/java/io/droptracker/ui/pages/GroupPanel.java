@@ -207,6 +207,8 @@ public class GroupPanel {
 							showLoadingState();
 							GroupSearchResult groupResult = api.searchGroup(group.getGroupName());
 							if (groupResult != null) {
+								currentGroupId = groupResult.getGroupDropTrackerId();
+								PanelElements.loadLootboardForGroup(currentGroupId);
 								showGroupDetails(groupResult);
 							}
 							return null;
@@ -248,7 +250,6 @@ public class GroupPanel {
 			return;
 		}
 		
-		System.out.println("Searching for group: " + searchQuery);
 		
 		// Show loading message
 		showLoadingState();
@@ -434,11 +435,8 @@ public class GroupPanel {
 		// Get recent submission data to draw 
 		List<RecentSubmission> recentSubmissions = groupResult.getRecentSubmissions();
 		if (recentSubmissions != null && !recentSubmissions.isEmpty()) {
-			System.out.println("Recent submissions: " + recentSubmissions.size());
-			System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
 			groupInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, true));
 		} else {
-			System.out.println("No recent submissions found for this group");
 			// Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
 			JPanel noSubmissionsContainer = new JPanel();
 			noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));
@@ -518,7 +516,6 @@ public class GroupPanel {
 	 */
 	private void loadGroupIcon(JLabel iconLabel, String inputString) {
 		if (inputString == null || inputString.trim().isEmpty()) {
-			System.out.println("Group icon URL is null or empty, skipping icon load");
 			return; // nothing to load
 		}
 		
@@ -535,42 +532,34 @@ public class GroupPanel {
 
 		CompletableFuture.supplyAsync(() -> {
 			try {
-				System.out.println("Attempting to load group icon from: " + urlString);
 				BufferedImage img = ImageIO.read(new URL(urlString));
 				if (img == null) {
-					System.err.println("ImageIO.read returned null for URL: " + urlString);
 					return null;
 				}
 				Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-				System.out.println("Successfully loaded and scaled group icon");
 				return new ImageIcon(scaled);
 			} catch (IOException e) {
 				System.err.println("Failed to load group icon from URL: " + urlString + " - " + e.getMessage());
 				// Try the original URL if the .png replacement failed
 				if (urlString.endsWith(".png") && !inputString.endsWith(".png")) {
 					try {
-						System.out.println("Attempting to load original URL: " + inputString);
 						BufferedImage img = ImageIO.read(new URL(inputString));
 						if (img != null) {
 							Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-							System.out.println("Successfully loaded original group icon");
 							return new ImageIcon(scaled);
 						}
 					} catch (IOException ex) {
-						System.err.println("Failed to load original group icon: " + ex.getMessage());
+						return null;
 					}
 				}
 				return null;
 			} catch (Exception e) {
-				System.err.println("Unexpected error loading group icon: " + e.getMessage());
 				return null;
 			}
 		}).thenAccept(icon -> {
 			if (icon != null) {
 				SwingUtilities.invokeLater(() -> iconLabel.setIcon(icon));
-			} else {
-				System.out.println("No icon loaded, keeping placeholder");
-			}
+			} 
 		});
 	}
 

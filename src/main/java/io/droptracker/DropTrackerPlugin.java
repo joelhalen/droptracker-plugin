@@ -188,19 +188,13 @@ public class DropTrackerPlugin extends Plugin {
 		chatMessageUtil.registerCommands();
 	}
 	private void createSidePanel() {
-		System.out.println("createSidePanel called");
 		
 		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		newPanel.init();
 
-		// Set up callback for automatic UI updates when submissions are added
-		System.out.println("Setting up submission manager callback");
-		System.out.println("SubmissionManager instance in plugin: " + submissionManager.hashCode());
 		submissionManager.setUpdateCallback(() -> {
-			System.out.println("SubmissionManager update callback called");
 			SwingUtilities.invokeLater(() -> {
 				if (newPanel != null) {
-					System.out.println("Updating submissions panel");
 					newPanel.updateSentSubmissions();
 				}
 			});
@@ -214,7 +208,6 @@ public class DropTrackerPlugin extends Plugin {
 				.build();
 
 		clientToolbar.addNavigation(newNavButton);
-		System.out.println("createSidePanel completed");
 	}
 
 	public void updateSubmissionsPanel() {
@@ -228,7 +221,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	public void updatePanelOnLogin(String chatMessage) {
 		if (chatMessage.contains("Welcome to Old School RuneScape.")) {
-			System.out.println("Welcome message detected, setting flag for panel update");
 			// Instead of updating immediately, set a flag to update when player is available
 			needsPanelUpdateOnLogin = true;
 		}
@@ -265,7 +257,6 @@ public class DropTrackerPlugin extends Plugin {
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
-				System.out.println("Config changed: useApi");
 				if(navButton != null) {
 					clientToolbar.removeNavigation(navButton);
 				}
@@ -289,9 +280,7 @@ public class DropTrackerPlugin extends Plugin {
 					}
 				}
 			} else if (configChanged.getKey().equals("showSidePanel")) {
-				System.out.println("Config changed: showSidePanel to " + configChanged.getNewValue());
 				if (!config.showSidePanel()) {
-					System.out.println("Disabling side panel - clearing callback");
 					if(navButton != null) {
 						clientToolbar.removeNavigation(navButton);
 					}
@@ -303,7 +292,6 @@ public class DropTrackerPlugin extends Plugin {
 						submissionManager.setUpdateCallback(null);
 					}
 				} else {
-					System.out.println("Enabling side panel");
 					if (newPanel == null) {
 						createSidePanel();
 					}
@@ -417,28 +405,21 @@ public class DropTrackerPlugin extends Plugin {
 		
 		// Check if we need to update panel on login and player is now available
 		if (needsPanelUpdateOnLogin && client.getLocalPlayer() != null && client.getLocalPlayer().getName() != null) {
-			System.out.println("Player is now available, updating panel");
 			needsPanelUpdateOnLogin = false; // Clear the flag
 			
 			// Use SwingUtilities to ensure UI updates happen on EDT
 			SwingUtilities.invokeLater(() -> {
 				try {
-					System.out.println("About to call updatePlayerPanel...");
 					if (newPanel != null) {
 						String playerName = client.getLocalPlayer().getName();
-						System.out.println("Updating config with player name: " + playerName);
 						configManager.setConfiguration("droptracker", "lastAccountName", playerName);
 						newPanel.updatePlayerPanel();
 						
 						// Also update the home player button since config might now have player name
 						newPanel.updateHomePlayerButton();
-						System.out.println("updatePlayerPanel and updateHomePlayerButton called successfully");
 						statsLoaded = true;
-					} else {
-						System.out.println("newPanel is null!");
 					}
 				} catch (Exception e) {
-					System.err.println("Error updating player panel: " + e.getMessage());
 					e.printStackTrace();
 					statsLoaded = true;
 				}

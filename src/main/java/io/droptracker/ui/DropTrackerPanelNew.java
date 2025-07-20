@@ -109,13 +109,15 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
 			playerStatsPanel = statsPanel.create(); // Store reference
 			groupStatsPanel = groupPanel.create();   // Store reference
-			tabbedPane.addTab("API", apiInfoPanel); // added first to place it at the top
 			tabbedPane.addTab("Players", playerStatsPanel);
 			tabbedPane.addTab("Groups", groupStatsPanel);
+			tabbedPane.addTab("Welcome", welcomePanel);
+			tabbedPane.addTab("API", apiInfoPanel); // added first to place it at the top
+		} else {
+			tabbedPane.addTab("Welcome", welcomePanel);
 		}
 
 		// Welcome tab
-		tabbedPane.addTab("Welcome", welcomePanel);
 
 
 		// Add components to main panel
@@ -203,7 +205,6 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 	public void selectPanel(String panelToSelect) {
 		if (tabbedPane == null) {
-			System.out.println("TabbedPane is null, cannot select panel");
 			return;
 		}
 		
@@ -212,42 +213,25 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 			case "welcome":
 				if (welcomePanel != null) {
 					tabbedPane.setSelectedComponent(welcomePanel);
-					System.out.println("Selected Welcome tab");
-				} else {
-					System.out.println("Welcome panel is null");
-				}
+				} 
 				break;
-				
 			case "players":
 			case "stats":
 				if (playerStatsPanel != null && config.useApi()) {
 					tabbedPane.setSelectedComponent(playerStatsPanel);
-					System.out.println("Selected Players tab");
-				} else {
-					System.out.println("Players panel is null or API disabled");
-				}
+				} 
 				break;
-				
 			case "groups":
 				if (groupStatsPanel != null && config.useApi()) {
 					tabbedPane.setSelectedComponent(groupStatsPanel);
-					System.out.println("Selected Groups tab");
-				} else {
-					System.out.println("Groups panel is null or API disabled");
 				}
 				break;
-				
 			case "api":
 				if (apiInfoPanel != null) {
 					tabbedPane.setSelectedComponent(apiInfoPanel);
-					System.out.println("Selected Info tab");
-				} else {
-					System.out.println("Info panel is null");
-				}
+				} 
 				break;
-				
 			default:
-				System.out.println("Unknown panel: " + panelToSelect);
 				break;
 		}
 	}

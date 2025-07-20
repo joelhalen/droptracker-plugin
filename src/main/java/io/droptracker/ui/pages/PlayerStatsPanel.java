@@ -226,17 +226,14 @@ public class PlayerStatsPanel {
 	}
 	
 	public void performPlayerSearch(String searchQuery) {
-		System.out.println("performPlayerSearch called with searchQuery: " + searchQuery);
 		String toSearch;
 		if (searchQuery.isEmpty()) {
 			if (searchField != null && searchField.getText() != null && !searchField.getText().isEmpty()) {
 				toSearch = searchField.getText().trim();
 			} else {
-				System.out.println("Search query is empty, checking for local player");
 				if (plugin.getLocalPlayerName() != null && !plugin.getLocalPlayerName().isEmpty()) {
 					toSearch = plugin.getLocalPlayerName();
 				} else {
-					System.out.println("No local player found and no search query provided");
 					return;
 				}
 			}
@@ -244,7 +241,6 @@ public class PlayerStatsPanel {
 			toSearch = searchQuery;
 		}
 		
-		System.out.println("Searching for player: " + toSearch);
 		
 		// Show loading message
 		contentPanel.removeAll();
@@ -260,14 +256,6 @@ public class PlayerStatsPanel {
 		CompletableFuture.supplyAsync(() -> {
 			try {
 				PlayerSearchResult playerResult = api.lookupPlayerNew(toSearch);
-				System.out.println("Got player search result -- recent submissions: ");
-				if (playerResult.getRecentSubmissions() != null) {
-					for (RecentSubmission submission : playerResult.getRecentSubmissions()) {
-						System.out.println("Submission: " + submission.toString());
-					}
-				} else {
-					System.out.println("No recent submissions found");
-				}
 				return playerResult;
 			} catch (Exception e) {
 				System.err.println("Failed to search for player: " + e.getMessage());
@@ -357,28 +345,14 @@ public class PlayerStatsPanel {
 		
 		// Format numbers nicely
 		String globalRankFormatted = "#" + playerResult.getGlobalRank();
-		String bestPbRankFormatted = playerResult.getBestPbRank() != null ? "#" + playerResult.getBestPbRank() : "N/A";
 		
 		// Format top NPC information
-		String topNpcFormatted = "N/A";
-		if (playerResult.getTopNpc() != null) {
-			PlayerSearchResult.TopNpc topNpc = playerResult.getTopNpc();
-			if (topNpc.getRank() != null && topNpc.getLoot() != null) {
-				topNpcFormatted = "#" + topNpc.getRank() + " - " + topNpc.getName();
-			} else if (topNpc.getLoot() != null) {
-				topNpcFormatted = topNpc.getLoot();
-			}
-		}
 		
 		JPanel totalLootBox = PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP");
 		JPanel globalRankBox = PanelElements.createStatBox("Global Rank", globalRankFormatted);
-		JPanel topNpcBox = PanelElements.createStatBox("Top NPC Rank", topNpcFormatted);
-		JPanel bestPbBox = PanelElements.createStatBox("Best PB Rank", bestPbRankFormatted);
 		
 		statsPanel.add(totalLootBox);
 		statsPanel.add(globalRankBox);
-		statsPanel.add(topNpcBox);
-		statsPanel.add(bestPbBox);
 		
 		// Action buttons - exactly like GroupPanel actionPanel
 		JPanel actionPanel = new JPanel();
@@ -417,12 +391,9 @@ public class PlayerStatsPanel {
 		// Add recent submissions panel if available
 		if (playerResult.getRecentSubmissions() != null && !playerResult.getRecentSubmissions().isEmpty()) {
 			List<RecentSubmission> recentSubmissions = playerResult.getRecentSubmissions();
-			System.out.println("Recent submissions: " + recentSubmissions.size());
-			System.out.println("First player: " + recentSubmissions.get(0).getPlayerName());
 			playerInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, false));
 			playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		} else {
-			System.out.println("No recent submissions found for this player");
 			// Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
 			JPanel noSubmissionsContainer = new JPanel();
 			noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));

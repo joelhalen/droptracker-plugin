@@ -94,19 +94,16 @@ public class PanelElements {
     public static void loadLootboardForGroup(int groupId) {
         // Check if we already have this group cached
         if (cachedGroupId != null && cachedGroupId == groupId && cachedLootboardImage != null) {
-            System.out.println("Group " + groupId + " lootboard already cached");
             return;
         }
         
         String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
-        System.out.println("Loading lootboard for group " + groupId + ": " + imageUrl);
         
         CompletableFuture.supplyAsync(() -> {
             try {
                 URL url = new URL(imageUrl);
                 return ImageIO.read(url);
             } catch (IOException e) {
-                System.err.println("Failed to load lootboard for group " + groupId + ": " + e.getMessage());
                 return null;
             }
         }).thenAccept(image -> {
@@ -115,10 +112,7 @@ public class PanelElements {
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
                 if (image != null) {
-                    System.out.println("Lootboard for group " + groupId + " cached successfully");
-                } else {
-                    System.err.println("Failed to cache lootboard for group " + groupId);
-                }
+                } 
             });
         });
     }
@@ -127,7 +121,6 @@ public class PanelElements {
     public static void loadLootboardForGroup(int groupId, Runnable onComplete) {
         // Check if we already have this group cached
         if (cachedGroupId != null && cachedGroupId == groupId && cachedLootboardImage != null) {
-            System.out.println("Group " + groupId + " lootboard already cached");
             if (onComplete != null) {
                 SwingUtilities.invokeLater(onComplete);
             }
@@ -135,7 +128,6 @@ public class PanelElements {
         }
         
         String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
-        System.out.println("Loading lootboard for group " + groupId + ": " + imageUrl);
         
         CompletableFuture.supplyAsync(() -> {
             try {
@@ -151,7 +143,6 @@ public class PanelElements {
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
                 if (image != null) {
-                    System.out.println("Lootboard for group " + groupId + " cached successfully");
                 } else {
                     System.err.println("Failed to cache lootboard for group " + groupId);
                 }
@@ -207,7 +198,6 @@ public class PanelElements {
 
         // Check if we already have the right group cached
         if (cachedLootboardImage != null && cachedGroupId != null && cachedGroupId == groupId) {
-            System.out.println("Displaying cached lootboard for group " + groupId);
             displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
             imageDialog.revalidate();
             imageDialog.repaint();
@@ -235,7 +225,6 @@ public class PanelElements {
         // Start loading BEFORE showing the dialog to avoid modality blocking
         loadLootboardForGroup(groupId, () -> {
             if (cachedLootboardImage != null) {
-                System.out.println("Group " + groupId + " image loaded, updating dialog");
                 imageDialog.getContentPane().removeAll();
                 displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
                 imageDialog.revalidate();
@@ -317,7 +306,6 @@ public class PanelElements {
         }).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 if (image != null) {
-                    System.out.println("URL image loaded, updating dialog");
                     imageDialog.getContentPane().removeAll();
                     displayImageInDialog(imageDialog, image, parentFrame);
                     imageDialog.revalidate();
@@ -618,32 +606,58 @@ public class PanelElements {
 
     public static JPanel createRecentSubmissionPanel(List<RecentSubmission> recentSubmissions,
 			ItemManager itemManager, Client client, boolean forGroup) {
-		System.out.println("Creating recent submission panel...");
 		
 		// Main container with title and submissions
 		JPanel container = new JPanel();
 		container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
 		container.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		container.setBorder(new EmptyBorder(10, 0, 10, 0));
-		container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Adjusted height
-		container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+		container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150)); // Increased from 120 to 150
+		container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150));
 		container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
 		
 		// Title panel to ensure centering
-		JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		JPanel titlePanel = new JPanel();
+		titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS)); // Changed to vertical layout
 		titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-		titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+		titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50)); // Increased from 20 to 50
+		titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50));
 		
 		JLabel title = new JLabel("Recent Submissions");
 		title.setFont(FontManager.getRunescapeSmallFont());
 		title.setForeground(Color.WHITE);
+		title.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the title
+
+		// Create a text area that looks like a label but handles wrapping better
+        JLabel warningLabel = createSuperscriptWarningLabel();
+		JTextArea titleDesc = new JTextArea("Clicking an icon opens a screenshot, if available.");
+		titleDesc.setForeground(Color.LIGHT_GRAY);
+		titleDesc.setFont(FontManager.getRunescapeSmallFont());
+		titleDesc.setBackground(titlePanel.getBackground());
+		titleDesc.setEditable(false);
+		titleDesc.setWrapStyleWord(true);
+		titleDesc.setLineWrap(true);
+		titleDesc.setBorder(null);
+		titleDesc.setOpaque(false);
+		titleDesc.setColumns(20);
+		titleDesc.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the description
+
 		titlePanel.add(title);
+		titlePanel.add(Box.createRigidArea(new Dimension(0, 3)));
+        
+        // Alternative: Single HTML label combining warning and text
+        JLabel combinedLabel = new JLabel("<html><div style='text-align: center;'><font color='orange'>⚠</font> <font color='#C0C0C0'>Clicking an icon opens a screenshot, if available.</font></div></html>");
+        combinedLabel.setFont(FontManager.getRunescapeSmallFont());
+        combinedLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        combinedLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        titlePanel.add(combinedLabel);
+		titlePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 		
 		// Submissions panel - use FlowLayout wrapper to center the GridBagLayout
 		JPanel submissionWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
 		submissionWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-		submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+		submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); // Keep same
 		submissionWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
 		
 		JPanel panel = new JPanel();
@@ -665,8 +679,6 @@ public class PanelElements {
 		panel.removeAll();
 		
 		// Debug logging
-		System.out.println("Starting updateRecentSubmissionPanel with " + recentSubmissions.size() + " submissions");
-		System.out.println("ItemManager is null: " + (itemManager == null));
 
 		GridBagConstraints c = new GridBagConstraints();
 		c.fill = GridBagConstraints.NONE;
@@ -693,7 +705,6 @@ public class PanelElements {
 					Integer itemId = submission.getDropItemId();
 					Integer quantity = submission.getDropQuantity();
 					
-					System.out.println(submission.toString());
 					
 					
 					if (itemId != null && quantity != null && itemManager != null) {
@@ -727,8 +738,6 @@ public class PanelElements {
 					// Handle collection log items
 					Integer itemId = submission.getClogItemId();
 					
-					System.out.println("  Clog - itemId=" + itemId);
-					
 					if (itemId != null && itemManager != null) {
 						final AsyncBufferedImage originalImage = itemManager.getImage(itemId, 1, false);
 						final float alpha = 1.0f;
@@ -755,15 +764,10 @@ public class PanelElements {
 							clogContainer.revalidate();
 							clogContainer.repaint();
 						});
-						
-						System.out.println("  Successfully added clog icon");
-					} else {
-						System.out.println("  Skipped clog - missing data or null itemManager");
-					}
+					} 
 				} else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
 					// Handle personal best submissions with image URL
 					String imageUrl = submission.getImageUrl();
-					System.out.println("  PB - imageUrl=" + imageUrl);
 					
 					if (imageUrl != null && !imageUrl.isEmpty()) {
 						final JLabel pbContainer = PanelElements.createStyledIconContainer();
@@ -795,14 +799,9 @@ public class PanelElements {
 								});
 							}
 						});
-						
-						System.out.println("  Successfully added PB placeholder");
 					} else {
-						System.out.println("  Skipped PB - no image URL");
 					}
-				} else {
-					System.out.println("  Unknown submission type: " + submission.getSubmissionType());
-				}
+				} 
 				
 				
 				// Add the icon container if it was created successfully
@@ -838,7 +837,6 @@ public class PanelElements {
 			}
 		}
 		
-		System.out.println("Successfully added " + successfullyAdded + " icons to panel");
         
 		// If no icons were added, show a message
 		if (successfullyAdded == 0) {
@@ -879,7 +877,7 @@ public class PanelElements {
                         "<i>from: " + submission.getSourceName() + "</i><br>" +
                         "<i>" + submission.timeSinceReceived() + "</i>";
                 }
-            else {
+            } else {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
                     String pbTime = submission.getPbTime();
                     tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
@@ -895,17 +893,16 @@ public class PanelElements {
                     String itemName = submission.getClogItemName();
                     tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
                         "<b>" + itemName + "</b><br>" +
-                        "<i>from: " + submission.getSourceName() + "</i><br>" +
                         "<i>" + submission.timeSinceReceived() + "</i>";
                 }
             }
 			tooltip += "</html>";
 			return tooltip;
-        }
+        
 		} catch (Exception e) {
 			System.err.println("Error building tooltip: " + e.getMessage());
+            return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
 		}
-		return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
 	}
 
     public static void showLoadingDialog(JDialog imageDialog, JFrame parentFrame) {
@@ -929,7 +926,6 @@ public class PanelElements {
 
         // Try to load the image again if it's not cached
         if (cachedLootboardImage == null) {
-            System.out.println("Attempting to reload image...");
             CompletableFuture.supplyAsync(() -> {
                 try {
                     URL url = new URL(currentImageUrl);
@@ -941,7 +937,6 @@ public class PanelElements {
             }).thenAccept(image -> {
                 SwingUtilities.invokeLater(() -> {
                     if (image != null) {
-                        System.out.println("Image reloaded successfully, updating dialog");
                         cachedLootboardImage = image;
                         imageDialog.getContentPane().removeAll();
                         displayImageInDialog(imageDialog, image, parentFrame);
@@ -1008,7 +1003,6 @@ public class PanelElements {
         // Request focus for escape key
         SwingUtilities.invokeLater(() -> imageLabel.requestFocusInWindow());
 
-        System.out.println("Image dialog setup complete");
     }
 
 
