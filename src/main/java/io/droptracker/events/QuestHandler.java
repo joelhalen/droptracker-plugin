@@ -20,7 +20,6 @@ import net.runelite.api.VarPlayer;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetID;
 
 @Slf4j
 @Singleton
@@ -50,9 +49,9 @@ public class QuestHandler extends BaseEventHandler {
         return config.trackQuests();
     }
 
-    @SuppressWarnings("deprecation")
     public void onWidgetLoaded(WidgetLoaded event) {
-        if (event.getGroupId() == WidgetID.QUEST_COMPLETED_GROUP_ID && isEnabled()) {
+        // 153 is the ID for the quest completion widget
+        if (event.getGroupId() == 153 && isEnabled()) {
             Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE); // Quest title widget
             if (questTitle != null) {
                 String questText = questTitle.getText();
