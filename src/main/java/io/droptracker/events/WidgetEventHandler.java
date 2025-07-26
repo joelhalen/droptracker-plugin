@@ -31,7 +31,6 @@ package io.droptracker.events;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.Pet;
@@ -1041,7 +1040,8 @@ public class WidgetEventHandler {
         try
         {
             // CHECKSTYLE:OFF
-            petList = gson.fromJson(petListJson, new TypeToken<List<Pet>>(){}.getType());
+            Pet[] petArray = gson.fromJson(petListJson, Pet[].class);
+            petList = new ArrayList<>(Arrays.asList(petArray));
             // CHECKSTYLE:ON
         }
         catch (JsonSyntaxException ex)
@@ -1068,7 +1068,9 @@ public class WidgetEventHandler {
         try
         {
             // CHECKSTYLE:OFF
-            petList = gson.fromJson(petListJson, new TypeToken<List<Integer>>(){}.getType());
+            Integer[] petArray = gson.fromJson(petListJson, Integer[].class);
+            petList = Arrays.asList(petArray);
+
             // CHECKSTYLE:ON
         }
         catch (JsonSyntaxException ex)

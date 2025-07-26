@@ -54,8 +54,8 @@ import io.droptracker.DropTrackerPlugin;
 public class PanelElements {
 
 
-    private static ImageIcon COLLAPSED_ICON;
-    private static ImageIcon EXPANDED_ICON;
+    public static  ImageIcon COLLAPSED_ICON = new ImageIcon();
+    public static  ImageIcon EXPANDED_ICON = new ImageIcon();
     private static ImageIcon BOARD_ICON;
     private static ImageIcon EXTERNAL_LINK_ICON;
     public static BufferedImage cachedLootboardImage;
