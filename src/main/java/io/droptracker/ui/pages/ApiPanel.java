@@ -221,16 +221,9 @@ public class ApiPanel {
 		titleLabel.setFont(FontManager.getRunescapeBoldFont());
 		titleLabel.setForeground(Color.WHITE);
 
-<<<<<<< HEAD
 		// Get the static icons from PanelElements using getter methods
 		ImageIcon expandedIcon = PanelElements.getExpandedIcon();
 		ImageIcon collapsedIcon = PanelElements.getCollapsedIcon();
-=======
-
-		ImageIcon expandedIcon = PanelElements.EXPANDED_ICON;
-		ImageIcon collapsedIcon = PanelElements.COLLAPSED_ICON;
-
->>>>>>> 5aee7e56e4e96ab2266722ef31b171e2bdbf656b
 		
 		final ImageIcon finalExpandedIcon = expandedIcon;
 		final ImageIcon finalCollapsedIcon = collapsedIcon;
@@ -352,15 +345,9 @@ public class ApiPanel {
 		titleLabel.setFont(FontManager.getRunescapeSmallFont()); // Use small font for group titles
 		titleLabel.setForeground(Color.WHITE);
 
-<<<<<<< HEAD
 		// Get the static icons from PanelElements using getter methods
 		ImageIcon expandedIcon = PanelElements.getExpandedIcon();
 		ImageIcon collapsedIcon = PanelElements.getCollapsedIcon();
-=======
-		ImageIcon expandedIcon = PanelElements.EXPANDED_ICON;
-		ImageIcon collapsedIcon = PanelElements.COLLAPSED_ICON;
-
->>>>>>> 5aee7e56e4e96ab2266722ef31b171e2bdbf656b
 		
 		// Toggle icon - set initial state based on isCollapsed parameter
 		final ImageIcon finalExpandedIcon = expandedIcon;
