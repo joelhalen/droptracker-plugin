@@ -2,7 +2,6 @@ package io.droptracker.util;
 
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
@@ -13,10 +12,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.io.Reader;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
@@ -91,15 +87,35 @@ public class ItemIDSearch {
      * @return a mapping of item ids to their in-game names, provided by the RuneLite API
      */
     private CompletableFuture<Map<Integer, String>> queryNamesById() {
-        return queryCache("names.json", new TypeToken<Map<Integer, String>>() {});
+        // Read JSON as Map<String, String> first
+        return queryCache("names.json", Map.class)
+                .thenApply(stringMap -> {
+                    Map<Integer, String> result = new HashMap<>();
+                    for (Object keyObj : stringMap.keySet()) {
+                        String keyStr = (String) keyObj;
+                        Object valObj = stringMap.get(keyStr);
+                        // Defensive: valObj might be String or something else
+                        String valueStr = valObj != null ? valObj.toString() : null;
+                        result.put(Integer.parseInt(keyStr), valueStr);
+                    }
+                    return result;
+                });
+
     }
 
     /**
      * @return a set of id's of noted items, provided by the RuneLite API
      */
     private CompletableFuture<Set<Integer>> queryNotedItemIds() {
-        return queryCache("notes.json", new TypeToken<Map<Integer, Integer>>() {})
-                .thenApply(Map::keySet);
+        return queryCache("notes.json", Map.class)
+                .thenApply(stringMap -> {
+                    Set<Integer> keys = new HashSet<>();
+                    for (Object keyObj : stringMap.keySet()) {
+                        keys.add(Integer.parseInt((String) keyObj));
+                    }
+                    return keys;
+                });
+
     }
 
     /**
@@ -107,12 +123,14 @@ public class ItemIDSearch {
      * @param type     a type token that indicates how the json response should be parsed
      * @return the transformed cache response, wrapped in a future
      */
-    private <T> CompletableFuture<T> queryCache(@NotNull String fileName, @NotNull TypeToken<T> type) {
-        return readJson(httpClient, gson, ITEM_CACHE_BASE_URL + fileName, type);
+    private <T> CompletableFuture<T> queryCache(@NotNull String fileName, @NotNull Class<T> clazz) {
+        return readJson(httpClient, gson, ITEM_CACHE_BASE_URL + fileName, clazz);
     }
-    public <T> CompletableFuture<T> readJson(@NotNull OkHttpClient httpClient, @NotNull Gson gson, @NotNull String url, @NotNull TypeToken<T> type) {
-        return readUrl(httpClient, url, reader -> gson.fromJson(reader, type.getType()));
+
+    public <T> CompletableFuture<T> readJson(@NotNull OkHttpClient httpClient, @NotNull Gson gson, @NotNull String url, @NotNull Class<T> clazz) {
+        return readUrl(httpClient, url, reader -> gson.fromJson(reader, clazz));
     }
+
     public <T> CompletableFuture<T> readUrl(@NotNull OkHttpClient httpClient, @NotNull String url, @NotNull Function<Reader, T> transformer) {
         CompletableFuture<T> future = new CompletableFuture<>();
         Request request = new Request.Builder().url(url).build();
@@ -136,4 +154,14 @@ public class ItemIDSearch {
         });
         return future;
     }
+    public class IntStringEntry {
+        public int key;
+        public String value;
+    }
+    public class IntIntEntry {
+        public int key;
+        public int value;
+    }
+
+
 }

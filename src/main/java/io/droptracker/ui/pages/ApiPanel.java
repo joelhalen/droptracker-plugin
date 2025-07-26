@@ -221,20 +221,10 @@ public class ApiPanel {
 		titleLabel.setFont(FontManager.getRunescapeBoldFont());
 		titleLabel.setForeground(Color.WHITE);
 
-		// Get the static icons from PanelElements using reflection
-		ImageIcon expandedIcon = null;
-		ImageIcon collapsedIcon = null;
-		try {
-			java.lang.reflect.Field expandedField = PanelElements.class.getDeclaredField("EXPANDED_ICON");
-			expandedField.setAccessible(true);
-			expandedIcon = (ImageIcon) expandedField.get(null);
-			
-			java.lang.reflect.Field collapsedField = PanelElements.class.getDeclaredField("COLLAPSED_ICON");
-			collapsedField.setAccessible(true);
-			collapsedIcon = (ImageIcon) collapsedField.get(null);
-		} catch (Exception e) {
-			// Use default if reflection fails
-		}
+
+		ImageIcon expandedIcon = PanelElements.EXPANDED_ICON;
+		ImageIcon collapsedIcon = PanelElements.COLLAPSED_ICON;
+
 		
 		final ImageIcon finalExpandedIcon = expandedIcon;
 		final ImageIcon finalCollapsedIcon = collapsedIcon;
@@ -356,30 +346,9 @@ public class ApiPanel {
 		titleLabel.setFont(FontManager.getRunescapeSmallFont()); // Use small font for group titles
 		titleLabel.setForeground(Color.WHITE);
 
-		// Get the static icons from PanelElements using reflection
-		ImageIcon expandedIcon = null;
-		ImageIcon collapsedIcon = null;
-		try {
-			java.lang.reflect.Field expandedField = PanelElements.class.getDeclaredField("EXPANDED_ICON");
-			expandedField.setAccessible(true);
-			expandedIcon = (ImageIcon) expandedField.get(null);
-			
-			java.lang.reflect.Field collapsedField = PanelElements.class.getDeclaredField("COLLAPSED_ICON");
-			collapsedField.setAccessible(true);
-			collapsedIcon = (ImageIcon) collapsedField.get(null);
-		} catch (Exception e) {
-			// Fallback to loading icons directly if reflection fails
-			Image collapsedImg = ImageUtil.loadImageResource(getClass(), "/io/droptracker/util/collapse.png");
-			Image expandedImg = ImageUtil.loadImageResource(getClass(), "/io/droptracker/util/expand.png");
-			if (collapsedImg != null && expandedImg != null) {
-				Image collapsedResized = collapsedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-				Image expandedResized = expandedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-				Image collapsedRecolored = ImageUtil.recolorImage(collapsedResized, ColorScheme.LIGHT_GRAY_COLOR);
-				Image expandedRecolored = ImageUtil.recolorImage(expandedResized, ColorScheme.LIGHT_GRAY_COLOR);
-				collapsedIcon = new ImageIcon(collapsedRecolored);
-				expandedIcon = new ImageIcon(expandedRecolored);
-			}
-		}
+		ImageIcon expandedIcon = PanelElements.EXPANDED_ICON;
+		ImageIcon collapsedIcon = PanelElements.COLLAPSED_ICON;
+
 		
 		// Toggle icon - set initial state based on isCollapsed parameter
 		final ImageIcon finalExpandedIcon = expandedIcon;
