@@ -90,6 +90,22 @@ public class PanelElements {
         loadLootboardForGroup(2);
     }
 
+    /**
+     * Get the collapsed icon for collapsible panels
+     * @return ImageIcon for collapsed state
+     */
+    public static ImageIcon getCollapsedIcon() {
+        return COLLAPSED_ICON;
+    }
+
+    /**
+     * Get the expanded icon for collapsible panels
+     * @return ImageIcon for expanded state
+     */
+    public static ImageIcon getExpandedIcon() {
+        return EXPANDED_ICON;
+    }
+
     // Method to load lootboard for a specific group ID
     public static void loadLootboardForGroup(int groupId) {
         // Check if we already have this group cached
