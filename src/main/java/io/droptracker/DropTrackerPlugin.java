@@ -373,7 +373,7 @@ public class DropTrackerPlugin extends Plugin {
 							});
 						}
 					} catch (IOException e) {
-						e.printStackTrace();
+						log.debug("Couldn't refresh api Panel");
 					}
 				}
 				break;
@@ -418,7 +418,7 @@ public class DropTrackerPlugin extends Plugin {
 						statsLoaded = true;
 					}
 				} catch (Exception e) {
-					e.printStackTrace();
+					log.debug("Couldn't Load Side Panel UI");
 					statsLoaded = true;
 				}
 			});

@@ -46,10 +46,7 @@ public class ClogHandler extends BaseEventHandler {
 
     static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (?<itemName>(.*))");
     private static final int POPUP_PREFIX_LENGTH = "New item:".length();
-    public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
-    // private static final String TOA = "Tombs of Amascut";
-    // private static final String TOB = "Theatre of Blood";
-    // private static final String COX = "Chambers of Xeric";
+
 
     @Override
     public void process(Object... args) {

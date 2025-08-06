@@ -56,6 +56,7 @@ public class DropTrackerApi {
     /* Group Configs */
     @SuppressWarnings({ "null", "unchecked" })
     public synchronized void loadGroupConfigs(String playerName) throws IOException {
+        
         if (client.getAccountHash() == -1 || playerName == null) {
             return;
         }
@@ -104,17 +105,17 @@ public class DropTrackerApi {
                     lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
                     
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    log.debug("Couldn't load group config in side panel (IOException) " + e);
                 } catch (JsonSyntaxException e) {
-                    e.printStackTrace();
+                    log.debug("Couldn't load group config in side panel (JsonSyntaxException) " + e);
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    log.debug("Couldn't load group config in side panel (Exception) " + e);
                 }
             } finally {
                 isLoadingGroupConfigs = false;
             }
         }).exceptionally(ex -> {
-            ex.printStackTrace();
+            log.debug(ex);
             isLoadingGroupConfigs = false;
             return null;
         });
@@ -127,7 +128,7 @@ public class DropTrackerApi {
             try {
                 loadGroupConfigs(plugin.getLocalPlayerName());
             } catch (IOException e) {
-                e.printStackTrace();
+                log.debug("Couldn't get group config in side panel (IOException) " + e);
             }
         }
         
@@ -167,7 +168,7 @@ public class DropTrackerApi {
             return this.gson.fromJson(responseData, TopGroupResult.class);
         }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.debug("Couldn't get top groups (IOException) " + e);
             return null;
         }
     }
@@ -190,7 +191,7 @@ public class DropTrackerApi {
             return gson.fromJson(responseData, TopPlayersResult.class);
         }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.debug("Couldn't get top players (IOException) " + e);
             return null;
         }
     }
@@ -246,7 +247,7 @@ public class DropTrackerApi {
                 return "? ms";
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.debug("Couldn't get current latency (IOException) " + e);
             return "? ms";
         }
         long endTime = System.currentTimeMillis();
@@ -320,7 +321,7 @@ public class DropTrackerApi {
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                e.printStackTrace();
+                log.debug("Couldn't  lookup player " + e);
                 future.completeExceptionally(e);
             }
 

@@ -63,6 +63,7 @@ public class PbHandler extends BaseEventHandler {
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            Pattern.compile("")
     };
     private static final Pattern[] PB_PATTERNS = {
             // Team patterns
