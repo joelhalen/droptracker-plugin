@@ -60,10 +60,11 @@ public class PbHandler extends BaseEventHandler {
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             //Colosseum Pattern
             Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
+            //Delve Pattern
+            Pattern.compile("Delve level: .+? duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            Pattern.compile("")
     };
     private static final Pattern[] PB_PATTERNS = {
             // Team patterns
@@ -79,6 +80,8 @@ public class PbHandler extends BaseEventHandler {
             Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // Colosseum Pattern
             Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
+            //Delve Pattern
+            Pattern.compile("Delve level: (\\S+) duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             // Generic boss pattern
             Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
             Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
@@ -509,6 +512,10 @@ public class PbHandler extends BaseEventHandler {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else {
+                    if(message.contains("Delve level") && message.contains("best")){
+                        noKcPB(message,time,bestTime,isPb);
+                        teamSize="Solo";
+                    }
                     storeBossTime("Grotesque Guardians",time,bestTime,isPb);
                     teamSize = "Solo";
                 }
@@ -571,6 +578,10 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime(bossName, time, bestTime, isPb);
                     return;
                 } else {
+                    if(message.contains("Delve level") && message.contains("best")){
+                        noKcPB(message,time,bestTime,isPb);
+                        teamSize="Solo";
+                    }
                     storeBossTime("Grotesque Guardians",time,bestTime,isPb);
                     teamSize = "Solo";
                 }
@@ -661,5 +672,32 @@ public class PbHandler extends BaseEventHandler {
         }
 
     }
+    //Storing boss Time to either access at a later point or to move through sending the time
+    private void noKcPB(String message, Duration time, Duration bestTime, boolean isPb){
+        PbHandler.TimeData timeData = new PbHandler.TimeData(time,bestTime,isPb);
+        BossNotification withTime = null;
+
+        if (message.contains("Delve")) {
+            String bossName = "Doom of Mokhaiotl";
+            pendingTimeData.put(bossName,timeData);
+            Pattern teamSizePattern = Pattern.compile("Delve level: (\\S+) duration.*");
+            Matcher teamMatch = teamSizePattern.matcher(message);
+            if (teamMatch.find())
+                bossName = "Doom of Mokhaiotl (Level: " + teamMatch.group(1) + " )";
+            withTime = new BossNotification(
+                    bossName,
+                    0,
+                    message,
+                    time,
+                    bestTime,
+                    isPb
+            );
+            bossData.set(withTime);
+            processKill(withTime);
+        }
+
+
+    }
+
 
 }
