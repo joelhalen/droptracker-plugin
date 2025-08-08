@@ -11,6 +11,7 @@ import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
 import io.droptracker.util.UUIDv7Generator;
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import net.runelite.api.Client;
 
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+@Slf4j
 public class DropTrackerApi {
     private final DropTrackerConfig config;
     @Inject
@@ -52,10 +54,15 @@ public class DropTrackerApi {
             this.client = client;
     }
 
+    
+
 
     /* Group Configs */
-    @SuppressWarnings({ "null", "unchecked" })
+    @SuppressWarnings({ "null" })
     public synchronized void loadGroupConfigs(String playerName) throws IOException {
+        if (!config.useApi()) {
+            return;
+        }
         
         if (client.getAccountHash() == -1 || playerName == null) {
             return;
@@ -115,7 +122,7 @@ public class DropTrackerApi {
                 isLoadingGroupConfigs = false;
             }
         }).exceptionally(ex -> {
-            log.debug(ex);
+            log.debug(ex.getMessage());
             isLoadingGroupConfigs = false;
             return null;
         });
@@ -123,6 +130,9 @@ public class DropTrackerApi {
 
     /* Get all players' group configs from memory */
     public List<GroupConfig> getGroupConfigs() {
+        if (!config.useApi()) {
+            return null;
+        }
         /* Reload group configs if they haven't been updated in the last 120 seconds */
         if (lastGroupConfigUpdateUnix < (int) (System.currentTimeMillis() / 1000) - 120 && !isLoadingGroupConfigs) {
             try {
@@ -137,6 +147,9 @@ public class DropTrackerApi {
 
     /* Get a specific group config from memory */
     public GroupConfig getGroupConfig(String groupName) {
+        if (!config.useApi()) {
+            return null;
+        }
         return this.getGroupConfigs().stream()
             .filter(groupConfig -> groupConfig.getGroupName().equals(groupName))
             .findFirst()
@@ -152,6 +165,9 @@ public class DropTrackerApi {
 
     @SuppressWarnings("null")
     public TopGroupResult getTopGroups() throws IOException {
+        if (!config.useApi()) {
+            return null;
+        }
         String apiUrl = getApiUrl();
         try{
         HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
@@ -175,6 +191,9 @@ public class DropTrackerApi {
 
     @SuppressWarnings("null")
     public TopPlayersResult getTopPlayers() throws IOException {
+        if (!config.useApi()) {
+            return null;
+        }
         String apiUrl = getApiUrl();
         try{
         HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
@@ -201,9 +220,8 @@ public class DropTrackerApi {
      */
     @SuppressWarnings({ "null", "unchecked" })
     public GroupSearchResult searchGroup(String groupName) throws IOException {
-        // Check if the API is enabled
         if (!config.useApi()) {
-            throw new IllegalStateException("API is not enabled in the plugin config");
+            return null;
         }
 
         String apiUrl = getApiUrl();
@@ -239,18 +257,21 @@ public class DropTrackerApi {
     }
 
     public String getCurrentLatency() {
-        try {
-        String url = getApiUrl() + "/ping";
-        long startTime = System.currentTimeMillis();
-        try (Response response = httpClient.newCall(new Request.Builder().url(url).build()).execute()) {
-            if (!response.isSuccessful()) {
-                return "? ms";
-            }
-        } catch (IOException e) {
-            log.debug("Couldn't get current latency (IOException) " + e);
+        if (!config.useApi()) {
             return "? ms";
         }
-        long endTime = System.currentTimeMillis();
+        try {
+            String url = getApiUrl() + "/ping";
+            long startTime = System.currentTimeMillis();
+            try (Response response = httpClient.newCall(new Request.Builder().url(url).build()).execute()) {
+                if (!response.isSuccessful()) {
+                    return "? ms";
+                }
+            } catch (IOException e) {
+                log.debug("Couldn't get current latency (IOException) " + e);
+                return "? ms";
+            }
+            long endTime = System.currentTimeMillis();
             return String.valueOf((int) (endTime - startTime)) + "ms";
         } catch (Exception e) {
             return "? ms";
@@ -262,9 +283,8 @@ public class DropTrackerApi {
      */
     @SuppressWarnings("null")
     public PlayerSearchResult lookupPlayerNew(String playerName) throws IOException {
-        // Check if the API is enabled
         if (!config.useApi()) {
-            throw new IllegalStateException("API is not enabled in the plugin config");
+            return null;
         }
 
         String apiUrl = getApiUrl();
@@ -302,7 +322,6 @@ public class DropTrackerApi {
     public CompletionStage<Map<String, Object>> lookupPlayer(String playerName) {
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
 
-        // Check if the API is enabled
         if (!config.useApi()) {
             future.completeExceptionally(new IllegalStateException("API is not enabled in the plugin config"));
             return future;
