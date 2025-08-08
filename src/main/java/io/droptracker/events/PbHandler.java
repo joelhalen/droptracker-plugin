@@ -153,6 +153,7 @@ public class PbHandler extends BaseEventHandler {
 
     @SuppressWarnings("unlikely-arg-type")
     private void processKill(BossNotification data) {
+        System.out.println("Processing Kill");
         if (data == null) {
             return;
         }
@@ -188,6 +189,7 @@ public class PbHandler extends BaseEventHandler {
                 }
             }
             if (bossName == null || bossName.equalsIgnoreCase("")){
+                System.out.println("Boss Name is null when processing");
                 return;
             }
             
@@ -514,9 +516,7 @@ public class PbHandler extends BaseEventHandler {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else {
-                    System.out.println("Boss Name is null");
                     if(message.contains("Delve level") && message.contains("best")){
-                        System.out.println("Delve Level found with Best");
                         noKcPB(message,time,bestTime,isPb);
                         teamSize="Solo";
                     }
@@ -698,6 +698,7 @@ public class PbHandler extends BaseEventHandler {
                     bestTime,
                     isPb
             );
+            System.out.println("NoKCPB Class is hit");
             bossData.set(withTime);
             processKill(withTime);
         }
