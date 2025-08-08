@@ -97,6 +97,7 @@ public class PbHandler extends BaseEventHandler {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
+        System.out.println(message);
         checkPB(message);
         checkTime(message);
         parseBossKill(message).ifPresent(this::updateData);
@@ -210,6 +211,7 @@ public class PbHandler extends BaseEventHandler {
             
             killWebhook.getEmbeds().add(killEmbed);
             sendData(killWebhook, SubmissionType.KILL_TIME);
+            System.out.println("PB Sent");
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
@@ -512,7 +514,9 @@ public class PbHandler extends BaseEventHandler {
                     setTeamSize(bossName,message);
                     storeBossTime(bossName, time, bestTime, isPb);
                 } else {
+                    System.out.println("Boss Name is null");
                     if(message.contains("Delve level") && message.contains("best")){
+                        System.out.println("Delve Level found with Best");
                         noKcPB(message,time,bestTime,isPb);
                         teamSize="Solo";
                     }
@@ -578,7 +582,9 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime(bossName, time, bestTime, isPb);
                     return;
                 } else {
+                    System.out.println("Boss Name is null");
                     if(message.contains("Delve level") && message.contains("best")){
+                        System.out.println("Delve Level found with Best");
                         noKcPB(message,time,bestTime,isPb);
                         teamSize="Solo";
                     }
