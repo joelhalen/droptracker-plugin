@@ -176,7 +176,8 @@ public class PbHandler extends BaseEventHandler {
             timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
             bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
             
-            String bossName = "";
+            String bossName = data.getBoss();
+            System.out.println("Saved Boss Name: " + bossName);
             if (teamSize == null || teamSize.equals("")) {
                 teamSize = "Solo";
             }
