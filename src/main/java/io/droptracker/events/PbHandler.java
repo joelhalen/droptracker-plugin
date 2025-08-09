@@ -97,7 +97,6 @@ public class PbHandler extends BaseEventHandler {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        System.out.println(message);
         checkPB(message);
         checkTime(message);
         parseBossKill(message).ifPresent(this::updateData);
@@ -153,7 +152,6 @@ public class PbHandler extends BaseEventHandler {
 
     @SuppressWarnings("unlikely-arg-type")
     private void processKill(BossNotification data) {
-        System.out.println("Processing Kill");
         if (data == null) {
             return;
         }
@@ -177,7 +175,6 @@ public class PbHandler extends BaseEventHandler {
             bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
             
             String bossName = data.getBoss();
-            System.out.println("Saved Boss Name: " + bossName);
             if (teamSize == null || teamSize.equals("")) {
                 teamSize = "Solo";
             }
@@ -190,7 +187,6 @@ public class PbHandler extends BaseEventHandler {
                 }
             }
             if (bossName == null || bossName.equalsIgnoreCase("")){
-                System.out.println("Boss Name is null when processing");
                 return;
             }
             
@@ -214,7 +210,6 @@ public class PbHandler extends BaseEventHandler {
             
             killWebhook.getEmbeds().add(killEmbed);
             sendData(killWebhook, SubmissionType.KILL_TIME);
-            System.out.println("PB Sent");
             mostRecentNpcData = null;
             pendingNotifications.clear();
             bossData.set(null);
@@ -583,9 +578,7 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime(bossName, time, bestTime, isPb);
                     return;
                 } else {
-                    System.out.println("Boss Name is null");
                     if(message.contains("Delve level") && message.contains("best")){
-                        System.out.println("Delve Level found with Best");
                         noKcPB(message,time,bestTime,isPb);
                         teamSize="Solo";
                     }
@@ -699,7 +692,6 @@ public class PbHandler extends BaseEventHandler {
                     bestTime,
                     isPb
             );
-            System.out.println("NoKCPB Class is hit");
             bossData.set(withTime);
             processKill(withTime);
         }
