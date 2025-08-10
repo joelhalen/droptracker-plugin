@@ -683,7 +683,7 @@ public class PbHandler extends BaseEventHandler {
             Pattern levelPattern = Pattern.compile("Delve level: (\\S+) duration.*");
             Matcher levelMatch = levelPattern.matcher(message);
             if (levelMatch.find())
-                bossName = "Doom of Mokhaiotl (Level: " + teamMatch.group(1) + " )";
+                bossName = "Doom of Mokhaiotl (Level: " + levelMatch.group(1) + " )";
             withTime = new BossNotification(
                     bossName,
                     0,
