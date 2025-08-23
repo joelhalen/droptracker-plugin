@@ -200,7 +200,9 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	
 	public void deinit() {
 		removeAll();
-		
+		if (apiPanel != null) {
+			apiPanel.cleanup();
+		}
 	}
 
 	public void selectPanel(String panelToSelect) {
@@ -252,8 +254,8 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 
 	// Update the group panel from sources other than direct searches
 	public void updateGroupPanel(String groupToLoad) {
-		if (groupPanel != null) {
-			groupPanel.performGroupSearch("");
+		if (groupPanel != null && groupToLoad != null && !groupToLoad.trim().isEmpty()) {
+			groupPanel.performGroupSearch(groupToLoad);
 		}
 	}
 

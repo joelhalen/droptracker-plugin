@@ -187,10 +187,21 @@ public class DropTrackerPlugin extends Plugin {
 
 		chatMessageUtil.registerCommands();
 	}
+
+	
 	private void createSidePanel() {
 		
 		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		newPanel.init();
+
+		// Trigger initial UI refreshes so the panel is populated immediately
+		SwingUtilities.invokeLater(() -> {
+			if (newPanel != null) {
+				newPanel.updateSentSubmissions();
+				newPanel.updateHomePlayerButton();
+				newPanel.updatePlayerPanel();
+			}
+		});
 
 		submissionManager.setUpdateCallback(() -> {
 			SwingUtilities.invokeLater(() -> {
@@ -233,8 +244,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
-		if(navButton != null) {
-			clientToolbar.removeNavigation(navButton);
+		if (newNavButton != null) {
+			clientToolbar.removeNavigation(newNavButton);
+			newNavButton = null;
 		}
 		chatMessageUtil.unregisterCommands();
 		if (newPanel != null) {
@@ -243,7 +255,6 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		// Clear the callback to prevent memory leaks
 		submissionManager.setUpdateCallback(null);
-		executor.shutdown();
 	}
 
 	@Provides
