@@ -8,11 +8,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -81,21 +78,22 @@ public class SubmissionManager {
     // Callback for UI updates
     private SubmissionUpdateCallback updateCallback;
 
-    private final ExecutorService executor = new ThreadPoolExecutor(
-            2, // core pool size
-            10, // maximum pool size
-            60L, TimeUnit.SECONDS, // keep alive time
-            new LinkedBlockingQueue<>(),
-            new ThreadFactory() {
-                @Override
-                public Thread newThread(Runnable r) {
-                    Thread t = new Thread(r);
-                    t.setUncaughtExceptionHandler((thread, ex) -> {
-                        log.error("Uncaught exception in executor thread", ex);
-                    });
-                    return t;
-                }
-            });
+    /* Replace with ScheduledThreadPoolExecutor */
+    private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+            // 2, // core pool size
+            // 10, // maximum pool size
+            // 60L, TimeUnit.SECONDS, // keep alive time
+            // new LinkedBlockingQueue<>(),
+            // new ThreadFactory() {
+            //     @Override
+            //     public Thread newThread(Runnable r) {
+            //         Thread t = new Thread(r);
+            //         t.setUncaughtExceptionHandler((thread, ex) -> {
+            //             log.error("Uncaught exception in executor thread", ex);
+            //         });
+            //         return t;
+            //     }
+            // });
             
     @Inject
     public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
@@ -116,7 +114,7 @@ public class SubmissionManager {
      */
     public void setUpdateCallback(SubmissionUpdateCallback callback) {
         if (callback == null) {
-            Thread.dumpStack();
+            return;
         }
         this.updateCallback = callback;
     }
@@ -142,7 +140,7 @@ public class SubmissionManager {
         Boolean shouldHideDm = config.hideDMs();
         
         if (type == SubmissionType.DROP) {
-            sendDataToDropTracker(webhook, (byte[]) null);
+            // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
         }
         if (type == SubmissionType.KILL_TIME) {
             // Kc / kill time
@@ -340,7 +338,6 @@ public class SubmissionManager {
         if (isFakeWorld()) {
             return;
         }
-        String logText = String.valueOf(gson.toJson(customWebhookBody));
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("payload_json", GSON.toJson(customWebhookBody));

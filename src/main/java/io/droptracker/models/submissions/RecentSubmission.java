@@ -6,35 +6,47 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import com.google.gson.annotations.SerializedName;
 
 // Nested classes for complex JSON structures
 public class RecentSubmission {
     @SerializedName("player_name")
+    @Getter @Setter
     private String playerName;
     
-    @SerializedName("submission_type") // pb, clog, drop    
+    @SerializedName("submission_type") // pb, clog, drop  
+    @Getter @Setter  
     private String submissionType;  
     
     @SerializedName("source_name") 
+    @Getter @Setter
     private String sourceName;
     
     @SerializedName("date_received")
+    @Getter @Setter
     private String dateReceived;
     
     @SerializedName("display_name") 
+    @Getter @Setter
     private String displayName;
 
     @SerializedName("value") // if not a pb
+    @Getter @Setter
     private String value;
 
     @SerializedName("data")
+    @Getter @Setter
     private List<Map<String, Object>> data;
 
     @SerializedName("image_url")
+    @Getter @Setter
     private String imageUrl;
 
     @SerializedName("submission_image_url")
+    @Getter @Setter
     private String submissionImageUrl;
 
     // Constructors
@@ -68,33 +80,6 @@ public class RecentSubmission {
     }
 
     // Getters and setters
-    public String getPlayerName() { return playerName; }
-    public void setPlayerName(String playerName) { this.playerName = playerName; }
-    
-    public String getSubmissionType() { return submissionType; }
-    public void setSubmissionType(String submissionType) { this.submissionType = submissionType; }
-    
-    public String getSourceName() { return sourceName; }
-    public void setSourceName(String sourceName) { this.sourceName = sourceName; }
-    
-    public String getDateReceived() { return dateReceived; }
-    public void setDateReceived(String dateReceived) { this.dateReceived = dateReceived; }
-    
-    public String getDisplayName() { return displayName; }
-    public void setDisplayName(String displayName) { this.displayName = displayName; }
-    
-    public String getValue() { return value == "-1" ? "0" : value; }
-    public void setValue(String value) { this.value = value == "0" ? "-1" : value; }
-    
-    public List<Map<String, Object>> getData() { return data; }
-    public void setData(List<Map<String, Object>> data) { this.data = data; }
-
-    public String getImageUrl() { return imageUrl; }
-    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-
-    public String getSubmissionImageUrl() { return submissionImageUrl; }
-    public void setSubmissionImageUrl(String submissionImageUrl) { this.submissionImageUrl = submissionImageUrl; }
-
     public String timeSinceReceived() {
         if (dateReceived == null) {
             return "Unknown";

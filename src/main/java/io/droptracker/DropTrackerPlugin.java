@@ -135,22 +135,24 @@ public class DropTrackerPlugin extends Plugin {
 	public Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
 
-	private final ExecutorService executor = new ThreadPoolExecutor(
-		2, // core pool size
-		10, // maximum pool size
-		60L, TimeUnit.SECONDS, // keep alive time
-		new LinkedBlockingQueue<>(),
-		new ThreadFactory() {
-			@Override
-			public Thread newThread(Runnable r) {
-				Thread t = new Thread(r);
-				t.setUncaughtExceptionHandler((thread, ex) -> {
-					log.error("Uncaught exception in executor thread", ex);
-				});
-				return t;
-			}
-		}
-	);
+	/* Replace with ScheduledThreadPoolExecutor */
+	private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
+	// private final ExecutorService executor = new ThreadPoolExecutor(
+	// 	2, // core pool size
+	// 	10, // maximum pool size
+	// 	60L, TimeUnit.SECONDS, // keep alive time
+	// 	new LinkedBlockingQueue<>(),
+	// 	new ThreadFactory() {
+	// 		@Override
+	// 		public Thread newThread(Runnable r) {
+	// 			Thread t = new Thread(r);
+	// 			t.setUncaughtExceptionHandler((thread, ex) -> {
+	// 				log.error("Uncaught exception in executor thread", ex);
+	// 			});
+	// 			return t;
+	// 		}
+	// 	}
+	// );
 
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 	

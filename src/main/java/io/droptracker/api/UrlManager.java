@@ -46,7 +46,7 @@ public class UrlManager {
     @Inject
     private ChatMessageUtil chatMessageUtil;
 
-	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PM_CHAT, 0);
+	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PmChat.CONTAINER, 0);
 
     @Inject
     public UrlManager(DropTrackerConfig config, DropTrackerPlugin plugin, ClientThread clientThread, ChatMessageUtil chatMessageUtil) {
