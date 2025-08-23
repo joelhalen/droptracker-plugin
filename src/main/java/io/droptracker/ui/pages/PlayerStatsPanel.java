@@ -124,7 +124,7 @@ public class PlayerStatsPanel {
 		defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 		
 		// Get current player and add button if logged in
-		String playerName = (client.getLocalPlayer() != null) ? client.getLocalPlayer().getName() : null;
+		String playerName = (config.lastAccountName() != null) ? config.lastAccountName() : null;
 		
 		if (playerName != null && !"Not logged in".equals(playerName)) {
 			// Button to view current player stats

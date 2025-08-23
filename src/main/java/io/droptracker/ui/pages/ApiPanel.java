@@ -40,10 +40,8 @@ import io.droptracker.util.DurationAdapter;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.util.ImageUtil;
 import java.awt.Cursor;
 import java.awt.event.MouseAdapter;
-import java.awt.Image;
 import java.util.HashMap;
 import java.util.Map;
 

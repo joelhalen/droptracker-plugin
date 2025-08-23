@@ -408,11 +408,11 @@ public class DropTrackerPlugin extends Plugin {
 			needsPanelUpdateOnLogin = false; // Clear the flag
 			
 			// Use SwingUtilities to ensure UI updates happen on EDT
+			String playerName = client.getLocalPlayer().getName();
+			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
 			SwingUtilities.invokeLater(() -> {
 				try {
 					if (newPanel != null) {
-						String playerName = client.getLocalPlayer().getName();
-						configManager.setConfiguration("droptracker", "lastAccountName", playerName);
 						newPanel.updatePlayerPanel();
 						
 						// Also update the home player button since config might now have player name
