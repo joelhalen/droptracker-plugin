@@ -33,7 +33,7 @@ import com.google.gson.*;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.concurrent.*;
+import java.util.concurrent.ScheduledExecutorService;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -126,36 +126,19 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private SubmissionManager submissionManager;
 
+	@Inject
+	private ScheduledExecutorService executor;
 
 	@Nullable
-    public Drop lastDrop = null;
+	public Drop lastDrop = null;
 
 	private boolean statsLoaded = false;
 
 	public Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
 
-	/* Replace with ScheduledThreadPoolExecutor */
-	private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
-	// private final ExecutorService executor = new ThreadPoolExecutor(
-	// 	2, // core pool size
-	// 	10, // maximum pool size
-	// 	60L, TimeUnit.SECONDS, // keep alive time
-	// 	new LinkedBlockingQueue<>(),
-	// 	new ThreadFactory() {
-	// 		@Override
-	// 		public Thread newThread(Runnable r) {
-	// 			Thread t = new Thread(r);
-	// 			t.setUncaughtExceptionHandler((thread, ex) -> {
-	// 				log.error("Uncaught exception in executor thread", ex);
-	// 			});
-	// 			return t;
-	// 		}
-	// 	}
-	// );
-
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
-	
+
 
 	@Inject
 	public WidgetEventHandler widgetEventHandler;
@@ -181,16 +164,14 @@ public class DropTrackerPlugin extends Plugin {
 			createSidePanel();
 		}
 		// Preload webhook URLs asynchronously
-		if (!executor.isShutdown() && !executor.isTerminated()) {
-			executor.submit(() -> urlManager.loadEndpoints());
-		}
+		executor.submit(() -> urlManager.loadEndpoints());
 
 		chatMessageUtil.registerCommands();
 	}
 
-	
+
 	private void createSidePanel() {
-		
+
 		newPanel = injector.getInstance(DropTrackerPanelNew.class);
 		newPanel.init();
 
@@ -262,7 +243,7 @@ public class DropTrackerPlugin extends Plugin {
 		return configManager.getConfig(DropTrackerConfig.class);
 	}
 
-	
+
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
@@ -372,7 +353,7 @@ public class DropTrackerPlugin extends Plugin {
 							SwingUtilities.invokeLater(() -> {
 								newPanel.updateSentSubmissions();
 							});
-							
+
 							// Delayed refresh after configs should be loaded
 							executor.submit(() -> {
 								try {
@@ -413,11 +394,11 @@ public class DropTrackerPlugin extends Plugin {
 		if (!isTracking) {
 			return;
 		}
-		
+
 		// Check if we need to update panel on login and player is now available
 		if (needsPanelUpdateOnLogin && client.getLocalPlayer() != null && client.getLocalPlayer().getName() != null) {
 			needsPanelUpdateOnLogin = false; // Clear the flag
-			
+
 			// Use SwingUtilities to ensure UI updates happen on EDT
 			String playerName = client.getLocalPlayer().getName();
 			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
@@ -425,7 +406,7 @@ public class DropTrackerPlugin extends Plugin {
 				try {
 					if (newPanel != null) {
 						newPanel.updatePlayerPanel();
-						
+
 						// Also update the home player button since config might now have player name
 						newPanel.updateHomePlayerButton();
 						statsLoaded = true;
@@ -436,12 +417,12 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			});
 		}
-		
+
 		/* Call individual event handlers */
-        experienceHandler.onTick();
+		experienceHandler.onTick();
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
-		
+
 		// Also tick the experience handler
 		if (config.trackExperience()) {
 			experienceHandler.onTick();
@@ -464,9 +445,9 @@ public class DropTrackerPlugin extends Plugin {
 		experienceHandler.onGameStateChanged(gameStateChanged);
 	}
 
-	
 
-	
+
+
 	public String getLocalPlayerName() {
 		if (client.getLocalPlayer() != null) {
 			return client.getLocalPlayer().getName();
@@ -476,12 +457,12 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	public void sendRankChangeChatMessage(String rankChangeType, Integer currentRankNpc, Integer currentRankAll, Integer totalRankChange, String totalLootReceived,
-			Integer totalRankChangeAtNpc, String totalLootNpc, Integer totalMembers, Integer totalMembersNpc,
-			String totalReceivedAllTime, String totalLootNpcAllTime) {
+										  Integer totalRankChangeAtNpc, String totalLootNpc, Integer totalMembers, Integer totalMembersNpc,
+										  String totalReceivedAllTime, String totalLootNpcAllTime) {
 
 	}
 
 
 
-	
+
 }

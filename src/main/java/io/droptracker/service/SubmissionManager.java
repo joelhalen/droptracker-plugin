@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -71,30 +70,16 @@ public class SubmissionManager {
     private UrlManager urlManager;
     @Inject
     private DrawManager drawManager;
-    
+
     // Store a list of submissions that the player has received which qualified for a notification to be sent
     private List<ValidSubmission> validSubmissions = new ArrayList<>();
-    
+
     // Callback for UI updates
     private SubmissionUpdateCallback updateCallback;
 
-    /* Replace with ScheduledThreadPoolExecutor */
-    private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(1);
-            // 2, // core pool size
-            // 10, // maximum pool size
-            // 60L, TimeUnit.SECONDS, // keep alive time
-            // new LinkedBlockingQueue<>(),
-            // new ThreadFactory() {
-            //     @Override
-            //     public Thread newThread(Runnable r) {
-            //         Thread t = new Thread(r);
-            //         t.setUncaughtExceptionHandler((thread, ex) -> {
-            //             log.error("Uncaught exception in executor thread", ex);
-            //         });
-            //         return t;
-            //     }
-            // });
-            
+    @Inject
+    private ScheduledExecutorService executor;
+
     @Inject
     public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
         this.config = config;
@@ -125,7 +110,7 @@ public class SubmissionManager {
     private void notifyUpdateCallback() {
         if (updateCallback != null) {
             updateCallback.onSubmissionsUpdated();
-        } 
+        }
     }
 
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
@@ -138,7 +123,7 @@ public class SubmissionManager {
          */
         Boolean requiredScreenshot = false;
         Boolean shouldHideDm = config.hideDMs();
-        
+
         if (type == SubmissionType.DROP) {
             // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
         }
@@ -170,7 +155,7 @@ public class SubmissionManager {
                                 continue; // Skip this group if screenshots required but not happening
                             }
                         }
-                        
+
                         // Create or find existing submission for this webhook
                         if (pbSubmission == null) {
                             pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
@@ -197,7 +182,7 @@ public class SubmissionManager {
                             continue; // Skip this group if screenshots required but not happening
                         }
                     }
-                    
+
                     // Create or find existing submission for this webhook
                     if (clogSubmission == null) {
                         clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
@@ -223,7 +208,7 @@ public class SubmissionManager {
                             continue; // Skip this group if screenshots required but not happening
                         }
                     }
-                    
+
                     // Create or find existing submission for this webhook
                     if (caSubmission == null) {
                         caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
@@ -282,19 +267,19 @@ public class SubmissionManager {
         // Handles sending drops exclusively - for individual items use sendDataToDropTracker(webhook, totalValue, singleValue)
         sendDataToDropTracker(customWebhookBody, totalValue, totalValue);
     }
-    
+
 
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
         }
-        
+
         boolean requiredScreenshot = false;
         if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
             requiredScreenshot = true;
         }
-        
+
         // Create ValidSubmission for drops
         /* Temporarily returning here for testing purposes -- will not send to server */
         ValidSubmission dropSubmission = null;
@@ -304,13 +289,13 @@ public class SubmissionManager {
                 if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
                     continue; // Skip this group if items were stacked but group disabled that
                 }
-                
+
                 if (groupConfig.isOnlyScreenshots() == true) {
                     if (requiredScreenshot == false) {
                         continue; // Skip this group if screenshots required but not happening
                     }
                 }
-                
+
                 // Create or find existing submission for this webhook
                 if (dropSubmission == null) {
                     dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
@@ -320,7 +305,7 @@ public class SubmissionManager {
                 }
             }
         }
-        
+
         // Notify UI if submissions were added
         if (dropSubmission != null) {
             notifyUpdateCallback();
@@ -393,7 +378,7 @@ public class SubmissionManager {
                 .build();
         if (config.useApi()) {
             api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000); // Update the last communication time
-                                                                                   // if the api is being used
+            // if the api is being used
         }
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
@@ -484,13 +469,13 @@ public class SubmissionManager {
             log.warn("Cannot retry submission: missing webhook data");
             return;
         }
-        
+
         // Update status to indicate retry attempt
         validSubmission.setStatus("retrying");
-        
+
         // Send the original webhook data again
         sendDataToDropTracker(validSubmission.getOriginalWebhook(), (byte[]) null);
-        
+
         // Log the retry attempt
     }
 
@@ -519,14 +504,14 @@ public class SubmissionManager {
      */
     public void updateSubmissionStatus(String uuid, String status, String response) {
         if (uuid == null) return;
-        
+
         for (ValidSubmission submission : validSubmissions) {
             if (uuid.equals(submission.getUuid())) {
                 submission.setStatus(status);
                 if ("success".equals(status) || "processed".equals(status)) {
                     submission.setTimeProcessedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
                 }
-                
+
                 // Add response to retry responses array if it's a retry
                 if (response != null && !"pending".equals(status)) {
                     String[] currentResponses = submission.getRetryResponses();
