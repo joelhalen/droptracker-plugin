@@ -76,6 +76,7 @@ public class SubmissionManager {
 
     // Callback for UI updates
     private SubmissionUpdateCallback updateCallback;
+    private boolean updatesEnabled = true;
 
     @Inject
     private ScheduledExecutorService executor;
@@ -98,17 +99,18 @@ public class SubmissionManager {
      * @param callback The callback to notify when submissions are updated
      */
     public void setUpdateCallback(SubmissionUpdateCallback callback) {
-        if (callback == null) {
-            return;
-        }
         this.updateCallback = callback;
+    }
+
+    public void setUpdatesEnabled(boolean enabled) {
+        this.updatesEnabled = enabled;
     }
 
     /**
      * Notifies the UI callback that submissions have been updated
      */
     private void notifyUpdateCallback() {
-        if (updateCallback != null) {
+        if (updatesEnabled && updateCallback != null) {
             updateCallback.onSubmissionsUpdated();
         }
     }

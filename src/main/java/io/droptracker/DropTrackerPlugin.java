@@ -51,7 +51,7 @@ import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
 import io.droptracker.service.SubmissionManager;
-import io.droptracker.ui.DropTrackerPanelNew;
+import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -88,13 +88,12 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	public static DropTrackerApi api;
 
-	private DropTrackerPanelNew newPanel;
+	private DropTrackerPanel panel;
 
 	@Inject
 	private ConfigManager configManager;
 
 	private NavigationButton navButton;
-	private NavigationButton newNavButton;
 
 	@Inject
 	private Gson gson;
@@ -172,39 +171,40 @@ public class DropTrackerPlugin extends Plugin {
 
 	private void createSidePanel() {
 
-		newPanel = injector.getInstance(DropTrackerPanelNew.class);
-		newPanel.init();
+		panel = injector.getInstance(DropTrackerPanel.class);
+		panel.init();
 
 		// Trigger initial UI refreshes so the panel is populated immediately
 		SwingUtilities.invokeLater(() -> {
-			if (newPanel != null) {
-				newPanel.updateSentSubmissions();
-				newPanel.updateHomePlayerButton();
-				newPanel.updatePlayerPanel();
+			if (panel != null) {
+				panel.updateSentSubmissions();
+				panel.updateHomePlayerButton();
+				panel.updatePlayerPanel();
 			}
 		});
 
 		submissionManager.setUpdateCallback(() -> {
 			SwingUtilities.invokeLater(() -> {
-				if (newPanel != null) {
-					newPanel.updateSentSubmissions();
+				if (panel != null) {
+					panel.updateSentSubmissions();
 				}
 			});
 		});
+		submissionManager.setUpdatesEnabled(true);
 
-		newNavButton = NavigationButton.builder()
+		navButton = NavigationButton.builder()
 				.tooltip("DropTracker")
 				.icon(PANEL_ICON)
 				.priority(1)
-				.panel(newPanel)
+				.panel(panel)
 				.build();
 
-		clientToolbar.addNavigation(newNavButton);
+		clientToolbar.addNavigation(navButton);
 	}
 
 	public void updateSubmissionsPanel() {
-		if (newPanel != null) {
-			newPanel.updateSentSubmissions();
+		if (panel != null) {
+			panel.updateSentSubmissions();
 		}
 	}
 
@@ -225,17 +225,17 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
-		if (newNavButton != null) {
-			clientToolbar.removeNavigation(newNavButton);
-			newNavButton = null;
+		if (navButton != null) {
+			clientToolbar.removeNavigation(navButton);
+			navButton = null;
 		}
 		chatMessageUtil.unregisterCommands();
-		if (newPanel != null) {
-			newPanel.deinit();
-			newPanel = null;
+		if (panel != null) {
+			panel.deinit();
+			panel = null;
 		}
-		// Clear the callback to prevent memory leaks
-		submissionManager.setUpdateCallback(null);
+		// Disable updates while panel is not present
+		submissionManager.setUpdatesEnabled(false);
 	}
 
 	@Provides
@@ -249,16 +249,13 @@ public class DropTrackerPlugin extends Plugin {
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
-				if(navButton != null) {
-					clientToolbar.removeNavigation(navButton);
-				}
 				// Recreate the side panel which will reset the callback
-				if (newPanel != null) {
-					clientToolbar.removeNavigation(newNavButton);
-					newPanel.deinit();
-					newPanel = null;
-					// Only clear callback when actually removing the panel
-					submissionManager.setUpdateCallback(null);
+				if (panel != null) {
+					clientToolbar.removeNavigation(navButton);
+					panel.deinit();
+					panel = null;
+					// Disable updates when removing the panel
+					submissionManager.setUpdatesEnabled(false);
 				}
 				if (config.showSidePanel()) {
 					createSidePanel();
@@ -273,18 +270,15 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			} else if (configChanged.getKey().equals("showSidePanel")) {
 				if (!config.showSidePanel()) {
-					if(navButton != null) {
+					if (panel != null) {
 						clientToolbar.removeNavigation(navButton);
-					}
-					if (newPanel != null) {
-						clientToolbar.removeNavigation(newNavButton);
-						newPanel.deinit();
-						newPanel = null;
-						// Clear the callback when panel is removed
-						submissionManager.setUpdateCallback(null);
+						panel.deinit();
+						panel = null;
+						// Disable updates when panel is removed
+						submissionManager.setUpdatesEnabled(false);
 					}
 				} else {
-					if (newPanel == null) {
+					if (panel == null) {
 						createSidePanel();
 					}
 				}
@@ -348,10 +342,10 @@ public class DropTrackerPlugin extends Plugin {
 						api.loadGroupConfigs(getLocalPlayerName());
 						// Refresh the API panel to show updated group configs
 						// Since loading is async, we need to delay the refresh
-						if (newPanel != null) {
+						if (panel != null) {
 							// Initial refresh to show loading state
 							SwingUtilities.invokeLater(() -> {
-								newPanel.updateSentSubmissions();
+								panel.updateSentSubmissions();
 							});
 
 							// Delayed refresh after configs should be loaded
@@ -359,7 +353,7 @@ public class DropTrackerPlugin extends Plugin {
 								try {
 									Thread.sleep(2000); // Wait 2 seconds for async load
 									SwingUtilities.invokeLater(() -> {
-										newPanel.updateSentSubmissions();
+										panel.updateSentSubmissions();
 									});
 								} catch (InterruptedException e) {
 									Thread.currentThread().interrupt();
@@ -402,13 +396,14 @@ public class DropTrackerPlugin extends Plugin {
 			// Use SwingUtilities to ensure UI updates happen on EDT
 			String playerName = client.getLocalPlayer().getName();
 			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
+			configManager.setConfiguration("droptracker", "lastAccountHash", String.valueOf(client.getAccountHash()));
 			SwingUtilities.invokeLater(() -> {
 				try {
-					if (newPanel != null) {
-						newPanel.updatePlayerPanel();
+					if (panel != null) {
+						panel.updatePlayerPanel();
 
 						// Also update the home player button since config might now have player name
-						newPanel.updateHomePlayerButton();
+						panel.updateHomePlayerButton();
 						statsLoaded = true;
 					}
 				} catch (Exception e) {

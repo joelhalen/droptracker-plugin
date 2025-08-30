@@ -309,4 +309,14 @@ public interface DropTrackerConfig extends Config {
     default String lastAccountName() {
         return null;
     }
+
+    @ConfigItem(
+        name = "lastAccountHash",
+        keyName = "lastAccountHash",
+        description = "lastAccountHash",
+        hidden = true
+    )
+    default String lastAccountHash() {
+        return null;
+    }
 }

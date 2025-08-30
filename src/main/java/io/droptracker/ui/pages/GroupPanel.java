@@ -32,7 +32,7 @@ import javax.swing.ImageIcon;
 import javax.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.ui.DropTrackerPanelNew;
+import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.api.DropTrackerApi;
@@ -56,7 +56,7 @@ public class GroupPanel {
 
 
 	@Inject
-	private DropTrackerPanelNew panel;
+	private DropTrackerPanel panel;
 
 	@Inject
 	private DropTrackerApi api;
@@ -73,7 +73,7 @@ public class GroupPanel {
 	// Add field for tracking leaderboard placeholder
 	private JPanel leaderboardPlaceholder;
 
-	public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanelNew panel) {
+	public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanel panel) {
 		this.client = client;
 		this.config = config;
 		this.api = api;

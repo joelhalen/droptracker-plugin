@@ -10,7 +10,6 @@ import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
-import io.droptracker.util.UUIDv7Generator;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import net.runelite.api.Client;
@@ -24,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 public class DropTrackerApi {
@@ -158,7 +158,10 @@ public class DropTrackerApi {
 
     /* Submissions */
     public String generateGuidForSubmission() {
-        return UUIDv7Generator.getInstance().generateAsString();
+        long timestamp = System.currentTimeMillis() / 1000L;
+        long accountHash = client != null ? client.getAccountHash() : -1L;
+        long randomPart = ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);
+        return timestamp + "-" + accountHash + "-" + randomPart;
     }
     
 

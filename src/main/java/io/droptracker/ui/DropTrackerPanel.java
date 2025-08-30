@@ -29,7 +29,7 @@ import java.util.Map;
 import java.awt.FlowLayout;
 import java.awt.Component;
 
-public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.PanelDataLoadedCallback {
+public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.PanelDataLoadedCallback {
 
 	private static final ImageIcon LOGO_GIF;
 
@@ -66,7 +66,7 @@ public class DropTrackerPanelNew extends PluginPanel implements DropTrackerApi.P
 	private JPanel groupStatsPanel;
 
 	@Inject
-	public DropTrackerPanelNew(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
+	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
 		this.config = config;
 		this.api = api;
 		this.plugin = plugin;

@@ -19,7 +19,7 @@ import net.runelite.client.util.LinkBrowser;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.DropTrackerConfig;
 import net.runelite.api.Client;
-import io.droptracker.ui.DropTrackerPanelNew;
+import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.PanelElements;
 
 public class HomePanel {
@@ -34,14 +34,14 @@ public class HomePanel {
     private Client client;
 
     @Inject
-    private DropTrackerPanelNew panel;
+    private DropTrackerPanel panel;
     
     // Store references for dynamic updates
     private JPanel homePanel;
     private JPanel playerButtonRow;
     private int playerButtonIndex = -1; // Tracks where to insert the button
 
-    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanelNew panel) {
+    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel) {
         this.config = config;
         this.api = api;
         this.panel = panel;
