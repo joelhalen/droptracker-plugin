@@ -16,9 +16,7 @@ import javax.inject.Singleton;
 
 import com.google.gson.Gson;
 import static net.runelite.http.api.RuneLiteAPI.GSON;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import com.google.gson.annotations.SerializedName;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
@@ -52,6 +50,22 @@ import okio.Buffer;
 @Slf4j
 @Singleton
 public class SubmissionManager {
+
+    private static class ApiResponse {
+        @SerializedName("notice")
+        private String notice;
+
+        @SerializedName("rank_update")
+        private String rankUpdate;
+
+        public String getNotice() {
+            return notice;
+        }
+
+        public String getRankUpdate() {
+            return rankUpdate;
+        }
+    }
 
     public interface SubmissionUpdateCallback {
         void onSubmissionsUpdated();
@@ -241,16 +255,16 @@ public class SubmissionManager {
                 }
             }
         } else if (type == SubmissionType.QUEST_COMPLETION) {
-            // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
+            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
             if (!config.trackQuests()) {
                 return;
             }
             if (config.screenshotQuests()) {
-                // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
+                // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
                 requiredScreenshot = true;
             }
         } else if (type == SubmissionType.PET) {
-            // TODO -- need to add config values for tracking for ValidSubmission object creation where necessary later
+            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
             if (config.screenshotPets()) {
                 requiredScreenshot = true;
             }
@@ -397,24 +411,18 @@ public class SubmissionManager {
                         String bodyString = body.string();
                         if (!bodyString.isEmpty()) {
                             try {
-                                JsonElement jsonElement = new JsonParser().parse(bodyString);
-                                if (jsonElement.isJsonObject()) {
-                                    JsonObject jsonObject = jsonElement.getAsJsonObject();
-                                    if (jsonObject.has("notice")) {
-                                        String noticeMessage = jsonObject.get("notice").getAsString();
-                                        if (noticeMessage != null && !noticeMessage.isEmpty()) {
-                                            chatMessageUtil.sendChatMessage(noticeMessage);
-                                        }
+                                ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
+                                if (apiResponse != null) {
+                                    String noticeMessage = apiResponse.getNotice();
+                                    if (noticeMessage != null && !noticeMessage.isEmpty()) {
+                                        chatMessageUtil.sendChatMessage(noticeMessage);
                                     }
-                                    if (jsonObject.has("rank_update")) {
-                                        String updateMessage = jsonObject.get("rank_update").getAsString();
-                                        if (updateMessage != null && !updateMessage.isEmpty()) {
-                                            chatMessageUtil.sendChatMessage(updateMessage);
-                                        }
+                                    String updateMessage = apiResponse.getRankUpdate();
+                                    if (updateMessage != null && !updateMessage.isEmpty()) {
+                                        chatMessageUtil.sendChatMessage(updateMessage);
                                     }
                                 }
                             } catch (Exception e) {
-
                             }
                         }
                     }
