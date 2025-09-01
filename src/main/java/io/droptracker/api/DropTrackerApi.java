@@ -45,6 +45,8 @@ public class DropTrackerApi {
 
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
     
+   
+
     @Inject
     public DropTrackerApi(DropTrackerConfig config, Gson gson, OkHttpClient httpClient, DropTrackerPlugin plugin, Client client) {
             this.config = config;
@@ -53,7 +55,6 @@ public class DropTrackerApi {
             this.plugin = plugin;
             this.client = client;
     }
-
     
 
 
@@ -172,20 +173,21 @@ public class DropTrackerApi {
             return null;
         }
         String apiUrl = getApiUrl();
-        try{
-        HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
-        Request request = new Request.Builder().url(url).build();
-        Response response = httpClient.newCall(request).execute();
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-        if (!response.isSuccessful()) {
-            throw new IOException("API request failed with status: " + response.code());
-        }
-        if (response.body() == null) {
-            throw new IOException("Empty response body");
-        } else {
-            String responseData = response.body().string();
-            return this.gson.fromJson(responseData, TopGroupResult.class);
-        }
+        try {
+            HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
+            Request request = new Request.Builder().url(url).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                if (!response.isSuccessful()) {
+                    throw new IOException("API request failed with status: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("Empty response body");
+                } else {
+                    String responseData = response.body().string();
+                    return this.gson.fromJson(responseData, TopGroupResult.class);
+                }
+            }
         } catch (IOException e) {
             log.debug("Couldn't get top groups (IOException) " + e);
             return null;
@@ -198,20 +200,21 @@ public class DropTrackerApi {
             return null;
         }
         String apiUrl = getApiUrl();
-        try{
-        HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
-        Request request = new Request.Builder().url(url).build();
-        Response response = httpClient.newCall(request).execute();
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-        if (!response.isSuccessful()) {
-            throw new IOException("API request failed with status: " + response.code());
-        }
-        if (response.body() == null) {
-            throw new IOException("Empty response body");
-        } else {
-            String responseData = response.body().string();
-            return gson.fromJson(responseData, TopPlayersResult.class);
-        }
+        try {
+            HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
+            Request request = new Request.Builder().url(url).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                if (!response.isSuccessful()) {
+                    throw new IOException("API request failed with status: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("Empty response body");
+                } else {
+                    String responseData = response.body().string();
+                    return gson.fromJson(responseData, TopPlayersResult.class);
+                }
+            }
         } catch (IOException e) {
             log.debug("Couldn't get top players (IOException) " + e);
             return null;
@@ -350,7 +353,7 @@ public class DropTrackerApi {
             @SuppressWarnings({ "null" })
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
+                try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
                     String responseData = responseBody.string();
                     @SuppressWarnings("unchecked")
                     Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
@@ -395,7 +398,7 @@ public class DropTrackerApi {
                 } else {
                     return "Error fetching latest update";
                 }
-            }
+            } 
         } catch (IOException e) {
             return "Error fetching latest update";
         }
