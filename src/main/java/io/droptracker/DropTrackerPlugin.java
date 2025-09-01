@@ -166,7 +166,6 @@ public class DropTrackerPlugin extends Plugin {
 		// Preload webhook URLs asynchronously
 		executor.submit(() -> urlManager.loadEndpoints());
 
-		chatMessageUtil.registerCommands();
 	}
 
 
@@ -230,7 +229,6 @@ public class DropTrackerPlugin extends Plugin {
 			clientToolbar.removeNavigation(navButton);
 			navButton = null;
 		}
-		chatMessageUtil.unregisterCommands();
 		if (panel != null) {
 			panel.deinit();
 			panel = null;
