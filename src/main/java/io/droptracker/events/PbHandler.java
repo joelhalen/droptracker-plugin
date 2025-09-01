@@ -172,10 +172,8 @@ public class PbHandler extends BaseEventHandler {
             if (mostRecentNpcData != null) {
                 bossName = mostRecentNpcData.getLeft();
             } else if (!pendingNotifications.isEmpty()) {
-                if (pendingNotifications.size() > 1) {
-                } else {
-                    bossName = pendingNotifications.get(0).getBoss();
-                }
+                // Get the first (or any) pending notification's boss name
+                bossName = pendingNotifications.values().iterator().next().getBoss();
             }
             if (bossName == null || bossName.equalsIgnoreCase("")){
                 return;
