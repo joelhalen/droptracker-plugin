@@ -16,28 +16,28 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 
 public class NpcUtilities {
-    
+
     public static final String GAUNTLET_NAME = "Gauntlet", GAUNTLET_BOSS = "Crystalline Hunllef";
     public static final String CG_NAME = "Corrupted Gauntlet", CG_BOSS = "Corrupted Hunllef";
 
     public static final String TOA = "Tombs of Amascut";
     public static final String TOB = "Theatre of Blood";
     public static final String COX = "Chambers of Xeric";
-    
-	public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor","Branda the Fire Queen","Eldric the Ice King","Dusk");
-	public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians","Yama");
+
+    public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor", "Branda the Fire Queen",
+            "Eldric the Ice King", "Dusk");
+    public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians", "Yama");
 
     public static final Pattern PRIMARY_REGEX = Pattern.compile(
-        "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)"
-    );
-    public static final Pattern SECONDARY_REGEX = Pattern.compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
-    private static Pair<String, Integer> mostRecentNpcData = null;
+            "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)");
+    public static final Pattern SECONDARY_REGEX = Pattern
+            .compile("Your (?<type>kill|chest|completed) (?<key>[\\w\\s:]+) count is:? (?<value>[\\d,]+)");
 
     @SuppressWarnings("null")
     public static String getStandardizedSource(LootReceived event, DropTrackerPlugin plugin) {
         if (isCorruptedGauntlet(event, plugin)) {
             return CG_NAME;
-        } 
+        }
         if (plugin.lastDrop == null) {
             return event.getName();
         } else if (shouldUseChatName(event, plugin) && plugin.lastDrop.getSource() != null) {
@@ -46,14 +46,13 @@ public class NpcUtilities {
         return event.getName();
     }
 
-    
     @SuppressWarnings("null")
     private static boolean isCorruptedGauntlet(LootReceived event, DropTrackerPlugin plugin) {
-        return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null && "The Gauntlet".equals(event.getName())
+        return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null
+                && "The Gauntlet".equals(event.getName())
                 && (CG_NAME.equals(plugin.lastDrop.getSource()) || CG_BOSS.equals(plugin.lastDrop.getSource()));
     }
 
-    
     private static boolean shouldUseChatName(LootReceived event, DropTrackerPlugin plugin) {
         assert plugin.lastDrop != null;
         String lastSource = plugin.lastDrop.getSource();
@@ -64,6 +63,7 @@ public class NpcUtilities {
     public static Optional<Pair<String, Integer>> parseBoss(String message, DropTrackerPlugin plugin) {
         Matcher primary = PRIMARY_REGEX.matcher(message);
         Matcher secondary = SECONDARY_REGEX.matcher(message);
+        Pair<String, Integer> mostRecentNpcData = null;
 
         if (primary.find()) {
             String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
@@ -77,8 +77,7 @@ public class NpcUtilities {
                 } catch (NumberFormatException e) {
                 }
             }
-        } else
-        if (secondary.find()){
+        } else if (secondary.find()) {
             String key = parseSecondary(secondary.group("key"));
             String value = secondary.group("value");
             if (key != null) {
@@ -136,5 +135,5 @@ public class NpcUtilities {
 
         return null;
     }
-    
+
 }

@@ -53,10 +53,15 @@ public class ClogHandler extends BaseEventHandler {
         /* does not need an override */
     }
 
+    @Override
+    public boolean isEnabled() {
+        return config.clogEmbeds();
+    }
+
 
     @SuppressWarnings("deprecation")
     public void onChatMessage(String chatMessage) {
-        if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1) {
+        if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1 || !this.isEnabled()) {
             // require notifier enabled without popup mode to use chat event
             return;
         }
@@ -72,7 +77,7 @@ public class ClogHandler extends BaseEventHandler {
             popupStarted.set(true);
         } else if (scriptId == ScriptID.NOTIFICATION_DELAY) {
             String topText = client.getVarcStrValue(VarClientStr.NOTIFICATION_TOP_TEXT);
-            if (popupStarted.getAndSet(false) && "Collection log".equalsIgnoreCase(topText) && isEnabled()) {
+            if (popupStarted.getAndSet(false) && "Collection log".equalsIgnoreCase(topText) && this.isEnabled()) {
                 String bottomText = submissionManager.sanitize(client.getVarcStrValue(VarClientStr.NOTIFICATION_BOTTOM_TEXT));
                 processCollection(bottomText.substring(POPUP_PREFIX_LENGTH).trim());
             }
@@ -83,6 +88,8 @@ public class ClogHandler extends BaseEventHandler {
 
 
     private void processCollection(String itemName) {
+        if (!this.isEnabled()) return;
+
         int completed = client.getVarpValue(COMPLETED_VARP);
         int total = client.getVarpValue(TOTAL_VARP);
 

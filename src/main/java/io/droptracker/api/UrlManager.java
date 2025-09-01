@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 
 import javax.inject.Inject;
 
@@ -19,7 +18,6 @@ import com.google.gson.JsonParser;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.annotations.Component;
-import net.runelite.api.events.ChatMessage;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.WidgetUtil;
 import net.runelite.client.callback.ClientThread;
@@ -177,7 +175,7 @@ public class UrlManager {
 
     
     /* Open a link in the browser */
-    public BiConsumer<ChatMessage, String> openLink(String destination) {
+    public void openLink(String destination) {
 		HttpUrl webUrl = HttpUrl.parse("https://discord.gg/dvb7yP7JJH");
 		if (!destination.contains("https://")) {
 			if (destination == "website" && config.useApi()) {
@@ -187,12 +185,12 @@ public class UrlManager {
 			webUrl = HttpUrl.parse(destination);
 		}
 		if (webUrl == null) {
-			return null;
+			return;
 		}
 		HttpUrl.Builder urlBuilder = webUrl.newBuilder();
 		HttpUrl url = urlBuilder.build();
 		LinkBrowser.browse(url.toString());
-		return null;
+		return;
 	}
 
     

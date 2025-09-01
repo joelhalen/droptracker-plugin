@@ -9,13 +9,11 @@ import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.commons.lang3.tuple.Triple;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.Temporal;
 import java.util.*;
@@ -42,9 +40,6 @@ public class PbHandler extends BaseEventHandler {
     private static final long MESSAGE_LOOT_WINDOW = 15000; // 15 seconds
     private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
 
-    private static final Duration PB_MESSAGE_WINDOW = Duration.ofSeconds(5); // Adjust window as needed
-    private final Map<String, Triple<Duration, Duration, Boolean>> recentTimeMessages = new HashMap<>();
-    private final Map<String, Instant> timeMessageTimestamps = new HashMap<>();
 
     private static final Pattern[] TIME_PATTERNS = {
             // Team patterns
@@ -96,7 +91,8 @@ public class PbHandler extends BaseEventHandler {
     public void process(Object... args) { /* does not need an override */ }
 
     public void onGameMessage(String message) {
-        if (!isEnabled()) return;
+        // call isEnabled instead of checking config again
+        if (!this.isEnabled()) return;
         checkPB(message);
         checkTime(message);
         parseBossKill(message).ifPresent(this::updateData);
@@ -111,12 +107,16 @@ public class PbHandler extends BaseEventHandler {
     }
 
 
+    @Override
+    public boolean isEnabled() {
+        return config.pbEmbeds();
+    }
     public void onTick() {
         BossNotification data = this.bossData.get();
 
         if (data != null) {
             if (data.getBoss() != null) {
-                if (isEnabled()) {
+                if (this.isEnabled()) {
                     processKill(data);
                     return;
                 }
@@ -137,15 +137,6 @@ public class PbHandler extends BaseEventHandler {
         if (plugin.ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
             mostRecentNpcData = null;
         }
-
-        // Clean up old time messages
-        Instant cutoff = Instant.now().minus(PB_MESSAGE_WINDOW);
-        timeMessageTimestamps.entrySet().removeIf(entry ->
-                entry.getValue().isBefore(cutoff)
-        );
-        recentTimeMessages.keySet().removeIf(boss ->
-                !timeMessageTimestamps.containsKey(boss)
-        );
     }
 
 
@@ -294,7 +285,6 @@ public class PbHandler extends BaseEventHandler {
         });
     }
 
-    @NotNull
     private Duration parseTime(String timeStr) {
 
         try {
@@ -334,7 +324,7 @@ public class PbHandler extends BaseEventHandler {
             return duration;
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Error parsing time: {}", e.getMessage());
             return null;
         }
     }

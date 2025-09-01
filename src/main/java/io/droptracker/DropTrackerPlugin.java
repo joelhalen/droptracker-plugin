@@ -34,6 +34,7 @@ import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -202,11 +203,11 @@ public class DropTrackerPlugin extends Plugin {
 		clientToolbar.addNavigation(navButton);
 	}
 
-	public void updateSubmissionsPanel() {
-		if (panel != null) {
-			panel.updateSentSubmissions();
-		}
-	}
+	// public void updateSubmissionsPanel() {
+	// 	if (panel != null) {
+	// 		panel.updateSentSubmissions();
+	// 	}
+	// }
 
 
 
@@ -292,7 +293,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event) {
-		if(config.clogEmbeds()) {
+		if(clogHandler.isEnabled()) {
 			clogHandler.onScript(event.getScriptId());
 		}
 	}
@@ -348,17 +349,10 @@ public class DropTrackerPlugin extends Plugin {
 								panel.updateSentSubmissions();
 							});
 
-							// Delayed refresh after configs should be loaded
-							executor.submit(() -> {
-								try {
-									Thread.sleep(2000); // Wait 2 seconds for async load
-									SwingUtilities.invokeLater(() -> {
-										panel.updateSentSubmissions();
-									});
-								} catch (InterruptedException e) {
-									Thread.currentThread().interrupt();
-								}
-							});
+							// Schedule a panel submission update on the executor instead of directly waiting on the thread
+
+							executor.schedule(() -> { panel.updateSentSubmissions(); }, 2, TimeUnit.SECONDS); // Wait 2 seconds for async load
+
 						}
 					} catch (IOException e) {
 						log.debug("Couldn't refresh api Panel");
@@ -366,13 +360,13 @@ public class DropTrackerPlugin extends Plugin {
 				}
 				break;
 			case GAMEMESSAGE:
-				if(config.pbEmbeds()){
+				if(pbHandler.isEnabled()){
 					pbHandler.onGameMessage(chatMessage);
 				}
-				if(config.caEmbeds()){
+				if(caHandler.isEnabled()){
 					caHandler.onGameMessage(chatMessage);
 				}
-				if(config.clogEmbeds()) {
+				if(clogHandler.isEnabled()) {
 					clogHandler.onChatMessage(chatMessage);
 				}
 			case FRIENDSCHATNOTIFICATION:
@@ -395,6 +389,10 @@ public class DropTrackerPlugin extends Plugin {
 
 			// Use SwingUtilities to ensure UI updates happen on EDT
 			String playerName = client.getLocalPlayer().getName();
+			if (config.lastAccountName() != null && !config.lastAccountName().equals(playerName)) {
+				/* In the case that the player has changed from the last time we stored their name/hash, we need to call the reset method on KCService... */
+				kcService.reset();
+			}
 			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
 			configManager.setConfiguration("droptracker", "lastAccountHash", String.valueOf(client.getAccountHash()));
 			SwingUtilities.invokeLater(() -> {

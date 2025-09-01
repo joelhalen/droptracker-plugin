@@ -2,12 +2,8 @@ package io.droptracker.util;
 
 
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonElement;
-
-
+import com.google.gson.reflect.TypeToken;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Setter;
@@ -23,7 +19,15 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,27 +41,16 @@ public class Rarity {
 
     @Inject
     void init() {
-        Map<String, List<RawDrop>> raw = new HashMap<>();
-
+        Map<String, List<RawDrop>> raw;
         try (InputStream is = getClass().getResourceAsStream("/npc_drops.json");
              Reader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(is)))) {
-
-            // Parse JSON root object
-            JsonParser parser = new JsonParser();
-            JsonObject jsonObject = parser.parse(reader).getAsJsonObject();
-
-            // For each NPC name key, parse the value as RawDrop[]
-            for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
-                RawDrop[] dropsArray = gson.fromJson(entry.getValue(), RawDrop[].class);
-                raw.put(entry.getKey(), Arrays.asList(dropsArray));
-            }
-
+            raw = gson.fromJson(reader,
+                    new TypeToken<Map<String, List<RawDrop>>>() {}.getType());
         } catch (Exception e) {
             log.error("Failed to read monster drop rates", e);
             return;
         }
 
-        // Process raw drops to your dropsByNpcName map
         raw.forEach((npcName, rawDrops) -> {
             List<Drop> drops = rawDrops.stream()
                     .map(RawDrop::transform)
@@ -66,7 +59,6 @@ public class Rarity {
             dropsByNpcName.put(npcName, drops);
         });
     }
-
 
     public OptionalDouble getRarity(String npcName, int itemId, int quantity) {
         ItemComposition composition = itemId >= 0 ? itemManager.getItemComposition(itemId) : null;

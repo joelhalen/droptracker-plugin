@@ -299,6 +299,7 @@ public interface DropTrackerConfig extends Config {
     default String lastVersionNotified() {
         return "0";
     }
+    public void setLastVersionNotified(String versionNotified);
 
     @ConfigItem(
         name = "lastAccountName",

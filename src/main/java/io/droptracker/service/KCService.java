@@ -72,6 +72,7 @@ public class KCService {
         this.configManager = configManager;
         this.gson = gson;
         this.rarityService = rarityService;
+        this.executor = executor;
         this.plugin = plugin;
     }
 
@@ -158,6 +159,9 @@ public class KCService {
             // However: we don't know if boss message appeared before/after the loot event.
             // If after, we should store kc. If before, we should store kc - 1.
             // Given this uncertainty, we wait so that the loot event has passed, and then we can store latest kc.
+
+            
+            /* -- We are using the executor here -- */
             executor.schedule(() -> {
                 killCounts.asMap().merge(cacheKey, kc, Math::max);
             }, 15, TimeUnit.SECONDS);

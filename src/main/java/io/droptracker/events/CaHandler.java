@@ -45,8 +45,13 @@ public class CaHandler extends BaseEventHandler {
         /* does not need an override */
     }
 
+    @Override
+    public boolean isEnabled() {
+        return config.caEmbeds();
+    }
+
     public void onGameMessage(String message) {
-        if (!isEnabled()) return;
+        if (!this.isEnabled()) return;
         parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
 
@@ -55,6 +60,8 @@ public class CaHandler extends BaseEventHandler {
 
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
+        if (!this.isEnabled()) return;
+
         // delay notification for varbits to be updated
         clientThread.invokeAtTickEnd(() -> {
             int taskPoints = tier.getPoints();
