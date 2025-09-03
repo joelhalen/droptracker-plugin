@@ -146,9 +146,9 @@ public class SubmissionManager {
             if (isPb) {
                 ValidSubmission pbSubmission = null;
                 for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                    if (groupConfig.isSendPbs() == true) {
-                        if (groupConfig.isOnlyScreenshots() == true) {
-                            if (requiredScreenshot == false) {
+                    if (groupConfig.isSendPbs()) {
+                        if (groupConfig.isOnlyScreenshots()) {
+                            if (!requiredScreenshot) {
                                 continue; // Skip this group if screenshots required but not happening
                             }
                         }
@@ -173,9 +173,9 @@ public class SubmissionManager {
             // Create ValidSubmission for collection log entries
             ValidSubmission clogSubmission = null;
             for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendClogs() == true) {
-                    if (groupConfig.isOnlyScreenshots() == true) {
-                        if (requiredScreenshot == false) {
+                if (groupConfig.isSendClogs()) {
+                    if (groupConfig.isOnlyScreenshots()) {
+                        if (!requiredScreenshot) {
                             continue; // Skip this group if screenshots required but not happening
                         }
                     }
@@ -199,9 +199,9 @@ public class SubmissionManager {
             // Create ValidSubmission for combat achievements
             ValidSubmission caSubmission = null;
             for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendCAs() == true) {
-                    if (groupConfig.isOnlyScreenshots() == true) {
-                        if (requiredScreenshot == false) {
+                if (groupConfig.isSendCAs()) {
+                    if (groupConfig.isOnlyScreenshots()) {
+                        if (!requiredScreenshot) {
                             continue; // Skip this group if screenshots required but not happening
                         }
                     }
@@ -272,23 +272,20 @@ public class SubmissionManager {
             return;
         }
 
-        boolean requiredScreenshot = false;
-        if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
-            requiredScreenshot = true;
-        }
+        boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue();
 
         // Create ValidSubmission for drops
         /* Temporarily returning here for testing purposes -- will not send to server */
         ValidSubmission dropSubmission = null;
         for (GroupConfig groupConfig : api.getGroupConfigs()) {
-            if (groupConfig.isSendDrops() == true && totalValue >= groupConfig.getMinimumDropValue()) {
+            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
                 // Check if group allows stacked items
                 if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
                     continue; // Skip this group if items were stacked but group disabled that
                 }
 
-                if (groupConfig.isOnlyScreenshots() == true) {
-                    if (requiredScreenshot == false) {
+                if (groupConfig.isOnlyScreenshots()) {
+                    if (!requiredScreenshot) {
                         continue; // Skip this group if screenshots required but not happening
                     }
                 }
