@@ -76,7 +76,8 @@ public class SubmissionManager {
     private final UrlManager urlManager;
     private final DrawManager drawManager;
 
-    // Store a list of submissions that the player has received which qualified for a notification to be sent
+    /// Store a list of submissions that the player has received which qualified for a notification to be sent
+    @Getter
     private final List<ValidSubmission> validSubmissions = new ArrayList<>();
 
     /// Callback for UI updates when submissions change
@@ -444,10 +445,6 @@ public class SubmissionManager {
         }
         validSubmissions.add(validSubmission);
         notifyUpdateCallback();
-    }
-
-    public List<ValidSubmission> getValidSubmissions() {
-        return validSubmissions;
     }
 
     /**
