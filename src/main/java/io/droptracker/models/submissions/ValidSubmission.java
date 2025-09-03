@@ -11,24 +11,20 @@ import javax.swing.JPanel;
 import javax.swing.JTextArea;
 
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.ui.components.PanelElements;
-import lombok.Getter;
-import lombok.Setter;
-import net.runelite.client.util.AsyncBufferedImage;
+import lombok.Data;
 
-@Getter
-@Setter
+/**
+ * Can represent any type of outgoing submission, such as a drop, pb, clog, ca, etc.
+ * ValidSubmissions are created when a user receives something that their registered group(s)
+ * have configured to have notifications sent for.
+ * <p>
+ * We generate an ID when sending data, and store this ID in the ValidSubmission object,
+ * so that we can update/track whether the submission arrived at the API and had its notifications
+ * processed properly.
+ */
+@Data
 public class ValidSubmission {
-    /* Can represent any type of outgoing submission, such as a drop, pb, clog, ca, etc.
-     * ValidSubmissions are created when a user receives something that their registered group(s)
-     * have configured to have notifications sent for.
-     * 
-     * We use the uuidv7 generator when sending data, and store this ID in the ValidSubmission object,
-     * so that we can update/track whether the submission arrived at the API and had its notifications
-     * processed properly.
-     */
-
-    // uuidv7 generated ID
+    // generated ID
     private String uuid;
     // type of submission
     private SubmissionType type;
@@ -77,34 +73,6 @@ public class ValidSubmission {
         
         // Extract data from webhook
         extractDataFromWebhook(webhook);
-    }
-
-    /* @param uuid - uuidv7 generated ID
-     * @param type - type of submission
-     * @param groupIds - group ID(s) that the submission should have been sent to
-     * @param accountHash - account hash
-     * @param itemId - item ID
-     * @param itemName - item name
-     * @param status - current status of the submission (e.g. "pending", "processed", "failed")
-     * @param timeSinceReceived - time since submission was created on the client-side
-     * @param timeProcessedAt - time that the API responded with a successful processing of the submission
-     * @param retryResponses - array of responses from the API on retry attempts
-     */
-    public ValidSubmission(String uuid, SubmissionType type, String[] groupIds, 
-                           String accountHash, String itemId, String itemName, String npcName, String description, String status, 
-                           String timeReceived, String timeProcessedAt, String[] retryResponses) {
-        this.uuid = uuid;
-        this.type = type;
-        this.groupIds = groupIds;
-        this.accountHash = accountHash;
-        this.itemId = itemId;
-        this.itemName = itemName;
-        this.npcName = npcName;
-        this.description = description;
-        this.status = status;
-        this.timeReceived = timeReceived;
-        this.timeProcessedAt = timeProcessedAt;
-        this.retryResponses = retryResponses;
     }
 
     private void extractDataFromWebhook(CustomWebhookBody webhook) {
@@ -157,19 +125,13 @@ public class ValidSubmission {
         this.groupIds = newGroupIds;
     }
 
-    // Method to get the original webhook for retry functionality
-    public CustomWebhookBody getOriginalWebhook() {
-        return originalWebhook;
-    }
-
-
     public JPanel toSubmissionPanel() {
         JPanel entryPanel = new JPanel();
         entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
 
         // Create a text area to display the submission information
         JTextArea textArea = new JTextArea();
-        String text = "";
+        String text;
         switch (this.type) {
             case DROP:
                 text = "Drop: " + this.itemName + " - " + this.timeSinceReceived();
@@ -209,29 +171,6 @@ public class ValidSubmission {
         textArea.setFont(new Font("Arial", Font.PLAIN, 12));    
         entryPanel.add(textArea);
         return entryPanel;
-    }
-
-    private AsyncBufferedImage getPanelImage() {
-        return PanelElements.getImageForSubmission(this);
-    }
-
-    @Override
-    public String toString() {
-        return "ValidSubmission{" +
-            "uuid='" + uuid + '\'' +
-            ", type='" + type + '\'' +
-            ", groupIds='" + groupIds + '\'' +
-            ", accountHash='" + accountHash + '\'' +
-            ", itemId='" + itemId + '\'' +
-            ", itemName='" + itemName + '\'' +
-            ", npcName='" + npcName + '\'' +
-            ", description='" + description + '\'' +
-            ", timeReceived='" + timeReceived + '\'' +
-            ", timeProcessedAt='" + timeProcessedAt + '\'' +
-            ", status='" + status + '\'' +
-            ", retryResponses='" + retryResponses + '\'' +
-            ", originalWebhook='" + originalWebhook + '\'' +
-            '}';
     }
 
     private String timeSinceReceived() {

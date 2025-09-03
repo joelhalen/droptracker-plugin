@@ -3,10 +3,7 @@ package io.droptracker.service;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -26,6 +23,8 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
@@ -40,56 +39,48 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okio.Buffer;
+import org.jetbrains.annotations.NotNull;
 
 @Slf4j
 @Singleton
 public class SubmissionManager {
 
+    @Getter
     private static class ApiResponse {
         @SerializedName("notice")
         private String notice;
 
         @SerializedName("rank_update")
         private String rankUpdate;
-
-        public String getNotice() {
-            return notice;
-        }
-
-        public String getRankUpdate() {
-            return rankUpdate;
-        }
     }
 
     public interface SubmissionUpdateCallback {
         void onSubmissionsUpdated();
     }
 
-    private DropTrackerConfig config;
-    private DropTrackerApi api;
-    private ChatMessageUtil chatMessageUtil;
-    private Gson gson;
-    private OkHttpClient okHttpClient;
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private UrlManager urlManager;
-    @Inject
-    private DrawManager drawManager;
+    private final DropTrackerConfig config;
+    private final DropTrackerApi api;
+    private final ChatMessageUtil chatMessageUtil;
+    private final Gson gson;
+    private final OkHttpClient okHttpClient;
+    private final Client client;
+    private final ClientThread clientThread;
+    private final UrlManager urlManager;
+    private final DrawManager drawManager;
 
-    // Store a list of submissions that the player has received which qualified for a notification to be sent
-    private List<ValidSubmission> validSubmissions = new ArrayList<>();
+    /// Store a list of submissions that the player has received which qualified for a notification to be sent
+    @Getter
+    private final List<ValidSubmission> validSubmissions = new ArrayList<>();
 
-    // Callback for UI updates
+    /// Callback for UI updates when submissions change
+    @Setter
     private SubmissionUpdateCallback updateCallback;
+    @Setter
     private boolean updatesEnabled = true;
 
     @Inject
@@ -109,18 +100,6 @@ public class SubmissionManager {
     }
 
     /**
-     * Sets the callback for UI updates when submissions change
-     * @param callback The callback to notify when submissions are updated
-     */
-    public void setUpdateCallback(SubmissionUpdateCallback callback) {
-        this.updateCallback = callback;
-    }
-
-    public void setUpdatesEnabled(boolean enabled) {
-        this.updatesEnabled = enabled;
-    }
-
-    /**
      * Notifies the UI callback that submissions have been updated
      */
     private void notifyUpdateCallback() {
@@ -137,137 +116,157 @@ public class SubmissionManager {
          * and later updating the status of it with whether or not it properly got sent to the API and had its notifications
          * processed properly for the target group(s).
          */
-        Boolean requiredScreenshot = false;
-        Boolean shouldHideDm = config.hideDMs();
+        var requiredScreenshot = false;
+        var shouldHideDm = config.hideDMs();
 
-        if (type == SubmissionType.DROP) {
-            // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
-        }
-        if (type == SubmissionType.KILL_TIME) {
-            // Kc / kill time
-            List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
-            if (!config.pbEmbeds()) {
-                return;
-            }
-            boolean isPb = false;
-            for (CustomWebhookBody.Embed embed : embeds) {
-                for (CustomWebhookBody.Field field : embed.getFields()) {
-                    if (field.getName().equalsIgnoreCase("is_pb")) {
-                        if (field.getValue().equalsIgnoreCase("true")) {
-                            isPb = true;
+        switch (type) {
+            case DROP:
+                // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
+                break;
+
+            case KILL_TIME:
+                // Kc / kill time
+                List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
+                if (!config.pbEmbeds()) {
+                    return;
+                }
+                boolean isPb = false;
+                for (CustomWebhookBody.Embed embed : embeds) {
+                    for (CustomWebhookBody.Field field : embed.getFields()) {
+                        if (field.getName().equalsIgnoreCase("is_pb")) {
+                            if (field.getValue().equalsIgnoreCase("true")) {
+                                isPb = true;
+                            }
                         }
                     }
                 }
-            }
-            if (config.screenshotPBs() && isPb) {
-                requiredScreenshot = true;
-            }
-            if (isPb) {
-                ValidSubmission pbSubmission = null;
+                if (config.screenshotPBs() && isPb) {
+                    requiredScreenshot = true;
+                }
+                if (isPb) {
+                    ValidSubmission pbSubmission = null;
+                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                        if (groupConfig.isSendPbs()) {
+                            if (groupConfig.isOnlyScreenshots()) {
+                                if (!requiredScreenshot) {
+                                    continue; // Skip this group if screenshots required but not happening
+                                }
+                            }
+
+                            // Create or find existing submission for this webhook
+                            if (pbSubmission == null) {
+                                pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
+                                addSubmissionToMemory(pbSubmission);
+                            } else {
+                                pbSubmission.addGroupId(groupConfig.getGroupId());
+                            }
+                        }
+                    }
+                }
+                break;
+
+            case COLLECTION_LOG:
+                if (!config.clogEmbeds()) {
+                    return;
+                }
+                if (config.screenshotNewClogs()) {
+                    requiredScreenshot = true;
+                }
+                // Create ValidSubmission for collection log entries
+                ValidSubmission clogSubmission = null;
                 for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                    if (groupConfig.isSendPbs() == true) {
-                        if (groupConfig.isOnlyScreenshots() == true) {
-                            if (requiredScreenshot == false) {
+                    if (groupConfig.isSendClogs()) {
+                        if (groupConfig.isOnlyScreenshots()) {
+                            if (!requiredScreenshot) {
                                 continue; // Skip this group if screenshots required but not happening
                             }
                         }
 
                         // Create or find existing submission for this webhook
-                        if (pbSubmission == null) {
-                            pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
-                            addSubmissionToMemory(pbSubmission);
+                        if (clogSubmission == null) {
+                            clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
+                            addSubmissionToMemory(clogSubmission);
                         } else {
-                            pbSubmission.addGroupId(groupConfig.getGroupId());
+                            clogSubmission.addGroupId(groupConfig.getGroupId());
                         }
                     }
                 }
-            }
-        } else if (type == SubmissionType.COLLECTION_LOG) {
-            if (!config.clogEmbeds()) {
-                return;
-            }
-            if (config.screenshotNewClogs()) {
-                requiredScreenshot = true;
-            }
-            // Create ValidSubmission for collection log entries
-            ValidSubmission clogSubmission = null;
-            for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendClogs() == true) {
-                    if (groupConfig.isOnlyScreenshots() == true) {
-                        if (requiredScreenshot == false) {
-                            continue; // Skip this group if screenshots required but not happening
-                        }
-                    }
+                break;
 
-                    // Create or find existing submission for this webhook
-                    if (clogSubmission == null) {
-                        clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
-                        addSubmissionToMemory(clogSubmission);
-                    } else {
-                        clogSubmission.addGroupId(groupConfig.getGroupId());
-                    }
+            case COMBAT_ACHIEVEMENT:
+                // combat achievements
+                if (!config.caEmbeds()) {
+                    return;
                 }
-            }
-        } else if (type == SubmissionType.COMBAT_ACHIEVEMENT) { // combat achievements
-            if (!config.caEmbeds()) {
-                return;
-            }
-            if (config.screenshotCAs()) {
-                requiredScreenshot = true;
-            }
-            // Create ValidSubmission for combat achievements
-            ValidSubmission caSubmission = null;
-            for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendCAs() == true) {
-                    if (groupConfig.isOnlyScreenshots() == true) {
-                        if (requiredScreenshot == false) {
-                            continue; // Skip this group if screenshots required but not happening
+                if (config.screenshotCAs()) {
+                    requiredScreenshot = true;
+                }
+                // Create ValidSubmission for combat achievements
+                ValidSubmission caSubmission = null;
+                for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                    if (groupConfig.isSendCAs()) {
+                        if (groupConfig.isOnlyScreenshots()) {
+                            if (!requiredScreenshot) {
+                                continue; // Skip this group if screenshots required but not happening
+                            }
+                        }
+
+                        // Create or find existing submission for this webhook
+                        if (caSubmission == null) {
+                            caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
+                            addSubmissionToMemory(caSubmission);
+                        } else {
+                            caSubmission.addGroupId(groupConfig.getGroupId());
                         }
                     }
+                }
+                break;
 
-                    // Create or find existing submission for this webhook
-                    if (caSubmission == null) {
-                        caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
-                        addSubmissionToMemory(caSubmission);
-                    } else {
-                        caSubmission.addGroupId(groupConfig.getGroupId());
+            case LEVEL_UP:
+                CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
+                // Check the skills that leveled up
+                for (CustomWebhookBody.Field field : embed.getFields()) {
+                    String fieldName = field.getName();
+                    if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
+                        int newLevel = Integer.parseInt(field.getValue());
+                        // Check if this level qualifies for a screenshot
+                        if (newLevel >= config.minLevelToScreenshot()) {
+                            requiredScreenshot = true;
+                            break;
+                        }
                     }
                 }
-            }
-        } else if (type == SubmissionType.ADVENTURE_LOG) {
-            // Nothing extra needs to be done for adventure log data
-            requiredScreenshot = false;
-        } else if (type == SubmissionType.EXPERIENCE || type == SubmissionType.EXPERIENCE_MILESTONE) {
-            /* We don't need to take screenshots for experience or experience milestones */
-            requiredScreenshot = false;
-        } else if (type == SubmissionType.LEVEL_UP) {
-            CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
-            // Check the skills that leveled up
-            for (CustomWebhookBody.Field field : embed.getFields()) {
-                String fieldName = field.getName();
-                if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
-                    int newLevel = Integer.parseInt(field.getValue());
-                    // Check if this level qualifies for a screenshot
-                    if (newLevel >= config.minLevelToScreenshot()) {
-                        requiredScreenshot = true;
-                        break;
-                    }
-                }
-            }
-        } else if (type == SubmissionType.QUEST_COMPLETION) {
-            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-            if (!config.trackQuests()) {
-                return;
-            }
-            if (config.screenshotQuests()) {
+                break;
+
+            case QUEST_COMPLETION:
                 // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                requiredScreenshot = true;
-            }
-        } else if (type == SubmissionType.PET) {
-            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-            if (config.screenshotPets()) {
-                requiredScreenshot = true;
-            }
+                if (!config.trackQuests()) {
+                    return;
+                }
+                if (config.screenshotQuests()) {
+                    // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
+                    requiredScreenshot = true;
+                }
+                break;
+
+            case EXPERIENCE:
+                /* We don't need to take screenshots for experience */
+                break;
+
+            case EXPERIENCE_MILESTONE:
+                /* We don't need to take screenshots for experience milestones */
+                break;
+
+            case ADVENTURE_LOG:
+                // Nothing extra needs to be done for adventure log data
+                break;
+
+            case PET:
+                // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
+                if (config.screenshotPets()) {
+                    requiredScreenshot = true;
+                }
+                break;
         }
 
         // UI notification is handled by addSubmissionToMemory() when submissions are actually added
@@ -279,35 +278,26 @@ public class SubmissionManager {
         }
     }
 
-    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue) {
-        // Handles sending drops exclusively - for individual items use sendDataToDropTracker(webhook, totalValue, singleValue)
-        sendDataToDropTracker(customWebhookBody, totalValue, totalValue);
-    }
-
-
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
         }
 
-        boolean requiredScreenshot = false;
-        if (config.screenshotDrops() && totalValue > config.screenshotValue()) {
-            requiredScreenshot = true;
-        }
+        boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue();
 
         // Create ValidSubmission for drops
         /* Temporarily returning here for testing purposes -- will not send to server */
         ValidSubmission dropSubmission = null;
         for (GroupConfig groupConfig : api.getGroupConfigs()) {
-            if (groupConfig.isSendDrops() == true && totalValue >= groupConfig.getMinimumDropValue()) {
+            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
                 // Check if group allows stacked items
                 if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
                     continue; // Skip this group if items were stacked but group disabled that
                 }
 
-                if (groupConfig.isOnlyScreenshots() == true) {
-                    if (requiredScreenshot == false) {
+                if (groupConfig.isOnlyScreenshots()) {
+                    if (!requiredScreenshot) {
                         continue; // Skip this group if screenshots required but not happening
                     }
                 }
@@ -350,26 +340,18 @@ public class SubmissionManager {
 
         MultipartBody requestBody = requestBodyBuilder.build();
         for (MultipartBody.Part part : requestBody.parts()) {
-            Headers headers = part.headers();
-            if (headers != null) {
-                for (int i = 0; i < headers.size(); i++) {
-                }
-            }
-
             // Try to read the body content
             RequestBody body = part.body();
-            if (body != null) {
-                // Safely check content type
-                MediaType contentType = body.contentType();
-                if (contentType != null &&
-                        (contentType.toString().contains("text") ||
-                                contentType.toString().contains("json"))) {
-                    Buffer buffer = new Buffer();
-                    try {
-                        body.writeTo(buffer);
-                    } catch (IOException e) {
-                    }
-                } else {
+
+            // Safely check content type
+            MediaType contentType = body.contentType();
+            if (contentType != null &&
+                    (contentType.toString().contains("text") ||
+                            contentType.toString().contains("json"))) {
+                Buffer buffer = new Buffer();
+                try {
+                    body.writeTo(buffer);
+                } catch (IOException e) {
                 }
             }
         }
@@ -398,57 +380,53 @@ public class SubmissionManager {
         }
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 log.error("Error submitting: ", e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 if (config.useApi()) {
                     // Try to get response body, but don't consume it
                     ResponseBody body = response.peekBody(Long.MAX_VALUE);
-                    if (body != null) {
-                        String bodyString = body.string();
-                        if (!bodyString.isEmpty()) {
-                            try {
-                                ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
-                                if (apiResponse != null) {
-                                    String noticeMessage = apiResponse.getNotice();
-                                    if (noticeMessage != null && !noticeMessage.isEmpty()) {
-                                        chatMessageUtil.sendChatMessage(noticeMessage);
-                                    }
-                                    String updateMessage = apiResponse.getRankUpdate();
-                                    if (updateMessage != null && !updateMessage.isEmpty()) {
-                                        chatMessageUtil.sendChatMessage(updateMessage);
-                                    }
+                    String bodyString = body.string();
+                    if (!bodyString.isEmpty()) {
+                        try {
+                            ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
+                            if (apiResponse != null) {
+                                String noticeMessage = apiResponse.getNotice();
+                                if (noticeMessage != null && !noticeMessage.isEmpty()) {
+                                    chatMessageUtil.sendChatMessage(noticeMessage);
                                 }
-                            } catch (Exception e) {
+                                String updateMessage = apiResponse.getRankUpdate();
+                                if (updateMessage != null && !updateMessage.isEmpty()) {
+                                    chatMessageUtil.sendChatMessage(updateMessage);
+                                }
                             }
+                        } catch (Exception e) {
                         }
                     }
                 }
 
-                if (response.isSuccessful()) {
-                } else if (response.code() == 429) {
-                    sendDataToDropTracker(customWebhookBody, screenshot);
-                } else if (response.code() == 400) {
-
-                    response.close();
-                    return;
-
-                } else if (response.code() == 404) {
-                    // On the first 404 error, we'll populate the list with new ones.
-                    executor.submit(() -> {
-                        try {
-                            urlManager.fetchNewList();
-                        } catch (Exception e) {
-                            log.error("Failed to fetch new webhook list", e);
-                        }
-                    });
-                    sendDataToDropTracker(customWebhookBody, screenshot);
-
-                } else {
-                    sendDataToDropTracker(customWebhookBody, screenshot);
+                if (!response.isSuccessful()) {
+                    if (response.code() == 429) {
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    } else if (response.code() == 400) {
+                        response.close();
+                        return;
+                    } else if (response.code() == 404) {
+                        // On the first 404 error, we'll populate the list with new ones.
+                        executor.submit(() -> {
+                            try {
+                                urlManager.fetchNewList();
+                            } catch (Exception e) {
+                                log.error("Failed to fetch new webhook list", e);
+                            }
+                        });
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    } else {
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    }
                 }
                 response.close();
             }
@@ -464,10 +442,6 @@ public class SubmissionManager {
         }
         validSubmissions.add(validSubmission);
         notifyUpdateCallback();
-    }
-
-    public List<ValidSubmission> getValidSubmissions() {
-        return validSubmissions;
     }
 
     /**
@@ -497,44 +471,6 @@ public class SubmissionManager {
         validSubmissions.remove(validSubmission);
         notifyUpdateCallback();
     }
-
-    /**
-     * Clear all stored submissions
-     */
-    public void clearAllSubmissions() {
-        validSubmissions.clear();
-        notifyUpdateCallback();
-    }
-
-    /**
-     * Update the status of a submission based on API response
-     * @param uuid The UUID of the submission to update
-     * @param status The new status ("success", "failed", "processed", etc.)
-     * @param response The response message from the API
-     */
-    public void updateSubmissionStatus(String uuid, String status, String response) {
-        if (uuid == null) return;
-
-        for (ValidSubmission submission : validSubmissions) {
-            if (uuid.equals(submission.getUuid())) {
-                submission.setStatus(status);
-                if ("success".equals(status) || "processed".equals(status)) {
-                    submission.setTimeProcessedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
-                }
-
-                // Add response to retry responses array if it's a retry
-                if (response != null && !"pending".equals(status)) {
-                    String[] currentResponses = submission.getRetryResponses();
-                    String[] newResponses = Arrays.copyOf(currentResponses, currentResponses.length + 1);
-                    newResponses[currentResponses.length] = response;
-                    submission.setRetryResponses(newResponses);
-                }
-                notifyUpdateCallback();
-                break;
-            }
-        }
-    }
-
 
     private boolean isFakeWorld() {
         var worldType = client.getWorldType();

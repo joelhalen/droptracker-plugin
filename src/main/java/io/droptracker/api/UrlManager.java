@@ -70,7 +70,7 @@ public class UrlManager {
 	 * Grabs a random webhook URL from a preloaded list.
 	 * If not loaded yet, throws or returns null.
 	 */
-	public static String getRandomUrl() throws Exception {
+	public static String getRandomUrl() throws IllegalStateException {
 		// Wait for URLs to be loaded, but don't block the main thread
 		if (!endpointUrlsLoaded.isDone()) {
 			throw new IllegalStateException("Endpoints are not yet loaded; cannot submit...");

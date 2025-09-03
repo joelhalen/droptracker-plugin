@@ -256,8 +256,10 @@ public class DropTrackerApi {
                 return gson.fromJson(responseData, GroupSearchResult.class);
             } catch (Exception e) {
                 // If direct parsing fails, try to parse as Map and convert
+                // NOTE: This feels very ugly - we own the API. We should know the returned format
                 Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-                return GroupSearchResult.fromJsonMap(responseMap);
+                String jsonString = gson.toJson(responseMap);
+                return gson.fromJson(jsonString, GroupSearchResult.class);
             }
         }
     }
@@ -318,9 +320,11 @@ public class DropTrackerApi {
                 return gson.fromJson(responseData, PlayerSearchResult.class);
             } catch (Exception e) {
                 // If direct parsing fails, try to parse as Map and convert
+                // NOTE: We own the API - we should make sure we return values that can be parsed
                 @SuppressWarnings("unchecked")
                 Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-                return PlayerSearchResult.fromJsonMap(responseMap);
+                String jsonString = gson.toJson(responseMap);
+                return gson.fromJson(jsonString, PlayerSearchResult.class);
             }
         }
     }
