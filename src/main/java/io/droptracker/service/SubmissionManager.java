@@ -77,7 +77,7 @@ public class SubmissionManager {
     private final DrawManager drawManager;
 
     // Store a list of submissions that the player has received which qualified for a notification to be sent
-    private List<ValidSubmission> validSubmissions = new ArrayList<>();
+    private final List<ValidSubmission> validSubmissions = new ArrayList<>();
 
     /// Callback for UI updates when submissions change
     @Setter
