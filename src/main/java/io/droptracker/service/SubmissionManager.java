@@ -26,6 +26,7 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
@@ -51,20 +52,13 @@ import okio.Buffer;
 @Singleton
 public class SubmissionManager {
 
+    @Getter
     private static class ApiResponse {
         @SerializedName("notice")
         private String notice;
 
         @SerializedName("rank_update")
         private String rankUpdate;
-
-        public String getNotice() {
-            return notice;
-        }
-
-        public String getRankUpdate() {
-            return rankUpdate;
-        }
     }
 
     public interface SubmissionUpdateCallback {
