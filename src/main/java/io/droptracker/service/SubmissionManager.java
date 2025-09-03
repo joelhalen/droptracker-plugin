@@ -3,10 +3,7 @@ package io.droptracker.service;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -474,44 +471,6 @@ public class SubmissionManager {
         validSubmissions.remove(validSubmission);
         notifyUpdateCallback();
     }
-
-    /**
-     * Clear all stored submissions
-     */
-    public void clearAllSubmissions() {
-        validSubmissions.clear();
-        notifyUpdateCallback();
-    }
-
-    /**
-     * Update the status of a submission based on API response
-     * @param uuid The UUID of the submission to update
-     * @param status The new status ("success", "failed", "processed", etc.)
-     * @param response The response message from the API
-     */
-    public void updateSubmissionStatus(String uuid, String status, String response) {
-        if (uuid == null) return;
-
-        for (ValidSubmission submission : validSubmissions) {
-            if (uuid.equals(submission.getUuid())) {
-                submission.setStatus(status);
-                if ("success".equals(status) || "processed".equals(status)) {
-                    submission.setTimeProcessedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
-                }
-
-                // Add response to retry responses array if it's a retry
-                if (response != null && !"pending".equals(status)) {
-                    String[] currentResponses = submission.getRetryResponses();
-                    String[] newResponses = Arrays.copyOf(currentResponses, currentResponses.length + 1);
-                    newResponses[currentResponses.length] = response;
-                    submission.setRetryResponses(newResponses);
-                }
-                notifyUpdateCallback();
-                break;
-            }
-        }
-    }
-
 
     private boolean isFakeWorld() {
         var worldType = client.getWorldType();
