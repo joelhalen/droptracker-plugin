@@ -280,12 +280,6 @@ public class SubmissionManager {
         }
     }
 
-    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue) {
-        // Handles sending drops exclusively - for individual items use sendDataToDropTracker(webhook, totalValue, singleValue)
-        sendDataToDropTracker(customWebhookBody, totalValue, totalValue);
-    }
-
-
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
