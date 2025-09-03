@@ -27,6 +27,7 @@ import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
@@ -82,8 +83,10 @@ public class SubmissionManager {
     // Store a list of submissions that the player has received which qualified for a notification to be sent
     private List<ValidSubmission> validSubmissions = new ArrayList<>();
 
-    // Callback for UI updates
+    /// Callback for UI updates when submissions change
+    @Setter
     private SubmissionUpdateCallback updateCallback;
+    @Setter
     private boolean updatesEnabled = true;
 
     @Inject
@@ -100,18 +103,6 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
-    }
-
-    /**
-     * Sets the callback for UI updates when submissions change
-     * @param callback The callback to notify when submissions are updated
-     */
-    public void setUpdateCallback(SubmissionUpdateCallback callback) {
-        this.updateCallback = callback;
-    }
-
-    public void setUpdatesEnabled(boolean enabled) {
-        this.updatesEnabled = enabled;
     }
 
     /**
