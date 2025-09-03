@@ -33,17 +33,6 @@ public class ChatMessageUtil {
     @Inject
     private ClientThread clientThread;
 
-
-
-    @Inject
-    public ChatMessageUtil(DropTrackerConfig config, DropTrackerApi api,
-                           DropTrackerPlugin plugin, ScheduledExecutorService executor) {
-        this.config = config;
-        this.api = api;
-        this.plugin = plugin;
-        this.executor = executor;
-    }
-
     public void checkForMessage() {
         if (isMessageChecked) {
             return;
