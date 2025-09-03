@@ -430,7 +430,7 @@ public class GroupPanel {
 		groupInfoPanel.add(statsPanel);
 		groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 		// Get recent submission data to draw 
-		List<RecentSubmission> recentSubmissions = groupResult.getRecentSubmissions();
+		List<RecentSubmission> recentSubmissions = groupResult.getGroupRecentSubmissions();
 		if (recentSubmissions != null && !recentSubmissions.isEmpty()) {
 			groupInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, true));
 		} else {
