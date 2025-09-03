@@ -410,27 +410,25 @@ public class SubmissionManager {
                     }
                 }
 
-                if (response.isSuccessful()) {
-                } else if (response.code() == 429) {
-                    sendDataToDropTracker(customWebhookBody, screenshot);
-                } else if (response.code() == 400) {
-
-                    response.close();
-                    return;
-
-                } else if (response.code() == 404) {
-                    // On the first 404 error, we'll populate the list with new ones.
-                    executor.submit(() -> {
-                        try {
-                            urlManager.fetchNewList();
-                        } catch (Exception e) {
-                            log.error("Failed to fetch new webhook list", e);
-                        }
-                    });
-                    sendDataToDropTracker(customWebhookBody, screenshot);
-
-                } else {
-                    sendDataToDropTracker(customWebhookBody, screenshot);
+                if (!response.isSuccessful()) {
+                    if (response.code() == 429) {
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    } else if (response.code() == 400) {
+                        response.close();
+                        return;
+                    } else if (response.code() == 404) {
+                        // On the first 404 error, we'll populate the list with new ones.
+                        executor.submit(() -> {
+                            try {
+                                urlManager.fetchNewList();
+                            } catch (Exception e) {
+                                log.error("Failed to fetch new webhook list", e);
+                            }
+                        });
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    } else {
+                        sendDataToDropTracker(customWebhookBody, screenshot);
+                    }
                 }
                 response.close();
             }
