@@ -121,32 +121,63 @@ public class SubmissionManager {
         var requiredScreenshot = false;
         var shouldHideDm = config.hideDMs();
 
-        if (type == SubmissionType.DROP) {
-            // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
-        }
-        if (type == SubmissionType.KILL_TIME) {
-            // Kc / kill time
-            List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
-            if (!config.pbEmbeds()) {
-                return;
-            }
-            boolean isPb = false;
-            for (CustomWebhookBody.Embed embed : embeds) {
-                for (CustomWebhookBody.Field field : embed.getFields()) {
-                    if (field.getName().equalsIgnoreCase("is_pb")) {
-                        if (field.getValue().equalsIgnoreCase("true")) {
-                            isPb = true;
+        switch (type) {
+            case DROP:
+                // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
+                break;
+
+            case KILL_TIME:
+                // Kc / kill time
+                List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
+                if (!config.pbEmbeds()) {
+                    return;
+                }
+                boolean isPb = false;
+                for (CustomWebhookBody.Embed embed : embeds) {
+                    for (CustomWebhookBody.Field field : embed.getFields()) {
+                        if (field.getName().equalsIgnoreCase("is_pb")) {
+                            if (field.getValue().equalsIgnoreCase("true")) {
+                                isPb = true;
+                            }
                         }
                     }
                 }
-            }
-            if (config.screenshotPBs() && isPb) {
-                requiredScreenshot = true;
-            }
-            if (isPb) {
-                ValidSubmission pbSubmission = null;
+                if (config.screenshotPBs() && isPb) {
+                    requiredScreenshot = true;
+                }
+                if (isPb) {
+                    ValidSubmission pbSubmission = null;
+                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                        if (groupConfig.isSendPbs()) {
+                            if (groupConfig.isOnlyScreenshots()) {
+                                if (!requiredScreenshot) {
+                                    continue; // Skip this group if screenshots required but not happening
+                                }
+                            }
+
+                            // Create or find existing submission for this webhook
+                            if (pbSubmission == null) {
+                                pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
+                                addSubmissionToMemory(pbSubmission);
+                            } else {
+                                pbSubmission.addGroupId(groupConfig.getGroupId());
+                            }
+                        }
+                    }
+                }
+                break;
+
+            case COLLECTION_LOG:
+                if (!config.clogEmbeds()) {
+                    return;
+                }
+                if (config.screenshotNewClogs()) {
+                    requiredScreenshot = true;
+                }
+                // Create ValidSubmission for collection log entries
+                ValidSubmission clogSubmission = null;
                 for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                    if (groupConfig.isSendPbs()) {
+                    if (groupConfig.isSendClogs()) {
                         if (groupConfig.isOnlyScreenshots()) {
                             if (!requiredScreenshot) {
                                 continue; // Skip this group if screenshots required but not happening
@@ -154,101 +185,90 @@ public class SubmissionManager {
                         }
 
                         // Create or find existing submission for this webhook
-                        if (pbSubmission == null) {
-                            pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
-                            addSubmissionToMemory(pbSubmission);
+                        if (clogSubmission == null) {
+                            clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
+                            addSubmissionToMemory(clogSubmission);
                         } else {
-                            pbSubmission.addGroupId(groupConfig.getGroupId());
+                            clogSubmission.addGroupId(groupConfig.getGroupId());
                         }
                     }
                 }
-            }
-        } else if (type == SubmissionType.COLLECTION_LOG) {
-            if (!config.clogEmbeds()) {
-                return;
-            }
-            if (config.screenshotNewClogs()) {
-                requiredScreenshot = true;
-            }
-            // Create ValidSubmission for collection log entries
-            ValidSubmission clogSubmission = null;
-            for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendClogs()) {
-                    if (groupConfig.isOnlyScreenshots()) {
-                        if (!requiredScreenshot) {
-                            continue; // Skip this group if screenshots required but not happening
-                        }
-                    }
+                break;
 
-                    // Create or find existing submission for this webhook
-                    if (clogSubmission == null) {
-                        clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
-                        addSubmissionToMemory(clogSubmission);
-                    } else {
-                        clogSubmission.addGroupId(groupConfig.getGroupId());
-                    }
+            case COMBAT_ACHIEVEMENT:
+                // combat achievements
+                if (!config.caEmbeds()) {
+                    return;
                 }
-            }
-        } else if (type == SubmissionType.COMBAT_ACHIEVEMENT) { // combat achievements
-            if (!config.caEmbeds()) {
-                return;
-            }
-            if (config.screenshotCAs()) {
-                requiredScreenshot = true;
-            }
-            // Create ValidSubmission for combat achievements
-            ValidSubmission caSubmission = null;
-            for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendCAs()) {
-                    if (groupConfig.isOnlyScreenshots()) {
-                        if (!requiredScreenshot) {
-                            continue; // Skip this group if screenshots required but not happening
+                if (config.screenshotCAs()) {
+                    requiredScreenshot = true;
+                }
+                // Create ValidSubmission for combat achievements
+                ValidSubmission caSubmission = null;
+                for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                    if (groupConfig.isSendCAs()) {
+                        if (groupConfig.isOnlyScreenshots()) {
+                            if (!requiredScreenshot) {
+                                continue; // Skip this group if screenshots required but not happening
+                            }
+                        }
+
+                        // Create or find existing submission for this webhook
+                        if (caSubmission == null) {
+                            caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
+                            addSubmissionToMemory(caSubmission);
+                        } else {
+                            caSubmission.addGroupId(groupConfig.getGroupId());
                         }
                     }
+                }
+                break;
 
-                    // Create or find existing submission for this webhook
-                    if (caSubmission == null) {
-                        caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
-                        addSubmissionToMemory(caSubmission);
-                    } else {
-                        caSubmission.addGroupId(groupConfig.getGroupId());
+            case LEVEL_UP:
+                CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
+                // Check the skills that leveled up
+                for (CustomWebhookBody.Field field : embed.getFields()) {
+                    String fieldName = field.getName();
+                    if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
+                        int newLevel = Integer.parseInt(field.getValue());
+                        // Check if this level qualifies for a screenshot
+                        if (newLevel >= config.minLevelToScreenshot()) {
+                            requiredScreenshot = true;
+                            break;
+                        }
                     }
                 }
-            }
-        } else if (type == SubmissionType.ADVENTURE_LOG) {
-            // Nothing extra needs to be done for adventure log data
-            requiredScreenshot = false;
-        } else if (type == SubmissionType.EXPERIENCE || type == SubmissionType.EXPERIENCE_MILESTONE) {
-            /* We don't need to take screenshots for experience or experience milestones */
-            requiredScreenshot = false;
-        } else if (type == SubmissionType.LEVEL_UP) {
-            CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
-            // Check the skills that leveled up
-            for (CustomWebhookBody.Field field : embed.getFields()) {
-                String fieldName = field.getName();
-                if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
-                    int newLevel = Integer.parseInt(field.getValue());
-                    // Check if this level qualifies for a screenshot
-                    if (newLevel >= config.minLevelToScreenshot()) {
-                        requiredScreenshot = true;
-                        break;
-                    }
-                }
-            }
-        } else if (type == SubmissionType.QUEST_COMPLETION) {
-            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-            if (!config.trackQuests()) {
-                return;
-            }
-            if (config.screenshotQuests()) {
+                break;
+
+            case QUEST_COMPLETION:
                 // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                requiredScreenshot = true;
-            }
-        } else if (type == SubmissionType.PET) {
-            // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-            if (config.screenshotPets()) {
-                requiredScreenshot = true;
-            }
+                if (!config.trackQuests()) {
+                    return;
+                }
+                if (config.screenshotQuests()) {
+                    // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
+                    requiredScreenshot = true;
+                }
+                break;
+
+            case EXPERIENCE:
+                /* We don't need to take screenshots for experience */
+                break;
+
+            case EXPERIENCE_MILESTONE:
+                /* We don't need to take screenshots for experience milestones */
+                break;
+
+            case ADVENTURE_LOG:
+                // Nothing extra needs to be done for adventure log data
+                break;
+
+            case PET:
+                // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
+                if (config.screenshotPets()) {
+                    requiredScreenshot = true;
+                }
+                break;
         }
 
         // UI notification is handled by addSubmissionToMemory() when submissions are actually added
