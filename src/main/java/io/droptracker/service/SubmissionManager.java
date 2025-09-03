@@ -66,19 +66,15 @@ public class SubmissionManager {
         void onSubmissionsUpdated();
     }
 
-    private DropTrackerConfig config;
-    private DropTrackerApi api;
-    private ChatMessageUtil chatMessageUtil;
-    private Gson gson;
-    private OkHttpClient okHttpClient;
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private UrlManager urlManager;
-    @Inject
-    private DrawManager drawManager;
+    private final DropTrackerConfig config;
+    private final DropTrackerApi api;
+    private final ChatMessageUtil chatMessageUtil;
+    private final Gson gson;
+    private final OkHttpClient okHttpClient;
+    private final Client client;
+    private final ClientThread clientThread;
+    private final UrlManager urlManager;
+    private final DrawManager drawManager;
 
     // Store a list of submissions that the player has received which qualified for a notification to be sent
     private List<ValidSubmission> validSubmissions = new ArrayList<>();
