@@ -42,7 +42,6 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.Call;
@@ -328,12 +327,6 @@ public class SubmissionManager {
 
         MultipartBody requestBody = requestBodyBuilder.build();
         for (MultipartBody.Part part : requestBody.parts()) {
-            Headers headers = part.headers();
-            if (headers != null) {
-                for (int i = 0; i < headers.size(); i++) {
-                }
-            }
-
             // Try to read the body content
             RequestBody body = part.body();
             if (body != null) {
