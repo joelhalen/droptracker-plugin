@@ -118,8 +118,8 @@ public class SubmissionManager {
          * and later updating the status of it with whether or not it properly got sent to the API and had its notifications
          * processed properly for the target group(s).
          */
-        Boolean requiredScreenshot = false;
-        Boolean shouldHideDm = config.hideDMs();
+        var requiredScreenshot = false;
+        var shouldHideDm = config.hideDMs();
 
         if (type == SubmissionType.DROP) {
             // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
