@@ -10,8 +10,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 import com.google.gson.annotations.SerializedName;
+import lombok.ToString;
 
-// Nested classes for complex JSON structures
+/// Nested classes for complex JSON structures
+@ToString
 public class RecentSubmission {
     @SerializedName("player_name")
     @Getter @Setter
@@ -48,36 +50,6 @@ public class RecentSubmission {
     @SerializedName("submission_image_url")
     @Getter @Setter
     private String submissionImageUrl;
-
-    // Constructors
-    public RecentSubmission() {} // Default constructor for Gson
-    
-    public RecentSubmission(String playerName, String submissionType, String sourceName, String dateReceived, String displayName, long value, List<Map<String, Object>> data, String imageUrl, String submissionImageUrl) {
-        this.playerName = playerName;
-        this.submissionType = submissionType;
-        this.sourceName = sourceName;
-        this.dateReceived = dateReceived;
-        this.displayName = displayName;
-        this.value = value == 0 ? "-1" : String.valueOf(value);
-        this.data = data;
-        this.imageUrl = imageUrl;
-        this.submissionImageUrl = submissionImageUrl;
-    }
-
-    @Override
-    public String toString() {
-        return "RecentSubmission{" +
-            "playerName='" + playerName + '\'' +
-            ", submissionType='" + submissionType + '\'' +
-            ", sourceName='" + sourceName + '\'' +
-            ", dateReceived='" + dateReceived + '\'' +
-            ", displayName='" + displayName + '\'' +
-            ", value='" + value + '\'' +
-            ", data=" + data +
-            ", imageUrl='" + imageUrl + '\'' +
-            ", submissionImageUrl='" + submissionImageUrl + '\'' +
-            '}';
-    }
 
     // Getters and setters
     public String timeSinceReceived() {
