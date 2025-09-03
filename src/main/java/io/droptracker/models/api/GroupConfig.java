@@ -43,22 +43,4 @@ public class GroupConfig {
     /* Variables that we'll modify after init */
     @Setter
     private int lastUpdateUnix;
-    
-
-    public GroupConfig(String groupId, String groupName, int minValue, boolean onlyScreenshots, boolean sendDrops, boolean sendPbs, boolean sendClogs, boolean sendCAs, String minimumCATier, Integer minimumDropValue, boolean sendStackedItems, boolean sendPets, boolean sendKills, boolean sendDeaths) {
-        this.groupId = groupId;
-        this.groupName = groupName;
-        this.minValue = minValue;
-        this.onlyScreenshots = onlyScreenshots;
-        this.sendDrops = sendDrops;
-        this.sendPbs = sendPbs;
-        this.sendClogs = sendClogs;
-        this.sendCAs = sendCAs;
-        this.minimumCATier = minimumCATier;
-        this.minimumDropValue = minimumDropValue;
-        this.sendStackedItems = sendStackedItems;
-        this.sendPets = false;
-        this.sendKills = false;
-        this.sendDeaths = false;
-    }   
 }
