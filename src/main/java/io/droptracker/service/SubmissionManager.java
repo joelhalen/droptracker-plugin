@@ -329,18 +329,16 @@ public class SubmissionManager {
         for (MultipartBody.Part part : requestBody.parts()) {
             // Try to read the body content
             RequestBody body = part.body();
-            if (body != null) {
-                // Safely check content type
-                MediaType contentType = body.contentType();
-                if (contentType != null &&
-                        (contentType.toString().contains("text") ||
-                                contentType.toString().contains("json"))) {
-                    Buffer buffer = new Buffer();
-                    try {
-                        body.writeTo(buffer);
-                    } catch (IOException e) {
-                    }
-                } else {
+
+            // Safely check content type
+            MediaType contentType = body.contentType();
+            if (contentType != null &&
+                    (contentType.toString().contains("text") ||
+                            contentType.toString().contains("json"))) {
+                Buffer buffer = new Buffer();
+                try {
+                    body.writeTo(buffer);
+                } catch (IOException e) {
                 }
             }
         }
@@ -378,23 +376,21 @@ public class SubmissionManager {
                 if (config.useApi()) {
                     // Try to get response body, but don't consume it
                     ResponseBody body = response.peekBody(Long.MAX_VALUE);
-                    if (body != null) {
-                        String bodyString = body.string();
-                        if (!bodyString.isEmpty()) {
-                            try {
-                                ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
-                                if (apiResponse != null) {
-                                    String noticeMessage = apiResponse.getNotice();
-                                    if (noticeMessage != null && !noticeMessage.isEmpty()) {
-                                        chatMessageUtil.sendChatMessage(noticeMessage);
-                                    }
-                                    String updateMessage = apiResponse.getRankUpdate();
-                                    if (updateMessage != null && !updateMessage.isEmpty()) {
-                                        chatMessageUtil.sendChatMessage(updateMessage);
-                                    }
+                    String bodyString = body.string();
+                    if (!bodyString.isEmpty()) {
+                        try {
+                            ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
+                            if (apiResponse != null) {
+                                String noticeMessage = apiResponse.getNotice();
+                                if (noticeMessage != null && !noticeMessage.isEmpty()) {
+                                    chatMessageUtil.sendChatMessage(noticeMessage);
                                 }
-                            } catch (Exception e) {
+                                String updateMessage = apiResponse.getRankUpdate();
+                                if (updateMessage != null && !updateMessage.isEmpty()) {
+                                    chatMessageUtil.sendChatMessage(updateMessage);
+                                }
                             }
+                        } catch (Exception e) {
                         }
                     }
                 }
