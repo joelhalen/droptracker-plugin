@@ -47,6 +47,7 @@ import okhttp3.MediaType;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okio.Buffer;
+import org.jetbrains.annotations.NotNull;
 
 @Slf4j
 @Singleton
@@ -367,12 +368,12 @@ public class SubmissionManager {
         }
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 log.error("Error submitting: ", e);
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 if (config.useApi()) {
                     // Try to get response body, but don't consume it
                     ResponseBody body = response.peekBody(Long.MAX_VALUE);
