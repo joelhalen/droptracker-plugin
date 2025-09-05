@@ -71,10 +71,6 @@ public class ExperienceHandler extends BaseEventHandler {
     @Inject 
     private static Gson gson;
 
-    @Override
-    public void process(Object... args) {
-        /* Unused */
-    }
     
     @Override
     public boolean isEnabled() {

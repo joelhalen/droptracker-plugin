@@ -87,9 +87,6 @@ public class PbHandler extends BaseEventHandler {
     private static final long DUPLICATE_THRESHOLD = 5000;
     private String teamSize = null;
 
-    @Override
-    public void process(Object... args) { /* does not need an override */ }
-
     public void onGameMessage(String message) {
         // call isEnabled instead of checking config again
         if (!this.isEnabled()) return;

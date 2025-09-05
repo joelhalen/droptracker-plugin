@@ -38,11 +38,6 @@ public class DropHandler extends BaseEventHandler {
     @Inject
     private ItemManager itemManager;
 
-    @Override
-    public void process(Object... args) {
-        /* does not need an override */
-    }
-
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived event) {
 		chatMessageUtil.checkForMessage();
