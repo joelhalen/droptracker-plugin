@@ -290,6 +290,7 @@ public class PetHandler extends BaseEventHandler {
         Map.entry("Vorki", "Vorkath"),
         Map.entry("Wisp", "The Whisperer"),
         Map.entry("Yami", "Yama"),
-        Map.entry("Youngllef", "Gauntlet")
+        Map.entry("Youngllef", "Gauntlet"),
+        Map.entry("Dom", "Doom of Mokhaitl")
     );
 }
