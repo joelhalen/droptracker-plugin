@@ -3,12 +3,10 @@ package io.droptracker.util;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.google.inject.Inject;
-import com.google.inject.Provider;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
-import io.droptracker.api.UrlManager;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.api.ChatMessageType;
@@ -16,6 +14,7 @@ import net.runelite.api.Client;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.util.LinkBrowser;
 
 public class ChatMessageUtil {
 
@@ -25,8 +24,6 @@ public class ChatMessageUtil {
     @Inject
     private DropTrackerApi api;
     @Inject
-    private Provider<UrlManager> urlManagerProvider;
-    @Inject
     private DropTrackerPlugin plugin;
     @Inject
     private ScheduledExecutorService executor;
@@ -35,18 +32,6 @@ public class ChatMessageUtil {
     private Client client;
     @Inject
     private ClientThread clientThread;
-
-
-
-    @Inject
-    public ChatMessageUtil(DropTrackerConfig config, DropTrackerApi api, Provider<UrlManager> urlManagerProvider,
-            DropTrackerPlugin plugin, ScheduledExecutorService executor) {
-        this.config = config;
-        this.api = api;
-        this.urlManagerProvider = urlManagerProvider;
-        this.plugin = plugin;
-        this.executor = executor;
-    }
 
     public void checkForMessage() {
         if (isMessageChecked) {
@@ -74,12 +59,9 @@ public class ChatMessageUtil {
     {
         if (event.getCommand().equals("droptracker"))
         {
-            urlManagerProvider.get().openLink("https://www.droptracker.io/wiki/why-api/");
+            LinkBrowser.browse("https://www.droptracker.io/wiki/why-api/");
         }
-
     }
-
-    
 
     public void sendChatMessage(String messageContent) {
         ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
