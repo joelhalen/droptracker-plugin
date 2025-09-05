@@ -1,7 +1,5 @@
 package io.droptracker.util;
 
-import java.util.concurrent.ScheduledExecutorService;
-
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
@@ -25,8 +23,6 @@ public class ChatMessageUtil {
     private DropTrackerApi api;
     @Inject
     private DropTrackerPlugin plugin;
-    @Inject
-    private ScheduledExecutorService executor;
 
     @Inject
     private Client client;
@@ -42,8 +38,7 @@ public class ChatMessageUtil {
         // based on the last version they loaded, and the currently stored version
         String currentVersion = config.lastVersionNotified();
         if (currentVersion != null && !plugin.pluginVersion.equals(currentVersion + "1")) {
-            executor.submit(() -> {
-                String newNotificationData = api.getLatestUpdateString();
+            api.getLatestUpdateString(newNotificationData -> {
                 sendChatMessage(newNotificationData);
                 // Update the internal config value of this update message
                 config.setLastVersionNotified(currentVersion);
