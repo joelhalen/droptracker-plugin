@@ -133,7 +133,7 @@ public class HomePanel {
 		
 		// Feature panels with fixed heights
 		JPanel trackDropsPanel = PanelElements.createFeaturePanel("Track Your Drops", 
-			"Automatically record and analyze all your valuable drops from bosses, raids, and PvP.");
+			"Automatically record and analyze all your valuable drops from almost anywhere in the game.");
 		trackDropsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		
 		JPanel discordPanel = PanelElements.createFeaturePanel("Discord Integration", 
