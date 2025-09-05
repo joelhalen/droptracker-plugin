@@ -48,6 +48,7 @@ import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.QuestHandler;
+import io.droptracker.events.PetHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
@@ -119,7 +120,8 @@ public class DropTrackerPlugin extends Plugin {
 	public CaHandler caHandler;
 	@Inject
 	public PbHandler pbHandler;
-
+	@Inject
+	public PetHandler petHandler;
 	@Inject
 	public ExperienceHandler experienceHandler;
 	@Inject
@@ -234,6 +236,7 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		// Disable updates while panel is not present
 		submissionManager.setUpdatesEnabled(false);
+		this.resetAll();
 	}
 
 	@Provides
@@ -241,7 +244,10 @@ public class DropTrackerPlugin extends Plugin {
 		return configManager.getConfig(DropTrackerConfig.class);
 	}
 
-
+	protected void resetAll() {
+		kcService.reset();
+		petHandler.reset();
+	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
@@ -261,7 +267,7 @@ public class DropTrackerPlugin extends Plugin {
 				// panel.refreshData();
 				if (client.getAccountHash() != -1) {
 					try {
-						api.lookupPlayer(client.getLocalPlayer().getName());
+						api.lookupPlayerNew(client.getLocalPlayer().getName());
 					} catch (Exception e) {
 						log.debug("Couldn't look the current player up in the DropTracker database");
 					}
@@ -366,8 +372,15 @@ public class DropTrackerPlugin extends Plugin {
 				if(clogHandler.isEnabled()) {
 					clogHandler.onChatMessage(chatMessage);
 				}
+				if(petHandler.isEnabled()) {
+					petHandler.onGameMessage(chatMessage);
+				}
 			case FRIENDSCHATNOTIFICATION:
 				pbHandler.onFriendsChatNotification(chatMessage);
+			case CLAN_MESSAGE:
+			case CLAN_GIM_MESSAGE:
+                petHandler.onClanChatNotification(chatMessage);
+                break;
 			default:
 				break;
 		}
@@ -412,6 +425,9 @@ public class DropTrackerPlugin extends Plugin {
 		experienceHandler.onTick();
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
+
+		petHandler.onTick();
+
 
 		// Also tick the experience handler
 		if (config.trackExperience()) {

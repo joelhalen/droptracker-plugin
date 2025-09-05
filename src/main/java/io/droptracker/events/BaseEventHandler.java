@@ -13,7 +13,6 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -22,9 +21,6 @@ import java.util.Map;
  */
 @Slf4j
 public abstract class BaseEventHandler {
-
-    // Global fields that get added to all embeds
-    private final Map<String, String> globalFields = new HashMap<>();
 
     @Inject
     protected DropTrackerPlugin plugin;
@@ -80,25 +76,6 @@ public abstract class BaseEventHandler {
     }
 
     /**
-     * Adds a global field that will be included in all embeds created by this handler.
-     * 
-     * @param key the field key
-     * @param value the field value
-     */
-    protected void addGlobalField(String key, String value) {
-        globalFields.put(key, value);
-    }
-
-    /**
-     * Removes a global field.
-     * 
-     * @param key the field key to remove
-     */
-    protected void removeGlobalField(String key) {
-        globalFields.remove(key);
-    }
-
-    /**
      * Adds common fields that are present in all webhook embeds.
      * This includes player_name, acc_hash, p_v, and any global fields.
      * 
@@ -109,11 +86,6 @@ public abstract class BaseEventHandler {
         embed.addField("acc_hash", getAccountHash(), true);
         embed.addField("p_v", plugin.pluginVersion, true);
         embed.addField("guid", api.generateGuidForSubmission(), true);
-        
-        // Add any global fields
-        for (Map.Entry<String, String> globalField : globalFields.entrySet()) {
-            embed.addField(globalField.getKey(), globalField.getValue(), true);
-        }
     }
 
     /**
@@ -221,14 +193,6 @@ public abstract class BaseEventHandler {
         Integer killCount = configManager.getRSProfileConfiguration("killcount", bossName.toLowerCase(), int.class);
         return killCount != null ? killCount : 0;
     }
-
-    /**
-     * Abstract method that subclasses must implement to define their specific processing logic.
-     * The parameters will vary depending on the type of event being processed.
-     * 
-     * @param args variable arguments specific to each handler type
-     */
-    public abstract void process(Object... args);
 
     
 } 

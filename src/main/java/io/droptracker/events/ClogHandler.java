@@ -48,10 +48,6 @@ public class ClogHandler extends BaseEventHandler {
     private static final int POPUP_PREFIX_LENGTH = "New item:".length();
 
 
-    @Override
-    public void process(Object... args) {
-        /* does not need an override */
-    }
 
     @Override
     public boolean isEnabled() {

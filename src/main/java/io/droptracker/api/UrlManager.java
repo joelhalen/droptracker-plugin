@@ -1,6 +1,7 @@
 package io.droptracker.api;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.time.LocalDate;
@@ -103,7 +104,7 @@ public class UrlManager {
 	}
 
     /* Fetch a new list of webhook URLs from the GitHub page */
-    public void fetchNewList() throws Exception {
+    public void fetchNewList() throws IOException {
 		if (UrlManager.webhookResetCount > 10) {
 			// At this point we just stop attempting to fetch new webhooks
 			// Assuming that something on the backend is broken and they're not replenishing properly

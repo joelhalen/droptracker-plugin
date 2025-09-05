@@ -39,10 +39,6 @@ public class QuestHandler extends BaseEventHandler {
     private static final int VARBIT_QUESTS_TOTAL_COUNT = 11877;
     private static final int VARBIT_QP_MAX = 1782;
 
-    @Override
-    public void process(Object... args) {
-        /* Unused - quest handling is event-driven */
-    }
     
     @Override
     public boolean isEnabled() {

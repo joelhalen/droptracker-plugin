@@ -417,37 +417,51 @@ public class PanelElements {
     }
 
     public static JPanel getLatestWelcomeContent(DropTrackerApi api) {
-        String welcomeText;
-        welcomeText = (api != null && api.getLatestUpdateString() != null) ? api.getLatestUpdateString()
-                : "Welcome to the DropTracker!";
-        JTextArea textArea = collapsibleSubText(welcomeText);
-
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BorderLayout());
         contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        
+        // Start with default welcome text
+        JTextArea textArea = collapsibleSubText("Welcome to the DropTracker!");
         contentPanel.add(textArea, BorderLayout.CENTER);
+        
+        // If API is available, load content asynchronously
+        if (api != null) {
+            api.getLatestWelcomeString(welcomeText -> {
+                // Update the text area with the loaded content
+                textArea.setText(welcomeText != null ? welcomeText : "Welcome to the DropTracker!");
+                textArea.revalidate();
+                textArea.repaint();
+            });
+        }
 
         return contentPanel;
     }
 
     public static JPanel getLatestUpdateContent(DropTrackerConfig config, DropTrackerApi api) {
-        String updateText;
-        if (config != null && config.useApi()) {
-            updateText = (api != null && api.getLatestUpdateString() != null) ? api.getLatestUpdateString()
-                    : "No updates found.";
-        } else {
-            updateText = "• Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
-                    "• Added pet collection submissions when adventure logs are opened.\n\n" +
-                    "• Fixed various personal best tracking bugs.\n\n" +
-                    "• A new side panel & stats functionality";
-        }
-
-        JTextArea textArea = collapsibleSubText(updateText);
-
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BorderLayout());
         contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        
+        String defaultUpdateText = "• Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
+                "• Added pet collection submissions when adventure logs are opened.\n\n" +
+                "• Fixed various personal best tracking bugs.\n\n" +
+                "• A new side panel & stats functionality";
+        
+        // Start with default or fallback text
+        String initialText = (config != null && config.useApi()) ? "Loading updates..." : defaultUpdateText;
+        JTextArea textArea = collapsibleSubText(initialText);
         contentPanel.add(textArea, BorderLayout.CENTER);
+        
+        // If API is enabled and available, load content asynchronously
+        if (config != null && config.useApi() && api != null) {
+            api.getLatestUpdateString(updateText -> {
+                // Update the text area with the loaded content
+                textArea.setText(updateText != null ? updateText : "No updates found.");
+                textArea.revalidate();
+                textArea.repaint();
+            });
+        }
 
         return contentPanel;
     }

@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
@@ -329,64 +328,54 @@ public class DropTrackerApi {
         }
     }
 
-    public CompletionStage<Map<String, Object>> lookupPlayer(String playerName) {
-        CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
-
-        if (!config.useApi()) {
-            future.completeExceptionally(new IllegalStateException("API is not enabled in the plugin config"));
-            return future;
-        }
-
-        String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/player_lookup/" + playerName);
-
-        if (url == null) {
-            future.completeExceptionally(new IllegalArgumentException("Invalid URL"));
-            return future;
-        }
-
-        Request request = new Request.Builder().url(url).build();
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);  
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                log.debug("Couldn't  lookup player " + e);
-                future.completeExceptionally(e);
-            }
-
-            @SuppressWarnings({ "null" })
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
-                    String responseData = responseBody.string();
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-
-                    if (!response.isSuccessful()) {
-                        // Return the error message as part of the response to be handled
-                        future.complete(responseMap);
-                        return;
-                    }
-
-                    // If response is successful, return the response map
-                    future.complete(responseMap);
-                } catch (IllegalStateException e) {
-                    // If the webserver is down or malfunctioning, this is the likely outcome
-                    future.cancel(true);
-                }
-            }
-        });
-
-        return future;
-    }
-
-
     public String getApiUrl() {
         return config.useApi() ? "https://api.droptracker.io" : "";
     }
 
-    @SuppressWarnings("null")
-    public String getLatestUpdateString() {
+
+    /**
+     * Asynchronously fetches the latest welcome string to avoid blocking the EDT.
+     * @param callback Function to call with the result when ready
+     */
+    public void getLatestWelcomeString(java.util.function.Consumer<String> callback) {
+        String endpoint;
+        if (config.useApi()) {
+            endpoint = "https://api.droptracker.io/latest_welcome";
+        } else {
+            endpoint = "https://droptracker-io.github.io/content/welcome.txt";
+        }
+
+        Request request = new Request.Builder().url(endpoint).build();
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // Run callback on EDT to update UI safely
+                javax.swing.SwingUtilities.invokeLater(() -> 
+                    callback.accept("Welcome to the DropTracker!"));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
+                    String result;
+                    if (response.isSuccessful() && responseBody != null) {
+                        result = responseBody.string();
+                    } else {
+                        result = "Welcome to the DropTracker!";
+                    }
+                    
+                    // Run callback on EDT to update UI safely
+                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(result));
+                }
+            }
+        });
+    }
+
+    /**
+     * Asynchronously fetches the latest update string to avoid blocking the EDT.
+     * @param callback Function to call with the result when ready
+     */
+    public void getLatestUpdateString(java.util.function.Consumer<String> callback) {
         String endpoint;
         if (config.useApi()) {
             endpoint = "https://api.droptracker.io/latest_news";
@@ -394,18 +383,30 @@ public class DropTrackerApi {
             endpoint = "https://droptracker-io.github.io/content/news.txt";
         }
 
-        try {
-            Request request = new Request.Builder().url(endpoint).build();
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    return response.body().string();
-                } else {
-                    return "Error fetching latest update";
+        Request request = new Request.Builder().url(endpoint).build();
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                // Run callback on EDT to update UI safely
+                javax.swing.SwingUtilities.invokeLater(() -> 
+                    callback.accept("Error fetching latest update: " + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
+                    String result;
+                    if (response.isSuccessful() && responseBody != null) {
+                        result = responseBody.string();
+                    } else {
+                        result = "Error fetching latest update: " + (responseBody != null ? responseBody.string() : "Unknown error");
+                    }
+                    
+                    // Run callback on EDT to update UI safely
+                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(result));
                 }
-            } 
-        } catch (IOException e) {
-            return "Error fetching latest update";
-        }
+            }
+        });
     }
 
     public interface PanelDataLoadedCallback {

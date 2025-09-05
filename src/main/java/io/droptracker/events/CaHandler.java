@@ -40,10 +40,6 @@ public class CaHandler extends BaseEventHandler {
     @Varbit
     public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
 
-    @Override
-    public void process(Object... args) {
-        /* does not need an override */
-    }
 
     @Override
     public boolean isEnabled() {
