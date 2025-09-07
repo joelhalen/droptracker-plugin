@@ -24,13 +24,10 @@ import java.util.regex.Pattern;
 
 @Slf4j
 public class ClogHandler extends BaseEventHandler {
-    @Inject
-    private Rarity rarity;
+    private final Rarity rarity;
+    private final KCService kcService;
+    private final ItemIDSearch itemIDFinder;
 
-    @Inject
-    private KCService kcService;
-
-    private ItemIDSearch itemIDFinder;
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
     public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
 
