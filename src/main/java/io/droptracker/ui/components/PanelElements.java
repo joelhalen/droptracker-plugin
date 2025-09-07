@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import javax.imageio.ImageIO;
-import javax.inject.Inject;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -47,7 +46,6 @@ import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
-import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 
@@ -62,9 +60,6 @@ public class PanelElements {
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     public static String cachedGroupName = "All Players";
-
-    @Inject
-    private static ItemManager itemManager;
 
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
@@ -1017,18 +1012,6 @@ public class PanelElements {
         // Request focus for escape key
         SwingUtilities.invokeLater(() -> imageLabel.requestFocusInWindow());
 
-    }
-
-
-    public static AsyncBufferedImage getImageForSubmission(ValidSubmission submission) {
-        switch (submission.getType()) {
-            case DROP:
-                return itemManager.getImage(Integer.parseInt(submission.getItemId()), 1, false);
-            case COLLECTION_LOG:
-                return itemManager.getImage(Integer.parseInt(submission.getItemId()), 1, false);
-            default:
-                return null;
-        }
     }
 
     // Helper methods to reduce code duplication
