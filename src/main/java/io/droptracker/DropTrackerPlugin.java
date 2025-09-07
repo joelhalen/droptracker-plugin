@@ -99,9 +99,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient httpClient;
-	
-	@Inject
-	private ChatMessageUtil chatMessageUtil;
 
 	@Inject
 	private KCService kcService;
