@@ -13,6 +13,7 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 
+import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -26,15 +27,16 @@ import java.net.URL;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+@Slf4j
 public class PanelElements {
 
 
-    public static ImageIcon COLLAPSED_ICON = new ImageIcon();
-    public static ImageIcon EXPANDED_ICON = new ImageIcon();
-    public static BufferedImage cachedLootboardImage;
+    public static final ImageIcon COLLAPSED_ICON;
+    public static final ImageIcon EXPANDED_ICON;
+    public static @Nullable BufferedImage cachedLootboardImage;
     public static String cachedGroupName = "All Players";
-    private static ImageIcon BOARD_ICON;
-    private static ImageIcon EXTERNAL_LINK_ICON;
+    private static final ImageIcon BOARD_ICON;
+    private static final ImageIcon EXTERNAL_LINK_ICON;
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
 
