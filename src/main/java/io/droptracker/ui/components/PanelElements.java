@@ -4,6 +4,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.ColorScheme;
@@ -820,7 +821,7 @@ public class PanelElements {
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                log.warn("Failed updating submission panel", e);
             }
         }
 
