@@ -252,6 +252,7 @@ public class DropTrackerPlugin extends Plugin {
 					clientToolbar.removeNavigation(navButton);
 					panel.deinit();
 					panel = null;
+					navButton = null;
 					// Disable updates when removing the panel
 					submissionManager.setUpdatesEnabled(false);
 				}
@@ -272,6 +273,7 @@ public class DropTrackerPlugin extends Plugin {
 						clientToolbar.removeNavigation(navButton);
 						panel.deinit();
 						panel = null;
+						navButton = null;
 						// Disable updates when panel is removed
 						submissionManager.setUpdatesEnabled(false);
 					}
