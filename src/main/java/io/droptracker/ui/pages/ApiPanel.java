@@ -1,6 +1,5 @@
 package io.droptracker.ui.pages;
 
-import com.google.inject.Inject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupConfig;
@@ -25,14 +24,9 @@ import java.util.List;
 import java.util.Map;
 
 public class ApiPanel {
-
-    @Inject
-    private DropTrackerConfig config;
-    @Inject
-    private DropTrackerApi api;
-
-    @Inject
-    private SubmissionManager submissionManager;
+    private final DropTrackerConfig config;
+    private final DropTrackerApi api;
+    private final SubmissionManager submissionManager;
 
     private JPanel apiPanel;
     private JTextArea statusLabel;
