@@ -380,19 +380,4 @@ public class DropTrackerApi {
     public interface PanelDataLoadedCallback {
         void onDataLoaded(Map<String, Object> data);
     }
-
-    public static String formatNumber(double number) {
-        if (number == 0) {
-            return "0";
-        }
-        String[] units = new String[]{"", "K", "M", "B", "T"};
-        int unit = (int) Math.floor((Math.log10(number) / 3));
-
-        if (unit >= units.length) unit = units.length - 1;
-
-        double num = number / Math.pow(1000, unit);
-        DecimalFormat df = new DecimalFormat("#.#");
-        String formattedNum = df.format(num);
-        return formattedNum + units[unit];
-    }
 }
