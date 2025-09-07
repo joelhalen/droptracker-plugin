@@ -29,21 +29,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class GroupPanel {
-
-    @Inject
-    private Client client;
-
-    @Inject
-    private DropTrackerConfig config;
-
-
-    @Inject
-    private DropTrackerPanel panel;
-
-    @Inject
-    private DropTrackerApi api;
-
-    private ItemManager itemManager;
+    private final Client client;
+    private final DropTrackerConfig config;
+    private final DropTrackerPanel panel;
+    private final DropTrackerApi api;
+    private final ItemManager itemManager;
 
     private int currentGroupId = 2; // Track group ID instead of URL
 
