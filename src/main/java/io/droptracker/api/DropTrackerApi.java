@@ -145,17 +145,6 @@ public class DropTrackerApi {
         return groupConfigs;
     }
 
-    /* Get a specific group config from memory */
-    public GroupConfig getGroupConfig(String groupName) {
-        if (!config.useApi()) {
-            return null;
-        }
-        return this.getGroupConfigs().stream()
-            .filter(groupConfig -> groupConfig.getGroupName().equals(groupName))
-            .findFirst()
-            .orElse(null);
-    }
-
     /* Submissions */
     public String generateGuidForSubmission() {
         long timestamp = System.currentTimeMillis() / 1000L;
