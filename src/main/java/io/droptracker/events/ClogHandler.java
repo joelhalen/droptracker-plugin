@@ -10,6 +10,7 @@ import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varp;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.game.ItemStack;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.jetbrains.annotations.Nullable;
@@ -54,7 +55,7 @@ public class ClogHandler extends BaseEventHandler {
 
     @SuppressWarnings("deprecation")
     public void onChatMessage(String chatMessage) {
-        if (client.getVarbitValue(Varbits.COLLECTION_LOG_NOTIFICATION) != 1 || !this.isEnabled()) {
+        if (client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) != 1 || !this.isEnabled()) {
             // require notifier enabled without popup mode to use chat event
             return;
         }
