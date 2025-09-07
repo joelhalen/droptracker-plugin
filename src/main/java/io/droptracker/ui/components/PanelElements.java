@@ -129,8 +129,6 @@ public class PanelElements {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
-                if (image != null) {
-                }
                 // Call the completion callback
                 if (onComplete != null) {
                     onComplete.run();
@@ -718,7 +716,6 @@ public class PanelElements {
                                 });
                             }
                         });
-                    } else {
                     }
                 }
 
