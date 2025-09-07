@@ -156,7 +156,7 @@ public class DropTrackerApi {
 
 
     @SuppressWarnings("null")
-    public TopGroupResult getTopGroups() throws IOException {
+    public TopGroupResult getTopGroups() {
         if (!config.useApi()) {
             return null;
         }
@@ -183,7 +183,7 @@ public class DropTrackerApi {
     }
 
     @SuppressWarnings("null")
-    public TopPlayersResult getTopPlayers() throws IOException {
+    public TopPlayersResult getTopPlayers() {
         if (!config.useApi()) {
             return null;
         }
