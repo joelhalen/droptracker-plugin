@@ -226,7 +226,7 @@ public class PlayerStatsPanel {
         // Perform search in background
         CompletableFuture.supplyAsync(() -> {
             try {
-                PlayerSearchResult playerResult = api.lookupPlayerNew(toSearch);
+                PlayerSearchResult playerResult = api.lookupPlayer(toSearch);
                 return playerResult;
             } catch (Exception e) {
                 return null;

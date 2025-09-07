@@ -289,7 +289,7 @@ public class DropTrackerApi {
      * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
      */
     @SuppressWarnings("null")
-    public PlayerSearchResult lookupPlayerNew(String playerName) throws IOException {
+    public PlayerSearchResult lookupPlayer(String playerName) throws IOException {
         if (!config.useApi()) {
             return null;
         }

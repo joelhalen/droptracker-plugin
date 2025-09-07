@@ -267,7 +267,7 @@ public class DropTrackerPlugin extends Plugin {
 				// panel.refreshData();
 				if (client.getAccountHash() != -1) {
 					try {
-						api.lookupPlayerNew(client.getLocalPlayer().getName());
+						api.lookupPlayer(client.getLocalPlayer().getName());
 					} catch (Exception e) {
 						log.debug("Couldn't look the current player up in the DropTracker database");
 					}
