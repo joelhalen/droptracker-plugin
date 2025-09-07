@@ -16,7 +16,6 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.imageio.ImageIO;
-import javax.inject.Inject;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -38,7 +37,6 @@ public class GroupPanel {
     private int currentGroupId = 2; // Track group ID instead of URL
 
     // UI components that we need to update
-    private JPanel mainPanel;
     private JPanel contentPanel;
     private JTextField searchField;
 
@@ -54,7 +52,7 @@ public class GroupPanel {
     }
 
     public JPanel create() {
-        mainPanel = new JPanel();
+        var mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
         mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
