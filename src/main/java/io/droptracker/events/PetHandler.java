@@ -77,20 +77,20 @@ public class PetHandler extends BaseEventHandler {
 
     public void onGameMessage(String chatMessage) {
         if (!isEnabled()) return;
-            
-            if (petName == null) {
-                if (PET_REGEX.matcher(chatMessage).matches()) {
-                    // Prime the notifier to trigger next tick
-                    this.petName = PRIMED_NAME;
-                    this.duplicate = chatMessage.contains("would have been");
-                    this.backpack = chatMessage.contains(" backpack");
-                }
-            } else if (PRIMED_NAME.equals(petName) || !collection) {
-                parseItemFromGameMessage(chatMessage)
-                .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
+
+        if (petName == null) {
+            if (PET_REGEX.matcher(chatMessage).matches()) {
+                // Prime the notifier to trigger next tick
+                this.petName = PRIMED_NAME;
+                this.duplicate = chatMessage.contains("would have been");
+                this.backpack = chatMessage.contains(" backpack");
+            }
+        } else if (PRIMED_NAME.equals(petName) || !collection) {
+            parseItemFromGameMessage(chatMessage)
+                    .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
                     .ifPresent(parseResult -> {
-                    this.petName = parseResult.itemName;
-                    if (parseResult.collectionLog) {
+                        this.petName = parseResult.itemName;
+                        if (parseResult.collectionLog) {
                             this.collection = true;
                         }
                     });
@@ -225,18 +225,18 @@ public class PetHandler extends BaseEventHandler {
             this.collectionLog = collectionLog;
         }
     }
-            
-                /**
-                 * Converts text into "upper case first" form, as is used by OSRS for item names.
-                 *
-                 * @param text the string to be transformed
-                 * @return the text with only the first character capitalized
-                 */
+
+    /**
+     * Converts text into "upper case first" form, as is used by OSRS for item names.
+     *
+     * @param text the string to be transformed
+     * @return the text with only the first character capitalized
+     */
     private static String ucFirst(String text) {
         if (text == null || text.isEmpty()) return text;
-                    if (text.length() < 2) return text.toUpperCase();
-                    return Character.toUpperCase(text.charAt(0)) + text.substring(1).toLowerCase();
-                }
+        if (text.length() < 2) return text.toUpperCase();
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1).toLowerCase();
+    }
 
     private static boolean isPetName(String itemName) {
         return PET_TO_SOURCE.containsKey(ucFirst(itemName));

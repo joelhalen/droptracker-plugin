@@ -13,6 +13,7 @@ import io.droptracker.models.api.TopPlayersResult;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import net.runelite.api.Client;
+import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -145,17 +146,6 @@ public class DropTrackerApi {
         return groupConfigs;
     }
 
-    /* Get a specific group config from memory */
-    public GroupConfig getGroupConfig(String groupName) {
-        if (!config.useApi()) {
-            return null;
-        }
-        return this.getGroupConfigs().stream()
-            .filter(groupConfig -> groupConfig.getGroupName().equals(groupName))
-            .findFirst()
-            .orElse(null);
-    }
-
     /* Submissions */
     public String generateGuidForSubmission() {
         long timestamp = System.currentTimeMillis() / 1000L;
@@ -167,7 +157,7 @@ public class DropTrackerApi {
 
 
     @SuppressWarnings("null")
-    public TopGroupResult getTopGroups() throws IOException {
+    public TopGroupResult getTopGroups() {
         if (!config.useApi()) {
             return null;
         }
@@ -194,7 +184,7 @@ public class DropTrackerApi {
     }
 
     @SuppressWarnings("null")
-    public TopPlayersResult getTopPlayers() throws IOException {
+    public TopPlayersResult getTopPlayers() {
         if (!config.useApi()) {
             return null;
         }
@@ -263,33 +253,11 @@ public class DropTrackerApi {
         }
     }
 
-    public String getCurrentLatency() {
-        if (!config.useApi()) {
-            return "? ms";
-        }
-        try {
-            String url = getApiUrl() + "/ping";
-            long startTime = System.currentTimeMillis();
-            try (Response response = httpClient.newCall(new Request.Builder().url(url).build()).execute()) {
-                if (!response.isSuccessful()) {
-                    return "? ms";
-                }
-            } catch (IOException e) {
-                log.debug("Couldn't get current latency (IOException) " + e);
-                return "? ms";
-            }
-            long endTime = System.currentTimeMillis();
-            return String.valueOf((int) (endTime - startTime)) + "ms";
-        } catch (Exception e) {
-            return "? ms";
-        }
-    }
-
     /**
      * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
      */
     @SuppressWarnings("null")
-    public PlayerSearchResult lookupPlayerNew(String playerName) throws IOException {
+    public PlayerSearchResult lookupPlayer(String playerName) throws IOException {
         if (!config.useApi()) {
             return null;
         }
@@ -348,14 +316,14 @@ public class DropTrackerApi {
         Request request = new Request.Builder().url(endpoint).build();
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() -> 
                     callback.accept("Welcome to the DropTracker!"));
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
                     String result;
                     if (response.isSuccessful() && responseBody != null) {
@@ -386,14 +354,14 @@ public class DropTrackerApi {
         Request request = new Request.Builder().url(endpoint).build();
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() -> 
                     callback.accept("Error fetching latest update: " + e.getMessage()));
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
                     String result;
                     if (response.isSuccessful() && responseBody != null) {
@@ -411,20 +379,5 @@ public class DropTrackerApi {
 
     public interface PanelDataLoadedCallback {
         void onDataLoaded(Map<String, Object> data);
-    }
-
-    public static String formatNumber(double number) {
-        if (number == 0) {
-            return "0";
-        }
-        String[] units = new String[]{"", "K", "M", "B", "T"};
-        int unit = (int) Math.floor((Math.log10(number) / 3));
-
-        if (unit >= units.length) unit = units.length - 1;
-
-        double num = number / Math.pow(1000, unit);
-        DecimalFormat df = new DecimalFormat("#.#");
-        String formattedNum = df.format(num);
-        return formattedNum + units[unit];
     }
 }

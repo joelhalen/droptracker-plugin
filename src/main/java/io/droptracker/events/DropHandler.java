@@ -9,8 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
 
-import com.google.common.eventbus.Subscribe;
-
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
@@ -19,6 +17,7 @@ import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.NPC;
+import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.game.ItemStack;

@@ -1,20 +1,7 @@
 package io.droptracker.service;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ScheduledExecutorService;
-
-import javax.imageio.ImageIO;
-import javax.inject.Inject;
-import javax.inject.Singleton;
-
 import com.google.gson.Gson;
-import static net.runelite.http.api.RuneLiteAPI.GSON;
 import com.google.gson.annotations.SerializedName;
-
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
@@ -33,35 +20,25 @@ import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.Text;
-import okhttp3.OkHttpClient;
-import okhttp3.MultipartBody;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
-import okhttp3.Call;
-import okhttp3.Callback;
+import okhttp3.*;
 import okio.Buffer;
 import org.jetbrains.annotations.NotNull;
+
+import javax.imageio.ImageIO;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+
+import static net.runelite.http.api.RuneLiteAPI.GSON;
 
 @Slf4j
 @Singleton
 public class SubmissionManager {
-
-    @Getter
-    private static class ApiResponse {
-        @SerializedName("notice")
-        private String notice;
-
-        @SerializedName("rank_update")
-        private String rankUpdate;
-    }
-
-    public interface SubmissionUpdateCallback {
-        void onSubmissionsUpdated();
-    }
 
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
@@ -72,20 +49,16 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-
     /// Store a list of submissions that the player has received which qualified for a notification to be sent
     @Getter
     private final List<ValidSubmission> validSubmissions = new ArrayList<>();
-
     /// Callback for UI updates when submissions change
     @Setter
     private SubmissionUpdateCallback updateCallback;
     @Setter
     private boolean updatesEnabled = true;
-
     @Inject
     private ScheduledExecutorService executor;
-
     @Inject
     public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
         this.config = config;
@@ -97,6 +70,21 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
+    }
+
+    public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
+        clientThread.invoke(() -> {
+            Widget widget = client.getWidget(info);
+            if (widget != null) {
+                widget.setHidden(shouldHide);
+            }
+        });
+    }
+
+    private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
+        return byteArrayOutputStream.toByteArray();
     }
 
     /**
@@ -351,7 +339,7 @@ public class SubmissionManager {
                 Buffer buffer = new Buffer();
                 try {
                     body.writeTo(buffer);
-                } catch (IOException e) {
+                } catch (IOException ignored) {
                 }
             }
         }
@@ -403,7 +391,7 @@ public class SubmissionManager {
                                     chatMessageUtil.sendChatMessage(updateMessage);
                                 }
                             }
-                        } catch (Exception e) {
+                        } catch (Exception ignored) {
                         }
                     }
                 }
@@ -434,7 +422,6 @@ public class SubmissionManager {
 
     }
 
-
     public void addSubmissionToMemory(ValidSubmission validSubmission) {
         if (validSubmissions.size() > 20) {
             // Remove oldest submissions once the list starts to exceed 20
@@ -446,6 +433,7 @@ public class SubmissionManager {
 
     /**
      * Retry a failed submission using the stored webhook data
+     *
      * @param validSubmission The submission to retry
      */
     public void retrySubmission(ValidSubmission validSubmission) {
@@ -465,6 +453,7 @@ public class SubmissionManager {
 
     /**
      * Remove a submission from the in-memory list (e.g., when user dismisses it)
+     *
      * @param validSubmission The submission to remove
      */
     public void removeSubmission(ValidSubmission validSubmission) {
@@ -491,21 +480,6 @@ public class SubmissionManager {
         return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
     }
 
-    public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
-        clientThread.invoke(() -> {
-            Widget widget = client.getWidget(info);
-            if (widget != null) {
-                widget.setHidden(shouldHide);
-            }
-        });
-    }
-
-    private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
-        return byteArrayOutputStream.toByteArray();
-    }
-
     private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
         // First hide DMs if configured
         modWidget(hideDMs, client, clientThread, UrlManager.PRIVATE_CHAT_WIDGET);
@@ -527,6 +501,19 @@ public class SubmissionManager {
             }
             sendDataToDropTracker(webhook, imageBytes);
         });
+    }
+
+    public interface SubmissionUpdateCallback {
+        void onSubmissionsUpdated();
+    }
+
+    @Getter
+    private static class ApiResponse {
+        @SerializedName("notice")
+        private String notice;
+
+        @SerializedName("rank_update")
+        private String rankUpdate;
     }
 
 }

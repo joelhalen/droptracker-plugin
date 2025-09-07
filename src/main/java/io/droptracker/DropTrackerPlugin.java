@@ -92,9 +92,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	private DropTrackerPanel panel;
 
-	@Inject
-	private ConfigManager configManager;
-
 	private NavigationButton navButton;
 
 	@Inject
@@ -102,9 +99,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private OkHttpClient httpClient;
-	
-	@Inject
-	private ChatMessageUtil chatMessageUtil;
 
 	@Inject
 	private KCService kcService;
@@ -267,7 +261,7 @@ public class DropTrackerPlugin extends Plugin {
 				// panel.refreshData();
 				if (client.getAccountHash() != -1) {
 					try {
-						api.lookupPlayerNew(client.getLocalPlayer().getName());
+						api.lookupPlayer(client.getLocalPlayer().getName());
 					} catch (Exception e) {
 						log.debug("Couldn't look the current player up in the DropTracker database");
 					}
@@ -403,8 +397,8 @@ public class DropTrackerPlugin extends Plugin {
 				/* In the case that the player has changed from the last time we stored their name/hash, we need to call the reset method on KCService... */
 				kcService.reset();
 			}
-			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
-			configManager.setConfiguration("droptracker", "lastAccountHash", String.valueOf(client.getAccountHash()));
+			config.setLastAccountName(playerName);
+			config.setLastAccountHash(String.valueOf(client.getAccountHash()));
 			SwingUtilities.invokeLater(() -> {
 				try {
 					if (panel != null) {

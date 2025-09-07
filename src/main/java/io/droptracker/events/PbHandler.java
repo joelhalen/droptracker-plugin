@@ -657,14 +657,15 @@ public class PbHandler extends BaseEventHandler {
         }
 
     }
-   //Handling Boss times or PB times that do not contain an npc or boss name
-    private void noKcPB(String message, Duration time, Duration bestTime, boolean isPb){
-        PbHandler.TimeData timeData = new PbHandler.TimeData(time,bestTime,isPb);
+
+    /// Handling Boss times or PB times that do not contain an npc or boss name
+    private void noKcPB(String message, Duration time, Duration bestTime, boolean isPb) {
+        PbHandler.TimeData timeData = new PbHandler.TimeData(time, bestTime, isPb);
         BossNotification withTime = null;
 
         if (message.contains("Delve")) {
             String bossName = "Doom of Mokhaiotl";
-            pendingTimeData.put(bossName,timeData);
+            pendingTimeData.put(bossName, timeData);
             Pattern levelPattern = Pattern.compile("Delve level: (\\S+) duration.*");
             Matcher levelMatch = levelPattern.matcher(message);
             if (levelMatch.find())
@@ -680,8 +681,6 @@ public class PbHandler extends BaseEventHandler {
             bossData.set(withTime);
             processKill(withTime);
         }
-
-
     }
 
 
