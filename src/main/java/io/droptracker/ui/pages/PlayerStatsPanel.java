@@ -15,7 +15,6 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
-import javax.inject.Inject;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -24,20 +23,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class PlayerStatsPanel {
-
-    @Inject
-    private Client client;
-
-    @Inject
-    private DropTrackerConfig config;
-
-    @Inject
-    private DropTrackerApi api;
-
-    @Inject
-    private DropTrackerPlugin plugin;
-
-    private ItemManager itemManager;
+    private final Client client;
+    private final DropTrackerConfig config;
+    private final DropTrackerApi api;
+    private final DropTrackerPlugin plugin;
+    private final ItemManager itemManager;
 
     // UI components that we need to update
     private JPanel mainPanel;
