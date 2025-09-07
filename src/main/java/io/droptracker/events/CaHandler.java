@@ -25,19 +25,10 @@ public class CaHandler extends BaseEventHandler {
     @Varbit
     public static final int GRANDMASTER_TOTAL_POINTS_ID = 14814;
 
-    @Override
-    public void process(Object... args) {
-        /* does not need an override */
-    }
-
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
         parseCombatAchievement(message).ifPresent(pair -> processCombatAchievement(pair.getLeft(), pair.getRight()));
     }
-
-
-
-
 
     private void processCombatAchievement(CombatAchievement tier, String task) {
         // delay notification for varbits to be updated
