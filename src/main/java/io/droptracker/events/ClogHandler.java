@@ -9,7 +9,7 @@ import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.annotations.Varp;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.game.ItemStack;
 import net.runelite.http.api.loottracker.LootRecordType;
@@ -30,7 +30,6 @@ public class ClogHandler extends BaseEventHandler {
     private final ItemIDSearch itemIDFinder;
 
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
-    public static final @Varp int COMPLETED_VARP = 2943, TOTAL_VARP = 2944;
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     
@@ -53,7 +52,6 @@ public class ClogHandler extends BaseEventHandler {
     }
 
 
-    @SuppressWarnings("deprecation")
     public void onChatMessage(String chatMessage) {
         if (client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) != 1 || !this.isEnabled()) {
             // require notifier enabled without popup mode to use chat event
@@ -84,8 +82,8 @@ public class ClogHandler extends BaseEventHandler {
     private void processCollection(String itemName) {
         if (!this.isEnabled()) return;
 
-        int completed = client.getVarpValue(COMPLETED_VARP);
-        int total = client.getVarpValue(TOTAL_VARP);
+        int completed = client.getVarpValue(VarPlayerID.COLLECTION_COUNT);
+        int total = client.getVarpValue(VarPlayerID.COLLECTION_COUNT_MAX);
 
         boolean varpValid = total > 0 && completed > 0;
         if (!varpValid) {
