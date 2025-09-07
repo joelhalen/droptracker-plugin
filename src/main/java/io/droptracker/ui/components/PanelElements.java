@@ -101,8 +101,6 @@ public class PanelElements {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
-                if (image != null) {
-                }
             });
         });
     }
