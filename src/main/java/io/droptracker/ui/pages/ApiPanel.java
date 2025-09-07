@@ -35,7 +35,7 @@ public class ApiPanel {
     private JPanel groupConfigPanel;
     private JPanel groupsContainerPanel;
     private JScrollPane groupsScrollPane;
-    private Map<String, Boolean> groupExpandStates = new HashMap<>(); // Track expand/collapse state by group ID
+    private final Map<String, Boolean> groupExpandStates = new HashMap<>(); // Track expand/collapse state by group ID
 
 
     public ApiPanel(DropTrackerConfig config, DropTrackerApi api, SubmissionManager submissionManager) {
