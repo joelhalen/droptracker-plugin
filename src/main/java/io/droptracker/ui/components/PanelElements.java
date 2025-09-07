@@ -64,8 +64,6 @@ public class PanelElements {
     public static String cachedGroupName = "All Players";
 
     @Inject
-    private static Client client;
-    @Inject
     private static ItemManager itemManager;
 
     static {
@@ -686,7 +684,7 @@ public class PanelElements {
 		panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 		panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); 
 		
-		submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager, forGroup));
+		submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
 
 		// Add components to container
 		container.add(titlePanel);
@@ -696,7 +694,7 @@ public class PanelElements {
 		return container;
 	}
 
-	private static JPanel updateRecentSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, boolean forGroup) {
+	private static JPanel updateRecentSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
 		panel.removeAll();
 		
 		// Debug logging
