@@ -339,7 +339,7 @@ public class SubmissionManager {
                 Buffer buffer = new Buffer();
                 try {
                     body.writeTo(buffer);
-                } catch (IOException e) {
+                } catch (IOException ignored) {
                 }
             }
         }
@@ -391,7 +391,7 @@ public class SubmissionManager {
                                     chatMessageUtil.sendChatMessage(updateMessage);
                                 }
                             }
-                        } catch (Exception e) {
+                        } catch (Exception ignored) {
                         }
                     }
                 }
