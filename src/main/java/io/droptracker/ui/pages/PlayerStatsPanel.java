@@ -30,7 +30,6 @@ public class PlayerStatsPanel {
     private final ItemManager itemManager;
 
     // UI components that we need to update
-    private JPanel mainPanel;
     private JPanel contentPanel;
     private JTextField searchField;
     private JPanel leaderboardPlaceholder;
@@ -44,7 +43,7 @@ public class PlayerStatsPanel {
     }
 
     public JPanel create() {
-        mainPanel = new JPanel();
+        var mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
         mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
 
