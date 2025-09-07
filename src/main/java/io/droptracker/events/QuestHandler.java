@@ -46,8 +46,7 @@ public class QuestHandler extends BaseEventHandler {
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {
-        // 153 is the ID for the quest completion widget
-        if (event.getGroupId() == 153 && isEnabled()) {
+        if (event.getGroupId() == InterfaceID.QUESTSCROLL && isEnabled()) {
             Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE); // Quest title widget
             if (questTitle != null) {
                 String questText = questTitle.getText();
