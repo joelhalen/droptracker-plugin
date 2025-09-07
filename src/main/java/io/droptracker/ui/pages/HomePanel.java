@@ -10,23 +10,14 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
-import javax.inject.Inject;
 import javax.swing.*;
 import java.awt.*;
 
 public class HomePanel {
-
-    @Inject
-    private DropTrackerConfig config;
-
-    @Inject
-    private DropTrackerApi api;
-
-    @Inject
-    private Client client;
-
-    @Inject
-    private DropTrackerPanel panel;
+    private final DropTrackerConfig config;
+    private final DropTrackerApi api;
+    private final Client client;
+    private final DropTrackerPanel panel;
 
     // Store references for dynamic updates
     private JPanel homePanel;
@@ -36,6 +27,7 @@ public class HomePanel {
     public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel) {
         this.config = config;
         this.api = api;
+        this.client = client;
         this.panel = panel;
     }
 
