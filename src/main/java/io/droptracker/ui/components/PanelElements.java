@@ -499,7 +499,7 @@ public class PanelElements {
             if (SwingUtilities.getWindowAncestor(client.getCanvas()) instanceof JFrame) {
                 return (JFrame) SwingUtilities.getWindowAncestor(client.getCanvas());
             }
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
         return null;
     }
@@ -705,7 +705,7 @@ public class PanelElements {
                                     Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
                                     return new ImageIcon(scaled);
                                 }
-                            } catch (IOException e) {
+                            } catch (IOException ignored) {
                             }
                             return null;
                         }).thenAccept(imageIcon -> {
