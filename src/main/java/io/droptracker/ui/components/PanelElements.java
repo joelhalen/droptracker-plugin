@@ -31,12 +31,12 @@ import java.util.concurrent.CompletableFuture;
 public class PanelElements {
 
 
-    public static final ImageIcon COLLAPSED_ICON;
-    public static final ImageIcon EXPANDED_ICON;
-    public static @Nullable BufferedImage cachedLootboardImage;
-    public static String cachedGroupName = "All Players";
+    private static final ImageIcon COLLAPSED_ICON;
+    private static final ImageIcon EXPANDED_ICON;
     private static final ImageIcon BOARD_ICON;
     private static final ImageIcon EXTERNAL_LINK_ICON;
+    public static @Nullable BufferedImage cachedLootboardImage;
+    public static String cachedGroupName = "All Players";
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
 
