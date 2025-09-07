@@ -252,28 +252,6 @@ public class DropTrackerApi {
         }
     }
 
-    public String getCurrentLatency() {
-        if (!config.useApi()) {
-            return "? ms";
-        }
-        try {
-            String url = getApiUrl() + "/ping";
-            long startTime = System.currentTimeMillis();
-            try (Response response = httpClient.newCall(new Request.Builder().url(url).build()).execute()) {
-                if (!response.isSuccessful()) {
-                    return "? ms";
-                }
-            } catch (IOException e) {
-                log.debug("Couldn't get current latency (IOException) " + e);
-                return "? ms";
-            }
-            long endTime = System.currentTimeMillis();
-            return String.valueOf((int) (endTime - startTime)) + "ms";
-        } catch (Exception e) {
-            return "? ms";
-        }
-    }
-
     /**
      * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
      */
