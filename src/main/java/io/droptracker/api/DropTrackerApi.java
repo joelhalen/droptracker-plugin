@@ -13,6 +13,7 @@ import io.droptracker.models.api.TopPlayersResult;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import net.runelite.api.Client;
+import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -315,14 +316,14 @@ public class DropTrackerApi {
         Request request = new Request.Builder().url(endpoint).build();
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() -> 
                     callback.accept("Welcome to the DropTracker!"));
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
                     String result;
                     if (response.isSuccessful() && responseBody != null) {
@@ -353,14 +354,14 @@ public class DropTrackerApi {
         Request request = new Request.Builder().url(endpoint).build();
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() -> 
                     callback.accept("Error fetching latest update: " + e.getMessage()));
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
                     String result;
                     if (response.isSuccessful() && responseBody != null) {
