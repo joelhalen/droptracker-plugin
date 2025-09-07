@@ -310,6 +310,7 @@ public interface DropTrackerConfig extends Config {
     default String lastAccountName() {
         return null;
     }
+    void setLastAccountName(String accountName);
 
     @ConfigItem(
         name = "lastAccountHash",
@@ -320,4 +321,5 @@ public interface DropTrackerConfig extends Config {
     default String lastAccountHash() {
         return null;
     }
+    void setLastAccountHash(String accountHash);
 }

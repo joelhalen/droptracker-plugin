@@ -92,9 +92,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	private DropTrackerPanel panel;
 
-	@Inject
-	private ConfigManager configManager;
-
 	private NavigationButton navButton;
 
 	@Inject
@@ -403,8 +400,8 @@ public class DropTrackerPlugin extends Plugin {
 				/* In the case that the player has changed from the last time we stored their name/hash, we need to call the reset method on KCService... */
 				kcService.reset();
 			}
-			configManager.setConfiguration("droptracker", "lastAccountName", playerName);
-			configManager.setConfiguration("droptracker", "lastAccountHash", String.valueOf(client.getAccountHash()));
+			config.setLastAccountName(playerName);
+			config.setLastAccountHash(String.valueOf(client.getAccountHash()));
 			SwingUtilities.invokeLater(() -> {
 				try {
 					if (panel != null) {
