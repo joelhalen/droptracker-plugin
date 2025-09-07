@@ -77,20 +77,20 @@ public class PetHandler extends BaseEventHandler {
 
     public void onGameMessage(String chatMessage) {
         if (!isEnabled()) return;
-            
-            if (petName == null) {
-                if (PET_REGEX.matcher(chatMessage).matches()) {
-                    // Prime the notifier to trigger next tick
-                    this.petName = PRIMED_NAME;
-                    this.duplicate = chatMessage.contains("would have been");
-                    this.backpack = chatMessage.contains(" backpack");
-                }
-            } else if (PRIMED_NAME.equals(petName) || !collection) {
-                parseItemFromGameMessage(chatMessage)
-                .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
+
+        if (petName == null) {
+            if (PET_REGEX.matcher(chatMessage).matches()) {
+                // Prime the notifier to trigger next tick
+                this.petName = PRIMED_NAME;
+                this.duplicate = chatMessage.contains("would have been");
+                this.backpack = chatMessage.contains(" backpack");
+            }
+        } else if (PRIMED_NAME.equals(petName) || !collection) {
+            parseItemFromGameMessage(chatMessage)
+                    .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
                     .ifPresent(parseResult -> {
-                    this.petName = parseResult.itemName;
-                    if (parseResult.collectionLog) {
+                        this.petName = parseResult.itemName;
+                        if (parseResult.collectionLog) {
                             this.collection = true;
                         }
                     });
