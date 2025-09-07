@@ -206,7 +206,7 @@ public class PanelElements {
             cachedGroupName = "All Players";
         }
         final JFrame parentFrame = getParentFrame(client);
-        JDialog imageDialog = new JDialog(parentFrame, cachedGroupName + " - Lootboard", true);
+        JDialog imageDialog = new JDialog(parentFrame, cachedGroupName + " - Lootboard", false);
         imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         // Check if we already have the right group cached
@@ -250,7 +250,6 @@ public class PanelElements {
             }
         });
 
-        // Now show the modal dialog (this blocks, but image loading is already underway)
         imageDialog.setVisible(true);
     }
 
@@ -258,7 +257,7 @@ public class PanelElements {
     public static void showSubmissionImage(Client client, String submissionType, String submissionImageUrl, String tooltip) {
         final JFrame parentFrame = getParentFrame(client);
         String dialogTitle = getSubmissionDialogTitle(submissionType);
-        JDialog imageDialog = new JDialog(parentFrame, dialogTitle, true);
+        JDialog imageDialog = new JDialog(parentFrame, dialogTitle, false);
         imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         // Show loading dialog first
@@ -652,7 +651,6 @@ public class PanelElements {
 		title.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the title
 
 		// Create a text area that looks like a label but handles wrapping better
-        JLabel warningLabel = createSuperscriptWarningLabel();
 		JTextArea titleDesc = new JTextArea("Clicking an icon opens a screenshot, if available.");
 		titleDesc.setForeground(Color.LIGHT_GRAY);
 		titleDesc.setFont(FontManager.getRunescapeSmallFont());
