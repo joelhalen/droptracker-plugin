@@ -302,17 +302,6 @@ public class PanelElements {
         });
     }
 
-
-    // Method to get currently cached group ID
-    public static Integer getCachedGroupId() {
-        return cachedGroupId;
-    }
-
-    // Method to get current image URL
-    public static String getCurrentImageUrl() {
-        return currentImageUrl;
-    }
-
     // Helper method to create a stat box with fixed size
     public static JPanel createStatBox(String label, String value) {
         JPanel box = new JPanel();
@@ -334,56 +323,6 @@ public class PanelElements {
         box.add(nameLabel);
 
         return box;
-    }
-
-    // Helper method to create an NPC row (similar to member row)
-    public static JPanel createNpcRow(String npcName, String lootValue, String rank) {
-        JPanel row = new JPanel(new BorderLayout(5, 0));
-        row.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-        row.setBorder(new EmptyBorder(5, 5, 5, 5));
-
-        JLabel rankLabel = new JLabel("#" + rank);
-        rankLabel.setFont(FontManager.getRunescapeSmallFont());
-        rankLabel.setForeground(Color.YELLOW);
-
-        JLabel nameLabel = new JLabel(npcName);
-        nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(Color.WHITE);
-
-        JLabel lootLabel = new JLabel(lootValue);
-        lootLabel.setFont(FontManager.getRunescapeSmallFont());
-        lootLabel.setForeground(Color.GREEN);
-
-        row.add(rankLabel, BorderLayout.WEST);
-        row.add(nameLabel, BorderLayout.CENTER);
-        row.add(lootLabel, BorderLayout.EAST);
-
-        return row;
-    }
-
-    // Helper method to create a member row with fixed size for player rank lists
-    public static JPanel createMemberRow(String name, String loot, String rank) {
-        JPanel row = new JPanel(new BorderLayout(5, 0));
-        row.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-        row.setBorder(new EmptyBorder(5, 5, 5, 5));
-
-        JLabel rankLabel = new JLabel("#" + rank);
-        rankLabel.setFont(FontManager.getRunescapeSmallFont());
-        rankLabel.setForeground(Color.YELLOW);
-
-        JLabel nameLabel = new JLabel(name);
-        nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(Color.WHITE);
-
-        JLabel lootLabel = new JLabel(loot);
-        lootLabel.setFont(FontManager.getRunescapeSmallFont());
-        lootLabel.setForeground(Color.GREEN);
-
-        row.add(rankLabel, BorderLayout.WEST);
-        row.add(nameLabel, BorderLayout.CENTER);
-        row.add(lootLabel, BorderLayout.EAST);
-
-        return row;
     }
 
     public static JPanel getLatestWelcomeContent(DropTrackerApi api) {
@@ -553,15 +492,6 @@ public class PanelElements {
         sep.setBackground(color);
         sep.setForeground(color);
         return sep;
-    }
-
-    public static JLabel createSuperscriptWarningLabel() {
-        String htmlText = "<html><font color='orange'>!</font><sup><font color='orange'>!</font></sup></html>";
-
-        JLabel warningLabel = new JLabel(htmlText);
-        // warningLabel.setFont(new Font("SansSerif", Font.BOLD, 16));
-
-        return warningLabel;
     }
 
     public static JFrame getParentFrame(Client client) {
@@ -889,49 +819,6 @@ public class PanelElements {
 
         } catch (Exception e) {
             return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
-        }
-    }
-
-    public static void showLoadingDialog(JDialog imageDialog, JFrame parentFrame) {
-        // Create loading label
-        JLabel loadingLabel = new JLabel("Loading lootboard...");
-        loadingLabel.setForeground(Color.WHITE);
-        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        loadingLabel.setVerticalAlignment(JLabel.CENTER);
-        loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        loadingLabel.setOpaque(true);
-
-        // Add click to close
-        addCloseListener(loadingLabel, imageDialog);
-
-        imageDialog.add(loadingLabel);
-        imageDialog.pack();
-        imageDialog.setLocationRelativeTo(parentFrame);
-        imageDialog.setVisible(true);
-
-        // Try to load the image again if it's not cached
-        if (cachedLootboardImage == null) {
-            CompletableFuture.supplyAsync(() -> {
-                try {
-                    URL url = new URL(currentImageUrl);
-                    return ImageIO.read(url);
-                } catch (IOException e) {
-                    return null;
-                }
-            }).thenAccept(image -> {
-                SwingUtilities.invokeLater(() -> {
-                    if (image != null) {
-                        cachedLootboardImage = image;
-                        imageDialog.getContentPane().removeAll();
-                        displayImageInDialog(imageDialog, image, parentFrame);
-                    } else {
-                        loadingLabel.setText("Failed to load lootboard");
-                        loadingLabel.setForeground(Color.RED);
-                    }
-                });
-            });
         }
     }
 
