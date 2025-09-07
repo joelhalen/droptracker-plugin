@@ -17,8 +17,7 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -466,9 +465,10 @@ public class ApiPanel {
     }
 
     public void updateStatusLabel() {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime lastCommunicationDate = LocalDateTime.ofEpochSecond(api.lastCommunicationTime, 0, ZoneOffset.UTC);
-        Duration duration = Duration.between(lastCommunicationDate, now);
+        long nowEpochSeconds = Instant.now().getEpochSecond();
+        long lastEpochSeconds = api.lastCommunicationTime;
+        long deltaSeconds = Math.max(0L, nowEpochSeconds - lastEpochSeconds);
+        Duration duration = Duration.ofSeconds(deltaSeconds);
 
         String lastCommunicationTime = DurationAdapter.formatDuration(duration);
         String statusText;

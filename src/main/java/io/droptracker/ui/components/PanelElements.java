@@ -332,15 +332,14 @@ public class PanelElements {
         JTextArea textArea = collapsibleSubText("Welcome to the DropTracker!");
         contentPanel.add(textArea, BorderLayout.CENTER);
 
-        // If API is available, load content asynchronously
-        if (api != null) {
-            api.getLatestWelcomeString(welcomeText -> {
-                // Update the text area with the loaded content
-                textArea.setText(welcomeText != null ? welcomeText : "Welcome to the DropTracker!");
-                textArea.revalidate();
-                textArea.repaint();
-            });
-        }
+        /* getLatestWelcomeString method contains a check for whether config enabled API connections */
+        api.getLatestWelcomeString(welcomeText -> {
+            // Update the text area with the loaded content
+            textArea.setText(welcomeText != null ? welcomeText : "Welcome to the DropTracker!");
+            textArea.revalidate();
+            textArea.repaint();
+        });
+        
 
         return contentPanel;
     }
@@ -360,15 +359,14 @@ public class PanelElements {
         JTextArea textArea = collapsibleSubText(initialText);
         contentPanel.add(textArea, BorderLayout.CENTER);
 
-        // If API is enabled and available, load content asynchronously
-        if (config != null && config.useApi() && api != null) {
-            api.getLatestUpdateString(updateText -> {
-                // Update the text area with the loaded content
-                textArea.setText(updateText != null ? updateText : "No updates found.");
-                textArea.revalidate();
-                textArea.repaint();
-            });
-        }
+        /* getLatestUpdateString method contains a check for whether config enabled API connections */
+        api.getLatestUpdateString(updateText -> {
+            // Update the text area with the loaded content
+            textArea.setText(updateText != null ? updateText : "No updates found.");
+            textArea.revalidate();
+            textArea.repaint();
+        });
+        
 
         return contentPanel;
     }
@@ -775,48 +773,52 @@ public class PanelElements {
             String tooltip = "<html>";
             if (forGroup) {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-                    String pbTime = submission.getPbTime();
-                    tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
-                            submission.getPlayerName() + " - new personal best!<br>" + "<br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                    String pbTime = sanitizeTxt(submission.getPbTime());
+                    tooltip += "<b>" + pbTime + "</b> at " + sanitizeTxt(submission.getSourceName()) + "<br>" +
+                            sanitizeTxt(submission.getPlayerName()) + " - new personal best!<br><br>" +
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-                    String itemName = submission.getDropItemName();
+                    String itemName = sanitizeTxt(submission.getDropItemName());
                     tooltip += "<b>" + itemName + "</b><br>" +
-                            submission.getPlayerName() + "<br>" +
-                            "from: <i>" + submission.getSourceName() + "</i><br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                            sanitizeTxt(submission.getPlayerName()) + "<br>" +
+                            "from: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-                    String itemName = submission.getClogItemName();
-                    tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
+                    String itemName = sanitizeTxt(submission.getClogItemName());
+                    tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
                             "<b>" + itemName + "</b><br>" +
-                            "<i>from: " + submission.getSourceName() + "</i><br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                            "<i>from: " + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 }
             } else {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-                    String pbTime = submission.getPbTime();
-                    tooltip += "<b>" + pbTime + "</b> at " + submission.getSourceName() + "<br>" +
-                            submission.getPlayerName() + " - new personal best!<br>" + "<br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                    String pbTime = sanitizeTxt(submission.getPbTime());
+                    tooltip += "<b>" + pbTime + "</b> at " + sanitizeTxt(submission.getSourceName()) + "<br>" +
+                            sanitizeTxt(submission.getPlayerName()) + " - new personal best!<br><br>" +
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-                    String itemName = submission.getDropItemName();
+                    String itemName = sanitizeTxt(submission.getDropItemName());
                     tooltip += "<b>" + itemName + "</b><br>" +
-                            submission.getPlayerName() + "<br>" +
-                            "from: <i>" + submission.getSourceName() + "</i><br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                            sanitizeTxt(submission.getPlayerName()) + "<br>" +
+                            "from: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-                    String itemName = submission.getClogItemName();
-                    tooltip += submission.getPlayerName() + " - New Collection Log:<br>" +
+                    String itemName = sanitizeTxt(submission.getClogItemName());
+                    tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
                             "<b>" + itemName + "</b><br>" +
-                            "<i>" + submission.timeSinceReceived() + "</i>";
+                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 }
             }
             tooltip += "</html>";
             return tooltip;
 
         } catch (Exception e) {
-            return submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName();
+            return sanitizeTxt(submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName());
         }
+    }
+
+    private static String sanitizeTxt(String tooltip) {
+        return tooltip.replaceAll("\\<.*?\\>", "");
     }
 
     private static void displayImageInDialog(JDialog imageDialog, BufferedImage originalImage, JFrame parentFrame) {
