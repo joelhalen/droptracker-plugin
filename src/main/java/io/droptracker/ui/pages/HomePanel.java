@@ -10,6 +10,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
+import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
 
@@ -21,7 +22,7 @@ public class HomePanel {
 
     // Store references for dynamic updates
     private JPanel homePanel;
-    private JPanel playerButtonRow;
+    private @Nullable JPanel playerButtonRow;
     private int playerButtonIndex = -1; // Tracks where to insert the button
 
     public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel) {
