@@ -383,11 +383,11 @@ public class SubmissionManager {
                             ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
                             if (apiResponse != null) {
                                 String noticeMessage = apiResponse.getNotice();
-                                if (noticeMessage != null && !noticeMessage.isEmpty()) {
+                                if (noticeMessage != null && !noticeMessage.isEmpty() && config.receiveInGameMessages()) {
                                     chatMessageUtil.sendChatMessage(noticeMessage);
                                 }
                                 String updateMessage = apiResponse.getRankUpdate();
-                                if (updateMessage != null && !updateMessage.isEmpty()) {
+                                if (updateMessage != null && !updateMessage.isEmpty() && config.receiveInGameMessages()) {
                                     chatMessageUtil.sendChatMessage(updateMessage);
                                 }
                             }

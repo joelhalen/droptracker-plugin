@@ -256,6 +256,17 @@ public interface DropTrackerConfig extends Config {
         return false;
     }
 
+    @ConfigItem(
+        name = "Receive in-game messages",
+        keyName = "receiveInGameMessages",
+        description = "Do you want to see chat messages from the plugin to confirm your submissions/etc?",
+        position = 2,
+        section = apiSection
+    )
+    default boolean receiveInGameMessages() {
+        return true;
+    }
+
     /* Side panel settings */
     @ConfigSection(
         name = "Side Panel",
