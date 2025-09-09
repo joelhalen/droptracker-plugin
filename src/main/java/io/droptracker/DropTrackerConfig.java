@@ -27,7 +27,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "lootEmbeds",
         name = "Enable Loot Tracking",
-        description = "Should we send your drops to DropTracker?",
+        description = "Should we send your drops to The Droptracker?",
         position = 0,
         section = LootSection
     )
@@ -61,7 +61,7 @@ public interface DropTrackerConfig extends Config {
     /* Personal Best related Tracking */
     @ConfigSection(
         name = "Personal Bests",
-        description = "Should we send your personal bests to DropTracker?",
+        description = "Should we send your personal bests to The Droptracker?",
         position = 2,
         closedByDefault = false
     )
@@ -103,7 +103,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "clogEmbeds",
         name = "Enable Clogs",
-        description = "Should we send new collection log slot unlocks to DropTracker?",
+        description = "Should we send new collection log slot unlocks to The Droptracker?",
         position = 1,
         section = ClogSection
     )
@@ -135,7 +135,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "caEmbeds",
         name = "Enable CAs",
-        description = "Should we send your Combat Achievements to DropTracker?",
+        description = "Should we send your Combat Achievements to The Droptracker?",
         position = 3,
         section = CaSection
     )
@@ -158,7 +158,7 @@ public interface DropTrackerConfig extends Config {
     /* Pet related Tracking */
     @ConfigSection(
             name = "Pet Tracking",
-            description = "Should we send your pets to DropTracker?",
+            description = "Should we send your pets to The Droptracker?",
             position = 5,
             closedByDefault = false
     )
@@ -190,7 +190,7 @@ public interface DropTrackerConfig extends Config {
     /* Experience/Level related Tracking */
     @ConfigSection(
             name = "Experience / Level ",
-            description = "Should we send your experience to DropTracker?",
+            description = "Should we send your experience to The Droptracker?",
             position = 6,
             closedByDefault = false
     )
@@ -199,7 +199,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "trackExperience",
             name = "Track Experience",
-            description = "Do you want to send experience gains to DropTracker?",
+            description = "Do you want to send experience gains to The Droptracker?",
             position = 1,
             section = XPSection
     )
@@ -210,7 +210,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "levelEmbed",
             name = "Enable Levels",
-            description = "Do you want to send level gains to Droptracker",
+            description = "Do you want to send level gains to The Droptracker",
             position = 2,
             section = XPSection
     )
