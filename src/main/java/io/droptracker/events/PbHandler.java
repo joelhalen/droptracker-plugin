@@ -114,7 +114,9 @@ public class PbHandler extends BaseEventHandler {
         if (data != null) {
             if (data.getBoss() != null) {
                 if (this.isEnabled()) {
-                    processKill(data);
+                    if(!data.getTime().isZero()){
+                        processKill(data);
+                    }
                     return;
                 }
             } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
@@ -669,7 +671,7 @@ public class PbHandler extends BaseEventHandler {
             Pattern levelPattern = Pattern.compile("Delve level: (\\S+) duration.*");
             Matcher levelMatch = levelPattern.matcher(message);
             if (levelMatch.find())
-                bossName = "Doom of Mokhaiotl (Level: " + levelMatch.group(1) + " )";
+                bossName = "Doom of Mokhaiotl (Level:" + levelMatch.group(1) + ")";
             withTime = new BossNotification(
                     bossName,
                     0,
@@ -679,7 +681,9 @@ public class PbHandler extends BaseEventHandler {
                     isPb
             );
             bossData.set(withTime);
-            processKill(withTime);
+            if(!time.isZero()){
+                processKill(withTime);
+            }
         }
     }
 
