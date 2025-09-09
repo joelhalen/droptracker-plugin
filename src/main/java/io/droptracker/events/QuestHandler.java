@@ -42,7 +42,7 @@ public class QuestHandler extends BaseEventHandler {
     
     @Override
     public boolean isEnabled() {
-        return config.trackQuests();
+        return config.questsEmbed();
     }
 
     public void onWidgetLoaded(WidgetLoaded event) {

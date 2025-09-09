@@ -211,6 +211,12 @@ public class SubmissionManager {
                 break;
 
             case LEVEL_UP:
+                if (!config.levelEmbed()){
+                    return;
+                }
+                if(config.screenshotLevel()){
+                    requiredScreenshot = true;
+                }
                 CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
                 // Check the skills that leveled up
                 for (CustomWebhookBody.Field field : embed.getFields()) {
@@ -219,7 +225,6 @@ public class SubmissionManager {
                         int newLevel = Integer.parseInt(field.getValue());
                         // Check if this level qualifies for a screenshot
                         if (newLevel >= config.minLevelToScreenshot()) {
-                            requiredScreenshot = true;
                             break;
                         }
                     }
@@ -228,7 +233,7 @@ public class SubmissionManager {
 
             case QUEST_COMPLETION:
                 // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                if (!config.trackQuests()) {
+                if (!config.questsEmbed()) {
                     return;
                 }
                 if (config.screenshotQuests()) {
@@ -251,6 +256,9 @@ public class SubmissionManager {
 
             case PET:
                 // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
+                if(!config.petEmbeds()){
+                    break;
+                }
                 if (config.screenshotPets()) {
                     requiredScreenshot = true;
                 }

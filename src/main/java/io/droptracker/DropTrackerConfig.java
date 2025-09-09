@@ -27,7 +27,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "lootEmbeds",
         name = "Enable Loot Tracking",
-        description = "Should we send your drops to the DropTracker?",
+        description = "Should we send your drops to DropTracker?",
         position = 0,
         section = LootSection
     )
@@ -61,7 +61,7 @@ public interface DropTrackerConfig extends Config {
     /* Personal Best related Tracking */
     @ConfigSection(
         name = "Personal Bests",
-        description = "Should we send your personal bests to the DropTracker?",
+        description = "Should we send your personal bests to DropTracker?",
         position = 2,
         closedByDefault = false
     )
@@ -103,7 +103,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "clogEmbeds",
         name = "Enable Clogs",
-        description = "Should we send new collection log slot unlocks to the DropTracker?",
+        description = "Should we send new collection log slot unlocks to DropTracker?",
         position = 1,
         section = ClogSection
     )
@@ -135,7 +135,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "caEmbeds",
         name = "Enable CAs",
-        description = "Should we send your drops to the DropTracker?",
+        description = "Should we send your Combat Achievements to DropTracker?",
         position = 3,
         section = CaSection
     )
@@ -155,70 +155,124 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    /* Settings for Hiding Split Chat, Side Panel and API connections */
+    /* Pet related Tracking */
     @ConfigSection(
-        name = "Miscellaneous",
-        description = "Miscellaneous plugin config options",
-        position = 5,
-        closedByDefault = false
+            name = "Pet Tracking",
+            description = "Should we send your pets to DropTracker?",
+            position = 5,
+            closedByDefault = false
     )
-    String miscSettings = "Additional Settings";
+    String PetSection = "Pet Tracking";
 
     @ConfigItem(
-        keyName = "screenshotPets",
-        name = "Screenshot Pets",
-        description = "Do you want to send screenshots when you acquire a pet?",
-        position = 2,
-        section = miscSettings
+            keyName = "petEmbeds",
+            name = "Enable Pets",
+            description = "Do you want DropTracker to track your Pets?",
+            position = 1,
+            section = PetSection
+    )
+    default boolean petEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "screenshotPets",
+            name = "Screenshot Pets",
+            description = "Do you want to send screenshots when you acquire a pet?",
+            position = 2,
+            section = PetSection
     )
     default boolean screenshotPets() {
         return true;
     }
 
+
+    /* Experience/Level related Tracking */
+    @ConfigSection(
+            name = "Experience / Level ",
+            description = "Should we send your experience to DropTracker?",
+            position = 6,
+            closedByDefault = false
+    )
+    String XPSection = "Experience / Level ";
+
     @ConfigItem(
-        keyName = "trackExperience",
-        name = "Track Experience",
-        description = "Do you want to send experience gains to the DropTracker?",
-        position = 3,
-        section = miscSettings
+            keyName = "trackExperience",
+            name = "Track Experience",
+            description = "Do you want to send experience gains to DropTracker?",
+            position = 1,
+            section = XPSection
     )
     default boolean trackExperience() {
         return true;
     }
 
     @ConfigItem(
-        keyName = "minLevelToScreenshot",
-        name = "Minimum Level to Screenshot",
-        description = "<html>What minimum level should we take screenshots for you achieving?<br />"
-            + "<i>set above 99 to disable</i></html>",
-        position = 4,
-        section = miscSettings
+            keyName = "levelEmbed",
+            name = "Enable Levels",
+            description = "Do you want to send level gains to Droptracker",
+            position = 2,
+            section = XPSection
     )
-    default int minLevelToScreenshot() {
-        return 1;
-    }
+    default boolean levelEmbed(){ return true;}
 
     @ConfigItem(
-        keyName = "trackQuests",
-        name = "Track Quests",
-        description = "Do you want to send quest completions to the DropTracker?",
-        position = 5,
-        section = miscSettings
+            keyName = "screenshotLevel",
+            name = "Screenshot Levels",
+            description = "Do you want to send screenshots when you level up?",
+            position = 3,
+            section = XPSection
     )
-    default boolean trackQuests() {
+    default boolean screenshotLevel(){ return true;}
+
+    @ConfigItem(
+            keyName = "minLevelToScreenshot",
+            name = "Minimum Level to Screenshot",
+            description = "<html>What minimum level should we take screenshots for you achieving?<br />",
+            position = 4,
+            section = XPSection
+    )
+    default int minLevelToScreenshot() {return 1;}
+
+    /* Quest related Tracking */
+    @ConfigSection(
+            name = "Quest Tracking",
+            description = "Should we send your quests to the DropTracker?",
+            position = 7,
+            closedByDefault = false
+    )
+    String QuestSection = "Quest Tracking";
+
+    @ConfigItem(
+            keyName = "questsEmbed",
+            name = "Track Quests",
+            description = "Do you want to send quest completions to the DropTracker?",
+            position = 1,
+            section = QuestSection
+    )
+    default boolean questsEmbed() {
         return true;
     }
 
     @ConfigItem(
-        keyName = "screenshotQuests",
-        name = "Screenshot Quests",
-        description = "Do you want to send screenshots when you complete a quest?",
-        position = 6,
-        section = miscSettings
+            keyName = "screenshotQuests",
+            name = "Screenshot Quests",
+            description = "Do you want to send screenshots when you complete a quest?",
+            position = 2,
+            section = QuestSection
     )
     default boolean screenshotQuests() {
         return true;
     }
+
+    /* Settings for Hiding Split Chat, Side Panel and API connections */
+    @ConfigSection(
+        name = "Miscellaneous",
+        description = "Miscellaneous plugin config options",
+        position = 8,
+        closedByDefault = false
+    )
+    String miscSettings = "Additional Settings";
 
     @ConfigItem(
         keyName = "hideWhispers",
@@ -235,7 +289,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigSection(
         name = "API Configuration",
         description = "Configure settings related to integration with our external API",
-        position = 6,
+        position = 9,
         closedByDefault = true
     )
     String apiSection = "API Configuration";
@@ -271,7 +325,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigSection(
         name = "Side Panel",
         description = "Configure options related to the DropTracker Panel",
-        position = 7,
+        position = 10,
         closedByDefault = true
     )
     String sidePanelSection = "Side Panel";
