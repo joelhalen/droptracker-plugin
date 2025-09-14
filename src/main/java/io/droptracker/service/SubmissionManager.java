@@ -49,6 +49,7 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
+    private final RetryService retryService;
     /// Store a list of submissions that the player has received which qualified for a notification to be sent
     @Getter
     private final List<ValidSubmission> validSubmissions = new ArrayList<>();
@@ -59,8 +60,15 @@ public class SubmissionManager {
     private boolean updatesEnabled = true;
     @Inject
     private ScheduledExecutorService executor;
+
+    // Variables to store counts and values for the UI
+    public int totalSubmissions = 0;
+    public int notificationsSent = 0;
+    public int failedSubmissions = 0;
+    public Long totalValue = 0L;
+    
     @Inject
-    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
+    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager, RetryService retryService) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
@@ -70,6 +78,10 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
+        this.retryService = retryService;
+        
+        // Set up the retry callback
+        this.retryService.setRetryCallback(this::processQueuedSubmission);
     }
 
     public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
@@ -283,30 +295,35 @@ public class SubmissionManager {
         boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue();
 
         // Create ValidSubmission for drops
-        /* Temporarily returning here for testing purposes -- will not send to server */
-        ValidSubmission dropSubmission = null;
-        for (GroupConfig groupConfig : api.getGroupConfigs()) {
-            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
-                // Check if group allows stacked items
-                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
-                    continue; // Skip this group if items were stacked but group disabled that
-                }
-
-                if (groupConfig.isOnlyScreenshots()) {
-                    if (!requiredScreenshot) {
-                        continue; // Skip this group if screenshots required but not happening
-                    }
-                }
-
-                // Create or find existing submission for this webhook
-                if (dropSubmission == null) {
-                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
-                    addSubmissionToMemory(dropSubmission);
-                } else {
-                    dropSubmission.addGroupId(groupConfig.getGroupId());
-                }
-            }
-        }
+        /* TODO  -- DO NOT CREATE VALID SUBMISSIONS ON EVERY DROP */
+        ValidSubmission dropSubmission = new ValidSubmission(customWebhookBody, "2", SubmissionType.DROP);
+        addSubmissionToMemory(dropSubmission);
+        
+        // Update total value statistics  
+        this.totalValue += (long) totalValue;
+//        ValidSubmission dropSubmission = null;
+//        for (GroupConfig groupConfig : api.getGroupConfigs()) {
+//            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
+//                // Check if group allows stacked items
+//                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
+//                    continue; // Skip this group if items were stacked but group disabled that
+//                }
+//
+//                if (groupConfig.isOnlyScreenshots()) {
+//                    if (!requiredScreenshot) {
+//                        continue; // Skip this group if screenshots required but not happening
+//                    }
+//                }
+//
+//                // Create or find existing submission for this webhook
+//                if (dropSubmission == null) {
+//                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
+//                    addSubmissionToMemory(dropSubmission);
+//                } else {
+//                    dropSubmission.addGroupId(groupConfig.getGroupId());
+//                }
+//            }
+//        }
 
         // Notify UI if submissions were added
         if (dropSubmission != null) {
@@ -378,6 +395,17 @@ public class SubmissionManager {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 log.error("Error submitting: ", e);
+                
+                // Handle the failure with retry logic
+                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
+                retryService.handleFailure(customWebhookBody, screenshot, 
+                    getSubmissionTypeFromWebhook(customWebhookBody), e, validSubmission);
+                
+                // Increment failure statistics
+                failedSubmissions++;
+                
+                // Notify UI of status change
+                notifyUpdateCallback();
             }
 
             @Override
@@ -404,14 +432,26 @@ public class SubmissionManager {
                     }
                 }
 
+                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
+                
                 if (!response.isSuccessful()) {
+                    // Create an exception to represent the HTTP error
+                    IOException httpError = new IOException("HTTP " + response.code() + ": " + response.message());
+                    
                     if (response.code() == 429) {
-                        sendDataToDropTracker(customWebhookBody, screenshot);
+                        // Rate limited - retry with backoff
+                        retryService.handleFailure(customWebhookBody, screenshot, 
+                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
                     } else if (response.code() == 400) {
+                        // Bad request - don't retry
+                        if (validSubmission != null) {
+                            validSubmission.markAsFailed("Bad request (400)");
+                        }
                         response.close();
+                        notifyUpdateCallback();
                         return;
                     } else if (response.code() == 404) {
-                        // On the first 404 error, we'll populate the list with new ones.
+                        // Not found - try to fetch new webhook list and retry
                         executor.submit(() -> {
                             try {
                                 urlManager.fetchNewList();
@@ -419,10 +459,21 @@ public class SubmissionManager {
                                 log.error("Failed to fetch new webhook list", e);
                             }
                         });
-                        sendDataToDropTracker(customWebhookBody, screenshot);
+                        retryService.handleFailure(customWebhookBody, screenshot, 
+                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
                     } else {
-                        sendDataToDropTracker(customWebhookBody, screenshot);
+                        // Other HTTP errors - retry based on error type
+                        retryService.handleFailure(customWebhookBody, screenshot, 
+                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
                     }
+                } else {
+                    // Success!
+                    retryService.handleSuccess(validSubmission);
+                    
+                    // Increment success statistics
+                    notificationsSent++;
+                    
+                    notifyUpdateCallback();
                 }
                 response.close();
             }
@@ -436,6 +487,10 @@ public class SubmissionManager {
             validSubmissions.remove(0);
         }
         validSubmissions.add(validSubmission);
+        
+        // Increment total submissions when player generates a qualifying submission
+        totalSubmissions++;
+        
         notifyUpdateCallback();
     }
 
@@ -445,18 +500,8 @@ public class SubmissionManager {
      * @param validSubmission The submission to retry
      */
     public void retrySubmission(ValidSubmission validSubmission) {
-        if (validSubmission == null || validSubmission.getOriginalWebhook() == null) {
-            log.warn("Cannot retry submission: missing webhook data");
-            return;
-        }
-
-        // Update status to indicate retry attempt
-        validSubmission.setStatus("retrying");
-
-        // Send the original webhook data again
-        sendDataToDropTracker(validSubmission.getOriginalWebhook(), (byte[]) null);
-
-        // Log the retry attempt
+        retryService.retrySubmission(validSubmission);
+        notifyUpdateCallback();
     }
 
     /**
@@ -467,6 +512,28 @@ public class SubmissionManager {
     public void removeSubmission(ValidSubmission validSubmission) {
         validSubmissions.remove(validSubmission);
         notifyUpdateCallback();
+    }
+    
+    /**
+     * Get retry service statistics for UI display
+     */
+    public RetryService.RetryStats getRetryStats() {
+        return retryService.getStats();
+    }
+    
+    /**
+     * Clear the retry queue (for manual intervention)
+     */
+    public void clearRetryQueue() {
+        retryService.clearQueue();
+        notifyUpdateCallback();
+    }
+    
+    /**
+     * Enable or disable retry processing
+     */
+    public void setRetryProcessingEnabled(boolean enabled) {
+        retryService.setProcessingEnabled(enabled);
     }
 
     private boolean isFakeWorld() {
@@ -509,6 +576,87 @@ public class SubmissionManager {
             }
             sendDataToDropTracker(webhook, imageBytes);
         });
+    }
+    
+    /**
+     * Process a queued submission from the retry service
+     */
+    private void processQueuedSubmission(SubmissionQueue.QueuedSubmission queuedSubmission) {
+        log.debug("Processing queued {} submission", queuedSubmission.getType());
+        
+        // Find the corresponding ValidSubmission and update its status
+        ValidSubmission validSubmission = findValidSubmissionForWebhook(queuedSubmission.getWebhook());
+        if (validSubmission != null) {
+            validSubmission.markAsRetrying();
+            notifyUpdateCallback();
+        }
+        
+        // Send the submission
+        sendDataToDropTracker(queuedSubmission.getWebhook(), queuedSubmission.getScreenshot());
+    }
+    
+    /**
+     * Find a ValidSubmission that matches the given webhook
+     */
+    private ValidSubmission findValidSubmissionForWebhook(CustomWebhookBody webhook) {
+        if (webhook == null) return null;
+        
+        // Try to match based on webhook content - this is a simple implementation
+        // In a more sophisticated system, we might store a unique ID in the webhook
+        for (ValidSubmission submission : validSubmissions) {
+            if (submission.getOriginalWebhook() == webhook) {
+                return submission;
+            }
+        }
+        
+        // Try to match based on recent submissions with pending status
+        for (int i = validSubmissions.size() - 1; i >= 0 && i >= validSubmissions.size() - 5; i--) {
+            ValidSubmission submission = validSubmissions.get(i);
+            if ("pending".equals(submission.getStatus()) || "retrying".equals(submission.getStatus())) {
+                return submission;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Determine the submission type from webhook content
+     */
+    private SubmissionType getSubmissionTypeFromWebhook(CustomWebhookBody webhook) {
+        if (webhook == null || webhook.getEmbeds() == null || webhook.getEmbeds().isEmpty()) {
+            return SubmissionType.DROP; // Default fallback
+        }
+        
+        CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
+        String title = embed.getTitle();
+        
+        if (title != null) {
+            String lowerTitle = title.toLowerCase();
+            if (lowerTitle.contains("personal best") || lowerTitle.contains("pb")) {
+                return SubmissionType.KILL_TIME;
+            }
+            if (lowerTitle.contains("collection log") || lowerTitle.contains("clog")) {
+                return SubmissionType.COLLECTION_LOG;
+            }
+            if (lowerTitle.contains("combat achievement") || lowerTitle.contains("ca")) {
+                return SubmissionType.COMBAT_ACHIEVEMENT;
+            }
+            if (lowerTitle.contains("level") || lowerTitle.contains("leveled")) {
+                return SubmissionType.LEVEL_UP;
+            }
+            if (lowerTitle.contains("quest")) {
+                return SubmissionType.QUEST_COMPLETION;
+            }
+            if (lowerTitle.contains("pet")) {
+                return SubmissionType.PET;
+            }
+            if (lowerTitle.contains("experience") || lowerTitle.contains("xp")) {
+                return SubmissionType.EXPERIENCE;
+            }
+        }
+        
+        return SubmissionType.DROP; // Default fallback
     }
 
     public interface SubmissionUpdateCallback {

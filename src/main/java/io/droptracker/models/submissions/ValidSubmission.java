@@ -49,6 +49,12 @@ public class ValidSubmission {
     private String timeProcessedAt;
     // current status of the submission
     private String status;
+    
+    // number of retry attempts made
+    private int retryAttempts;
+    
+    // last failure reason
+    private String lastFailureReason;
 
     // array of responses from the API on retry attempts
     private String[] retryResponses;
@@ -62,6 +68,7 @@ public class ValidSubmission {
         this.status = "pending";
         this.groupIds = new String[0];
         this.retryResponses = new String[0];
+        this.retryAttempts = 0;
     }
 
     // Constructor that takes a webhook and extracts relevant data
@@ -123,6 +130,64 @@ public class ValidSubmission {
         String[] newGroupIds = Arrays.copyOf(groupIds, groupIds.length + 1);
         newGroupIds[groupIds.length] = groupId;
         this.groupIds = newGroupIds;
+    }
+    
+    /**
+     * Mark the submission as failed with a reason
+     */
+    public void markAsFailed(String reason) {
+        this.status = "failed";
+        this.lastFailureReason = reason;
+    }
+    
+    /**
+     * Mark the submission as queued for retry
+     */
+    public void markAsQueued() {
+        this.status = "queued";
+    }
+    
+    /**
+     * Mark the submission as currently retrying
+     */
+    public void markAsRetrying() {
+        this.status = "retrying";
+        this.retryAttempts++;
+    }
+    
+    /**
+     * Mark the submission as successfully sent
+     */
+    public void markAsSuccess() {
+        this.status = "sent";
+        this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+    }
+    
+    /**
+     * Check if this submission can be retried
+     */
+    public boolean canRetry() {
+        return retryAttempts < 5 && !"sent".equals(status);
+    }
+    
+    /**
+     * Get a human-readable status description
+     */
+    public String getStatusDescription() {
+        switch (status) {
+            case "pending":
+                return "Sending...";
+            case "sent":
+                return "Sent successfully";
+            case "failed":
+                return "Failed" + (lastFailureReason != null ? ": " + lastFailureReason : "");
+            case "queued":
+                return "Queued for retry";
+            case "retrying":
+                return "Retrying... (attempt " + (retryAttempts + 1) + ")";
+            default:
+                return status;
+        }
     }
 
     public JPanel toSubmissionPanel() {

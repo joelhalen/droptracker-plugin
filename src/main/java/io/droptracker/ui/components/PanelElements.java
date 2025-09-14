@@ -582,7 +582,7 @@ public class PanelElements {
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
 
-        submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
+        submissionWrapper.add(updateValidSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
 
         // Add components to container
         container.add(titlePanel);
@@ -592,7 +592,7 @@ public class PanelElements {
         return container;
     }
 
-    private static JPanel updateRecentSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
+    private static JPanel updateValidSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
         panel.removeAll();
 
         // Debug logging
@@ -637,6 +637,7 @@ public class PanelElements {
                         iconContainer = dropContainer;
 
                         originalImage.onLoaded(() -> {
+                            System.out.println("Original image loaded");
                             // Scale the loaded image to 16x16
                             Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
                             BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
@@ -646,8 +647,10 @@ public class PanelElements {
 
                             BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
                             dropContainer.setIcon(new ImageIcon(finalImage));
+                            dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                             dropContainer.revalidate();
                             dropContainer.repaint();
+                            System.out.println("Drop container icon set + repainted");
                         });
                     }
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
@@ -770,7 +773,7 @@ public class PanelElements {
 
     public static String buildSubmissionTooltip(RecentSubmission submission, boolean forGroup) {
         try {
-            String tooltip = "<html>";
+            String tooltip = "<html><p style='font-size:10px;'>";
             if (forGroup) {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
                     String pbTime = sanitizeTxt(submission.getPbTime());
@@ -809,7 +812,7 @@ public class PanelElements {
                             "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 }
             }
-            tooltip += "</html>";
+            tooltip += "</p></html>";
             return tooltip;
 
         } catch (Exception e) {
