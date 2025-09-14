@@ -372,11 +372,14 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomUrl();
+                System.out.println("Using URL: " + url);
             } catch (Exception e) {
+                System.out.println("Error getting URL: " + e.getMessage());
                 return; // Exit gracefully
             }
         } else {
             url = api.getApiUrl() + "/webhook";
+            System.out.println("Using API URL: " + url);
         }
         HttpUrl u = HttpUrl.parse(url);
         if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {

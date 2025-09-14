@@ -77,10 +77,11 @@ public class UrlManager {
 			throw new IllegalStateException("Endpoints are not yet loaded; cannot submit...");
 		}
 		if (endpointUrls.isEmpty()) {
-			throw new IllegalStateException("No valid URLs were loaded");
+			throw new IllegalStateException("No valid URLs were loaded - check logs for loading errors");
 		}
 		Random randomP = new Random();
 		String randomUrl = endpointUrls.get(randomP.nextInt(endpointUrls.size()));
+		log.debug("Selected webhook URL: {}", randomUrl.substring(0, Math.min(50, randomUrl.length())) + "...");
 		return randomUrl;
 	}   
 
@@ -233,14 +234,13 @@ public class UrlManager {
 						String encrypted = element.getAsString();
 						try {
 							String decryptedUrl = FernetDecrypt.decryptWebhook(encrypted);
-							if (!config.useApi()) {
-								// allow the user to use non-discord endpoints for submissions if the api is enabled
-								if (decryptedUrl.contains("discord")) {
-									endpointUrls.add(decryptedUrl);
-								} else {
-									
-									log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
-								}
+							// Always load Discord webhook URLs as they're needed for both API disabled users
+							// and as fallback URLs when API is enabled but fails
+							if (decryptedUrl.contains("discord")) {
+								endpointUrls.add(decryptedUrl);
+								log.debug("Added webhook URL to endpoints list");
+							} else {
+								log.error("[DropTracker] Decrypted URL is not based on discord; skipping: " + decryptedUrl);
 							}
 						} catch (Exception e) {
 							log.error("Decryption failed with error: " + e.getMessage());
@@ -250,11 +250,11 @@ public class UrlManager {
 					}
 				}
 			}
+			log.info("Successfully loaded {} webhook URLs from GitHub", endpointUrls.size());
 			endpointUrlsLoaded.complete(null);
 		} catch (Exception e) {
+			log.error("Failed to load webhook URLs from GitHub", e);
 			endpointUrlsLoaded.completeExceptionally(e);
-		} finally {
-			log.debug("Successfully loaded webhook URLs from GitHub.");
 		}
 	}
 
