@@ -152,7 +152,9 @@ public class PbHandler extends BaseEventHandler {
         long currentTime = System.currentTimeMillis();
 
         if(killIdentifier.equals(lastProcessedKill) && (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD){
-            return;
+            if (!data.getBoss().contains("1-8")) {
+                return;
+            }
         }
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
