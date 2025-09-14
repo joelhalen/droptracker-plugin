@@ -164,10 +164,20 @@ public class ValidSubmission {
     }
     
     /**
+     * Mark the submission as processed by the API
+     */
+    public void markAsProcessed() {
+        this.status = "processed";
+        this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+        // Clear webhook data to free memory since we no longer need to retry
+        this.originalWebhook = null;
+    }
+    
+    /**
      * Check if this submission can be retried
      */
     public boolean canRetry() {
-        return retryAttempts < 5 && !"sent".equals(status);
+        return retryAttempts < 5 && !"sent".equals(status) && !"processed".equals(status);
     }
     
     /**
@@ -179,6 +189,8 @@ public class ValidSubmission {
                 return "Sending...";
             case "sent":
                 return "Sent successfully";
+            case "processed":
+                return "Processed by API";
             case "failed":
                 return "Failed" + (lastFailureReason != null ? ": " + lastFailureReason : "");
             case "queued":

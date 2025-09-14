@@ -429,8 +429,33 @@ public class SubmissionManager {
                                 if (updateMessage != null && !updateMessage.isEmpty() && config.receiveInGameMessages()) {
                                     chatMessageUtil.sendChatMessage(updateMessage);
                                 }
+                                
+                                // Check if the submission was processed by the API
+                                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
+                                if (validSubmission != null) {
+                                    boolean isProcessed = false;
+                                    
+                                    // Check multiple ways the API might indicate processing
+                                    if (Boolean.TRUE.equals(apiResponse.getProcessed())) {
+                                        isProcessed = true;
+                                    } else if ("processed".equalsIgnoreCase(apiResponse.getStatus())) {
+                                        isProcessed = true;
+                                    } else if (apiResponse.getSubmissionId() != null && !apiResponse.getSubmissionId().isEmpty()) {
+                                        // If API returns a submission ID, it means it was processed
+                                        isProcessed = true;
+                                    }
+                                    
+                                    if (isProcessed) {
+                                        log.debug("API confirmed submission was processed, updating status");
+                                        validSubmission.markAsProcessed();
+                                        notifyUpdateCallback();
+                                        response.close();
+                                        return; // Early return since we've handled the processed case
+                                    }
+                                }
                             }
-                        } catch (Exception ignored) {
+                        } catch (Exception e) {
+                            log.debug("Failed to parse API response: " + e.getMessage());
                         }
                     }
                 }
@@ -673,6 +698,15 @@ public class SubmissionManager {
 
         @SerializedName("rank_update")
         private String rankUpdate;
+        
+        @SerializedName("status")
+        private String status;
+        
+        @SerializedName("processed")
+        private Boolean processed;
+        
+        @SerializedName("submission_id")
+        private String submissionId;
     }
 
 }

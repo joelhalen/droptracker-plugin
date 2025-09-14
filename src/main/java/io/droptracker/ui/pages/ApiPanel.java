@@ -19,6 +19,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +115,7 @@ public class ApiPanel {
         submissionsPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 50));
 
         // Create title for submissions section
-        JLabel submissionsTitle = new JLabel("Pending Submissions");
+        JLabel submissionsTitle = new JLabel("Session Submissions");
         submissionsTitle.setFont(FontManager.getRunescapeBoldFont());
         submissionsTitle.setForeground(Color.WHITE);
         submissionsTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -685,10 +686,34 @@ public class ApiPanel {
         }
 
         if (validSubmissions != null && validSubmissions.size() > 0) {
+            // Separate submissions by status - pending submissions first, then processed
+            List<ValidSubmission> pendingSubmissions = new ArrayList<>();
+            List<ValidSubmission> processedSubmissions = new ArrayList<>();
+            
             for (ValidSubmission submission : validSubmissions) {
+                if ("pending".equals(submission.getStatus()) || 
+                    "retrying".equals(submission.getStatus()) || 
+                    "queued".equals(submission.getStatus()) ||
+                    "failed".equals(submission.getStatus())) {
+                    pendingSubmissions.add(submission);
+                } else if ("processed".equals(submission.getStatus()) || 
+                          "sent".equals(submission.getStatus())) {
+                    processedSubmissions.add(submission);
+                }
+            }
+            
+            // Add pending submissions with full action panels
+            for (ValidSubmission submission : pendingSubmissions) {
                 JPanel submissionPanel = createSubmissionPanel(submission);
                 submissionsPanel.add(submissionPanel);
                 submissionsPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+            }
+            
+            // Add processed submissions with compact display
+            for (ValidSubmission submission : processedSubmissions) {
+                JPanel compactPanel = createCompactSubmissionPanel(submission);
+                submissionsPanel.add(compactPanel);
+                submissionsPanel.add(Box.createRigidArea(new Dimension(0, 3)));
             }
         } else {
             // Show "no submissions" message
@@ -749,6 +774,90 @@ public class ApiPanel {
             @Override
             public void mouseExited(java.awt.event.MouseEvent e) {
                 card.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+            }
+        });
+
+        return card;
+    }
+    
+    /**
+     * Creates a compact panel for processed submissions with just dismiss option
+     */
+    private JPanel createCompactSubmissionPanel(ValidSubmission submission) {
+        JPanel card = new JPanel();
+        card.setLayout(new BorderLayout(5, 0));
+        card.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        card.setBorder(new EmptyBorder(4, 8, 4, 8));
+        card.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
+        card.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 35));
+
+        // Left side - Small status indicator
+        JLabel statusIndicator = new JLabel("✓");
+        statusIndicator.setFont(FontManager.getRunescapeSmallFont());
+        statusIndicator.setForeground(Color.GREEN);
+        statusIndicator.setPreferredSize(new Dimension(15, 20));
+        card.add(statusIndicator, BorderLayout.WEST);
+
+        // Center - Compact submission text
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        
+        // Get submission content but make it more compact
+        JPanel originalPanel = submission.toSubmissionPanel();
+        String submissionText = extractTextFromPanel(originalPanel);
+        
+        JLabel mainLabel = new JLabel();
+        mainLabel.setFont(FontManager.getRunescapeSmallFont());
+        mainLabel.setForeground(Color.LIGHT_GRAY);
+        mainLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        
+        // Truncate for compact display
+        if (submissionText.length() > 45) {
+            mainLabel.setText(submissionText.substring(0, 42) + "...");
+        } else {
+            mainLabel.setText(submissionText);
+        }
+        
+        JLabel statusLabel = new JLabel("Processed");
+        statusLabel.setFont(FontManager.getRunescapeSmallFont());
+        statusLabel.setForeground(Color.GREEN);
+        statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        
+        textPanel.add(mainLabel);
+        textPanel.add(statusLabel);
+        card.add(textPanel, BorderLayout.CENTER);
+
+        // Right side - Only dismiss button
+        JButton dismissButton = new JButton("×");
+        dismissButton.setFont(FontManager.getRunescapeSmallFont());
+        dismissButton.setPreferredSize(new Dimension(18, 18));
+        dismissButton.setMaximumSize(new Dimension(18, 18));
+        dismissButton.setMinimumSize(new Dimension(18, 18));
+        dismissButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
+        dismissButton.setFocusPainted(false);
+        dismissButton.setBorderPainted(true);
+        dismissButton.setContentAreaFilled(true);
+        dismissButton.setBackground(new Color(120, 40, 40));
+        dismissButton.setForeground(Color.WHITE);
+        dismissButton.setToolTipText("Remove from list");
+        dismissButton.addActionListener(e -> {
+            submissionManager.removeSubmission(submission);
+            refreshSubmissions();
+        });
+        
+        card.add(dismissButton, BorderLayout.EAST);
+
+        // Add subtle hover effect
+        card.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                card.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                card.setBackground(ColorScheme.DARK_GRAY_COLOR);
             }
         });
 
@@ -824,6 +933,7 @@ public class ApiPanel {
         statusLabel.setFont(FontManager.getRunescapeSmallFont());
         statusLabel.setForeground(getStatusColor(submission.getStatus()));
         statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statusLabel.setBackground(null);
 
         // Group information - use HTML to prevent cutoff
         
@@ -964,9 +1074,11 @@ public class ApiPanel {
         switch (status.toLowerCase()) {
             case "success":
             case "processed":
+            case "sent":
                 return "#00FF00";
             case "pending":
             case "retrying":
+            case "queued":
                 return "#FFFF00";
             case "failed":
             case "error":
@@ -988,9 +1100,11 @@ public class ApiPanel {
         switch (status.toLowerCase()) {
             case "success":
             case "processed":
+            case "sent":
                 return Color.GREEN;
             case "pending":
             case "retrying":
+            case "queued":
                 return Color.YELLOW;
             case "failed":
             case "error":
