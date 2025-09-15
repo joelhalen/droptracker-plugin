@@ -99,6 +99,10 @@ public class ValidSubmission {
                     
                     if (fieldName != null && fieldValue != null) {
                         switch (fieldName.toLowerCase()) {
+                            case "guid":
+                                // Prefer GUID if present; override any earlier short IDs
+                                this.uuid = fieldValue;
+                                break;
                             case "uuid":
                             case "id":
                                 this.uuid = fieldValue;

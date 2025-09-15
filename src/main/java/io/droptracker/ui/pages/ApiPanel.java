@@ -95,6 +95,13 @@ public class ApiPanel {
                 updateStatusLabel();
                 refreshStatistics();
                 refreshGroupConfigs();
+                // Poll pending submissions for processed status when API is enabled
+                if (config.useApi()) {
+                    System.out.println("[ApiPanel] Timer tick: polling pending statuses");
+                    submissionManager.checkPendingStatuses();
+                    // After polling, refresh the submissions list
+                    refreshSubmissions();
+                }
             });
             statusUpdateTimer.start();
         }
@@ -691,14 +698,12 @@ public class ApiPanel {
             List<ValidSubmission> processedSubmissions = new ArrayList<>();
             
             for (ValidSubmission submission : validSubmissions) {
-                if ("pending".equals(submission.getStatus()) || 
-                    "retrying".equals(submission.getStatus()) || 
-                    "queued".equals(submission.getStatus()) ||
-                    "failed".equals(submission.getStatus())) {
-                    pendingSubmissions.add(submission);
-                } else if ("processed".equals(submission.getStatus()) || 
-                          "sent".equals(submission.getStatus())) {
+                String status = submission.getStatus();
+                if ("processed".equals(status)) {
                     processedSubmissions.add(submission);
+                } else {
+                    // Treat everything else (pending, sent, queued, retrying, failed, etc.) as in-progress list
+                    pendingSubmissions.add(submission);
                 }
             }
             
@@ -807,11 +812,17 @@ public class ApiPanel {
         JPanel originalPanel = submission.toSubmissionPanel();
         String submissionText = extractTextFromPanel(originalPanel);
         
+        // Fallback: if text extraction failed or returned empty, create text from submission fields
+        if (submissionText == null || submissionText.trim().isEmpty()) {
+            submissionText = createSubmissionTextFromFields(submission);
+        }
+        
         JLabel mainLabel = new JLabel();
         mainLabel.setFont(FontManager.getRunescapeSmallFont());
         mainLabel.setForeground(Color.LIGHT_GRAY);
         mainLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        
+        System.out.println("Got submission text: " + submissionText);
+        System.out.println("All submission data available: " + submission.toString());
         // Truncate for compact display
         if (submissionText.length() > 45) {
             mainLabel.setText(submissionText.substring(0, 42) + "...");
@@ -819,9 +830,9 @@ public class ApiPanel {
             mainLabel.setText(submissionText);
         }
         
-        JLabel statusLabel = new JLabel("Processed");
+        JLabel statusLabel = new JLabel(submission.getStatusDescription());
         statusLabel.setFont(FontManager.getRunescapeSmallFont());
-        statusLabel.setForeground(Color.GREEN);
+        statusLabel.setForeground(getStatusColor(submission.getStatus()));
         statusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         
         textPanel.add(mainLabel);
@@ -914,6 +925,11 @@ public class ApiPanel {
         // Get submission content from the original panel but format it better
         JPanel originalPanel = submission.toSubmissionPanel();
         String submissionText = extractTextFromPanel(originalPanel);
+        
+        // Fallback: if text extraction failed or returned empty, create text from submission fields
+        if (submissionText == null || submissionText.trim().isEmpty()) {
+            submissionText = createSubmissionTextFromFields(submission);
+        }
 
         // Main submission text - allow more space for longer text
         JLabel mainLabel = new JLabel();
@@ -1010,6 +1026,12 @@ public class ApiPanel {
         // Get full submission text
         JPanel originalPanel = submission.toSubmissionPanel();
         String submissionText = extractTextFromPanel(originalPanel);
+        
+        // Fallback: if text extraction failed or returned empty, create text from submission fields
+        if (submissionText == null || submissionText.trim().isEmpty()) {
+            submissionText = createSubmissionTextFromFields(submission);
+        }
+        
         tooltip.append("<div style='color: #FFFFFF; margin-bottom: 3px;'>")
                .append(submissionText.replaceAll("<.*?>", "")).append("</div>");
 
@@ -1062,10 +1084,71 @@ public class ApiPanel {
                 if (labelText != null && !labelText.isEmpty()) {
                     text.append(labelText).append(" ");
                 }
+            } else if (component instanceof JTextArea) {
+                String textAreaText = ((JTextArea) component).getText();
+                if (textAreaText != null && !textAreaText.isEmpty()) {
+                    text.append(textAreaText).append(" ");
+                }
             } else if (component instanceof java.awt.Container) {
                 extractTextRecursive((java.awt.Container) component, text);
             }
         }
+    }
+
+    /**
+     * Creates submission text directly from ValidSubmission fields as a fallback
+     * when panel-based text extraction fails
+     */
+    private String createSubmissionTextFromFields(ValidSubmission submission) {
+        if (submission == null) {
+            return "Unknown submission";
+        }
+        
+        String itemName = submission.getItemName();
+        if (itemName == null || itemName.trim().isEmpty()) {
+            itemName = submission.getDescription();
+        }
+        if (itemName == null || itemName.trim().isEmpty()) {
+            itemName = "Unknown item";
+        }
+        
+        String typeText = "Submission";
+        if (submission.getType() != null) {
+            switch (submission.getType()) {
+                case DROP:
+                    typeText = "Drop";
+                    break;
+                case KILL_TIME:
+                    typeText = "Personal Best";
+                    break;
+                case COLLECTION_LOG:
+                    typeText = "Collection Log";
+                    break;
+                case COMBAT_ACHIEVEMENT:
+                    typeText = "Combat Achievement";
+                    break;
+                case LEVEL_UP:
+                    typeText = "Level Up";
+                    break;
+                case QUEST_COMPLETION:
+                    typeText = "Quest Completion";
+                    break;
+                case EXPERIENCE:
+                    typeText = "Experience";
+                    break;
+                case EXPERIENCE_MILESTONE:
+                    typeText = "Experience Milestone";
+                    break;
+                case PET:
+                    typeText = "Pet";
+                    break;
+                default:
+                    typeText = "Submission";
+                    break;
+            }
+        }
+        
+        return typeText + ": " + itemName;
     }
 
     private String getStatusHexColor(String status) {

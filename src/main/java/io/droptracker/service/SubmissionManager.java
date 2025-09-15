@@ -296,7 +296,32 @@ public class SubmissionManager {
 
         // Create ValidSubmission for drops
         /* TODO  -- DO NOT CREATE VALID SUBMISSIONS ON EVERY DROP */
+        // Ensure we have a GUID on the webhook before creating the ValidSubmission
+        if (customWebhookBody != null && customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
+            boolean hasGuid = false;
+            for (CustomWebhookBody.Field f : customWebhookBody.getEmbeds().get(0).getFields()) {
+                if (f != null && f.getName() != null && f.getName().equalsIgnoreCase("guid")) {
+                    hasGuid = true;
+                    break;
+                }
+            }
+            if (!hasGuid) {
+                try {
+                    String generated = api.generateGuidForSubmission();
+                    // Add GUID field to the webhook so both server and client agree
+                    customWebhookBody.getEmbeds().get(0).getFields().add(new CustomWebhookBody.Field("guid", generated, false));
+                } catch (Exception ignored) { }
+            }
+        }
         ValidSubmission dropSubmission = new ValidSubmission(customWebhookBody, "2", SubmissionType.DROP);
+        // If uuid was not extracted from fields, generate one via API utility
+        if (dropSubmission.getUuid() == null || dropSubmission.getUuid().isEmpty()) {
+            try {
+                String generated = api.generateGuidForSubmission();
+                dropSubmission.setUuid(generated);
+            } catch (Exception ignored) { }
+        }
+        System.out.println("[SubmissionManager] Created drop submission uuid=" + dropSubmission.getUuid());
         addSubmissionToMemory(dropSubmission);
         
         // Update total value statistics  
@@ -401,6 +426,11 @@ public class SubmissionManager {
                 
                 // Handle the failure with retry logic
                 ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
+                if (validSubmission == null) {
+                    System.out.println("[SubmissionManager] onResponse: validSubmission not found for webhook; cannot schedule immediate /check");
+                } else {
+                    System.out.println("[SubmissionManager] onResponse: found submission uuid=" + validSubmission.getUuid() + ", status=" + validSubmission.getStatus());
+                }
                 retryService.handleFailure(customWebhookBody, screenshot, 
                     getSubmissionTypeFromWebhook(customWebhookBody), e, validSubmission);
                 
@@ -430,29 +460,7 @@ public class SubmissionManager {
                                     chatMessageUtil.sendChatMessage(updateMessage);
                                 }
                                 
-                                // Check if the submission was processed by the API
-                                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
-                                if (validSubmission != null) {
-                                    boolean isProcessed = false;
-                                    
-                                    // Check multiple ways the API might indicate processing
-                                    if (Boolean.TRUE.equals(apiResponse.getProcessed())) {
-                                        isProcessed = true;
-                                    } else if ("processed".equalsIgnoreCase(apiResponse.getStatus())) {
-                                        isProcessed = true;
-                                    } else if (apiResponse.getSubmissionId() != null && !apiResponse.getSubmissionId().isEmpty()) {
-                                        // If API returns a submission ID, it means it was processed
-                                        isProcessed = true;
-                                    }
-                                    
-                                    if (isProcessed) {
-                                        log.debug("API confirmed submission was processed, updating status");
-                                        validSubmission.markAsProcessed();
-                                        notifyUpdateCallback();
-                                        response.close();
-                                        return; // Early return since we've handled the processed case
-                                    }
-                                }
+                                // Do not mark processed here. Processing is confirmed via /check polling.
                             }
                         } catch (Exception e) {
                             log.debug("Failed to parse API response: " + e.getMessage());
@@ -502,6 +510,25 @@ public class SubmissionManager {
                     notificationsSent++;
                     
                     notifyUpdateCallback();
+
+                    // If API is enabled and we have a uuid, trigger an immediate single /check for this submission
+                    if (config.useApi() && validSubmission != null && validSubmission.getUuid() != null && !validSubmission.getUuid().isEmpty()) {
+                        executor.submit(() -> {
+                            try {
+                                boolean processed = api.checkSubmissionProcessed(validSubmission.getUuid());
+                                if (processed) {
+                                    validSubmission.markAsProcessed();
+                                    if (updatesEnabled) {
+                                        notifyUpdateCallback();
+                                    }
+                                }
+                            } catch (IOException e) {
+                                // Ignore; the periodic poll will catch up
+                            }
+                        });
+                    } else if (config.useApi()) {
+                        System.out.println("[SubmissionManager] Immediate /check not scheduled: submission or uuid missing");
+                    }
                 }
                 response.close();
             }
@@ -629,8 +656,7 @@ public class SubmissionManager {
     private ValidSubmission findValidSubmissionForWebhook(CustomWebhookBody webhook) {
         if (webhook == null) return null;
         
-        // Try to match based on webhook content - this is a simple implementation
-        // In a more sophisticated system, we might store a unique ID in the webhook
+        // Try to match based on webhook content - prefer identity match
         for (ValidSubmission submission : validSubmissions) {
             if (submission.getOriginalWebhook() == webhook) {
                 return submission;
@@ -685,6 +711,50 @@ public class SubmissionManager {
         }
         
         return SubmissionType.DROP; // Default fallback
+    }
+
+    /**
+     * Poll the API to update statuses of pending submissions. Only runs if API is enabled.
+     * This should be invoked periodically by the UI timer when the side panel is visible.
+     */
+    public void checkPendingStatuses() {
+        if (!config.useApi()) {
+            return;
+        }
+        // Avoid blocking EDT: schedule on executor
+        executor.submit(() -> {
+            try {
+                boolean changed = false;
+                for (ValidSubmission submission : new java.util.ArrayList<>(validSubmissions)) {
+                    String status = submission.getStatus();
+                    if (status == null) {
+                        continue;
+                    }
+                    // Poll anything not completed (processed) and not failed
+                    if (!"processed".equalsIgnoreCase(status) && !"failed".equalsIgnoreCase(status)) {
+                        String uuid = submission.getUuid();
+                        if (uuid == null || uuid.isEmpty()) {
+                            continue;
+                        }
+                        try {
+                            boolean processed = api.checkSubmissionProcessed(uuid);
+                            if (processed) {
+                                submission.markAsProcessed();
+                                changed = true;
+                            }
+                        } catch (IOException e) {
+                            // Swallow per-submission errors to continue polling others
+                            log.debug("/check failed for uuid {}: {}", uuid, e.getMessage());
+                        }
+                    }
+                }
+                if (changed && updatesEnabled) {
+                    notifyUpdateCallback();
+                }
+            } catch (Exception e) {
+                log.debug("Error while checking pending statuses: {}", e.getMessage());
+            }
+        });
     }
 
     public interface SubmissionUpdateCallback {
