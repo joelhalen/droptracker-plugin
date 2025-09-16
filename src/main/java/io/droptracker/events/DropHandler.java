@@ -95,6 +95,7 @@ public class DropHandler extends BaseEventHandler {
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		System.out.println("Processing drop event for NPC: " + npcName);
+		System.out.println("Items: " + items.toString());
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			System.out.println("Plugin is not tracking, returning...");
