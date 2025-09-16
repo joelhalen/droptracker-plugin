@@ -110,6 +110,8 @@ public class DropHandler extends BaseEventHandler {
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
+			System.out.println("Stacked items: " + stackedItems.toString());
+			System.out.println("Items: " + items.toString());
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
