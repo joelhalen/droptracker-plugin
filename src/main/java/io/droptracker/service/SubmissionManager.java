@@ -298,25 +298,27 @@ public class SubmissionManager {
         ValidSubmission dropSubmission = null;
         
         // Check each group configuration to see if this drop qualifies
-        for (GroupConfig groupConfig : api.getGroupConfigs()) {
-            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
-                // Check if group allows stacked items
-                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
-                    continue; // Skip this group if items were stacked but group disabled that
-                }
-
-                if (groupConfig.isOnlyScreenshots()) {
-                    if (!requiredScreenshot) {
-                        continue; // Skip this group if screenshots required but not happening
+        if (config.useApi()) {
+            for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
+                    // Check if group allows stacked items
+                    if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
+                        continue; // Skip this group if items were stacked but group disabled that
                     }
-                }
 
-                // Create or find existing submission for this webhook
-                if (dropSubmission == null) {
-                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
-                    addSubmissionToMemory(dropSubmission);
-                } else {
-                    dropSubmission.addGroupId(groupConfig.getGroupId());
+                    if (groupConfig.isOnlyScreenshots()) {
+                        if (!requiredScreenshot) {
+                            continue; // Skip this group if screenshots required but not happening
+                        }
+                    }
+
+                    // Create or find existing submission for this webhook
+                    if (dropSubmission == null) {
+                        dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
+                        addSubmissionToMemory(dropSubmission);
+                    } else {
+                        dropSubmission.addGroupId(groupConfig.getGroupId());
+                    }
                 }
             }
         }
@@ -371,8 +373,6 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomUrl();
-                // TODO -- don't print once we're sure
-                System.out.println("Using webhook URL: " + url);
             } catch (Exception e) {
                 return; // Exit gracefully
             }

@@ -69,8 +69,6 @@ public class DropHandler extends BaseEventHandler {
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
-		System.out.println("NpcName: " + npcName);
-		System.out.println("LootRecordType: " + lootReceived.getType());
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
@@ -80,8 +78,6 @@ public class DropHandler extends BaseEventHandler {
 				npcName = "Grotesque Guardians";
 			}
 
-			System.out.println("Processing drop event for NPC: " + npcName);
-			System.out.println("LootReceived: " + lootReceived.toString());
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
@@ -94,35 +90,23 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		System.out.println("Processing drop event for NPC: " + npcName);
-		System.out.println("1. Items: " + items.toString());
 		chatMessageUtil.checkForMessage();
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
-			System.out.println("Plugin is not tracking, returning...");
 			return;
-		} else {
-			System.out.println("Plugin is tracking, continuing...");
-		}
+		} 
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
-		System.out.println("2. Items: " + items.toString());
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
-		System.out.println("3. Items: " + items.toString());
 		clientThread.invokeLater(() -> {
-			System.out.println("4. Items: " + items.toString());
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
-			System.out.println("Stacked items: " + stackedItems.toString());
-			System.out.println("finalItems: " + finalItems.toString());
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
 			AtomicInteger singleValue = new AtomicInteger(0);
-
 			for (ItemStack item : stackedItems) {
-				System.out.println("Processing item: " + item.toString());
 				int itemId = item.getId();
 				int qty = item.getQuantity();
 				int price = itemManager.getItemPrice(itemId);
@@ -131,7 +115,6 @@ public class DropHandler extends BaseEventHandler {
 				singleValue.addAndGet(price);
 				CustomWebhookBody.Embed itemEmbed = createEmbed(localPlayerName + " received some drops:", "drop");
 				itemEmbed.setImage(plugin.itemImageUrl(itemId));
-				System.out.println("Item embed has been created, adding fields...");
 				Map<String, Object> fieldData = new HashMap<>();
 				fieldData.put("source_type", sourceType);
 				fieldData.put("item", itemComposition.getName());
@@ -147,27 +130,20 @@ public class DropHandler extends BaseEventHandler {
 				
 				addFields(itemEmbed, fieldData);
 				embeds.add(itemEmbed);
-				System.out.println("Item embed has been added to embeds, continuing...");
-
 			}
 
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
-			System.out.println("Sending to executor...");
 
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
-					System.out.println("Custom webhook body has been created, adding embeds...");
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						// ValidSubmission creation is now handled by SubmissionManager.sendDataToDropTracker()
 						sendData(customWebhookBody, valueToSend, singleValue.get());
-						System.out.println("Data has been been sent through sendData");
 					}
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);
-					// Optionally, add debug logging
 				}
 			});
 		});
