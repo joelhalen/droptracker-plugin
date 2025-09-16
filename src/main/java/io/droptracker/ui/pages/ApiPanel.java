@@ -6,6 +6,7 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.service.RetryService;
+import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.util.DurationAdapter;
 import net.runelite.client.ui.ColorScheme;
@@ -30,20 +31,21 @@ public class ApiPanel {
     private final SubmissionManager submissionManager;
 
     private JPanel apiPanel;
-    private JTextArea statusLabel;
     private JPanel submissionsPanel;
     private JPanel statisticsPanel;
     private Timer statusUpdateTimer;
     private JPanel groupConfigPanel;
     private JPanel groupsContainerPanel;
+    private DropTrackerPanel mainPanel;
     private JScrollPane groupsScrollPane;
     private final Map<String, Boolean> groupExpandStates = new HashMap<>(); // Track expand/collapse state by group ID
 
 
-    public ApiPanel(DropTrackerConfig config, DropTrackerApi api, SubmissionManager submissionManager) {
+    public ApiPanel(DropTrackerConfig config, DropTrackerApi api, SubmissionManager submissionManager, DropTrackerPanel mainPanel) {
         this.config = config;
         this.api = api;
         this.submissionManager = submissionManager;
+        this.mainPanel = mainPanel;
     }
 
     public JPanel create() {
@@ -52,18 +54,7 @@ public class ApiPanel {
         apiPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
         apiPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
-        // Create a panel for the title with proper alignment
-        // API status panel
-        statusLabel = new JTextArea("Last communication with API: loading...");
-        statusLabel.setForeground(config.useApi() ? Color.GREEN : Color.RED);
-        statusLabel.setFont(FontManager.getRunescapeSmallFont());
-        statusLabel.setLineWrap(true);
-        statusLabel.setWrapStyleWord(true);
-        statusLabel.setEditable(false);
-        statusLabel.setFocusable(false);
-        statusLabel.setOpaque(false);
-        statusLabel.setBorder(new EmptyBorder(0, 0, 0, 0));
-        statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Communication status is now handled in the main panel header
 
         JPanel configPanel = initializeConfigPanel();
 
@@ -97,10 +88,12 @@ public class ApiPanel {
                 refreshGroupConfigs();
                 // Poll pending submissions for processed status when API is enabled
                 if (config.useApi()) {
-                    System.out.println("[ApiPanel] Timer tick: polling pending statuses");
-                    submissionManager.checkPendingStatuses();
-                    // After polling, refresh the submissions list
-                    refreshSubmissions();
+                    // Only check pending statuses if there are submissions that need checking
+                    if (hasPendingOrFailedSubmissions()) {
+                        submissionManager.checkPendingStatuses();
+                        // After polling, refresh the submissions list
+                        refreshSubmissions();
+                    }
                 }
             });
             statusUpdateTimer.start();
@@ -176,13 +169,14 @@ public class ApiPanel {
         
         // Create two rows of statistics in a compact format
         JPanel row1 = createStatsRow(
-            "Total:", String.valueOf(submissionManager.totalSubmissions), Color.CYAN,
+            "Notified count:", String.valueOf(submissionManager.totalSubmissions), Color.CYAN,
             "Sent:", String.valueOf(submissionManager.notificationsSent), Color.GREEN
         );
+        row1.setToolTipText("Total number of submissions you have sent, and number of those which have created Discord notifications");
         
         JPanel row2 = createStatsRow(
-            "Failed:", String.valueOf(submissionManager.failedSubmissions), Color.RED,
-            "Value:", formatValue(submissionManager.totalValue), Color.YELLOW
+            "# Failed:", String.valueOf(submissionManager.failedSubmissions), Color.RED,
+            "GP value:", formatValue(submissionManager.totalValue), Color.YELLOW
         );
         
         // Get retry stats for status indicator
@@ -251,31 +245,20 @@ public class ApiPanel {
         healthIcon.setForeground(retryStats.apiHealthy ? Color.GREEN : Color.RED);
         healthIcon.setFont(FontManager.getRunescapeSmallFont());
         
-        JLabel healthLabel = new JLabel("API");
+        JLabel healthLabel = new JLabel("API Status");
         healthLabel.setFont(FontManager.getRunescapeSmallFont());
         healthLabel.setForeground(Color.LIGHT_GRAY);
         
         // Queue status
-        JLabel queueLabel = new JLabel("Queue: " + retryStats.queueStats.getCurrentSize());
+        JLabel queueLabel = new JLabel("Queued/Processing: " + retryStats.queueStats.getCurrentSize());
         queueLabel.setFont(FontManager.getRunescapeSmallFont());
         queueLabel.setForeground(retryStats.queueStats.getCurrentSize() > 0 ? Color.YELLOW : Color.LIGHT_GRAY);
         
-        // Processing status
-        JLabel processingIcon = new JLabel("●");
-        processingIcon.setForeground(retryStats.processingEnabled ? Color.GREEN : Color.RED);
-        processingIcon.setFont(FontManager.getRunescapeSmallFont());
-        
-        JLabel processingLabel = new JLabel("Retry");
-        processingLabel.setFont(FontManager.getRunescapeSmallFont());
-        processingLabel.setForeground(Color.LIGHT_GRAY);
         
         row.add(healthIcon);
         row.add(healthLabel);
         row.add(new JLabel(" "));
         row.add(queueLabel);
-        row.add(new JLabel(" "));
-        row.add(processingIcon);
-        row.add(processingLabel);
         
         return row;
     }
@@ -300,10 +283,7 @@ public class ApiPanel {
         wrapperPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         wrapperPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 400)); // Limit wrapper size
 
-        // Add status label at the top
-        statusLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
-        wrapperPanel.add(statusLabel);
-        wrapperPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        // Status label removed - now shown in main panel header
 
         // Create the content panel that will hold all group configs
         JPanel groupsContainer = new JPanel();
@@ -631,6 +611,10 @@ public class ApiPanel {
     }
 
     public void updateStatusLabel() {
+        if (!config.useApi()) {
+            return; // No need to update communication status when API is disabled
+        }
+        
         long nowEpochSeconds = Instant.now().getEpochSecond();
         long lastEpochSeconds = api.lastCommunicationTime;
         long deltaSeconds = Math.max(0L, nowEpochSeconds - lastEpochSeconds);
@@ -639,28 +623,25 @@ public class ApiPanel {
         String lastCommunicationTime = DurationAdapter.formatDuration(duration);
         String statusText;
         Color statusColor;
-        if (config.useApi()) {
-            if (duration.toSeconds() < 30) {
-                statusText = "Connected - last ping: " + lastCommunicationTime;
-                statusColor = Color.GREEN;
-            } else {
-                statusText = "May be disconnected! Last ping: " + lastCommunicationTime;
-                statusColor = Color.YELLOW;
-            }
+        
+        // More conservative disconnect detection
+        if (duration.toSeconds() < 60) {
+            // Connected - recent communication
+            statusText = "Last ping: " + lastCommunicationTime;
+            statusColor = ColorScheme.PROGRESS_COMPLETE_COLOR;
+        } else if (duration.toSeconds() < 300) { // 5 minutes
+            // Warning state - might be having issues
+            statusText = "Last ping: " + lastCommunicationTime;
+            statusColor = Color.YELLOW;
         } else {
-            statusText = "API disabled - check plugin config";
-            statusColor = Color.RED;
+            // Likely disconnected after 5+ minutes of no communication
+            statusText = "Disconnected (" + lastCommunicationTime + ")";
+            statusColor = ColorScheme.PROGRESS_ERROR_COLOR;
         }
 
-
-        // Update the text content
-        statusLabel.setText(statusText);
-        statusLabel.setForeground(statusColor);
-
-        // repaint and revalidate to update the UI
-        if (apiPanel != null) {
-            apiPanel.repaint();
-            apiPanel.revalidate();
+        // Update the header communication status
+        if (mainPanel != null) {
+            mainPanel.updateCommunicationStatus(statusText, statusColor);
         }
     }
 
@@ -1238,6 +1219,35 @@ public class ApiPanel {
         if (statusUpdateTimer != null && statusUpdateTimer.isRunning()) {
             statusUpdateTimer.stop();
         }
+    }
+
+    /**
+     * Check if there are any submissions that need status checking
+     */
+    private boolean hasPendingOrFailedSubmissions() {
+        if (submissionManager == null) {
+            return false;
+        }
+        
+        List<ValidSubmission> validSubmissions = submissionManager.getValidSubmissions();
+        if (validSubmissions == null || validSubmissions.isEmpty()) {
+            return false;
+        }
+        
+        // Check if any submissions are in states that need polling
+        for (ValidSubmission submission : validSubmissions) {
+            String status = submission.getStatus();
+            if (status != null && (
+                "pending".equalsIgnoreCase(status) || 
+                "sent".equalsIgnoreCase(status) || 
+                "retrying".equalsIgnoreCase(status) ||
+                "queued".equalsIgnoreCase(status)
+            )) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     /**

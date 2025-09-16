@@ -18,6 +18,8 @@ import net.runelite.client.util.LinkBrowser;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -321,9 +323,31 @@ public class PlayerStatsPanel {
 
         JPanel totalLootBox = PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP");
         JPanel globalRankBox = PanelElements.createStatBox("Global Rank", globalRankFormatted);
+        JPanel playerPointsBox = PanelElements.createStatBox("Lifetime Points", playerResult.getPoints() + " pts");
 
         statsPanel.add(totalLootBox);
         statsPanel.add(globalRankBox);
+        statsPanel.add(playerPointsBox);
+
+        playerPointsBox.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                LinkBrowser.browse("https://www.droptracker.io/wiki/points");
+            }
+
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                playerPointsBox.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+                playerPointsBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                playerPointsBox.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                playerPointsBox.setCursor(Cursor.getDefaultCursor());
+            }
+        });
+        playerPointsBox.setToolTipText("View more info about points (click to open wiki)");
 
         // Action buttons - exactly like GroupPanel actionPanel
         JPanel actionPanel = new JPanel();

@@ -37,6 +37,9 @@ public class PlayerSearchResult {
     
     @SerializedName("player_stats")  
     private PlayerStats playerStats;
+
+    @SerializedName("points")
+    private int points;
     
     // Raw JSON data for any additional fields not explicitly mapped
     private transient Map<String, Object> additionalData;
@@ -72,7 +75,6 @@ public class PlayerSearchResult {
         
         @SerializedName("favorite_boss")
         private String favoriteBoss;
-        
         
         @SerializedName("registration_date")
         private String registrationDate;

@@ -294,74 +294,35 @@ public class SubmissionManager {
 
         boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue();
 
-        // Create ValidSubmission for drops
-        /* TODO  -- DO NOT CREATE VALID SUBMISSIONS ON EVERY DROP */
-        // Ensure we have a GUID on the webhook before creating the ValidSubmission
-        if (customWebhookBody != null && customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
-            boolean hasGuid = false;
-            for (CustomWebhookBody.Field f : customWebhookBody.getEmbeds().get(0).getFields()) {
-                if (f != null && f.getName() != null && f.getName().equalsIgnoreCase("guid")) {
-                    hasGuid = true;
-                    break;
-                }
-            }
-            if (!hasGuid) {
-                try {
-                    String generated = api.generateGuidForSubmission();
-                    // Add GUID field to the webhook so both server and client agree
-                    customWebhookBody.getEmbeds().get(0).getFields().add(new CustomWebhookBody.Field("guid", generated, false));
-                } catch (Exception ignored) { }
-            }
-        }
-        ValidSubmission dropSubmission = new ValidSubmission(customWebhookBody, "2", SubmissionType.DROP);
+        // Create ValidSubmission for drops only when they qualify for group notifications
+        ValidSubmission dropSubmission = null;
         
-        // If uuid was still not extracted from fields, generate one as fallback
-        if (dropSubmission.getUuid() == null || dropSubmission.getUuid().isEmpty()) {
-            try {
-                String generated = api.generateGuidForSubmission();
-                dropSubmission.setUuid(generated);
-                // Also add this GUID to the webhook if it doesn't already have one
-                if (customWebhookBody != null && customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
-                    boolean hasGuidField = false;
-                    for (CustomWebhookBody.Field field : customWebhookBody.getEmbeds().get(0).getFields()) {
-                        if (field.getName().equalsIgnoreCase("guid")) {
-                            hasGuidField = true;
-                            break;
-                        }
-                    }
-                    if (!hasGuidField) {
-                        customWebhookBody.getEmbeds().get(0).getFields().add(new CustomWebhookBody.Field("guid", generated, false));
+        // Check each group configuration to see if this drop qualifies
+        for (GroupConfig groupConfig : api.getGroupConfigs()) {
+            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
+                // Check if group allows stacked items
+                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
+                    continue; // Skip this group if items were stacked but group disabled that
+                }
+
+                if (groupConfig.isOnlyScreenshots()) {
+                    if (!requiredScreenshot) {
+                        continue; // Skip this group if screenshots required but not happening
                     }
                 }
-            } catch (Exception ignored) { }
+
+                // Create or find existing submission for this webhook
+                if (dropSubmission == null) {
+                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
+                    addSubmissionToMemory(dropSubmission);
+                } else {
+                    dropSubmission.addGroupId(groupConfig.getGroupId());
+                }
+            }
         }
-        addSubmissionToMemory(dropSubmission);
         
         // Update total value statistics  
         this.totalValue += (long) totalValue;
-//        ValidSubmission dropSubmission = null;
-//        for (GroupConfig groupConfig : api.getGroupConfigs()) {
-//            if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
-//                // Check if group allows stacked items
-//                if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
-//                    continue; // Skip this group if items were stacked but group disabled that
-//                }
-//
-//                if (groupConfig.isOnlyScreenshots()) {
-//                    if (!requiredScreenshot) {
-//                        continue; // Skip this group if screenshots required but not happening
-//                    }
-//                }
-//
-//                // Create or find existing submission for this webhook
-//                if (dropSubmission == null) {
-//                    dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
-//                    addSubmissionToMemory(dropSubmission);
-//                } else {
-//                    dropSubmission.addGroupId(groupConfig.getGroupId());
-//                }
-//            }
-//        }
 
         // Notify UI if submissions were added
         if (dropSubmission != null) {
