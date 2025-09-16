@@ -802,8 +802,6 @@ public class ApiPanel {
         mainLabel.setFont(FontManager.getRunescapeSmallFont());
         mainLabel.setForeground(Color.LIGHT_GRAY);
         mainLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        System.out.println("Got submission text: " + submissionText);
-        System.out.println("All submission data available: " + submission.toString());
         // Truncate for compact display
         if (submissionText.length() > 45) {
             mainLabel.setText(submissionText.substring(0, 42) + "...");

@@ -634,14 +634,12 @@ public class PanelElements {
                         // Create a scaled version of the image for initial display
                         BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
                         BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
-                        System.out.println("??? Submission data:{}" + submission.toString());
                         final JLabel dropContainer = PanelElements.createStyledIconContainer(effects);
                         dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         dropContainer.setIcon(new ImageIcon(opaque));
                         iconContainer = dropContainer;
 
                         originalImage.onLoaded(() -> {
-                            System.out.println("Original image loaded");
                             // Scale the loaded image to 16x16
                             Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
                             BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
@@ -654,7 +652,6 @@ public class PanelElements {
                             dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                             dropContainer.revalidate();
                             dropContainer.repaint();
-                            System.out.println("Drop container icon set + repainted");
                         });
                     }
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {

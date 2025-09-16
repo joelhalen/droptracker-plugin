@@ -371,14 +371,13 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomUrl();
-                System.out.println("Using URL: " + url);
+                // TODO -- don't print once we're sure
+                System.out.println("Using webhook URL: " + url);
             } catch (Exception e) {
-                System.out.println("Error getting URL: " + e.getMessage());
                 return; // Exit gracefully
             }
         } else {
             url = api.getApiUrl() + "/webhook";
-            System.out.println("Using API URL: " + url);
         }
         HttpUrl u = HttpUrl.parse(url);
         if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {
@@ -400,11 +399,6 @@ public class SubmissionManager {
                 
                 // Handle the failure with retry logic
                 ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
-                if (validSubmission == null) {
-                    System.out.println("[SubmissionManager] onResponse: validSubmission not found for webhook; cannot schedule immediate /check");
-                } else {
-                    System.out.println("[SubmissionManager] onResponse: found submission uuid=" + validSubmission.getUuid() + ", status=" + validSubmission.getStatus());
-                }
                 retryService.handleFailure(customWebhookBody, screenshot, 
                     getSubmissionTypeFromWebhook(customWebhookBody), e, validSubmission);
                 
