@@ -97,7 +97,10 @@ public class DropHandler extends BaseEventHandler {
 		System.out.println("Processing drop event for NPC: " + npcName);
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
+			System.out.println("Plugin is not tracking, returning...");
 			return;
+		} else {
+			System.out.println("Plugin is tracking, continuing...");
 		}
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
@@ -112,6 +115,7 @@ public class DropHandler extends BaseEventHandler {
 			AtomicInteger singleValue = new AtomicInteger(0);
 
 			for (ItemStack item : stackedItems) {
+				System.out.println("Processing item: " + item.toString());
 				int itemId = item.getId();
 				int qty = item.getQuantity();
 				int price = itemManager.getItemPrice(itemId);
@@ -120,7 +124,7 @@ public class DropHandler extends BaseEventHandler {
 				singleValue.addAndGet(price);
 				CustomWebhookBody.Embed itemEmbed = createEmbed(localPlayerName + " received some drops:", "drop");
 				itemEmbed.setImage(plugin.itemImageUrl(itemId));
-				
+				System.out.println("Item embed has been created, adding fields...");
 				Map<String, Object> fieldData = new HashMap<>();
 				fieldData.put("source_type", sourceType);
 				fieldData.put("item", itemComposition.getName());
@@ -136,14 +140,19 @@ public class DropHandler extends BaseEventHandler {
 				
 				addFields(itemEmbed, fieldData);
 				embeds.add(itemEmbed);
+				System.out.println("Item embed has been added to embeds, continuing...");
+
 			}
 
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
+			System.out.println("Sending to executor...");
+
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
+					System.out.println("Custom webhook body has been created, adding embeds...");
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
 						// ValidSubmission creation is now handled by SubmissionManager.sendDataToDropTracker()
 						sendData(customWebhookBody, valueToSend, singleValue.get());
