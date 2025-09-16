@@ -327,6 +327,7 @@ public class DropTrackerApi {
 
         try (Response response = httpClient.newCall(request).execute()) {
             lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            
             if (!response.isSuccessful()) {
                 return false;
             }
@@ -335,16 +336,19 @@ public class DropTrackerApi {
                 return false;
             }
             String responseData = responseBody.string();
+            
             try {
                 // Response is expected to contain at least { processed: boolean } for the given uuid
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> map = gson.fromJson(responseData, java.util.Map.class);
                 Object processedVal = map != null ? map.get("processed") : null;
+                
                 if (processedVal instanceof Boolean) {
                     return (Boolean) processedVal;
                 }
                 // Some APIs might return status: "processed"
                 Object statusVal = map != null ? map.get("status") : null;
+                
                 if (statusVal instanceof String) {
                     return "processed".equalsIgnoreCase((String) statusVal);
                 }

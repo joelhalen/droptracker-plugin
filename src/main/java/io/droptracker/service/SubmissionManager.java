@@ -314,14 +314,27 @@ public class SubmissionManager {
             }
         }
         ValidSubmission dropSubmission = new ValidSubmission(customWebhookBody, "2", SubmissionType.DROP);
-        // If uuid was not extracted from fields, generate one via API utility
+        
+        // If uuid was still not extracted from fields, generate one as fallback
         if (dropSubmission.getUuid() == null || dropSubmission.getUuid().isEmpty()) {
             try {
                 String generated = api.generateGuidForSubmission();
                 dropSubmission.setUuid(generated);
+                // Also add this GUID to the webhook if it doesn't already have one
+                if (customWebhookBody != null && customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
+                    boolean hasGuidField = false;
+                    for (CustomWebhookBody.Field field : customWebhookBody.getEmbeds().get(0).getFields()) {
+                        if (field.getName().equalsIgnoreCase("guid")) {
+                            hasGuidField = true;
+                            break;
+                        }
+                    }
+                    if (!hasGuidField) {
+                        customWebhookBody.getEmbeds().get(0).getFields().add(new CustomWebhookBody.Field("guid", generated, false));
+                    }
+                }
             } catch (Exception ignored) { }
         }
-        System.out.println("[SubmissionManager] Created drop submission uuid=" + dropSubmission.getUuid());
         addSubmissionToMemory(dropSubmission);
         
         // Update total value statistics  
@@ -526,8 +539,6 @@ public class SubmissionManager {
                                 // Ignore; the periodic poll will catch up
                             }
                         });
-                    } else if (config.useApi()) {
-                        System.out.println("[SubmissionManager] Immediate /check not scheduled: submission or uuid missing");
                     }
                 }
                 response.close();

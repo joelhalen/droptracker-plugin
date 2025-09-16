@@ -91,7 +91,10 @@ public class ValidSubmission {
                 this.description = embed.getTitle();
             }
             
-            // Extract data from fields
+            // Extract data from fields - process GUID field with highest priority
+            String tempUuid = null;
+            String tempGuid = null;
+            
             if (embed.getFields() != null) {
                 for (CustomWebhookBody.Field field : embed.getFields()) {
                     String fieldName = field.getName();
@@ -100,12 +103,20 @@ public class ValidSubmission {
                     if (fieldName != null && fieldValue != null) {
                         switch (fieldName.toLowerCase()) {
                             case "guid":
-                                // Prefer GUID if present; override any earlier short IDs
-                                this.uuid = fieldValue;
+                                // GUID has highest priority for UUID
+                                tempGuid = fieldValue;
                                 break;
                             case "uuid":
+                                // UUID has medium priority
+                                if (tempUuid == null) {
+                                    tempUuid = fieldValue;
+                                }
+                                break;
                             case "id":
-                                this.uuid = fieldValue;
+                                // Only use ID if no UUID or GUID found, and only if it looks like a GUID (not item ID)
+                                if (tempUuid == null && fieldValue.contains("-")) {
+                                    tempUuid = fieldValue;
+                                }
                                 break;
                             case "item":
                             case "item_name":
@@ -125,6 +136,13 @@ public class ValidSubmission {
                                 break;
                         }
                     }
+                }
+                
+                // Set UUID with proper priority: GUID > UUID > ID (if it looks like GUID)
+                if (tempGuid != null) {
+                    this.uuid = tempGuid;
+                } else if (tempUuid != null) {
+                    this.uuid = tempUuid;
                 }
             }
         }
