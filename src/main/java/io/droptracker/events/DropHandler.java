@@ -81,6 +81,7 @@ public class DropHandler extends BaseEventHandler {
 				npcName = "Grotesque Guardians";
 			}
 			System.out.println("Processing drop event for NPC: {}" + npcName);
+			System.out.println("LootReceived: {}" + lootReceived.toString());
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
@@ -93,7 +94,10 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		
+		System.out.println("Processing drop event for NPC: {}" + npcName);
+		System.out.println("SourceType: {}" + sourceType);
+		System.out.println("LootRecordType: {}" + lootRecordType);
+		System.out.println("Items: {}" + items);
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
