@@ -95,8 +95,9 @@ public class DropHandler extends BaseEventHandler {
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		System.out.println("Processing drop event for NPC: " + npcName);
-		System.out.println("Items: " + items.toString());
+		System.out.println("1. Items: " + items.toString());
 		chatMessageUtil.checkForMessage();
+		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			System.out.println("Plugin is not tracking, returning...");
 			return;
@@ -106,12 +107,15 @@ public class DropHandler extends BaseEventHandler {
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
-        plugin.lastDrop = new Drop(npcName, lootRecordType, items);
+		System.out.println("2. Items: " + items.toString());
+        plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
+		System.out.println("3. Items: " + items.toString());
 		clientThread.invokeLater(() -> {
+			System.out.println("4. Items: " + items.toString());
 			// Gather all game state info needed
-			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
+			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
 			System.out.println("Stacked items: " + stackedItems.toString());
-			System.out.println("Items: " + items.toString());
+			System.out.println("finalItems: " + finalItems.toString());
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
