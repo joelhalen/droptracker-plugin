@@ -69,15 +69,18 @@ public class DropHandler extends BaseEventHandler {
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
+		log.debug("NpcName: {}", npcName);
+		log.debug("LootRecordType: {}", lootReceived.getType());
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
-
+			log.debug("Loot is NPC and special names contains the npc name....");
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
+			log.debug("Processing drop event for NPC: {}", npcName);
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
