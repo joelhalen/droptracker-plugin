@@ -73,13 +73,13 @@ public class DropHandler extends BaseEventHandler {
 		System.out.println("LootRecordType: {}" + lootReceived.getType());
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
-			System.out.println("Loot is NPC and special names contains the npc name....");
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
+
 			System.out.println("Processing drop event for NPC: {}" + npcName);
 			System.out.println("LootReceived: {}" + lootReceived.toString());
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
@@ -94,10 +94,7 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		System.out.println("Processing drop event for NPC: {}" + npcName);
-		System.out.println("SourceType: {}" + sourceType);
-		System.out.println("LootRecordType: {}" + lootRecordType);
-		System.out.println("Items: {}" + items);
+		System.out.println("Processing drop event for NPC: " + npcName);
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
@@ -150,6 +147,7 @@ public class DropHandler extends BaseEventHandler {
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
 						// ValidSubmission creation is now handled by SubmissionManager.sendDataToDropTracker()
 						sendData(customWebhookBody, valueToSend, singleValue.get());
+						System.out.println("Data has been been sent through sendData");
 					}
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);

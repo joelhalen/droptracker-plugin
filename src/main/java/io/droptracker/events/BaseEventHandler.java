@@ -177,6 +177,8 @@ public abstract class BaseEventHandler {
     protected void sendData(CustomWebhookBody webhook, int value, int singleValue) {
         if (webhook != null && !webhook.getEmbeds().isEmpty()) {
             submissionManager.sendDataToDropTracker(webhook, value, singleValue);
+        } else {
+            System.out.println("Webhook is null or empty, not sending data");
         }
     }
 
