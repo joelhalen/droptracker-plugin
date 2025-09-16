@@ -17,7 +17,6 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
 import java.io.IOException;
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -300,6 +299,67 @@ public class DropTrackerApi {
         return config.useApi() ? "https://api.droptracker.io" : "";
     }
 
+
+    /**
+     * Check whether a submission with the given uuid has been processed by the API.
+     * Sends a JSON body {"uuid": "..."} to {apiUrl}/check via POST.
+     * Returns true if the API explicitly reports the submission as processed.
+     */
+    public boolean checkSubmissionProcessed(String uuid) throws IOException {
+        if (!config.useApi() || uuid == null || uuid.isEmpty()) {
+            return false;
+        }
+
+        String apiUrl = getApiUrl();
+        HttpUrl url = HttpUrl.parse(apiUrl + "/check");
+        if (url == null) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+
+        // Build JSON body
+        String jsonBody = gson.toJson(java.util.Collections.singletonMap("uuid", uuid));
+        RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonBody);
+
+        Request request = new Request.Builder()
+            .url(url)
+            .post(body)
+            .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            
+            if (!response.isSuccessful()) {
+                return false;
+            }
+            ResponseBody responseBody = response.body();
+            if (responseBody == null) {
+                return false;
+            }
+            String responseData = responseBody.string();
+            
+            try {
+                // Response is expected to contain at least { processed: boolean } for the given uuid
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> map = gson.fromJson(responseData, java.util.Map.class);
+                Object processedVal = map != null ? map.get("processed") : null;
+                
+                if (processedVal instanceof Boolean) {
+                    return (Boolean) processedVal;
+                }
+                // Some APIs might return status: "processed"
+                Object statusVal = map != null ? map.get("status") : null;
+                
+                if (statusVal instanceof String) {
+                    return "processed".equalsIgnoreCase((String) statusVal);
+                }
+            } catch (Exception e) {
+                // If parsing fails, consider it not processed
+                return false;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * Asynchronously fetches the latest welcome string to avoid blocking the EDT.

@@ -71,13 +71,13 @@ public class DropHandler extends BaseEventHandler {
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
-
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
+
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
@@ -90,23 +90,22 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		
 		chatMessageUtil.checkForMessage();
+		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			return;
-		}
+		} 
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
-        plugin.lastDrop = new Drop(npcName, lootRecordType, items);
+        plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
-			List<ItemStack> stackedItems = new ArrayList<>(stack(items));
+			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
 			AtomicInteger singleValue = new AtomicInteger(0);
-
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
 				int qty = item.getQuantity();
@@ -116,7 +115,6 @@ public class DropHandler extends BaseEventHandler {
 				singleValue.addAndGet(price);
 				CustomWebhookBody.Embed itemEmbed = createEmbed(localPlayerName + " received some drops:", "drop");
 				itemEmbed.setImage(plugin.itemImageUrl(itemId));
-				
 				Map<String, Object> fieldData = new HashMap<>();
 				fieldData.put("source_type", sourceType);
 				fieldData.put("item", itemComposition.getName());
@@ -136,17 +134,16 @@ public class DropHandler extends BaseEventHandler {
 
 			// Now do the heavy work off the client thread
 			int valueToSend = totalValue.get();
+
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						// ValidSubmission creation is now handled by SubmissionManager.sendDataToDropTracker()
 						sendData(customWebhookBody, valueToSend, singleValue.get());
 					}
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);
-					// Optionally, add debug logging
 				}
 			});
 		});

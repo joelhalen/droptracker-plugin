@@ -177,7 +177,7 @@ public abstract class BaseEventHandler {
     protected void sendData(CustomWebhookBody webhook, int value, int singleValue) {
         if (webhook != null && !webhook.getEmbeds().isEmpty()) {
             submissionManager.sendDataToDropTracker(webhook, value, singleValue);
-        }
+        } 
     }
 
     /**

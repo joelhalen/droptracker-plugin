@@ -156,6 +156,7 @@ public class PbHandler extends BaseEventHandler {
                 return;
             }
         }
+        
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
         boolean isPb = data.isPersonalBest() == Boolean.TRUE;

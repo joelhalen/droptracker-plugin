@@ -49,6 +49,12 @@ public class ValidSubmission {
     private String timeProcessedAt;
     // current status of the submission
     private String status;
+    
+    // number of retry attempts made
+    private int retryAttempts;
+    
+    // last failure reason
+    private String lastFailureReason;
 
     // array of responses from the API on retry attempts
     private String[] retryResponses;
@@ -62,6 +68,7 @@ public class ValidSubmission {
         this.status = "pending";
         this.groupIds = new String[0];
         this.retryResponses = new String[0];
+        this.retryAttempts = 0;
     }
 
     // Constructor that takes a webhook and extracts relevant data
@@ -84,7 +91,10 @@ public class ValidSubmission {
                 this.description = embed.getTitle();
             }
             
-            // Extract data from fields
+            // Extract data from fields - process GUID field with highest priority
+            String tempUuid = null;
+            String tempGuid = null;
+            
             if (embed.getFields() != null) {
                 for (CustomWebhookBody.Field field : embed.getFields()) {
                     String fieldName = field.getName();
@@ -92,9 +102,21 @@ public class ValidSubmission {
                     
                     if (fieldName != null && fieldValue != null) {
                         switch (fieldName.toLowerCase()) {
+                            case "guid":
+                                // GUID has highest priority for UUID
+                                tempGuid = fieldValue;
+                                break;
                             case "uuid":
+                                // UUID has medium priority
+                                if (tempUuid == null) {
+                                    tempUuid = fieldValue;
+                                }
+                                break;
                             case "id":
-                                this.uuid = fieldValue;
+                                // Only use ID if no UUID or GUID found, and only if it looks like a GUID (not item ID)
+                                if (tempUuid == null && fieldValue.contains("-")) {
+                                    tempUuid = fieldValue;
+                                }
                                 break;
                             case "item":
                             case "item_name":
@@ -115,6 +137,13 @@ public class ValidSubmission {
                         }
                     }
                 }
+                
+                // Set UUID with proper priority: GUID > UUID > ID (if it looks like GUID)
+                if (tempGuid != null) {
+                    this.uuid = tempGuid;
+                } else if (tempUuid != null) {
+                    this.uuid = tempUuid;
+                }
             }
         }
     }
@@ -123,6 +152,76 @@ public class ValidSubmission {
         String[] newGroupIds = Arrays.copyOf(groupIds, groupIds.length + 1);
         newGroupIds[groupIds.length] = groupId;
         this.groupIds = newGroupIds;
+    }
+    
+    /**
+     * Mark the submission as failed with a reason
+     */
+    public void markAsFailed(String reason) {
+        this.status = "failed";
+        this.lastFailureReason = reason;
+    }
+    
+    /**
+     * Mark the submission as queued for retry
+     */
+    public void markAsQueued() {
+        this.status = "queued";
+    }
+    
+    /**
+     * Mark the submission as currently retrying
+     */
+    public void markAsRetrying() {
+        this.status = "retrying";
+        this.retryAttempts++;
+    }
+    
+    /**
+     * Mark the submission as successfully sent
+     */
+    public void markAsSuccess() {
+        this.status = "sent";
+        this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+    }
+    
+    /**
+     * Mark the submission as processed by the API
+     */
+    public void markAsProcessed() {
+        this.status = "processed";
+        this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
+        // Clear webhook data to free memory since we no longer need to retry
+        this.originalWebhook = null;
+    }
+    
+    /**
+     * Check if this submission can be retried
+     */
+    public boolean canRetry() {
+        return retryAttempts < 5 && !"sent".equals(status) && !"processed".equals(status);
+    }
+    
+    /**
+     * Get a human-readable status description
+     */
+    public String getStatusDescription() {
+        switch (status) {
+            case "pending":
+                return "Sending...";
+            case "sent":
+                return "Sent successfully";
+            case "processed":
+                return "Processed by API";
+            case "failed":
+                return "Failed" + (lastFailureReason != null ? ": " + lastFailureReason : "");
+            case "queued":
+                return "Queued for retry";
+            case "retrying":
+                return "Retrying... (attempt " + (retryAttempts + 1) + ")";
+            default:
+                return status;
+        }
     }
 
     public JPanel toSubmissionPanel() {

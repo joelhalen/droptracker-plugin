@@ -138,9 +138,10 @@ public class PanelElements {
     }
 
     /**
-     * Creates a styled container for submission icons with border and background
+     * Creates a styled container for submission icons with border and background,
+     * with optional enter/exit effects (if an image is provided for the submission)
      */
-    public static JLabel createStyledIconContainer() {
+    public static JLabel createStyledIconContainer(boolean withEffects) {
         JLabel container = new JLabel();
         container.setVerticalAlignment(SwingConstants.CENTER);
         container.setHorizontalAlignment(SwingConstants.CENTER);
@@ -154,19 +155,21 @@ public class PanelElements {
         container.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.BORDER_COLOR));
 
         // Add hover effect
-        container.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                container.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
-                container.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            }
+        if (withEffects) {
+            container.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    container.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+                    container.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                }
 
-            @Override
-            public void mouseExited(MouseEvent e) {
-                container.setBackground(ColorScheme.DARK_GRAY_COLOR);
-                container.setCursor(Cursor.getDefaultCursor());
-            }
-        });
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    container.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    container.setCursor(Cursor.getDefaultCursor());
+                }
+            });
+        }
 
         return container;
     }
@@ -291,7 +294,7 @@ public class PanelElements {
                     imageDialog.revalidate();
                     imageDialog.repaint();
                 } else {
-                    loadingLabel.setText("Failed to load image from URL");
+                    loadingLabel.setText("Failed to load image... (likely a bug on our end)");
                     loadingLabel.setForeground(Color.RED);
                     imageDialog.revalidate();
                     imageDialog.repaint();
@@ -582,7 +585,7 @@ public class PanelElements {
         panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
 
-        submissionWrapper.add(updateRecentSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
+        submissionWrapper.add(updateValidSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
 
         // Add components to container
         container.add(titlePanel);
@@ -592,7 +595,7 @@ public class PanelElements {
         return container;
     }
 
-    private static JPanel updateRecentSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
+    private static JPanel updateValidSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
         panel.removeAll();
 
         // Debug logging
@@ -613,15 +616,16 @@ public class PanelElements {
         // Add each submission icon to the panel (limit to 10 items)
         for (int i = 0; i < Math.min(recentSubmissions.size(), MAX_ITEMS); i++) {
             RecentSubmission submission = recentSubmissions.get(i);
-
+            boolean effects = false;
+            if (submission.getSubmissionImageUrl() != null && !submission.getSubmissionImageUrl().isEmpty()) {
+                effects = true;
+            }
             try {
                 JLabel iconContainer = null;
-
                 if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
                     // Handle drops
                     Integer itemId = submission.getDropItemId();
                     Integer quantity = submission.getDropQuantity();
-
 
                     if (itemId != null && quantity != null && itemManager != null) {
                         final AsyncBufferedImage originalImage = itemManager.getImage(itemId, quantity, quantity > 1);
@@ -630,8 +634,7 @@ public class PanelElements {
                         // Create a scaled version of the image for initial display
                         BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
                         BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
-
-                        final JLabel dropContainer = PanelElements.createStyledIconContainer();
+                        final JLabel dropContainer = PanelElements.createStyledIconContainer(effects);
                         dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         dropContainer.setIcon(new ImageIcon(opaque));
                         iconContainer = dropContainer;
@@ -646,6 +649,7 @@ public class PanelElements {
 
                             BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
                             dropContainer.setIcon(new ImageIcon(finalImage));
+                            dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                             dropContainer.revalidate();
                             dropContainer.repaint();
                         });
@@ -662,7 +666,7 @@ public class PanelElements {
                         BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
                         BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
 
-                        final JLabel clogContainer = PanelElements.createStyledIconContainer();
+                        final JLabel clogContainer = PanelElements.createStyledIconContainer(effects);
                         clogContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         clogContainer.setIcon(new ImageIcon(opaque));
                         iconContainer = clogContainer;
@@ -686,7 +690,7 @@ public class PanelElements {
                     String imageUrl = submission.getImageUrl();
 
                     if (imageUrl != null && !imageUrl.isEmpty()) {
-                        final JLabel pbContainer = PanelElements.createStyledIconContainer();
+                        final JLabel pbContainer = PanelElements.createStyledIconContainer(effects);
                         pbContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         pbContainer.setText("PB");
                         pbContainer.setFont(FontManager.getRunescapeSmallFont());
@@ -725,7 +729,6 @@ public class PanelElements {
                         final String submissionTypeForListener = submission.getSubmissionType();
                         final String submissionImageUrlForListener = submission.getSubmissionImageUrl();
                         final String tooltipForListener = buildSubmissionTooltip(submission, forGroup);
-
                         // Add hover effect and click listener
                         iconContainer.addMouseListener(new MouseAdapter() {
                             @Override
@@ -770,7 +773,7 @@ public class PanelElements {
 
     public static String buildSubmissionTooltip(RecentSubmission submission, boolean forGroup) {
         try {
-            String tooltip = "<html>";
+            String tooltip = "<html><p style='font-size:10px;'>";
             if (forGroup) {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
                     String pbTime = sanitizeTxt(submission.getPbTime());
@@ -809,7 +812,7 @@ public class PanelElements {
                             "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
                 }
             }
-            tooltip += "</html>";
+            tooltip += "</p></html>";
             return tooltip;
 
         } catch (Exception e) {

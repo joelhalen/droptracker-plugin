@@ -64,6 +64,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JPanel apiInfoPanel;
 	private JPanel playerStatsPanel;
 	private JPanel groupStatsPanel;
+	private JLabel communicationStatusLabel;
 
 	@Inject
 	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
@@ -103,7 +104,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		// Tabs for users with API enabled
 		if (config.useApi()) {
 			// API Info tab
-			apiPanel = new ApiPanel(config, api, submissionManager);
+			apiPanel = new ApiPanel(config, api, submissionManager, this);
 			apiInfoPanel = apiPanel.create();   // Store reference
 			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
@@ -124,6 +125,11 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		add(headerPanel, BorderLayout.NORTH);
 		add(tabbedPane, BorderLayout.CENTER);
 		tabbedPane.setSelectedComponent(welcomePanel);
+
+		// Initialize communication status after everything is set up
+		if (config.useApi() && apiPanel != null) {
+			apiPanel.updateStatusLabel();
+		}
 
 		revalidate();
 		repaint();
@@ -149,7 +155,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		titlePanel.add(welcomeText);
 
 		// Create a subtle info panel for version and API status
-		JPanel infoPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+		JPanel infoPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
 		infoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
 		JLabel versionText = new JLabel("v" + plugin.pluginVersion);
@@ -166,6 +172,10 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		apiStatusText.setFont(FontManager.getRunescapeSmallFont());
 		apiStatusText.setForeground(config.useApi() ? ColorScheme.PROGRESS_COMPLETE_COLOR : ColorScheme.PROGRESS_ERROR_COLOR);
 		
+		// Create communication status label (only shown when API is enabled)
+		communicationStatusLabel = new JLabel("Loading...");
+		communicationStatusLabel.setFont(FontManager.getRunescapeSmallFont());
+		communicationStatusLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 
 		JButton refreshButton = new JButton("↻ Refresh Panel");
 		refreshButton.setFont(FontManager.getRunescapeSmallFont());
@@ -175,11 +185,18 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		refreshButton.setPreferredSize(new Dimension(100, 30));
 		refreshButton.setMaximumSize(new Dimension(100, 30));
 
-
-		// Add info components to info panel
+		// Add info components to info panel (version and API status only)
 		infoPanel.add(versionText);
 		infoPanel.add(separatorText);
 		infoPanel.add(apiStatusText);
+		
+		// Create communication status panel (separate line, only when API is enabled)
+		JPanel communicationPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		communicationPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		if (config.useApi()) {
+			communicationStatusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			communicationPanel.add(communicationStatusLabel);
+		}
 		
 		// Logo panel with logo and version info below it
 		JPanel logoPanel = new JPanel();
@@ -191,6 +208,12 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		logoPanel.add(logoLabel);
 		logoPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Small spacing between logo and info
 		logoPanel.add(infoPanel);
+		
+		// Add communication status on its own line if API is enabled
+		if (config.useApi()) {
+			logoPanel.add(Box.createRigidArea(new Dimension(0, 2))); // Small spacing
+			logoPanel.add(communicationPanel);
+		}
 
 		// Add to header panel
 		headerPanel.add(titlePanel, BorderLayout.NORTH);
@@ -273,6 +296,21 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	public void updateHomePlayerButton() {
 		if (homePanel != null) {
 			homePanel.updatePlayerButton();
+		}
+	}
+
+	/**
+	 * Updates the communication status in the header panel
+	 */
+	public void updateCommunicationStatus(String statusText, Color statusColor) {
+		if (communicationStatusLabel != null) {
+			communicationStatusLabel.setText(statusText);
+			communicationStatusLabel.setForeground(statusColor);
+			// Force repaint of header
+			if (headerPanel != null) {
+				headerPanel.revalidate();
+				headerPanel.repaint();
+			}
 		}
 	}
 
