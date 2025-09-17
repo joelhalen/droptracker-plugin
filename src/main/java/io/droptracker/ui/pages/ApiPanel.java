@@ -543,10 +543,17 @@ public class ApiPanel {
         panel.setBorder(new EmptyBorder(2, 5, 2, 5));
 
         // Notifications header
+        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18));
+        headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 70, 18));
+        
         JLabel notificationsLabel = new JLabel("Notifications:");
         notificationsLabel.setFont(FontManager.getRunescapeSmallFont());
         notificationsLabel.setForeground(Color.WHITE);
-        panel.add(notificationsLabel);
+        headerPanel.add(notificationsLabel);
+        
+        panel.add(headerPanel);
         panel.add(Box.createRigidArea(new Dimension(0, 2)));
 
         // Drops configuration
