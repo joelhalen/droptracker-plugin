@@ -25,11 +25,9 @@ public class FernetDecrypt {
         try {
             // First decode - get the Fernet token
             String fernetToken = new String(Base64.getUrlDecoder().decode(webhookHash), StandardCharsets.UTF_8);
-            log.debug("Fernet token length: {}", fernetToken.length());
             
             // Second decode - get the encrypted data
             byte[] token = Base64.getUrlDecoder().decode(fernetToken);
-            log.debug("Token byte length: {}", token.length);
             
             // Decode the key
             byte[] keyBytes = Base64.getUrlDecoder().decode(ENCRYPTION_KEY);
@@ -43,14 +41,12 @@ public class FernetDecrypt {
             }
             
             byte version = token[0];
-            log.debug("Fernet version: {}", version);
             
             // Skip timestamp (bytes 1-8) - not needed for decryption
             
             // Extract IV (bytes 9-24)  
             byte[] iv = Arrays.copyOfRange(token, 9, 25);
-            log.debug("IV extracted from bytes 9-24");
-            
+
             // Get the HMAC (last 32 bytes)
             byte[] hmac = Arrays.copyOfRange(token, token.length - 32, token.length);
             byte[] message = Arrays.copyOfRange(token, 0, token.length - 32);
@@ -67,8 +63,6 @@ public class FernetDecrypt {
             // Get ciphertext (everything between IV and HMAC)
             // Start at byte 25 (after version + timestamp + IV)
             byte[] ciphertext = Arrays.copyOfRange(token, 25, token.length - 32);
-            log.debug("Ciphertext length: {}", ciphertext.length);
-            
             // Decrypt
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             cipher.init(Cipher.DECRYPT_MODE, 
@@ -77,8 +71,6 @@ public class FernetDecrypt {
             
             byte[] decryptedBytes = cipher.doFinal(ciphertext);
             String result = new String(decryptedBytes, StandardCharsets.UTF_8);
-            log.debug("Raw decrypted result length: {}, first 50 chars: {}", result.length(), 
-                     result.length() > 50 ? result.substring(0, 50) : result);
             
             // Post-process the result to fix common issues
             result = postProcessDecryptedUrl(result);
@@ -111,7 +103,6 @@ public class FernetDecrypt {
         // If it starts with /api/webhooks/, prepend the Discord domain
         if (cleaned.startsWith("/api/webhooks/")) {
             cleaned = "https://discord.com" + cleaned;
-            log.debug("Fixed URL by prepending Discord domain");
         }
         
         // If it contains .com/api/webhooks but doesn't start with https://, try to fix it
@@ -119,11 +110,8 @@ public class FernetDecrypt {
             int comIndex = cleaned.indexOf("com/api/webhooks/");
             if (comIndex >= 0) {
                 cleaned = "https://discord." + cleaned.substring(comIndex);
-                log.debug("Fixed URL by reconstructing Discord domain");
             }
         }
-        
-        log.debug("Post-processed URL: {}", cleaned.length() > 50 ? cleaned.substring(0, 50) + "..." : cleaned);
         return cleaned;
     }
 }
