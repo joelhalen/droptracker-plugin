@@ -172,7 +172,7 @@ public class FailureTracker {
     }
     
     /**
-     * Reset all failure counters (useful for testing or manual reset)
+     * Reset all failure counters
      */
     public void reset() {
         consecutiveFailures.set(0);
