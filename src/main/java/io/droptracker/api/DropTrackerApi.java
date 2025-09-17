@@ -112,13 +112,10 @@ public class DropTrackerApi {
                     lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
                     
                 } catch (IOException e) {
-                    System.out.println("Couldn't load group config in side panel (IOException) " + e);
                     log.debug("Couldn't load group config in side panel (IOException) " + e);
                 } catch (JsonSyntaxException e) {
-                    System.out.println("Couldn't load group config in side panel (JsonSyntaxException) " + e);
                     log.debug("Couldn't load group config in side panel (JsonSyntaxException) " + e);
                 } catch (Exception e) {
-                    System.out.println("Couldn't load group config in side panel (Exception) " + e);
                     log.debug("Couldn't load group config in side panel (Exception) " + e);
                 }
             } finally {
