@@ -321,27 +321,7 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    @ConfigItem(
-        name = "Enable Retry Queue",
-        keyName = "enableRetryQueue",
-        description = "Queue failed submissions for automatic retry when connection is restored",
-        position = 3,
-        section = apiSection
-    )
-    default boolean enableRetryQueue() {
-        return true;
-    }
-
-    @ConfigItem(
-        name = "Max Retry Attempts",
-        keyName = "maxRetryAttempts",
-        description = "Maximum number of retry attempts for failed submissions (1-10)",
-        position = 4,
-        section = apiSection
-    )
-    default int maxRetryAttempts() {
-        return 5;
-    }
+    // Removed retry queue and maxRetryAttempts settings in favor of simplified per-call retry
 
     /* Side panel settings */
     @ConfigSection(

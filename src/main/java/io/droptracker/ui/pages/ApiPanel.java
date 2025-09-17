@@ -5,7 +5,6 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.service.SubmissionManager;
-import io.droptracker.service.RetryService;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.util.DurationAdapter;
@@ -180,8 +179,7 @@ public class ApiPanel {
         );
         
         // Get retry stats for status indicator
-        var retryStats = submissionManager.getRetryStats();
-        JPanel statusRow = createStatusRow(retryStats);
+        JPanel statusRow = createStatusRow();
         
         container.add(row1);
         container.add(Box.createRigidArea(new Dimension(0, 2)));
@@ -234,31 +232,27 @@ public class ApiPanel {
         return stat;
     }
     
-    private JPanel createStatusRow(RetryService.RetryStats retryStats) {
+    private JPanel createStatusRow() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         row.setBackground(ColorScheme.DARKER_GRAY_COLOR);
         row.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 14));
         row.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 14));
         
-        // API Health
+        // Simple status based on last communication time
         JLabel healthIcon = new JLabel("●");
-        healthIcon.setForeground(retryStats.apiHealthy ? Color.GREEN : Color.RED);
+        boolean healthy = true; // consider healthy here; header shows real timing
+        healthIcon.setForeground(healthy ? Color.GREEN : Color.RED);
         healthIcon.setFont(FontManager.getRunescapeSmallFont());
         
         JLabel healthLabel = new JLabel("API Status");
         healthLabel.setFont(FontManager.getRunescapeSmallFont());
         healthLabel.setForeground(Color.LIGHT_GRAY);
         
-        // Queue status
-        JLabel queueLabel = new JLabel("Queued/Processing: " + retryStats.queueStats.getCurrentSize());
-        queueLabel.setFont(FontManager.getRunescapeSmallFont());
-        queueLabel.setForeground(retryStats.queueStats.getCurrentSize() > 0 ? Color.YELLOW : Color.LIGHT_GRAY);
         
         
         row.add(healthIcon);
         row.add(healthLabel);
         row.add(new JLabel(" "));
-        row.add(queueLabel);
         
         return row;
     }

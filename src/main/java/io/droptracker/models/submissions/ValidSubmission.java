@@ -181,6 +181,7 @@ public class ValidSubmission {
      * Check if this submission can be retried
      */
     public boolean canRetry() {
+        // only allow up to 5 retries from the API panel--after this, we assume it's "broken" somehow
         return retryAttempts < 5 && !"sent".equals(status) && !"processed".equals(status);
     }
     

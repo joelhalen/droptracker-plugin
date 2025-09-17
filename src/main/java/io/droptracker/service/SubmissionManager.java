@@ -49,7 +49,6 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-    private final RetryService retryService;
     /// Store a list of submissions that the player has received which qualified for a notification to be sent
     @Getter
     private final List<ValidSubmission> validSubmissions = new ArrayList<>();
@@ -68,7 +67,7 @@ public class SubmissionManager {
     public Long totalValue = 0L;
     
     @Inject
-    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager, RetryService retryService) {
+    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
@@ -78,10 +77,6 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
-        this.retryService = retryService;
-        
-        // Set up the retry callback
-        this.retryService.setRetryCallback(this::processQueuedSubmission);
     }
 
     public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
@@ -340,12 +335,19 @@ public class SubmissionManager {
     }
 
     private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+        sendWebhookWithRetry(customWebhookBody, screenshot, 0);
+    }
+
+    private static final long BASE_RETRY_DELAY_MS = 1000L;
+
+    private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt) {
         if (isFakeWorld()) {
             return;
         }
+
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("payload_json", GSON.toJson(customWebhookBody));
+                .addFormDataPart("payload_json", GSON.toJson(webhook));
 
         if (screenshot != null) {
             requestBodyBuilder.addFormDataPart("file", "image.jpeg",
@@ -353,22 +355,7 @@ public class SubmissionManager {
         }
 
         MultipartBody requestBody = requestBodyBuilder.build();
-        for (MultipartBody.Part part : requestBody.parts()) {
-            // Try to read the body content
-            RequestBody body = part.body();
 
-            // Safely check content type
-            MediaType contentType = body.contentType();
-            if (contentType != null &&
-                    (contentType.toString().contains("text") ||
-                            contentType.toString().contains("json"))) {
-                Buffer buffer = new Buffer();
-                try {
-                    body.writeTo(buffer);
-                } catch (IOException ignored) {
-                }
-            }
-        }
         String url;
         if (!config.useApi()) {
             try {
@@ -384,102 +371,79 @@ public class SubmissionManager {
             log.debug("Invalid or malformed webhook URL: {}", url);
             return;
         }
+
         Request request = new Request.Builder()
                 .url(url)
                 .post(requestBody)
                 .build();
-        if (config.useApi()) {
-            api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000); // Update the last communication time
-            // if the api is being used
-        }
+
+        ValidSubmission validSubmission = findValidSubmissionForWebhook(webhook);
+
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                log.error("Error submitting: ", e);
-                
-                // Handle the failure with retry logic
-                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
-                retryService.handleFailure(customWebhookBody, screenshot, 
-                    getSubmissionTypeFromWebhook(customWebhookBody), e, validSubmission);
-                
-                // Increment failure statistics
-                failedSubmissions++;
-                
-                // Notify UI of status change
-                notifyUpdateCallback();
+                scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, e);
             }
 
             @Override
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
-                if (config.useApi()) {
-                    // Try to get response body, but don't consume it
-                    ResponseBody body = response.peekBody(Long.MAX_VALUE);
-                    String bodyString = body.string();
-                    if (!bodyString.isEmpty()) {
-                        try {
-                            ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
-                            if (apiResponse != null) {
-                                String noticeMessage = apiResponse.getNotice();
-                                if (noticeMessage != null && !noticeMessage.isEmpty() && config.receiveInGameMessages()) {
-                                    chatMessageUtil.sendChatMessage(noticeMessage);
-                                }
-                                String updateMessage = apiResponse.getRankUpdate();
-                                if (updateMessage != null && !updateMessage.isEmpty() && config.receiveInGameMessages()) {
-                                    chatMessageUtil.sendChatMessage(updateMessage);
-                                }
-                                
-                                // Do not mark processed here. Processing is confirmed via /check polling.
-                            }
-                        } catch (Exception e) {
-                            log.debug("Failed to parse API response: " + e.getMessage());
-                        }
-                    }
-                }
-
-                ValidSubmission validSubmission = findValidSubmissionForWebhook(customWebhookBody);
-                
-                if (!response.isSuccessful()) {
-                    // Create an exception to represent the HTTP error
-                    IOException httpError = new IOException("HTTP " + response.code() + ": " + response.message());
-                    
-                    if (response.code() == 429) {
-                        // Rate limited - retry with backoff
-                        retryService.handleFailure(customWebhookBody, screenshot, 
-                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
-                    } else if (response.code() == 400) {
-                        // Bad request - don't retry
-                        if (validSubmission != null) {
-                            validSubmission.markAsFailed("Bad request (400)");
-                        }
-                        response.close();
-                        notifyUpdateCallback();
-                        return;
-                    } else if (response.code() == 404) {
-                        // Not found - try to fetch new webhook list and retry
-                        executor.submit(() -> {
+                try (ResponseBody body = response.body()) {
+                    if (config.useApi()) {
+                        api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                        if (body != null) {
                             try {
-                                urlManager.fetchNewList();
+                                String bodyString = body.string();
+                                if (!bodyString.isEmpty()) {
+                                    ApiResponse apiResponse = gson.fromJson(bodyString, ApiResponse.class);
+                                    if (apiResponse != null) {
+                                        String noticeMessage = apiResponse.getNotice();
+                                        if (noticeMessage != null && !noticeMessage.isEmpty() && config.receiveInGameMessages()) {
+                                            chatMessageUtil.sendChatMessage(noticeMessage);
+                                        }
+                                        String updateMessage = apiResponse.getRankUpdate();
+                                        if (updateMessage != null && !updateMessage.isEmpty() && config.receiveInGameMessages()) {
+                                            chatMessageUtil.sendChatMessage(updateMessage);
+                                        }
+                                    }
+                                }
                             } catch (Exception e) {
-                                log.error("Failed to fetch new webhook list", e);
+                                log.debug("Failed to parse API response: {}", e.getMessage());
                             }
-                        });
-                        retryService.handleFailure(customWebhookBody, screenshot, 
-                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
-                    } else {
-                        // Other HTTP errors - retry based on error type
-                        retryService.handleFailure(customWebhookBody, screenshot, 
-                            getSubmissionTypeFromWebhook(customWebhookBody), httpError, validSubmission);
+                        }
                     }
-                } else {
-                    // Success!
-                    retryService.handleSuccess(validSubmission);
-                    
-                    // Increment success statistics
-                    notificationsSent++;
-                    
-                    notifyUpdateCallback();
 
-                    // If API is enabled and we have a uuid, trigger an immediate single /check for this submission
+                    if (!response.isSuccessful()) {
+                        int code = response.code();
+
+                        if (code == 400 || code == 401 || code == 403) {
+                            if (validSubmission != null) {
+                                validSubmission.markAsFailed("HTTP " + code);
+                                notifyUpdateCallback();
+                            }
+                            return;
+                        }
+
+                        if (code == 404) {
+                            executor.submit(() -> {
+                                try {
+                                    urlManager.fetchNewList();
+                                } catch (Exception ex) {
+                                    log.debug("Failed to fetch new webhook list: {}", ex.getMessage());
+                                }
+                            });
+                        }
+
+                        scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, new IOException("HTTP " + code + ": " + response.message()));
+                        return;
+                    }
+
+                    // Success
+                    if (validSubmission != null) {
+                        validSubmission.markAsSuccess();
+                        notifyUpdateCallback();
+                    }
+                    notificationsSent++;
+
                     if (config.useApi() && validSubmission != null && validSubmission.getUuid() != null && !validSubmission.getUuid().isEmpty()) {
                         executor.submit(() -> {
                             try {
@@ -490,16 +454,34 @@ public class SubmissionManager {
                                         notifyUpdateCallback();
                                     }
                                 }
-                            } catch (IOException e) {
-                                // Ignore; the periodic poll will catch up
+                            } catch (IOException ignored) {
                             }
                         });
                     }
                 }
-                response.close();
             }
         });
+    }
 
+    private void scheduleRetryOrFail(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission validSubmission, int attempt, Throwable e) {
+        int maxAttempts = 10;
+        if (attempt < maxAttempts) {
+            long delay = BASE_RETRY_DELAY_MS * (1L << Math.min(attempt, 16));
+            if (validSubmission != null) {
+                validSubmission.markAsRetrying();
+                notifyUpdateCallback();
+            }
+            executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1), delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            log.debug("Scheduled webhook retry in {} ms (attempt {}/{})", delay, attempt + 1, maxAttempts);
+        } else {
+            if (validSubmission != null) {
+                String reason = e != null && e.getMessage() != null ? e.getMessage() : "Retry limit reached";
+                validSubmission.markAsFailed(reason);
+                notifyUpdateCallback();
+            }
+            failedSubmissions++;
+            log.warn("Exhausted retry attempts when sending webhook");
+        }
     }
 
     public void addSubmissionToMemory(ValidSubmission validSubmission) {
@@ -521,8 +503,13 @@ public class SubmissionManager {
      * @param validSubmission The submission to retry
      */
     public void retrySubmission(ValidSubmission validSubmission) {
-        retryService.retrySubmission(validSubmission);
+        if (validSubmission == null || validSubmission.getOriginalWebhook() == null) {
+            log.warn("Cannot retry submission: missing webhook data");
+            return;
+        }
+        validSubmission.markAsRetrying();
         notifyUpdateCallback();
+        sendWebhookWithRetry(validSubmission.getOriginalWebhook(), null, 0);
     }
 
     /**
@@ -538,15 +525,16 @@ public class SubmissionManager {
     /**
      * Get retry service statistics for UI display
      */
-    public RetryService.RetryStats getRetryStats() {
-        return retryService.getStats();
+    public String getRetryStatusText() {
+        // Simple status for UI: based on last communication time; detailed queue/health removed
+        return "";
     }
     
     /**
      * Clear the retry queue (for manual intervention)
      */
     public void clearRetryQueue() {
-        retryService.clearQueue();
+        // No-op after removing queue; keep method to avoid UI breakage if referenced elsewhere
         notifyUpdateCallback();
     }
     
@@ -554,7 +542,7 @@ public class SubmissionManager {
      * Enable or disable retry processing
      */
     public void setRetryProcessingEnabled(boolean enabled) {
-        retryService.setProcessingEnabled(enabled);
+        // No-op in simplified retry model
     }
 
     private boolean isFakeWorld() {
@@ -602,19 +590,7 @@ public class SubmissionManager {
     /**
      * Process a queued submission from the retry service
      */
-    private void processQueuedSubmission(SubmissionQueue.QueuedSubmission queuedSubmission) {
-        log.debug("Processing queued {} submission", queuedSubmission.getType());
-        
-        // Find the corresponding ValidSubmission and update its status
-        ValidSubmission validSubmission = findValidSubmissionForWebhook(queuedSubmission.getWebhook());
-        if (validSubmission != null) {
-            validSubmission.markAsRetrying();
-            notifyUpdateCallback();
-        }
-        
-        // Send the submission
-        sendDataToDropTracker(queuedSubmission.getWebhook(), queuedSubmission.getScreenshot());
-    }
+    // Queue processing removed in simplified retry model
     
     /**
      * Find a ValidSubmission that matches the given webhook
