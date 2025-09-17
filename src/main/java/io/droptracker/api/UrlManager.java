@@ -238,7 +238,6 @@ public class UrlManager {
 							// and as fallback URLs when API is enabled but fails
 							if (decryptedUrl.contains("discord")) {
 								endpointUrls.add(decryptedUrl);
-								log.debug("Added webhook URL to endpoints list");
 							} else {
 								log.error("[DropTracker] Decrypted URL is not based on discord; skipping: " + decryptedUrl);
 							}
