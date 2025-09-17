@@ -568,7 +568,27 @@ public class ApiPanel {
         panel.add(createConfigRow("CLogs",
                 groupConfig.isSendClogs(),
                 null));
-
+        
+        // Pets config
+        panel.add(createConfigRow("Pets",
+                groupConfig.isSendPets(),
+                null));
+        
+        // Quests config
+        panel.add(createConfigRow("Quests",
+                groupConfig.isSendQuests(),
+                null));
+        
+        // Level config
+        String levelText = "";
+        if (groupConfig.isSendXP()) {
+            levelText = "Levels (" + groupConfig.getMinimumLevel() + " min)";
+        } else {
+            levelText = "Levels";
+        }
+        panel.add(createConfigRow(levelText,
+                groupConfig.isSendXP(),
+                null));
         return panel;
     }
 

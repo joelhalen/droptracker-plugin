@@ -32,9 +32,15 @@ public class GroupConfig {
     private Integer minimumDropValue;
     @SerializedName("send_stacked_items")
     private boolean sendStackedItems;
-    // add for later -- these handlers don't exist "properly" yet
     @SerializedName("send_pets")
     private boolean sendPets;
+    @SerializedName("send_quests")
+    private boolean sendQuests;
+    @SerializedName("send_xp")
+    private boolean sendXP;
+    @SerializedName("minimum_level")
+    private int minimumLevel;
+    // add for later -- these handlers don't exist "properly" yet
     @SerializedName("send_kills")
     private boolean sendKills;
     @SerializedName("send_deaths")
