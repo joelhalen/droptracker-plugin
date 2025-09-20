@@ -143,10 +143,13 @@ public class PbHandler extends BaseEventHandler {
     @SuppressWarnings("unlikely-arg-type")
     private void processKill(BossNotification data) {
         if (data == null) {
+            log.debug("Attempted to process null BossNotification");
             return;
         }
-        if (data.getBoss() == null || data.getCount() == null)
+        if (data.getBoss() == null || data.getCount() == null) {
+            log.debug("BossNotification missing required data - boss: {}, count: {}", data.getBoss(), data.getCount());
             return;
+        }
 
         String killIdentifier = data.getBoss() + "-" + data.getCount();
         long currentTime = System.currentTimeMillis();
@@ -163,48 +166,64 @@ public class PbHandler extends BaseEventHandler {
         String player = getPlayerName();
         final String[] timeRef = {null};
         final String[] bestTimeRef = {null};
+        
+        if (clientThread == null) {
+            log.error("ClientThread is null, cannot process kill");
+            return;
+        }
+        
         clientThread.invokeLater(() -> {
-            timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
-            bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
-            
-            String bossName = data.getBoss();
-            if (teamSize == null || teamSize.equals("")) {
-                teamSize = "Solo";
-            }
-            if (mostRecentNpcData != null) {
-                bossName = mostRecentNpcData.getLeft();
-            } else if (!pendingNotifications.isEmpty()) {
-                // Get the first (or any) pending notification's boss name
-                bossName = pendingNotifications.values().iterator().next().getBoss();
-            }
-            if (bossName == null || bossName.equalsIgnoreCase("")){
-                return;
-            }
-            
-            Integer killCount = 0;
-            CustomWebhookBody killWebhook = createWebhookBody(player + " has killed a boss:");
-            CustomWebhookBody.Embed killEmbed = createEmbed(player + " has killed a boss:", "npc_kill");
-            
-            Map<String, Object> fieldData = new HashMap<>();
-            fieldData.put("boss_name", bossName);
-            fieldData.put("kill_time", timeRef[0]);
-            fieldData.put("best_time", bestTimeRef[0]);
-            fieldData.put("is_pb", isPb);
-            fieldData.put("team_size", teamSize);
-            
-            if (bossName != null) {
-                killCount = getKillCount(bossName);
+            try {
+                timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
+                bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
+                
+                String bossName = data.getBoss();
+                if (teamSize == null || teamSize.trim().isEmpty()) {
+                    teamSize = "Solo";
+                }
+                if (mostRecentNpcData != null && mostRecentNpcData.getLeft() != null) {
+                    bossName = mostRecentNpcData.getLeft();
+                } else if (!pendingNotifications.isEmpty()) {
+                    // Get the first (or any) pending notification's boss name
+                    BossNotification firstNotification = pendingNotifications.values().iterator().next();
+                    if (firstNotification != null && firstNotification.getBoss() != null) {
+                        bossName = firstNotification.getBoss();
+                    }
+                }
+                if (bossName == null || bossName.trim().isEmpty()){
+                    log.debug("No valid boss name found, skipping kill processing");
+                    return;
+                }
+                
+                Integer killCount = getKillCount(bossName);
+                CustomWebhookBody killWebhook = createWebhookBody(player + " has killed a boss:");
+                CustomWebhookBody.Embed killEmbed = createEmbed(player + " has killed a boss:", "npc_kill");
+                
+                Map<String, Object> fieldData = new HashMap<>();
+                fieldData.put("boss_name", bossName);
+                fieldData.put("kill_time", timeRef[0] != null ? timeRef[0] : "N/A");
+                fieldData.put("best_time", bestTimeRef[0] != null ? bestTimeRef[0] : "N/A");
+                fieldData.put("is_pb", isPb);
+                fieldData.put("team_size", teamSize);
                 fieldData.put("killcount", killCount);
+                
+                addFields(killEmbed, fieldData);
+                
+                if (killWebhook != null && killEmbed != null) {
+                    killWebhook.getEmbeds().add(killEmbed);
+                    sendData(killWebhook, SubmissionType.KILL_TIME);
+                } else {
+                    log.warn("Failed to create webhook or embed for kill processing");
+                }
+                
+                // Clean up
+                mostRecentNpcData = null;
+                pendingNotifications.clear();
+                bossData.set(null);
+                teamSize = null;
+            } catch (Exception e) {
+                log.error("Error processing kill notification: {}", e.getMessage(), e);
             }
-            
-            addFields(killEmbed, fieldData);
-            
-            killWebhook.getEmbeds().add(killEmbed);
-            sendData(killWebhook, SubmissionType.KILL_TIME);
-            mostRecentNpcData = null;
-            pendingNotifications.clear();
-            bossData.set(null);
-            teamSize = null;
         });
     }
 
@@ -437,32 +456,44 @@ public class PbHandler extends BaseEventHandler {
 
     //Storing boss Time to either access at a later point or to move through sending the time
     private void storeBossTime(String bossName, Duration time, Duration bestTime, boolean isPb){
-        PbHandler.TimeData timeData = new PbHandler.TimeData(time,bestTime,isPb);
-        pendingTimeData.put(bossName,timeData);
-        BossNotification withTime = null;
-        if (mostRecentNpcData != null) {
-            withTime = new BossNotification(
-                    bossName,
-                    mostRecentNpcData.getRight(),
-                    "",
-                    time,
-                    bestTime,
-                    isPb
-            );
-
-        } else {
-            withTime = new BossNotification(
-                    "",
-                    0,
-                    "",
-                    time,
-                    bestTime,
-                    isPb
-            );
+        if (bossName == null || bossName.trim().isEmpty()) {
+            log.debug("Cannot store boss time with null/empty boss name");
+            return;
         }
-        bossData.set(withTime);
-        processKill(withTime);
-
+        if (time == null) {
+            log.debug("Cannot store boss time with null duration");
+            return;
+        }
+        
+        try {
+            PbHandler.TimeData timeData = new PbHandler.TimeData(time, bestTime != null ? bestTime : Duration.ZERO, isPb);
+            pendingTimeData.put(bossName, timeData);
+            
+            BossNotification withTime;
+            if (mostRecentNpcData != null && mostRecentNpcData.getRight() != null) {
+                withTime = new BossNotification(
+                        bossName,
+                        mostRecentNpcData.getRight(),
+                        "",
+                        time,
+                        bestTime != null ? bestTime : Duration.ZERO,
+                        isPb
+                );
+            } else {
+                withTime = new BossNotification(
+                        bossName,
+                        0,
+                        "",
+                        time,
+                        bestTime != null ? bestTime : Duration.ZERO,
+                        isPb
+                );
+            }
+            bossData.set(withTime);
+            processKill(withTime);
+        } catch (Exception e) {
+            log.error("Error storing boss time for {}: {}", bossName, e.getMessage(), e);
+        }
     }
     private static class TimeData {
         final Duration time;

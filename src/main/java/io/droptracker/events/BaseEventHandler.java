@@ -60,19 +60,20 @@ public abstract class BaseEventHandler {
     /**
      * Gets the local player's name.
      * 
-     * @return the local player's name
+     * @return the local player's name, or "Unknown" if null/empty
      */
     protected String getPlayerName() {
-        return plugin.getLocalPlayerName();
+        String playerName = plugin.getLocalPlayerName();
+        return (playerName != null && !playerName.trim().isEmpty()) ? playerName : "Unknown";
     }
 
     /**
      * Gets the account hash as a string.
      * 
-     * @return the account hash
+     * @return the account hash, or "0" if client is null
      */
     protected String getAccountHash() {
-        return String.valueOf(client.getAccountHash());
+        return client != null ? String.valueOf(client.getAccountHash()) : "0";
     }
 
     /**
@@ -82,10 +83,20 @@ public abstract class BaseEventHandler {
      * @param embed the embed to add fields to
      */
     protected void addCommonFields(CustomWebhookBody.Embed embed) {
-        embed.addField("player_name", getPlayerName(), true);
-        embed.addField("acc_hash", getAccountHash(), true);
-        embed.addField("p_v", plugin.pluginVersion, true);
-        embed.addField("guid", api.generateGuidForSubmission(), true);
+        if (embed == null) {
+            log.warn("Attempted to add common fields to null embed");
+            return;
+        }
+        
+        String playerName = getPlayerName();
+        String accountHash = getAccountHash();
+        String pluginVersion = plugin != null && plugin.pluginVersion != null ? plugin.pluginVersion : "unknown";
+        String guid = api != null ? api.generateGuidForSubmission() : "unknown";
+        
+        embed.addField("player_name", playerName, true);
+        embed.addField("acc_hash", accountHash, true);
+        embed.addField("p_v", pluginVersion, true);
+        embed.addField("guid", guid, true);
     }
 
     /**
@@ -96,7 +107,7 @@ public abstract class BaseEventHandler {
      */
     protected CustomWebhookBody createWebhookBody(String content) {
         CustomWebhookBody webhook = new CustomWebhookBody();
-        webhook.setContent(content);
+        webhook.setContent(content != null ? content : "DropTracker Event");
         return webhook;
     }
 
@@ -109,10 +120,12 @@ public abstract class BaseEventHandler {
      */
     protected CustomWebhookBody.Embed createEmbed(String title, String type) {
         CustomWebhookBody.Embed embed = new CustomWebhookBody.Embed();
-        if (title != null) {
+        if (title != null && !title.trim().isEmpty()) {
             embed.setTitle(title);
+        } else {
+            embed.setTitle("DropTracker Event");
         }
-        if (type != null) {
+        if (type != null && !type.trim().isEmpty()) {
             embed.addField("type", type, true);
         }
         addCommonFields(embed);
@@ -147,9 +160,33 @@ public abstract class BaseEventHandler {
      * @param inline whether the fields should be inline
      */
     protected void addFields(CustomWebhookBody.Embed embed, Map<String, Object> fieldData, boolean inline) {
+        if (embed == null) {
+            log.warn("Attempted to add fields to null embed");
+            return;
+        }
+        if (fieldData == null) {
+            log.warn("Attempted to add null fieldData to embed");
+            return;
+        }
+        
         for (Map.Entry<String, Object> entry : fieldData.entrySet()) {
-            String value = entry.getValue() != null ? String.valueOf(entry.getValue()) : "null";
-            embed.addField(entry.getKey(), value, inline);
+            String fieldName = entry.getKey();
+            if (fieldName == null || fieldName.trim().isEmpty()) {
+                log.debug("Skipping field with null/empty name");
+                continue;
+            }
+            
+            String value;
+            Object rawValue = entry.getValue();
+            if (rawValue == null) {
+                value = "N/A";
+            } else if (rawValue instanceof String && ((String) rawValue).trim().isEmpty()) {
+                value = "N/A";
+            } else {
+                value = String.valueOf(rawValue);
+            }
+            
+            embed.addField(fieldName, value, inline);
         }
     }
 
@@ -161,8 +198,27 @@ public abstract class BaseEventHandler {
      * @param type the event type identifier
      */
     protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
-        if (webhook != null && !webhook.getEmbeds().isEmpty()) {
+        if (webhook == null) {
+            log.warn("Attempted to send null webhook data");
+            return;
+        }
+        if (webhook.getEmbeds() == null || webhook.getEmbeds().isEmpty()) {
+            log.warn("Attempted to send webhook with no embeds");
+            return;
+        }
+        if (type == null) {
+            log.warn("Attempted to send webhook with null submission type");
+            return;
+        }
+        if (submissionManager == null) {
+            log.error("SubmissionManager is null, cannot send webhook data");
+            return;
+        }
+        
+        try {
             submissionManager.sendDataToDropTracker(webhook, type);
+        } catch (Exception e) {
+            log.error("Failed to send webhook data: {}", e.getMessage(), e);
         }
     }
 
@@ -175,9 +231,24 @@ public abstract class BaseEventHandler {
      * @param singleValue the value of individual items (for stacked item checking)
      */
     protected void sendData(CustomWebhookBody webhook, int value, int singleValue) {
-        if (webhook != null && !webhook.getEmbeds().isEmpty()) {
+        if (webhook == null) {
+            log.warn("Attempted to send null webhook data");
+            return;
+        }
+        if (webhook.getEmbeds() == null || webhook.getEmbeds().isEmpty()) {
+            log.warn("Attempted to send webhook with no embeds");
+            return;
+        }
+        if (submissionManager == null) {
+            log.error("SubmissionManager is null, cannot send webhook data");
+            return;
+        }
+        
+        try {
             submissionManager.sendDataToDropTracker(webhook, value, singleValue);
-        } 
+        } catch (Exception e) {
+            log.error("Failed to send webhook data: {}", e.getMessage(), e);
+        }
     }
 
     /**

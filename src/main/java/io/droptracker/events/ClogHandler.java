@@ -80,51 +80,113 @@ public class ClogHandler extends BaseEventHandler {
 
 
     private void processCollection(String itemName) {
-        if (!this.isEnabled()) return;
-
-        int completed = client.getVarpValue(VarPlayerID.COLLECTION_COUNT);
-        int total = client.getVarpValue(VarPlayerID.COLLECTION_COUNT_MAX);
-
-        boolean varpValid = total > 0 && completed > 0;
-        if (!varpValid) {
-            // This occurs if the player doesn't have the character summary tab selected
-            log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
+        if (!this.isEnabled()) {
+            log.debug("Collection log processing disabled");
+            return;
         }
-        
-        Integer itemId = itemIDFinder.findItemId(itemName);
-        Drop loot = itemId != null ? getLootSource(itemId) : null;
-        Integer killCount = loot != null ? kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource()) : 0;
-        OptionalDouble itemRarity = ((loot != null) && (loot.getCategory() == LootRecordType.NPC) && (itemId != null)) ?
-                rarity.getRarity(loot.getSource(), itemId, 1) : OptionalDouble.empty();
-                
-        String player = getPlayerName();
-        CustomWebhookBody collectionLogBody = createWebhookBody(player + " received a collection log:");
-        CustomWebhookBody.Embed collEmbed = createEmbed(player + " received a collection log:", "collection_log");
-        
-        Map<String, Object> fieldData = new HashMap<>();
-        fieldData.put("source", loot != null ? loot.getSource() : "unknown");
-        fieldData.put("item", itemName);
-        fieldData.put("kc", killCount);
-        fieldData.put("rarity", itemRarity);
-        fieldData.put("item_id", itemId);
-        fieldData.put("slots", completed + "/" + total);
-        
-        addFields(collEmbed, fieldData);
-        
-        collectionLogBody.getEmbeds().add(collEmbed);
-        sendData(collectionLogBody, SubmissionType.COLLECTION_LOG);
+
+        if (itemName == null || itemName.trim().isEmpty()) {
+            log.debug("Cannot process collection log with null/empty item name");
+            return;
+        }
+
+        try {
+            int completed = 0;
+            int total = 0;
+            
+            if (client != null) {
+                completed = client.getVarpValue(VarPlayerID.COLLECTION_COUNT);
+                total = client.getVarpValue(VarPlayerID.COLLECTION_COUNT_MAX);
+            }
+
+            boolean varpValid = total > 0 && completed > 0;
+            if (!varpValid) {
+                // This occurs if the player doesn't have the character summary tab selected
+                log.debug("Collection log progress varps were invalid ({} / {})", completed, total);
+            }
+            
+            Integer itemId = null;
+            if (itemIDFinder != null) {
+                try {
+                    itemId = itemIDFinder.findItemId(itemName);
+                } catch (Exception e) {
+                    log.debug("Error finding item ID for {}: {}", itemName, e.getMessage());
+                }
+            }
+            
+            Drop loot = itemId != null ? getLootSource(itemId) : null;
+            Integer killCount = 0;
+            if (loot != null && kcService != null) {
+                try {
+                    killCount = kcService.getKillCountWithStorage(loot.getCategory(), loot.getSource());
+                } catch (Exception e) {
+                    log.debug("Error getting kill count: {}", e.getMessage());
+                }
+            }
+            
+            OptionalDouble itemRarity = OptionalDouble.empty();
+            if (loot != null && loot.getCategory() == LootRecordType.NPC && itemId != null && rarity != null) {
+                try {
+                    itemRarity = rarity.getRarity(loot.getSource(), itemId, 1);
+                } catch (Exception e) {
+                    log.debug("Error calculating rarity: {}", e.getMessage());
+                }
+            }
+                    
+            String player = getPlayerName();
+            CustomWebhookBody collectionLogBody = createWebhookBody(player + " received a collection log:");
+            CustomWebhookBody.Embed collEmbed = createEmbed(player + " received a collection log:", "collection_log");
+            
+            Map<String, Object> fieldData = new HashMap<>();
+            fieldData.put("source", loot != null && loot.getSource() != null ? loot.getSource() : "unknown");
+            fieldData.put("item", itemName);
+            fieldData.put("kc", killCount);
+            fieldData.put("rarity", itemRarity.isPresent() ? itemRarity.getAsDouble() : "unknown");
+            fieldData.put("item_id", itemId);
+            fieldData.put("slots", varpValid ? completed + "/" + total : "unknown");
+            
+            addFields(collEmbed, fieldData);
+            
+            if (collectionLogBody != null && collEmbed != null) {
+                collectionLogBody.getEmbeds().add(collEmbed);
+                sendData(collectionLogBody, SubmissionType.COLLECTION_LOG);
+            } else {
+                log.warn("Failed to create webhook or embed for collection log");
+            }
+        } catch (Exception e) {
+            log.error("Error processing collection log for item {}: {}", itemName, e.getMessage(), e);
+        }
     }
 
     @Nullable
     private Drop getLootSource(int itemId) {
-        Drop drop = plugin.lastDrop;
-        if (drop == null) return null;
-        if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) return null;
-        for (ItemStack item : drop.getItems()) {
-            if (item.getId() == itemId) {
-                return drop;
-            }
+        if (plugin == null) {
+            return null;
         }
+        
+        Drop drop = plugin.lastDrop;
+        if (drop == null || drop.getTime() == null) {
+            return null;
+        }
+        
+        try {
+            if (Duration.between(drop.getTime(), Instant.now()).compareTo(RECENT_DROP) > 0) {
+                return null;
+            }
+            
+            if (drop.getItems() == null) {
+                return null;
+            }
+            
+            for (ItemStack item : drop.getItems()) {
+                if (item != null && item.getId() == itemId) {
+                    return drop;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error checking loot source for item {}: {}", itemId, e.getMessage());
+        }
+        
         return null;
     }
 
