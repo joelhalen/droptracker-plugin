@@ -109,7 +109,7 @@ public class PbHandler extends BaseEventHandler {
         return config.pbEmbeds();
     }
     public void onTick() {
-        BossNotification data = this.bossData.getAndSet(null);
+        BossNotification data = this.bossData.get();
 
         if (data != null) {
             if (data.getBoss() != null) {
