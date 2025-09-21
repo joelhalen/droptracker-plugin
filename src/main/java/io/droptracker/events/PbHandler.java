@@ -109,7 +109,7 @@ public class PbHandler extends BaseEventHandler {
         return config.pbEmbeds();
     }
     public void onTick() {
-        BossNotification data = this.bossData.get();
+        BossNotification data = this.bossData.getAndSet(null);
 
         if (data != null) {
             if (data.getBoss() != null) {
@@ -171,7 +171,7 @@ public class PbHandler extends BaseEventHandler {
             log.error("ClientThread is null, cannot process kill");
             return;
         }
-        
+
         clientThread.invokeLater(() -> {
             try {
                 timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
@@ -552,12 +552,12 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime("Tombs of Amascut: Entry Mode", time,bestTime,isPb);
                     storeBossTime("Tombs of Amascut", time, bestTime, isPb);
                     storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
-                }else if(message.contains("Theatre of Blood")){
+                } else if(message.contains("Theatre of Blood")){
                     setTeamSize("Theatre of Blood",message);
                     storeBossTime("Theatre of Blood: Entry Mode", time,bestTime,isPb);
                     storeBossTime("Theatre of Blood",time,bestTime,isPb);
                     storeBossTime("Theatre of Blood: Hard Mode",time,bestTime,isPb);
-                }else if (message.contains("Corrupted challenge")) {
+                } else if (message.contains("Corrupted challenge")) {
                     setTeamSize("Corrupted Hunllef",message);
                     storeBossTime("Corrupted Hunllef", time, bestTime, isPb);
                 } else if (message.contains("Challenge duration")) {
