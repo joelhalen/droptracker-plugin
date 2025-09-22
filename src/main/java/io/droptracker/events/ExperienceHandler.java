@@ -10,7 +10,6 @@ import net.runelite.api.WorldType;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
@@ -42,28 +41,19 @@ public class ExperienceHandler extends BaseEventHandler {
     private static final Set<String> COMBAT_COMPONENTS;
     
     // Configuration constants
-    private static final int XP_INTERVAL_MILLIONS = 10; // Track every 10M XP milestone
     private static final int LEVEL_MIN_VALUE = 1; // Minimum level to track
     private static final int LEVEL_INTERVAL = 1; // Track every level
     private static final boolean TRACK_VIRTUAL_LEVELS = true; // Track levels above 99
     private static final boolean TRACK_COMBAT_LEVEL = true; // Track combat level increases
-    private static final boolean TRACK_ALL_XP_CHANGES = true; // Track all XP changes
-    private static final int XP_UPDATE_INTERVAL_TICKS = 10; // Send XP updates every 10 ticks (6 seconds)
     
     private final BlockingQueue<String> levelledSkills = new ArrayBlockingQueue<>(SKILL_COUNT + 1);
-    private final Set<Skill> xpReached = EnumSet.noneOf(Skill.class);
     private final Map<String, Integer> currentLevels = new HashMap<>();
     private final Map<Skill, Integer> currentXp = new EnumMap<>(Skill.class);
-    private final Map<Skill, Integer> previousXp = new EnumMap<>(Skill.class); // Track previous XP for changes
-    private final Set<Skill> xpChanged = EnumSet.noneOf(Skill.class); // Track which skills had XP changes
     private final Map<String, Integer> previousLevels = new HashMap<>(); // Track previous levels for level increase calculation
     
     private int ticksWaited = 0;
     private int initTicks = 0;
-    private int xpUpdateTicks = 0;
     private Set<WorldType> specialWorldType = null;
-    private Skill lastSkillTrained = null;
-    private long lastXpGainTime = 0;
 
     @Inject
     private ClientThread clientThread;
@@ -86,7 +76,6 @@ public class ExperienceHandler extends BaseEventHandler {
             }
             currentLevels.put(skill.getName(), level);
             currentXp.put(skill, xp);
-            previousXp.put(skill, xp); // Initialize previous XP tracking
         }
         currentLevels.put(COMBAT_NAME, calculateCombatLevel());
         this.initTicks = 0;
@@ -99,16 +88,10 @@ public class ExperienceHandler extends BaseEventHandler {
         clientThread.invoke(() -> {
             this.initTicks = 0;
             this.ticksWaited = 0;
-            this.xpUpdateTicks = 0;
-            xpReached.clear();
-            xpChanged.clear();
             currentXp.clear();
-            previousXp.clear();
             currentLevels.clear();
             previousLevels.clear();
             this.specialWorldType = null;
-            this.lastSkillTrained = null;
-            this.lastXpGainTime = 0;
         });
     }
 
@@ -123,29 +106,16 @@ public class ExperienceHandler extends BaseEventHandler {
             return;
         }
 
-        // Handle level ups and XP milestones
-        if (!levelledSkills.isEmpty() || !xpReached.isEmpty()) {
+        // Handle level ups only
+        if (!levelledSkills.isEmpty()) {
             // We wait a couple extra ticks so we can ensure that we process all the levels of the previous tick
             if (++this.ticksWaited > 2) {
                 this.ticksWaited = 0;
                 // ensure notifier was not disabled during ticks waited
                 if (isEnabled()) {
-                    attemptNotify();
+                    notifyLevels();
                 } else {
                     levelledSkills.clear();
-                    xpReached.clear();
-                }
-            }
-        }
-        
-        // Handle regular XP updates
-        if (TRACK_ALL_XP_CHANGES && !xpChanged.isEmpty()) {
-            if (++this.xpUpdateTicks >= XP_UPDATE_INTERVAL_TICKS) {
-                this.xpUpdateTicks = 0;
-                if (isEnabled()) {
-                    sendXpUpdate();
-                } else {
-                    xpChanged.clear();
                 }
             }
         }
@@ -172,17 +142,6 @@ public class ExperienceHandler extends BaseEventHandler {
             return;
         }
 
-        // Track any XP change
-        if (TRACK_ALL_XP_CHANGES && xp != previousXp) {
-            xpChanged.add(skill);
-            lastSkillTrained = skill;
-            lastXpGainTime = System.currentTimeMillis();
-            this.xpUpdateTicks = 0; // Reset counter to delay sending
-            
-            // Update previous XP for tracking
-            this.previousXp.put(skill, previousXp);
-        }
-
         String skillName = skill.getName();
         int virtualLevel = level < MAX_REAL_LEVEL ? level : getLevel(xp); // avoid log(n) query when not needed
         Integer previousLevel = currentLevels.put(skillName, virtualLevel);
@@ -200,17 +159,6 @@ public class ExperienceHandler extends BaseEventHandler {
 
         // Check normal skill level up
         checkLevelUp(true, skillName, previousLevel, virtualLevel);
-
-        // Check if xp milestone reached
-        int xpInterval = XP_INTERVAL_MILLIONS * 1_000_000;
-        if (xpInterval > 0 && level >= MAX_REAL_LEVEL && xp > previousXp) {
-            int remainder = xp % xpInterval;
-            if (remainder == 0 || xp - remainder > previousXp || xp >= Experience.MAX_SKILL_XP) {
-                log.debug("Observed XP milestone for {} to {}", skill, xp);
-                xpReached.add(skill);
-                this.ticksWaited = 0;
-            }
-        }
 
         // Skip combat level checking if no level up has occurred
         if (virtualLevel <= previousLevel) {
@@ -254,32 +202,24 @@ public class ExperienceHandler extends BaseEventHandler {
         }
     }
 
-    private void attemptNotify() {
-        notifyLevels();
-        notifyXp();
-    }
 
     /**
-     * Creates a simplified field data map for experience submissions.
-     * Only includes essential data without verbose null fields.
+     * Creates a simplified field data map for level-up submissions.
      * 
-     * @param submissionType the type of submission (xp_update, level_up, xp_milestone)
      * @param skillsTrainedList list of skill names that were trained
      * @param skillsLeveledList list of skill names that leveled up
      * @param experienceData map containing experience data for relevant skills
      * @return a map containing only the essential fields
      */
-    private Map<String, Object> createStandardizedFieldData(String submissionType, 
-                                                           List<String> skillsTrainedList, 
-                                                           List<String> skillsLeveledList,
-                                                           Map<String, Object> experienceData) {
+    private Map<String, Object> createLevelUpFieldData(List<String> skillsTrainedList, 
+                                                      List<String> skillsLeveledList,
+                                                      Map<String, Object> experienceData) {
         Map<String, Object> fieldData = new HashMap<>();
         
         // General player stats
         fieldData.put("total_level", client.getTotalLevel());
         fieldData.put("total_xp", client.getOverallExperience());
         fieldData.put("combat_level", currentLevels.get(COMBAT_NAME));
-        fieldData.put("last_skill_trained", lastSkillTrained != null ? lastSkillTrained.getName() : "Unknown");
         
         // Skills data - flatten to simple fields
         fieldData.put("skills_trained", String.join(",", skillsTrainedList));
@@ -304,121 +244,6 @@ public class ExperienceHandler extends BaseEventHandler {
         return fieldData;
     }
 
-    private void sendXpUpdate() {
-        if (xpChanged.isEmpty()) return;
-        
-        // Calculate total XP gained and build skills message
-        List<String> skillsUpdated = new ArrayList<>();
-        int totalXpGained = 0;
-        
-        for (Skill skill : xpChanged) {
-            int currentSkillXp = currentXp.get(skill);
-            int previousSkillXp = previousXp.get(skill);
-            int xpGained = currentSkillXp - previousSkillXp;
-            
-            if (xpGained > 0) {
-                skillsUpdated.add(skill.getName());
-                totalXpGained += xpGained;
-            }
-            
-            // Update previous XP to current
-            previousXp.put(skill, currentSkillXp);
-        }
-        
-        // Create experience data for relevant skills
-        Map<String, Object> experienceData = new HashMap<>();
-        experienceData.put("total_xp_gained", totalXpGained);
-        
-        for (Skill skill : xpChanged) {
-            int currentSkillXp = currentXp.get(skill);
-            int previousSkillXp = previousXp.get(skill);
-            int xpGained = currentSkillXp - previousSkillXp;
-            
-            if (xpGained > 0) {
-                String skillName = skill.getName().toLowerCase();
-                Map<String, Object> skillData = new HashMap<>();
-                skillData.put("xp_gained", xpGained);
-                skillData.put("xp_total", currentSkillXp);
-                experienceData.put(skillName, skillData);
-            }
-        }
-        
-        // Create standardized field data
-        List<String> skillsLeveled = new ArrayList<>(); // No level ups for XP updates
-        Map<String, Object> fieldData = createStandardizedFieldData("xp_update", skillsUpdated, skillsLeveled, experienceData);
-        
-        // Create webhook body
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " gained experience");
-        CustomWebhookBody.Embed embed = createEmbed("Experience Update", "xp_update");
-        
-        addFields(embed, fieldData);
-        webhook.getEmbeds().add(embed);
-        
-        // Clear the changed skills set
-        xpChanged.clear();
-        
-        // Send the data
-        sendData(webhook, SubmissionType.EXPERIENCE);
-        return;
-    }
-
-    private void notifyXp() {
-        final int n = xpReached.size();
-        if (n == 0) return;
-
-        int interval = XP_INTERVAL_MILLIONS * 1_000_000;
-        List<String> milestones = new ArrayList<>(n);
-        
-        StringBuilder skillMessage = new StringBuilder();
-        boolean first = true;
-        
-        for (Skill skill : xpReached) {
-            int xp = currentXp.getOrDefault(skill, 0);
-            xp -= xp % interval;
-            milestones.add(skill.getName());
-            
-            if (!first) {
-                skillMessage.append(", ");
-            }
-            first = false;
-            
-            skillMessage.append(skill.getName())
-                       .append(" to ")
-                       .append(QuantityFormatter.formatNumber(xp))
-                       .append(" XP");
-        }
-        
-        // Create experience data for milestone skills
-        Map<String, Object> experienceData = new HashMap<>();
-        experienceData.put("xp_milestone_interval", interval);
-        
-        for (Skill skill : xpReached) {
-            int xp = currentXp.getOrDefault(skill, 0);
-            xp -= xp % interval; // Get the milestone XP amount
-            String skillName = skill.getName().toLowerCase();
-            Map<String, Object> skillData = new HashMap<>();
-            skillData.put("xp_milestone", xp);
-            skillData.put("xp_total", currentXp.get(skill));
-            experienceData.put(skillName, skillData);
-        }
-        
-        // Create standardized field data
-        List<String> skillsLeveled = new ArrayList<>(); // No level ups for XP milestones
-        Map<String, Object> fieldData = createStandardizedFieldData("xp_milestone", milestones, skillsLeveled, experienceData);
-        
-        // Create webhook body
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " reached an XP milestone!");
-        CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "xp_milestone");
-        
-        addFields(embed, fieldData);
-        webhook.getEmbeds().add(embed);
-        
-        // Clear the reached skills set
-        xpReached.clear();
-        
-        // Send the data
-        sendData(webhook, SubmissionType.EXPERIENCE_MILESTONE);
-    }
 
     private void notifyLevels() {
         /* For level ups specifically  */
@@ -515,8 +340,8 @@ public class ExperienceHandler extends BaseEventHandler {
             experienceData.put("combat", combatData);
         }
         
-        // Create standardized field data
-        Map<String, Object> fieldData = createStandardizedFieldData("level_up", skillsTrainedList, skillsLeveledList, experienceData);
+        // Create level-up field data
+        Map<String, Object> fieldData = createLevelUpFieldData(skillsTrainedList, skillsLeveledList, experienceData);
         
         // Update combat level if it leveled up
         if (combatLevelUp != null && combatLevelUp) {
