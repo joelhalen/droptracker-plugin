@@ -109,7 +109,7 @@ public class PbHandler extends BaseEventHandler {
         return config.pbEmbeds();
     }
     public void onTick() {
-        BossNotification data = this.bossData.getAndSet(null);
+        BossNotification data = this.bossData.get();
 
         if (data != null) {
             if (data.getBoss() != null) {
@@ -548,10 +548,16 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime("The Nightmare", time, bestTime, isPb);
                     storeBossTime("Phosani's Nightmare",time,bestTime,isPb);
                 } else if (message.contains("Tombs of Amascut")) {
-                    setTeamSize("Tombs of Amascut",message);
-                    storeBossTime("Tombs of Amascut: Entry Mode", time,bestTime,isPb);
-                    storeBossTime("Tombs of Amascut", time, bestTime, isPb);
-                    storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
+                    if (message.contains("Expert")) {
+                        setTeamSize("Tombs of Amascut: Expert Mode",message);
+                        storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
+                    } else if (message.contains("Entry")) { 
+                        setTeamSize("Tombs of Amascut: Entry Mode",message);
+                        storeBossTime("Tombs of Amascut: Entry Mode", time, bestTime, isPb);
+                    } else {
+                        setTeamSize("Tombs of Amascut",message);
+                        storeBossTime("Tombs of Amascut", time, bestTime, isPb);
+                    }
                 } else if(message.contains("Theatre of Blood")){
                     setTeamSize("Theatre of Blood",message);
                     storeBossTime("Theatre of Blood: Entry Mode", time,bestTime,isPb);
