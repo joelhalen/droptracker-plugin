@@ -20,6 +20,7 @@ import net.runelite.api.NPC;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
+import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -67,6 +68,7 @@ public class DropHandler extends BaseEventHandler {
 		if (!plugin.isTracking) {
 			return;
 		}
+		
 		processDropEvent(event.getNpc().getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
