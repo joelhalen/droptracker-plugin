@@ -10,6 +10,7 @@ import net.runelite.api.WorldType;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
@@ -41,12 +42,14 @@ public class ExperienceHandler extends BaseEventHandler {
     private static final Set<String> COMBAT_COMPONENTS;
     
     // Configuration constants
+    private static final int XP_INTERVAL_MILLIONS = 1; // Track every 1M XP milestone
     private static final int LEVEL_MIN_VALUE = 1; // Minimum level to track
     private static final int LEVEL_INTERVAL = 1; // Track every level
     private static final boolean TRACK_VIRTUAL_LEVELS = true; // Track levels above 99
     private static final boolean TRACK_COMBAT_LEVEL = true; // Track combat level increases
     
     private final BlockingQueue<String> levelledSkills = new ArrayBlockingQueue<>(SKILL_COUNT + 1);
+    private final Set<Skill> xpReached = EnumSet.noneOf(Skill.class);
     private final Map<String, Integer> currentLevels = new HashMap<>();
     private final Map<Skill, Integer> currentXp = new EnumMap<>(Skill.class);
     private final Map<String, Integer> previousLevels = new HashMap<>(); // Track previous levels for level increase calculation
@@ -88,6 +91,7 @@ public class ExperienceHandler extends BaseEventHandler {
         clientThread.invoke(() -> {
             this.initTicks = 0;
             this.ticksWaited = 0;
+            xpReached.clear();
             currentXp.clear();
             currentLevels.clear();
             previousLevels.clear();
@@ -106,16 +110,17 @@ public class ExperienceHandler extends BaseEventHandler {
             return;
         }
 
-        // Handle level ups only
-        if (!levelledSkills.isEmpty()) {
+        // Handle level ups and XP milestones
+        if (!levelledSkills.isEmpty() || !xpReached.isEmpty()) {
             // We wait a couple extra ticks so we can ensure that we process all the levels of the previous tick
             if (++this.ticksWaited > 2) {
                 this.ticksWaited = 0;
                 // ensure notifier was not disabled during ticks waited
                 if (isEnabled()) {
-                    notifyLevels();
+                    attemptNotify();
                 } else {
                     levelledSkills.clear();
+                    xpReached.clear();
                 }
             }
         }
@@ -160,6 +165,17 @@ public class ExperienceHandler extends BaseEventHandler {
         // Check normal skill level up
         checkLevelUp(true, skillName, previousLevel, virtualLevel);
 
+        // Check if xp milestone reached
+        int xpInterval = XP_INTERVAL_MILLIONS * 1_000_000;
+        if (xpInterval > 0 && level >= MAX_REAL_LEVEL && xp > previousXp) {
+            int remainder = xp % xpInterval;
+            if (remainder == 0 || xp - remainder > previousXp || xp >= Experience.MAX_SKILL_XP) {
+                log.debug("Observed XP milestone for {} to {}", skill, xp);
+                xpReached.add(skill);
+                this.ticksWaited = 0;
+            }
+        }
+
         // Skip combat level checking if no level up has occurred
         if (virtualLevel <= previousLevel) {
             // only return if we don't need to initialize combat level for the first time
@@ -202,6 +218,10 @@ public class ExperienceHandler extends BaseEventHandler {
         }
     }
 
+    private void attemptNotify() {
+        notifyLevels();
+        notifyXp();
+    }
 
     /**
      * Creates a simplified field data map for level-up submissions.
@@ -244,6 +264,63 @@ public class ExperienceHandler extends BaseEventHandler {
         return fieldData;
     }
 
+    private void notifyXp() {
+        final int n = xpReached.size();
+        if (n == 0) return;
+
+        int interval = XP_INTERVAL_MILLIONS * 1_000_000;
+        List<String> milestones = new ArrayList<>(n);
+        
+        StringBuilder skillMessage = new StringBuilder();
+        boolean first = true;
+        
+        for (Skill skill : xpReached) {
+            int xp = currentXp.getOrDefault(skill, 0);
+            xp -= xp % interval;
+            milestones.add(skill.getName());
+            
+            if (!first) {
+                skillMessage.append(", ");
+            }
+            first = false;
+            
+            skillMessage.append(skill.getName())
+                       .append(" to ")
+                       .append(QuantityFormatter.formatNumber(xp))
+                       .append(" XP");
+        }
+        
+        // Create experience data for milestone skills
+        Map<String, Object> experienceData = new HashMap<>();
+        experienceData.put("xp_milestone_interval", interval);
+        
+        for (Skill skill : xpReached) {
+            int xp = currentXp.getOrDefault(skill, 0);
+            xp -= xp % interval; // Get the milestone XP amount
+            String skillName = skill.getName().toLowerCase();
+            Map<String, Object> skillData = new HashMap<>();
+            skillData.put("xp_milestone", xp);
+            skillData.put("xp_total", currentXp.get(skill));
+            experienceData.put(skillName, skillData);
+        }
+        
+        // Create standardized field data
+        List<String> skillsLeveled = new ArrayList<>(); // No level ups for XP milestones
+        Map<String, Object> fieldData = createLevelUpFieldData(milestones, skillsLeveled, experienceData);
+        
+        // Create webhook body
+        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " reached an XP milestone!");
+        CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "xp_milestone");
+        
+        addFields(embed, fieldData);
+        webhook.getEmbeds().add(embed);
+        
+        // Clear the reached skills set
+        xpReached.clear();
+        
+        // Send the data
+        sendData(webhook, SubmissionType.EXPERIENCE_MILESTONE);
+    }
 
     private void notifyLevels() {
         /* For level ups specifically  */
