@@ -25,7 +25,7 @@ import static java.time.temporal.ChronoField.*;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 @Slf4j
-public class NewPbHandler extends BaseEventHandler {
+public class PbHandler extends BaseEventHandler {
 
     @VisibleForTesting
     static final int MAX_BAD_TICKS = 10;
