@@ -42,7 +42,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
-        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s+(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?)?(?<pb_indicator>\\(new personal best\\))?",
+        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*)?(?<pb_indicator>\\(new personal best\\))?",
         Pattern.CASE_INSENSITIVE
     );
     
