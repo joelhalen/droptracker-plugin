@@ -42,7 +42,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
-        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*)?(?<pb_indicator>\\(new personal best\\))?",
+        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*)?(?<pbIndicator>\\(new personal best\\))?",
         Pattern.CASE_INSENSITIVE
     );
     
@@ -172,7 +172,7 @@ public class PbHandler extends BaseEventHandler {
             Duration time = parseTime(matcher.group("duration"));
             String pbTimeStr = matcher.group("pbtime");
             Duration bestTime = pbTimeStr != null ? parseTime(pbTimeStr) : Duration.ZERO;
-            boolean isPersonalBest = matcher.group("pb_indicator") != null;
+            boolean isPersonalBest = matcher.group("pbIndicator") != null;
             
             String bossName = determineBossFromContext(message);
             String teamSize = extractTeamSize(message);
