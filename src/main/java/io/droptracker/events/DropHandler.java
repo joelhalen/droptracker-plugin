@@ -68,8 +68,9 @@ public class DropHandler extends BaseEventHandler {
 		if (!plugin.isTracking) {
 			return;
 		}
-		
-		processDropEvent(event.getNpc().getName(), "npc", LootRecordType.NPC, event.getItems());
+	
+		var comp = event.getComposition();
+		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
 	@Subscribe
