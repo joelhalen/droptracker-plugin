@@ -62,6 +62,15 @@ public class DropHandler extends BaseEventHandler {
 	}
 
 	@Subscribe
+	public void onServerNpcLoot(ServerNpcLoot event) {
+		chatMessageUtil.checkForMessage();
+		if (!plugin.isTracking) {
+			return;
+		}
+		processDropEvent(event.getNpc().getName(), "npc", LootRecordType.NPC, event.getItems());
+	}
+
+	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
