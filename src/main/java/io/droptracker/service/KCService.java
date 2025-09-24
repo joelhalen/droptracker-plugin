@@ -127,6 +127,10 @@ public class KCService {
             this.incrementKills(event.getType(), NpcUtilities.getStandardizedSource(event, plugin), event.getItems());
         }
     }
+    public void onServerNpcLoot(ServerNpcLoot event) {
+        /* Currently only called for Yama events */
+        this.incrementKills(LootRecordType.NPC, event.getComposition().getName(), event.getItems());
+    }
 
     public void onGameMessage(String message) {
         // update cached clue casket count

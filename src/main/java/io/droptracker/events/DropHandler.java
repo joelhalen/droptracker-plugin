@@ -62,6 +62,15 @@ public class DropHandler extends BaseEventHandler {
 	}
 
 	@Subscribe
+	public void onServerNpcLoot(ServerNpcLoot event) {
+		chatMessageUtil.checkForMessage();
+		if (!plugin.isTracking) {
+			return;
+		}
+		processDropEvent(event.getNpc().getName(), "npc", LootRecordType.NPC, event.getItems());
+	}
+
+	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
@@ -71,6 +80,7 @@ public class DropHandler extends BaseEventHandler {
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
+			log.debug("Special NPC loot received: {}", npcName);
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
@@ -84,6 +94,7 @@ public class DropHandler extends BaseEventHandler {
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
 			return;
 		}
+		log.debug("Other NPC loot received: {}", npcName);
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 		kcService.onLoot(lootReceived);
 		//sendChatReminder();
@@ -171,5 +182,7 @@ public class DropHandler extends BaseEventHandler {
 
 		return list;
 	}
+
+	
 
 }

@@ -304,8 +304,22 @@ public class DropTrackerPlugin extends Plugin {
 		questHandler.onWidgetLoaded(widget);
 	}
 
+	/** Add support for Yama's special drop mechanics */
+	@Subscribe(priority = 1)
+    public void onServerNpcLoot(ServerNpcLoot event) {
+        if (event.getComposition().getId() != NpcID.YAMA) {
+            return;
+        }
+        kcService.onServerNpcLoot(event);
+        dropHandler.onServerNpcLoot(event);
+    }
+
 	@Subscribe(priority=1)
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		if (npcLootReceived.getNpc().getId() == NpcID.YAMA) {
+			/* Handled by onServerNpcLoot */
+            return;
+        }
 		dropHandler.onNpcLootReceived(npcLootReceived);
 		kcService.onNpcKill(npcLootReceived);
 	}
