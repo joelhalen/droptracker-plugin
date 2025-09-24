@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.TimeUnit;
 
 import static java.time.temporal.ChronoField.*;
 import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
@@ -31,142 +30,309 @@ public class PbHandler extends BaseEventHandler {
 
     @VisibleForTesting
     static final int MAX_BAD_TICKS = 10;
-
-    private final AtomicInteger badTicks = new AtomicInteger();
-    private final AtomicReference<BossNotification> bossData = new AtomicReference<>();
-
-    private static Pair<String, Integer> mostRecentNpcData = null;
-
+    private static final long DUPLICATE_THRESHOLD = 5000;
     private static final long MESSAGE_LOOT_WINDOW = 15000; // 15 seconds
-    private final Map<String, BossNotification> pendingNotifications = new HashMap<>();
 
-
-    private static final Pattern[] TIME_PATTERNS = {
-            // Team patterns
-            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            // ToA patterns
-            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.*\\d*)\\.*"),
-            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            // ToB pattern
-            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            // Gauntlet pattern - fixed spacing and case
-            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            //Colosseum Pattern
-            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            //Delve Pattern
-            Pattern.compile("Delve level: .+? duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            // Generic boss pattern
-            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*)\\. Personal best: (\\d*:*\\d+:\\d+\\.?\\d*)\\.*"),
-    };
-    private static final Pattern[] PB_PATTERNS = {
-            // Team patterns
-            Pattern.compile("Team size: .+? Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            Pattern.compile("Team size: .+? Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            // ToA patterns
-            Pattern.compile("Tombs of Amascut: Expert Mode total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            Pattern.compile("Tombs of Amascut total completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            // ToB pattern
-            Pattern.compile("Theatre of Blood completion time: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            // Gauntlet pattern - fixed spacing and case
-            Pattern.compile("Challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            Pattern.compile("Corrupted challenge duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            // Colosseum Pattern
-            Pattern.compile("Colosseum duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            //Delve Pattern
-            Pattern.compile("Delve level: (\\S+) duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            // Generic boss pattern
-            Pattern.compile("Duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-            Pattern.compile("Fight duration: (\\d*:*\\d+:\\d+\\.?\\d*) \\(new personal best\\)\\.*"),
-    };
-    private final Map<String, PbHandler.TimeData> pendingTimeData = new HashMap<>();
+    /* Four regex filters to rule them all :) */
+    private static final Pattern BOSS_COUNT_PATTERN = Pattern.compile(
+        "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)", 
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
+        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is: (?<value>[\\d,]+)",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
+        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s+(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?)?(?<pb_indicator>\\(new personal best\\))?",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
+        "Team size: (?<size>\\d+) players?",
+        Pattern.CASE_INSENSITIVE
+    );
+    
+    // State management
+    private final AtomicInteger badTicks = new AtomicInteger();
+    private final AtomicReference<KillData> killData = new AtomicReference<>();
+    
+    // Duplicate prevention
     private String lastProcessedKill = null;
     private long lastProcessedTime = 0;
-    private static final long DUPLICATE_THRESHOLD = 5000;
-    private String teamSize = null;
+    
+    private static class KillData {
+        final String boss;
+        final Integer count;
+        final Duration time;
+        final Duration bestTime;
+        final boolean isPersonalBest;
+        final String teamSize;
+        final String gameMessage;
 
-    public void onGameMessage(String message) {
-        // call isEnabled instead of checking config again
-        if (!this.isEnabled()) return;
-        checkPB(message);
-        checkTime(message);
-        parseBossKill(message).ifPresent(this::updateData);
+        KillData(String boss, Integer count, Duration time, Duration bestTime, 
+                boolean isPersonalBest, String teamSize, String gameMessage) {
+            this.boss = boss;
+            this.count = count;
+            this.time = time;
+            this.bestTime = bestTime;
+            this.isPersonalBest = isPersonalBest;
+            this.teamSize = teamSize;
+            this.gameMessage = gameMessage;
+        }
+
+        KillData withTime(Duration time, Duration bestTime, boolean isPersonalBest) {
+            return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+        }
+
+        KillData withBossCount(String boss, Integer count) {
+            return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+        }
+
+        KillData withTeamSize(String teamSize) {
+            return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+        }
+
+        boolean isValid() {
+            return boss != null && count != null && time != null && !time.isZero();
+        }
     }
-
-
-
-    public void onFriendsChatNotification(String message) {
-        /* Chambers of Xeric completions are sent in the Friends chat channel */
-        if (message.startsWith("Congratulations - your raid is complete!"))
-            this.onGameMessage(message);
-    }
-
 
     @Override
     public boolean isEnabled() {
         return config.pbEmbeds();
     }
-    public void onTick() {
-        BossNotification data = this.bossData.get();
 
-        if (data != null) {
-            if (data.getBoss() != null) {
-                if (this.isEnabled()) {
-                    if(!data.getTime().isZero()){
-                        processKill(data);
-                    }
-                    return;
-                }
-            } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
-                reset();
-            }
-        }
-        else if (mostRecentNpcData != null) {
-            if (bossData.get() != null) {
-                processKill(bossData.get());
-            }
-            plugin.ticksSinceNpcDataUpdate += 1;
-        } else {
-            if (plugin.ticksSinceNpcDataUpdate > 1)  {
-                plugin.ticksSinceNpcDataUpdate = 0;
-            }
-        }
-        if (plugin.ticksSinceNpcDataUpdate >= 5 && mostRecentNpcData != null) {
-            mostRecentNpcData = null;
+    public void onGameMessage(String message) {
+        if (!isEnabled()) return;
+        
+        // Parse and update data in a clean pipeline
+        parseMessage(message).ifPresent(this::updateKillData);
+    }
+
+    public void onFriendsChatNotification(String message) {
+        // Chambers of Xeric completions are sent in the Friends chat channel
+        if (message.startsWith("Congratulations - your raid is complete!")) {
+            onGameMessage(message);
         }
     }
 
-
-
-    @SuppressWarnings("unlikely-arg-type")
-    private void processKill(BossNotification data) {
+    public void onTick() {
+        KillData data = killData.get();
+        
         if (data == null) {
-            log.debug("Attempted to process null BossNotification");
-            return;
-        }
-        if (data.getBoss() == null || data.getCount() == null) {
-            log.debug("BossNotification missing required data - boss: {}, count: {}", data.getBoss(), data.getCount());
+            if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
+                reset();
+            }
             return;
         }
 
-        String killIdentifier = data.getBoss() + "-" + data.getCount();
+        if (data.isValid() && isEnabled()) {
+            processKill(data);
+            reset();
+        } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
+            reset();
+        }
+    }
+
+    /**
+     * Parses game messages to extract kill data.
+     * 
+     */
+    private Optional<KillData> parseMessage(String message) {
+        // Skip preparation messages
+        if (message.startsWith("Preparation")) {
+            return Optional.empty();
+        }
+
+        // Try to parse boss count first
+        Optional<Pair<String, Integer>> bossCount = parseBossCount(message);
+        if (bossCount.isPresent()) {
+            Pair<String, Integer> pair = bossCount.get();
+            return Optional.of(new KillData(pair.getLeft(), pair.getRight(), 
+                Duration.ZERO, Duration.ZERO, false, null, message));
+        }
+
+        // Try to parse time data
+        return parseTimeData(message);
+    }
+
+    /**
+     * Parses boss count information from messages.
+     */
+    private Optional<Pair<String, Integer>> parseBossCount(String message) {
+        // Primary pattern
+        Matcher primary = BOSS_COUNT_PATTERN.matcher(message);
+        if (primary.find()) {
+            String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
+            if (boss != null) {
+                try {
+                    int count = Integer.parseInt(primary.group("value").replace(",", ""));
+                    return Optional.of(Pair.of(boss, count));
+                } catch (NumberFormatException e) {
+                    log.debug("Failed to parse kill count: {}", primary.group("value"));
+                }
+            }
+        }
+
+        // Secondary pattern
+        Matcher secondary = SECONDARY_BOSS_PATTERN.matcher(message);
+        if (secondary.find()) {
+            String boss = parseSecondaryBoss(secondary.group("key"));
+            if (boss != null) {
+                try {
+                    int count = Integer.parseInt(secondary.group("value").replace(",", ""));
+                    return Optional.of(Pair.of(boss, count));
+                } catch (NumberFormatException e) {
+                    log.debug("Failed to parse kill count: {}", secondary.group("value"));
+                }
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    /**
+     * Parses time data from messages.
+     */
+    private Optional<KillData> parseTimeData(String message) {
+        Matcher matcher = TIME_WITH_PB_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return Optional.empty();
+        }
+
+        try {
+            Duration time = parseTime(matcher.group("duration"));
+            String pbTimeStr = matcher.group("pbtime");
+            Duration bestTime = pbTimeStr != null ? parseTime(pbTimeStr) : Duration.ZERO;
+            boolean isPersonalBest = matcher.group("pb_indicator") != null;
+            
+            // Determine boss name from context
+            String bossName = determineBossFromContext(message);
+            String teamSize = extractTeamSize(message);
+            
+            return Optional.of(new KillData(bossName, null, time, bestTime, 
+                isPersonalBest, teamSize, message));
+                
+        } catch (Exception e) {
+            log.error("Error parsing time data: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Determines boss name from message context when not explicitly provided.
+     */
+    private String determineBossFromContext(String message) {
+        // Check for specific raid patterns
+        if (message.contains("Tombs of Amascut")) {
+            return message.contains("Expert Mode") ? "Tombs of Amascut: Expert Mode" : "Tombs of Amascut";
+        }
+        if (message.contains("Theatre of Blood")) {
+            return "Theatre of Blood";
+        }
+        if (message.contains("Chambers of Xeric")) {
+            return "Chambers of Xeric";
+        }
+        if (message.contains("Corrupted challenge")) {
+            return "Corrupted Hunllef";
+        }
+        if (message.contains("Challenge duration")) {
+            return "Crystalline Hunllef";
+        }
+        if (message.contains("Colosseum duration")) {
+            return "Sol Heredit";
+        }
+        if (message.contains("Delve level")) {
+            return extractDelveBoss(message);
+        }
+        
+        // Default fallback
+        return "Grotesque Guardians";
+    }
+
+    /**
+     * Extracts delve boss information with level.
+     */
+    private String extractDelveBoss(String message) {
+        Pattern delvePattern = Pattern.compile("Delve level: (\\S+)");
+        Matcher matcher = delvePattern.matcher(message);
+        if (matcher.find()) {
+            return "Doom of Mokhaiotl (Level:" + matcher.group(1).trim() + ")";
+        }
+        return "Doom of Mokhaiotl";
+    }
+
+    /**
+     * Extracts team size from message or determines from varbits.
+     */
+    private String extractTeamSize(String message) {
+        // Check message for explicit team size
+        Matcher teamMatcher = TEAM_SIZE_PATTERN.matcher(message);
+        if (teamMatcher.find()) {
+            return teamMatcher.group("size");
+        }
+
+        // Check for raid-specific team size patterns
+        if (message.contains("Tombs of Amascut")) {
+            return getToaTeamSize();
+        }
+        if (message.contains("Theatre of Blood")) {
+            return getTobTeamSize();
+        }
+        if (message.contains("Royal Titans")) {
+            return getRoyalTitansTeamSize();
+        }
+
+        // Default to solo
+        return "Solo";
+    }
+
+    /**
+     * Updates kill data with new information, merging intelligently.
+     */
+    private void updateKillData(KillData newData) {
+        killData.getAndUpdate(old -> {
+            if (old == null) {
+                return newData;
+            }
+
+            // Merge data intelligently
+            String boss = defaultIfNull(newData.boss, old.boss);
+            Integer count = defaultIfNull(newData.count, old.count);
+            Duration time = newData.time != null && !newData.time.isZero() ? newData.time : old.time;
+            Duration bestTime = newData.bestTime != null && !newData.bestTime.isZero() ? newData.bestTime : old.bestTime;
+            boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
+            String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
+            String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
+
+            return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+        });
+    }
+
+    /**
+     * Processes a complete kill notification.
+     */
+    private void processKill(KillData data) {
+        if (data == null || !data.isValid()) {
+            log.debug("Invalid kill data, skipping processing");
+            return;
+        }
+
+        // Check for duplicates
+        String killIdentifier = data.boss + "-" + data.count;
         long currentTime = System.currentTimeMillis();
-
-        if(killIdentifier.equals(lastProcessedKill) && (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD){
-            if (!data.getBoss().contains("1-8")) {
+        
+        if (killIdentifier.equals(lastProcessedKill) && 
+            (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD) {
+            if (!data.boss.contains("1-8")) {
+                log.debug("Duplicate kill detected, skipping: {}", killIdentifier);
                 return;
             }
         }
         
         lastProcessedKill = killIdentifier;
         lastProcessedTime = currentTime;
-        boolean isPb = data.isPersonalBest() == Boolean.TRUE;
-        String player = getPlayerName();
-        final String[] timeRef = {null};
-        final String[] bestTimeRef = {null};
-        
+
+        // Process on client thread
         if (clientThread == null) {
             log.error("ClientThread is null, cannot process kill");
             return;
@@ -174,140 +340,60 @@ public class PbHandler extends BaseEventHandler {
 
         clientThread.invokeLater(() -> {
             try {
-                timeRef[0] = formatTime(data.getTime(), isPreciseTiming(client));
-                bestTimeRef[0] = formatTime(data.getBestTime(), isPreciseTiming(client));
-                
-                String bossName = data.getBoss();
-                if (teamSize == null || teamSize.trim().isEmpty()) {
-                    teamSize = "Solo";
-                }
-                if (mostRecentNpcData != null && mostRecentNpcData.getLeft() != null) {
-                    bossName = mostRecentNpcData.getLeft();
-                } else if (!pendingNotifications.isEmpty()) {
-                    // Get the first (or any) pending notification's boss name
-                    BossNotification firstNotification = pendingNotifications.values().iterator().next();
-                    if (firstNotification != null && firstNotification.getBoss() != null) {
-                        bossName = firstNotification.getBoss();
-                    }
-                }
-                if (bossName == null || bossName.trim().isEmpty()){
-                    log.debug("No valid boss name found, skipping kill processing");
-                    return;
-                }
-                
-                Integer killCount = getKillCount(bossName);
-                CustomWebhookBody killWebhook = createWebhookBody(player + " has killed a boss:");
-                CustomWebhookBody.Embed killEmbed = createEmbed(player + " has killed a boss:", "npc_kill");
-                
-                Map<String, Object> fieldData = new HashMap<>();
-                fieldData.put("boss_name", bossName);
-                fieldData.put("kill_time", timeRef[0] != null ? timeRef[0] : "N/A");
-                fieldData.put("best_time", bestTimeRef[0] != null ? bestTimeRef[0] : "N/A");
-                fieldData.put("is_pb", isPb);
-                fieldData.put("team_size", teamSize);
-                fieldData.put("killcount", killCount);
-                
-                addFields(killEmbed, fieldData);
-                
-                if (killWebhook != null && killEmbed != null) {
-                    killWebhook.getEmbeds().add(killEmbed);
-                    sendData(killWebhook, SubmissionType.KILL_TIME);
-                } else {
-                    log.warn("Failed to create webhook or embed for kill processing");
-                }
-                
-                // Clean up
-                mostRecentNpcData = null;
-                pendingNotifications.clear();
-                bossData.set(null);
-                teamSize = null;
+                sendKillNotification(data);
             } catch (Exception e) {
                 log.error("Error processing kill notification: {}", e.getMessage(), e);
             }
         });
     }
 
-    private void updateData(BossNotification updated) {
-        bossData.getAndUpdate(old -> {
-            if (old == null) {
-                // Store pending notification for later processing
-                pendingNotifications.put(updated.getBoss(), updated);
-
-                // Schedule cleanup task
-                executor.schedule(() -> {
-                    BossNotification pending = pendingNotifications.remove(updated.getBoss());
-                    if (pending != null) {
-                        // If notification wasn't processed by loot event, process it now
-                        processKill(pending);
-                    }
-                }, MESSAGE_LOOT_WINDOW, TimeUnit.MILLISECONDS);
-
-                return updated;
-            } else {
-
-                return new BossNotification(
-                        defaultIfNull(updated.getBoss(), old.getBoss()),
-                        defaultIfNull(updated.getCount(), old.getCount()),
-                        defaultIfNull(updated.getGameMessage(), old.getGameMessage()),
-                        defaultIfNull(updated.getTime(), old.getTime()),
-                        defaultIfNull(updated.getBestTime(), old.getBestTime()),
-                        defaultIfNull(updated.isPersonalBest(), old.isPersonalBest())
-                );
-            }
-        });
+    /**
+     * Sends the kill notification webhook.
+     */
+    private void sendKillNotification(KillData data) {
+        String player = getPlayerName();
+        String formattedTime = formatTime(data.time, isPreciseTiming(client));
+        String formattedBestTime = formatTime(data.bestTime, isPreciseTiming(client));
+        
+        // Create webhook
+        CustomWebhookBody webhook = createWebhookBody(player + " has killed a boss:");
+        CustomWebhookBody.Embed embed = createEmbed(player + " has killed a boss:", "npc_kill");
+        
+        // Add fields
+        Map<String, Object> fieldData = new HashMap<>();
+        fieldData.put("boss_name", data.boss);
+        fieldData.put("kill_time", formattedTime != null ? formattedTime : "N/A");
+        fieldData.put("best_time", formattedBestTime != null ? formattedBestTime : "N/A");
+        fieldData.put("is_pb", data.isPersonalBest);
+        fieldData.put("team_size", data.teamSize != null ? data.teamSize : "Solo");
+        fieldData.put("killcount", data.count);
+        
+        addFields(embed, fieldData);
+        webhook.getEmbeds().add(embed);
+        
+        // Send data
+        sendData(webhook, SubmissionType.KILL_TIME);
     }
+
+    /**
+     * Resets handler state.
+     */
     public void reset() {
-        bossData.set(null);
+        killData.set(null);
         badTicks.set(0);
-        teamSize = null;
     }
 
+    // ========== UTILITY METHODS ==========
 
-    private Optional<BossNotification> parseBossKill(String message) {
-        Optional<Pair<String, Integer>> boss = parseBoss(message);
-        return boss.flatMap(pair -> {
-            String bossName = pair.getLeft();
-            // retrieve the stored timeData for this bossName, if any is stored...
-            // for cases where a time message may appear before the boss name/kc message appears
-            PbHandler.TimeData timeData = pendingTimeData.get(bossName);
-
-            //Search for stored TimeData
-            if(timeData != null){
-
-
-                BossNotification newBossData  = new BossNotification(
-                        bossName,
-                        pair.getRight(),
-                        message,
-                        timeData.time,
-                        timeData.bestTime,
-                        timeData.isPb
-                );
-                bossData.set(newBossData);
-                return Optional.of(newBossData);
-            } else {
-                BossNotification currentData = bossData.get();
-                if (currentData != null) {
-                    BossNotification newBossData = new BossNotification(
-                            bossName,
-                            pair.getRight(),
-                            "",
-                            currentData.getTime(),
-                            currentData.getBestTime(),
-                            currentData.isPersonalBest()
-                    );
-                    bossData.set(newBossData);
-                    return Optional.of(newBossData);
-                }
-                return Optional.empty();
-            }
-        });
-    }
-
+    /**
+     * Parses time string into Duration.
+     */
     private Duration parseTime(String timeStr) {
+        if (timeStr == null || timeStr.trim().isEmpty()) {
+            return Duration.ZERO;
+        }
 
         try {
-            // Split into parts based on : and .
             String timePart = timeStr.contains(".") ? timeStr.substring(0, timeStr.indexOf('.')) : timeStr;
             String[] timeParts = timePart.split(":");
 
@@ -316,7 +402,6 @@ public class PbHandler extends BaseEventHandler {
             long seconds = 0;
             long millis = 0;
 
-            // Parse hours:minutes:seconds or minutes:seconds
             if (timeParts.length == 3) {  // h:m:s
                 hours = Long.parseLong(timeParts[0]);
                 minutes = Long.parseLong(timeParts[1]);
@@ -329,60 +414,53 @@ public class PbHandler extends BaseEventHandler {
             // Parse milliseconds if present
             if (timeStr.contains(".")) {
                 String millisStr = timeStr.substring(timeStr.indexOf('.') + 1);
-                // Pad with zeros if needed
                 while (millisStr.length() < 3) {
                     millisStr += "0";
                 }
                 millis = Long.parseLong(millisStr);
             }
 
-            Duration duration = Duration.ofHours(hours)
+            return Duration.ofHours(hours)
                     .plusMinutes(minutes)
                     .plusSeconds(seconds)
                     .plusMillis(millis);
-            return duration;
 
         } catch (Exception e) {
             log.error("Error parsing time: {}", e.getMessage());
-            return null;
+            return Duration.ZERO;
         }
     }
 
-    public Optional<Pair<String, Integer>> parseBoss(String message) {
-        Matcher primary = NpcUtilities.PRIMARY_REGEX.matcher(message);
-        Matcher secondary = NpcUtilities.SECONDARY_REGEX.matcher(message);
+    /**
+     * Formats duration for display.
+     */
+    @NotNull
+    public String formatTime(@Nullable Duration duration, boolean precise) {
+        Temporal time = ObjectUtils.defaultIfNull(duration, Duration.ZERO).addTo(LocalTime.of(0, 0));
+        StringBuilder sb = new StringBuilder();
 
+        int h = time.get(HOUR_OF_DAY);
+        if (h > 0)
+            sb.append(String.format("%02d", h)).append(':');
 
-        if (primary.find()) {
-            String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
-            String count = primary.group("value");
-            if (boss != null) {
-                try {
-                    int killCount = Integer.parseInt(count.replace(",", ""));
-                    mostRecentNpcData = Pair.of(boss, killCount);
-                    plugin.ticksSinceNpcDataUpdate = 0;
-                    return Optional.of(mostRecentNpcData);
-                } catch (NumberFormatException e) {
-                }
-            }
-        } else
-        if (secondary.find()){
-            String key = parseSecondary(secondary.group("key"));
-            String value = secondary.group("value");
-            if (key != null) {
-                try {
-                    int killCount = Integer.parseInt(value.replace(",", ""));
-                    mostRecentNpcData = Pair.of(key, killCount);
-                    plugin.ticksSinceNpcDataUpdate = 0;
-                    return Optional.of(mostRecentNpcData);
-                } catch (NumberFormatException e) {
-                }
-            }
-        }
-        return Optional.empty();
+        sb.append(String.format("%02d", time.get(MINUTE_OF_HOUR))).append(':');
+        sb.append(String.format("%02d", time.get(SECOND_OF_MINUTE)));
+
+        if (precise)
+            sb.append('.').append(String.format("%02d", time.get(MILLI_OF_SECOND) / 10));
+
+        return sb.toString();
     }
 
+    /**
+     * Checks if precise timing is enabled.
+     */
+    public boolean isPreciseTiming(@NotNull Client client) {
+        @Varbit int ENABLE_PRECISE_TIMING = 11866;
+        return client.getVarbitValue(ENABLE_PRECISE_TIMING) > 0;
+    }
 
+    // ========== BOSS PARSING METHODS ==========
 
     @Nullable
     private static String parsePrimaryBoss(String boss, String type) {
@@ -402,8 +480,6 @@ public class PbHandler extends BaseEventHandler {
                 return null;
 
             case "kill":
-                return boss;
-
             case "success":
                 return boss;
 
@@ -412,7 +488,7 @@ public class PbHandler extends BaseEventHandler {
         }
     }
 
-    private static String parseSecondary(String boss) {
+    private static String parseSecondaryBoss(String boss) {
         if (boss == null || "Wintertodt".equalsIgnoreCase(boss))
             return boss;
 
@@ -548,16 +624,10 @@ public class PbHandler extends BaseEventHandler {
                     storeBossTime("The Nightmare", time, bestTime, isPb);
                     storeBossTime("Phosani's Nightmare",time,bestTime,isPb);
                 } else if (message.contains("Tombs of Amascut")) {
-                    if (message.contains("Expert")) {
-                        setTeamSize("Tombs of Amascut: Expert Mode",message);
-                        storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
-                    } else if (message.contains("Entry")) { 
-                        setTeamSize("Tombs of Amascut: Entry Mode",message);
-                        storeBossTime("Tombs of Amascut: Entry Mode", time, bestTime, isPb);
-                    } else {
-                        setTeamSize("Tombs of Amascut",message);
-                        storeBossTime("Tombs of Amascut", time, bestTime, isPb);
-                    }
+                    setTeamSize("Tombs of Amascut",message);
+                    storeBossTime("Tombs of Amascut: Entry Mode", time,bestTime,isPb);
+                    storeBossTime("Tombs of Amascut", time, bestTime, isPb);
+                    storeBossTime("Tombs of Amascut: Expert Mode", time, bestTime, isPb);
                 } else if(message.contains("Theatre of Blood")){
                     setTeamSize("Theatre of Blood",message);
                     storeBossTime("Theatre of Blood: Entry Mode", time,bestTime,isPb);
@@ -644,88 +714,31 @@ public class PbHandler extends BaseEventHandler {
         We can obtain the group size for TOB/TOA using the player orb varbits
     */
     @SuppressWarnings("deprecation")
-    private String tobTeamSize() {
-
+    private String getTobTeamSize() {
         Integer teamSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB4), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
-        if(teamSize == 1){
-            return "Solo";
-        }
-        return teamSize.toString();
+        return teamSize == 1 ? "Solo" : teamSize.toString();
     }
-    
 
     @SuppressWarnings("deprecation")
-    private String toaTeamSize() {
-        Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1 +
+    private String getToaTeamSize() {
+        Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_2_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_3_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_4_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1));
-        if(teamSize==1){
-            return "Solo";
-        }
-        return teamSize.toString();
-    }
-    private void setTeamSize (String bossName, String message){
-
-        if(bossName.contains("Theatre of Blood")){
-            teamSize = tobTeamSize();
-        }else if (bossName.contains("Tombs of Amascut")){
-            teamSize = toaTeamSize();
-        }else if (message.contains("Team size")){
-            Pattern teamSizePattern = Pattern.compile("Team size: (\\S+) players.*");
-            Matcher teamMatch = teamSizePattern.matcher(message);
-            if(teamMatch.find())
-                teamSize = teamMatch.group(1);
-
-        }else if(bossName.contains("Royal Titans")){
-            @SuppressWarnings("deprecation")
-            int size = client.getPlayers().size();
-            if(size == 1){
-                teamSize = "Solo";
-            }else{
-                teamSize = String.valueOf(size);
-            }
-
-        } else if(message.contains("ersonal best")){
-            teamSize = "Solo";
-        }
-
+                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
+        return teamSize == 1 ? "Solo" : teamSize.toString();
     }
 
-    /// Handling Boss times or PB times that do not contain an npc or boss name
-    private void noKcPB(String message, Duration time, Duration bestTime, boolean isPb) {
-        PbHandler.TimeData timeData = new PbHandler.TimeData(time, bestTime, isPb);
-        BossNotification withTime = null;
-
-        if (message.contains("Delve")) {
-            String bossName = "Doom of Mokhaiotl";
-            pendingTimeData.put(bossName, timeData);
-            Pattern levelPattern = Pattern.compile("Delve level: (\\S+) duration.*");
-            Matcher levelMatch = levelPattern.matcher(message);
-            if (levelMatch.find())
-                bossName = "Doom of Mokhaiotl (Level:" + levelMatch.group(1).strip() + ")";
-            withTime = new BossNotification(
-                    bossName,
-                    0,
-                    message,
-                    time,
-                    bestTime,
-                    isPb
-            );
-            bossData.set(withTime);
-            if(!time.isZero()){
-                processKill(withTime);
-            }
-        }
+    @SuppressWarnings("deprecation")
+    private String getRoyalTitansTeamSize() {
+        int size = client.getPlayers().size();
+        return size == 1 ? "Solo" : String.valueOf(size);
     }
-
-
 }
