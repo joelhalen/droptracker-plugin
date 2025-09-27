@@ -356,6 +356,17 @@ public interface DropTrackerConfig extends Config {
 		return true;
 	}
 
+    @ConfigItem(
+        name = "[ADVANCED] Custom API Endpoint",
+        keyName = "customApiEndpoint",
+        description = "<html><b>Warning!</b>: Changing this option will likely cause<br>your submissions to no longer be processed at all!<br>This is intended as a debugging option.</html>",
+        position = 2,
+        section = sidePanelSection
+    )
+    default String customApiEndpoint() {
+        return "";
+    }
+
     /* Hidden config items for storing internal info */
     @ConfigItem(
         name = "lastVersionNotified",

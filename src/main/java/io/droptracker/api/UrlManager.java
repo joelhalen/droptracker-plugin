@@ -87,7 +87,7 @@ public class UrlManager {
 
     /* Determine whether the given URL is a properly-formatted Discord webhook URL or not */
     public boolean isValidDiscordWebhookUrl(HttpUrl url) {
-		if (config.useApi() && url.host().equals("api.droptracker.io")) {
+		if (config.useApi() && (url.host().equals("api.droptracker.io") || !config.customApiEndpoint().equals(""))) {
 			return true;
 		}
 		// Ensure that any webhook URLs returned from the GitHub page are actual Discord webhooks

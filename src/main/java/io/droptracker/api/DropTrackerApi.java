@@ -296,7 +296,14 @@ public class DropTrackerApi {
     }
 
     public String getApiUrl() {
-        return config.useApi() ? "https://api.droptracker.io" : "";
+        if (config.customApiEndpoint().equals("")) {
+            return config.useApi() ? "https://api.droptracker.io" : "";
+        } else {
+            if (!config.customApiEndpoint().startsWith("http")) {
+                return "http://" + config.customApiEndpoint();
+            }
+            return config.customApiEndpoint();
+        }
     }
 
 
@@ -368,7 +375,7 @@ public class DropTrackerApi {
     public void getLatestWelcomeString(java.util.function.Consumer<String> callback) {
         String endpoint;
         if (config.useApi()) {
-            endpoint = "https://api.droptracker.io/latest_welcome";
+            endpoint = getApiUrl() + "/latest_welcome";
         } else {
             endpoint = "https://droptracker-io.github.io/content/welcome.txt";
         }
@@ -406,7 +413,7 @@ public class DropTrackerApi {
     public void getLatestUpdateString(java.util.function.Consumer<String> callback) {
         String endpoint;
         if (config.useApi()) {
-            endpoint = "https://api.droptracker.io/latest_news";
+            endpoint = getApiUrl() + "/latest_news";
         } else {
             endpoint = "https://droptracker-io.github.io/content/news.txt";
         }
