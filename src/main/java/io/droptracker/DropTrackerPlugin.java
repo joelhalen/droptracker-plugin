@@ -55,6 +55,7 @@ import io.droptracker.service.KCService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.ChatMessage;
@@ -125,10 +126,13 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ScheduledExecutorService executor;
 
+	@Inject
+	private DebugLogger debugLogger;
+
 	@Nullable
 	public Drop lastDrop = null;
 
-	private boolean statsLoaded = false;
+	private boolean statsLoaded = false; 
 
 	public Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
@@ -231,7 +235,10 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		// Disable updates while panel is not present
 		submissionManager.setUpdatesEnabled(false);
-		this.resetAll();
+		if (debugLogger != null) {
+			debugLogger.close();
+		}
+		this.resetAll();	
 	}
 
 	@Provides

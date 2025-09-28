@@ -3,6 +3,7 @@ package io.droptracker.events;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.util.NpcUtilities;
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
@@ -88,10 +89,12 @@ public class PbHandler extends BaseEventHandler {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
+        DebugLogger.log("[PbHandler.java:92] onGameMessage: " + message);
         parseMessage(message).ifPresent(this::updateKillData);
     }
 
     public void onFriendsChatNotification(String message) {
+        DebugLogger.log("[PbHandler.java:97] onFriendsChatNotification: " + message);
         if (message.startsWith("Congratulations - your raid is complete!")) {
             onGameMessage(message);
         }
@@ -99,7 +102,7 @@ public class PbHandler extends BaseEventHandler {
 
     public void onTick() {
         KillData data = killData.get();
-        
+        DebugLogger.log("[PbHandler.java:105] onTick: " + data);
         if (data == null) {
             if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
@@ -241,6 +244,7 @@ public class PbHandler extends BaseEventHandler {
     }
 
     private void updateKillData(KillData newData) {
+        DebugLogger.log("[PbHandler.java:247] updateKillData called with newData: " + newData);
         killData.getAndUpdate(old -> {
             if (old == null) {
                 return newData;
@@ -253,14 +257,17 @@ public class PbHandler extends BaseEventHandler {
             boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
-
+            DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage));
             return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
         });
+        DebugLogger.log("[PbHandler.java:263] updateKillData completed");
     }
 
     // === KILL PROCESSING ===
     private void processKill(KillData data) {
+        DebugLogger.log("[PbHandler.java:109] processKill: " + data);
         if (data == null || !data.isValid()) {
+            DebugLogger.log("[PbHandler.java:268] Invalid kill data, skipping processing");
             log.debug("Invalid kill data, skipping processing");
             return;
         }
@@ -272,6 +279,8 @@ public class PbHandler extends BaseEventHandler {
         if (killIdentifier.equals(lastProcessedKill) && 
             (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD) {
             if (!data.boss.contains("1-8")) {
+                
+                DebugLogger.log("[PbHandler.java:281] Duplicate kill detected, skipping: " + killIdentifier);
                 log.debug("Duplicate kill detected, skipping: {}", killIdentifier);
                 return;
             }
@@ -281,6 +290,7 @@ public class PbHandler extends BaseEventHandler {
         lastProcessedTime = currentTime;
 
         if (clientThread == null) {
+            DebugLogger.log("[PbHandler.java:291] ClientThread is null, cannot process kill");
             log.error("ClientThread is null, cannot process kill");
             return;
         }
@@ -289,6 +299,7 @@ public class PbHandler extends BaseEventHandler {
             try {
                 sendKillNotification(data);
             } catch (Exception e) {
+                DebugLogger.log("[PbHandler.java:300] Error processing kill notification: " + e.getMessage());
                 log.error("Error processing kill notification: {}", e.getMessage(), e);
             }
         });
