@@ -64,6 +64,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.NpcID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -317,6 +318,7 @@ public class DropTrackerPlugin extends Plugin {
     public void onServerNpcLoot(ServerNpcLoot event) {
 		DebugLogger.log("Received onServerNpcLoot event -- compID: " + event.getComposition().getId());
         if (event.getComposition().getId() != NpcID.YAMA) {
+			DebugLogger.log("Event composition ID is not yama?");
             return;
         }
         kcService.onServerNpcLoot(event);

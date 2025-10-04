@@ -30,9 +30,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.Collection;
-import java.util.Map;
-import java.util.OptionalDouble;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -60,6 +58,9 @@ public class KCService {
     @Inject
     private DropTrackerPlugin plugin;
 
+    private List<Integer> whispererIds = Arrays.asList(12204, 12205, 12206, 12207);
+
+
     private static final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .maximumSize(64L)
@@ -86,9 +87,7 @@ public class KCService {
     public void onNpcKill(NpcLootReceived event) {
         NPC npc = event.getNpc();
         int id = npc.getId();
-        if (id == NpcID.THE_WHISPERER || id == NpcID.THE_WHISPERER_12205 || id == NpcID.THE_WHISPERER_12206 || id == NpcID.THE_WHISPERER_12207) {
-            // Upstream does not fire NpcLootReceived for the whisperer, since they do not hold a reference to the NPC.
-            // So, we use LootReceived instead (and return here just in case they change their implementation).
+        if (whispererIds.contains(id)) {
             return;
         }
 
