@@ -65,14 +65,11 @@ public class DropHandler extends BaseEventHandler {
 
 	@Subscribe(priority=1)
 	public void onServerNpcLoot(ServerNpcLoot event) {
-		DebugLogger.log("onServerNpcLoot has been called....");
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
-			DebugLogger.log("Plugin is not tracking.");
 			return;
 		}
 		var comp = event.getComposition();
-		DebugLogger.log("Got event composition data:" + comp);
 		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
@@ -115,7 +112,6 @@ public class DropHandler extends BaseEventHandler {
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
-		DebugLogger.log("Adding plugin.lastDrop with (npcName, lootType, items): " + npcName + ", " + lootRecordType + ", " + finalItems.toString());
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
