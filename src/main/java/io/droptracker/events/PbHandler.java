@@ -456,10 +456,10 @@ public class PbHandler extends BaseEventHandler {
         //Chambers of Xeric Challenge Mode Test
         /*
           onGameMessage("Congratulations - Your raid is complete!");
-           onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
           // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
           onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
-        /*
+        */
 
         //Chambers of Xeric Test
         /*
@@ -485,7 +485,7 @@ public class PbHandler extends BaseEventHandler {
         // onGameMessage("Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
         // onGameMessage("Tombs of Amascut total completion time: 14:36.4 (new personal best)");
         onGameMessage("Your completed Tombs of Amascut count is 15.");
-        /*
+        */
 
         //Tombs of Amascut Expert Mode Test
         /*
@@ -619,7 +619,7 @@ public class PbHandler extends BaseEventHandler {
 
         //Grotesque Guardians Test
 /*
-          onGameMessage("Fight duration: 2:12. Personal best: 1:18");
+          //onGameMessage("Fight duration: 2:12. Personal best: 1:18");
           //onGameMessage("Fight duration: 1:55 (new personal best)");
           onGameMessage("Your Grotesque Guardians kill count is 413.");
 */
@@ -726,16 +726,16 @@ public class PbHandler extends BaseEventHandler {
         //Vorkath Test
         /*
           onGameMessage("Your Vorkath kill count is: 168.");
-          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          //onGameMessage("Fight duration: 4:04. Personal best: 1:13");
           // onGameMessage("Fight duration: 1:53 (new personal best)");
-         */
+        */
 
         //Yama Test
         /*
         onGameMessage("Your Yama success count is 20.");
         // onGameMessage("Fight duration: 4:04. Personal best: 3:50");
         // onGameMessage("Fight duration: 3:22 (new personal best)");\
-         */
+        */
 
         //Doom Mokhaiotl Level 4 Test
         /*
