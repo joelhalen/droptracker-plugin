@@ -211,8 +211,8 @@ public class PbHandler extends BaseEventHandler {
         if (message.contains("Delve level")) {
             return extractDelveBoss(message);
         }
-        
-        return "Grotesque Guardians";
+        // With an unknown context, don't guess--defer to subsequent kill-count parsing
+        return null;
     }
 
     private String extractDelveBoss(String message) {
@@ -251,16 +251,17 @@ public class PbHandler extends BaseEventHandler {
             }
 
             String boss = defaultIfNull(newData.boss, old.boss);
+            DebugLogger.log("[PbHandler.java:254] set boss to new data: " + newData.boss + " from old: " + old.boss);
             Integer count = defaultIfNull(newData.count, old.count);
             Duration time = newData.time != null && !newData.time.isZero() ? newData.time : old.time;
             Duration bestTime = newData.bestTime != null && !newData.bestTime.isZero() ? newData.bestTime : old.bestTime;
             boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
-            DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage));
+            DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage).toString());
             return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
         });
-        DebugLogger.log("[PbHandler.java:263] updateKillData completed");
+        DebugLogger.log("[PbHandler.java:263] updateKillData completed. boss / time / count:" + newData.boss + "/" + newData.time + "/" + newData.count);
     }
 
     // === KILL PROCESSING ===
