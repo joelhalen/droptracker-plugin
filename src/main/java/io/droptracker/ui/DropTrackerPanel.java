@@ -66,12 +66,15 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JPanel groupStatsPanel;
 	private JLabel communicationStatusLabel;
 
+	private boolean testing = true;
+
 	@Inject
 	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
 		this.config = config;
 		this.api = api;
 		this.plugin = plugin;
 		this.client = client;
+
 		
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -88,6 +91,13 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		headerPanel = new JPanel(new BorderLayout());
 
 		addHeaderElements();
+
+		if(testing){
+			JButton testButton = new JButton("Create Game Message");
+			testButton.addActionListener(e -> plugin.pbHandler.generateTestMessage());
+			testButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+			headerPanel.add(testButton, BorderLayout.NORTH);
+		}
 
 		// Create tabbed pane
 		tabbedPane = new JTabbedPane();
