@@ -63,10 +63,12 @@ public class DropHandler extends BaseEventHandler {
 		//sendChatReminder();
 	}
 
-	@Subscribe
+	@Subscribe(priority=1)
 	public void onServerNpcLoot(ServerNpcLoot event) {
+		DebugLogger.log("onServerNpcLoot has been called....");
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
+			DebugLogger.log("Plugin is not tracking.");
 			return;
 		}
 		var comp = event.getComposition();
