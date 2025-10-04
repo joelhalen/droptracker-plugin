@@ -13,6 +13,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ChatMessageUtil;
+import io.droptracker.util.DebugLogger;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
@@ -69,6 +70,7 @@ public class DropHandler extends BaseEventHandler {
 			return;
 		}
 		var comp = event.getComposition();
+		DebugLogger.log("Got event composition data:" + comp);
 		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
@@ -80,7 +82,7 @@ public class DropHandler extends BaseEventHandler {
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
-
+		log.debug("onLootReceived called ...");
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
 			log.debug("Special NPC loot received: {}", npcName);
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
@@ -111,6 +113,7 @@ public class DropHandler extends BaseEventHandler {
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
+		DebugLogger.log("Adding plugin.lastDrop with (npcName, lootType, items): " + npcName + ", " + lootRecordType + ", " + finalItems.toString());
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed

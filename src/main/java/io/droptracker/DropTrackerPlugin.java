@@ -315,6 +315,7 @@ public class DropTrackerPlugin extends Plugin {
 	/** Add support for Yama's special drop mechanics */
 	@Subscribe(priority = 1)
     public void onServerNpcLoot(ServerNpcLoot event) {
+		DebugLogger.log("Received onServerNpcLoot event -- compID: " + event.getComposition().getId());
         if (event.getComposition().getId() != NpcID.YAMA) {
             return;
         }
