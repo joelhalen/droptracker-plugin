@@ -455,7 +455,7 @@ public class PbHandler extends BaseEventHandler {
     }
 
     public void generateTestBossMessage(String bossName) {
-        generateTestBossMessage(bossName, false);
+        generateTestBossMessage(bossName, shouldSendTestAsPb);
     }
 
     public void generateTestBossMessage(String bossName, boolean newPersonalBest) {
