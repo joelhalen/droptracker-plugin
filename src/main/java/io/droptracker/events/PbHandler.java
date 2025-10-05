@@ -80,6 +80,12 @@ public class PbHandler extends BaseEventHandler {
         }
 
         boolean isValid() {
+            if (boss != null) {
+                if (boss.contains("Doom")) {
+                    // Doom levels do not include count; so we do not need a null check here
+                    return time != null && !time.isZero();
+                }
+            }
             return boss != null && count != null && time != null && !time.isZero();
         }
     }
@@ -113,9 +119,18 @@ public class PbHandler extends BaseEventHandler {
             return;
         }
 
-        if (data.isValid() && isEnabled() && data.count != null) {
-            processKill(data);
-            reset();
+        if (data.isValid() && isEnabled()) {
+            if (data.count == null) {
+                /* Doom does not have KCs available for individual floors, so we need to handle the data anyways for this boss */
+                /* Otherwise, we should handle other data with no count included consistently with before */
+                if (data.boss.contains("Doom")) {
+                    processKill(data);
+                    reset();
+                }
+            } else {
+                processKill(data);
+                reset();
+            }
         } else {
             // Allow partial data (e.g., time before count or vice versa) to coalesce for up to 10 seconds
             long now = System.currentTimeMillis();
@@ -776,16 +791,14 @@ public class PbHandler extends BaseEventHandler {
                 return;
 
             /* Doom of Mokhaiotl */
-            case "doom level 4":
-            case "doom 4":
-            case "doom of mokhaiotl level 4":
+            case "doom-4":
+            case "doom-l4":
                 onGameMessage(newPersonalBest
-                    ? "Delve level: 4 (new personal best)"
+                    ? "Delve level: 4 duration: 1:53 (new personal best)"
                     : "Delve level: 4 duration: 2:34. Personal best: 1:54");
                 return;
-            case "doom 1-8":
-            case "doom 1 - 8":
-            case "doom of mokhaiotl 1-8":
+            case "doom1-8":
+            case "doom-all":
                 onGameMessage(newPersonalBest
                     ? "Delve level 1 - 8 duration: 9:33 (new personal best)"
                     : "Delve level 1 - 8 duration: 9:40. Personal best: 9:33");
