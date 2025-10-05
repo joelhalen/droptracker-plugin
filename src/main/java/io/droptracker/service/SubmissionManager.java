@@ -10,6 +10,7 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
+import io.droptracker.util.DebugLogger;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -335,6 +336,7 @@ public class SubmissionManager {
     }
 
     private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+        DebugLogger.log("data has arrived at final sendDataToDropTracker method; == " + customWebhookBody.toString());
         sendWebhookWithRetry(customWebhookBody, screenshot, 0);
     }
 
@@ -342,6 +344,7 @@ public class SubmissionManager {
 
     private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt) {
         if (isFakeWorld()) {
+            DebugLogger.log("Returning due to this being a fake world");
             return;
         }
 
@@ -366,6 +369,7 @@ public class SubmissionManager {
         } else {
             url = api.getApiUrl() + "/webhook";
         }
+        DebugLogger.log("Using the following URL for this submission: " + url);
         HttpUrl u = HttpUrl.parse(url);
         if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {
             log.debug("Invalid or malformed webhook URL: {}", url);
@@ -382,6 +386,7 @@ public class SubmissionManager {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                DebugLogger.log("onFailure received; scheduleRetryOrFail method called...");
                 scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, e);
             }
 
@@ -389,6 +394,7 @@ public class SubmissionManager {
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (ResponseBody body = response.body()) {
                     if (config.useApi()) {
+                        DebugLogger.log("onResponse received with API enabled...");
                         api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
                         if (body != null) {
                             try {

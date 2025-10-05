@@ -48,7 +48,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
-        "Team size: (?<size>\\d+) players?",
+        "Team size:\\s*(?<size>\\d+|Solo|\\d\\+)\\s*(?:players?)?",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -56,6 +56,7 @@ public class PbHandler extends BaseEventHandler {
     private final AtomicReference<KillData> killData = new AtomicReference<>();
     private String lastProcessedKill = null;
     private long lastProcessedTime = 0;
+    private long lastKillDataUpdate = 0L;
     public boolean shouldSendTestAsPb = false;
 
     private static class KillData {
@@ -115,8 +116,12 @@ public class PbHandler extends BaseEventHandler {
         if (data.isValid() && isEnabled()) {
             processKill(data);
             reset();
-        } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
-            reset();
+        } else {
+            // Allow partial data (e.g., time before count or vice versa) to coalesce for up to 10 seconds
+            long now = System.currentTimeMillis();
+            if (now - lastKillDataUpdate > 10_000) {
+                reset();
+            }
         }
     }
 
@@ -201,6 +206,10 @@ public class PbHandler extends BaseEventHandler {
         if (message.contains("Chambers of Xeric")) {
             return "Chambers of Xeric";
         }
+        // Chambers of Xeric time lines often omit the raid name but include the Olm split
+        if (message.contains("Olm Duration")) {
+            return "Chambers of Xeric";
+        }
         if (message.contains("Corrupted challenge")) {
             return "Corrupted Hunllef";
         }
@@ -249,6 +258,7 @@ public class PbHandler extends BaseEventHandler {
         DebugLogger.log("[PbHandler.java:247] updateKillData called with newData: " + newData);
         killData.getAndUpdate(old -> {
             if (old == null) {
+                lastKillDataUpdate = System.currentTimeMillis();
                 return newData;
             }
 
@@ -261,6 +271,7 @@ public class PbHandler extends BaseEventHandler {
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
             DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage).toString());
+            lastKillDataUpdate = System.currentTimeMillis();
             return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
         });
         DebugLogger.log("[PbHandler.java:263] updateKillData completed. boss / time / count:" + newData.boss + "/" + newData.time + "/" + newData.count);
@@ -459,6 +470,8 @@ public class PbHandler extends BaseEventHandler {
     }
 
     public void generateTestBossMessage(String bossName, boolean newPersonalBest) {
+        DebugLogger.log("Got bossName and newPersonalBest from generateTestBossMessage call:");
+        DebugLogger.log(bossName + " - " + newPersonalBest + " -- status of bool in pbhandler= " + shouldSendTestAsPb);
         if (bossName == null) {
             return;
         }
