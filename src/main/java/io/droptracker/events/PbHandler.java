@@ -242,16 +242,27 @@ public class PbHandler extends BaseEventHandler {
     private String extractTeamSize(String message, String bossName) {
         Matcher teamMatcher = TEAM_SIZE_PATTERN.matcher(message);
         if (teamMatcher.find()) {
-            return teamMatcher.group("size");
+            String raw = teamMatcher.group("size");
+            if (raw == null) {
+                return "Solo";
+            }
+            if (raw.equalsIgnoreCase("solo")) {
+                return "Solo";
+            }
+            return raw;
         }
 
-        if (message.contains("Tombs of Amascut") || bossName.contains("Tombs of Amascut")) {
+        boolean mentionsToa = message.contains("Tombs of Amascut") || (bossName != null && bossName.contains("Tombs of Amascut"));
+        boolean mentionsTob = message.contains("Theatre of Blood") || (bossName != null && bossName.contains("Theatre of Blood"));
+        boolean mentionsRoyalTitans = message.contains("Royal Titans") || (bossName != null && bossName.contains("Royal Titans"));
+
+        if (mentionsToa) {
             return getToaTeamSize();
         }
-        if (message.contains("Theatre of Blood") || bossName.contains("Theatre of Blood")) {
+        if (mentionsTob) {
             return getTobTeamSize();
         }
-        if (message.contains("Royal Titans")) {
+        if (mentionsRoyalTitans) {
             return getRoyalTitansTeamSize();
         }
 
