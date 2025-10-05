@@ -14,6 +14,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.util.LinkBrowser;
 
+
 public class ChatMessageUtil {
 
     private boolean isMessageChecked = false;
@@ -55,6 +56,17 @@ public class ChatMessageUtil {
         if (event.getCommand().equals("droptracker"))
         {
             LinkBrowser.browse("https://www.droptracker.io/wiki/why-api/");
+        }
+        if (event.getCommand().equals("pbtest"))
+        {
+            if (event.getArguments() != null) {
+                String targetBoss = event.getArguments()[0];
+                plugin.pbHandler.generateTestBossMessage(targetBoss);
+            }
+        }
+        if (event.getCommand().equals("pb"))
+        {
+            plugin.pbHandler.shouldSendTestAsPb = true;
         }
     }
 

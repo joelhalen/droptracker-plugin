@@ -13,6 +13,8 @@ import io.droptracker.ui.pages.HomePanel;
 import io.droptracker.ui.pages.ApiPanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
 
+import io.droptracker.util.DebugLogger;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
@@ -29,6 +31,7 @@ import java.util.Map;
 import java.awt.FlowLayout;
 import java.awt.Component;
 
+@Slf4j
 public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.PanelDataLoadedCallback {
 
 	private static final ImageIcon LOGO_GIF;
@@ -93,6 +96,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		addHeaderElements();
 
 		if(testing){
+			DebugLogger.log("Testing is set true... adding button");
 			JButton testButton = new JButton("Create Game Message");
 			testButton.addActionListener(e -> plugin.pbHandler.generateTestMessage());
 			testButton.setAlignmentX(Component.CENTER_ALIGNMENT);

@@ -58,12 +58,7 @@ import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.events.ChatMessage;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.ScriptPreFired;
-import net.runelite.api.events.StatChanged;
-import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.events.*;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -121,6 +116,9 @@ public class DropTrackerPlugin extends Plugin {
 	public PetHandler petHandler;
 	@Inject
 	public ExperienceHandler experienceHandler;
+
+	@Inject
+	public ChatMessageUtil chatMessageUtil;
 	@Inject
 	private SubmissionManager submissionManager;
 
@@ -298,6 +296,10 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
+	@Subscribe
+	public void onCommandExecuted(CommandExecuted command) {
+		chatMessageUtil.onCommandExecuted(command);
+	}
 
 	@Subscribe
 	public void onScriptPreFired(ScriptPreFired event) {
