@@ -185,11 +185,11 @@ public class PbHandler extends BaseEventHandler {
             boolean isPersonalBest = matcher.group("pbIndicator") != null;
             
             String bossName = determineBossFromContext(message);
-            String teamSize = extractTeamSize(message);
+            String teamSize = extractTeamSize(message, bossName);
             
             // For CoX, PB lines often include Olm split but team size isn't always on KC line. If team size missing, try to extract now.
             if (teamSize == null && message.contains("Team size:")) {
-                teamSize = extractTeamSize(message);
+                teamSize = extractTeamSize(message, bossName);
             }
             return Optional.of(new KillData(bossName, null, time, bestTime, 
                 isPersonalBest, teamSize, message));
@@ -239,16 +239,16 @@ public class PbHandler extends BaseEventHandler {
         return "Doom of Mokhaiotl";
     }
 
-    private String extractTeamSize(String message) {
+    private String extractTeamSize(String message, String bossName) {
         Matcher teamMatcher = TEAM_SIZE_PATTERN.matcher(message);
         if (teamMatcher.find()) {
             return teamMatcher.group("size");
         }
 
-        if (message.contains("Tombs of Amascut")) {
+        if (message.contains("Tombs of Amascut") || bossName.contains("Tombs of Amascut")) {
             return getToaTeamSize();
         }
-        if (message.contains("Theatre of Blood")) {
+        if (message.contains("Theatre of Blood") || bossName.contains("Theatre of Blood")) {
             return getTobTeamSize();
         }
         if (message.contains("Royal Titans")) {
