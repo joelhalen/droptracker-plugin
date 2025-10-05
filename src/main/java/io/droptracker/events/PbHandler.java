@@ -38,7 +38,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
-        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is: (?<value>[\\d,]+)",
+        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is:?[ \\t]*(?<value>[\\d,]+)",
         Pattern.CASE_INSENSITIVE
     );
     
@@ -113,7 +113,7 @@ public class PbHandler extends BaseEventHandler {
             return;
         }
 
-        if (data.isValid() && isEnabled()) {
+        if (data.isValid() && isEnabled() && data.count != null) {
             processKill(data);
             reset();
         } else {
@@ -187,6 +187,10 @@ public class PbHandler extends BaseEventHandler {
             String bossName = determineBossFromContext(message);
             String teamSize = extractTeamSize(message);
             
+            // For CoX, PB lines often include Olm split but team size isn't always on KC line. If team size missing, try to extract now.
+            if (teamSize == null && message.contains("Team size:")) {
+                teamSize = extractTeamSize(message);
+            }
             return Optional.of(new KillData(bossName, null, time, bestTime, 
                 isPersonalBest, teamSize, message));
                 
