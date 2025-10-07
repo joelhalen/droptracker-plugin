@@ -108,7 +108,6 @@ public class PbHandler extends BaseEventHandler {
 
     public void onTick() {
         KillData data = killData.get();
-
         if (data == null) {
             if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
