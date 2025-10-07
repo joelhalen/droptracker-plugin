@@ -38,7 +38,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
-        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is: (?<value>[\\d,]+)",
+        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is:?[ \\t]*(?<value>[\\d,]+)",
         Pattern.CASE_INSENSITIVE
     );
     
@@ -48,7 +48,7 @@ public class PbHandler extends BaseEventHandler {
     );
     
     private static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
-        "Team size: (?<size>\\d+) players?",
+        "Team size:\\s*(?<size>\\d+|Solo|\\d\\+)\\s*(?:players?)?",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -56,6 +56,8 @@ public class PbHandler extends BaseEventHandler {
     private final AtomicReference<KillData> killData = new AtomicReference<>();
     private String lastProcessedKill = null;
     private long lastProcessedTime = 0;
+    private long lastKillDataUpdate = 0L;
+    public boolean shouldSendTestAsPb = false;
 
     private static class KillData {
         final String boss;
@@ -78,6 +80,12 @@ public class PbHandler extends BaseEventHandler {
         }
 
         boolean isValid() {
+            if (boss != null) {
+                if (boss.contains("Doom")) {
+                    // Doom levels do not include count; so we do not need a null check here
+                    return time != null && !time.isZero();
+                }
+            }
             return boss != null && count != null && time != null && !time.isZero();
         }
     }
@@ -100,6 +108,7 @@ public class PbHandler extends BaseEventHandler {
 
     public void onTick() {
         KillData data = killData.get();
+
         if (data == null) {
             if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
@@ -108,10 +117,23 @@ public class PbHandler extends BaseEventHandler {
         }
 
         if (data.isValid() && isEnabled()) {
-            processKill(data);
-            reset();
-        } else if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
-            reset();
+            if (data.count == null) {
+                /* Doom does not have KCs available for individual floors, so we need to handle the data anyways for this boss */
+                /* Otherwise, we should handle other data with no count included consistently with before */
+                if (data.boss.contains("Doom")) {
+                    processKill(data);
+                    reset();
+                }
+            } else {
+                processKill(data);
+                reset();
+            }
+        } else {
+            // Allow partial data (e.g., time before count or vice versa) to coalesce for up to 10 seconds
+            long now = System.currentTimeMillis();
+            if (now - lastKillDataUpdate > 10_000) {
+                reset();
+            }
         }
     }
 
@@ -175,8 +197,12 @@ public class PbHandler extends BaseEventHandler {
             boolean isPersonalBest = matcher.group("pbIndicator") != null;
             
             String bossName = determineBossFromContext(message);
-            String teamSize = extractTeamSize(message);
+            String teamSize = extractTeamSize(message, bossName);
             
+            // For CoX, PB lines often include Olm split but team size isn't always on KC line. If team size missing, try to extract now.
+            if (teamSize == null && message.contains("Team size:")) {
+                teamSize = extractTeamSize(message, bossName);
+            }
             return Optional.of(new KillData(bossName, null, time, bestTime, 
                 isPersonalBest, teamSize, message));
                 
@@ -194,6 +220,10 @@ public class PbHandler extends BaseEventHandler {
             return "Theatre of Blood";
         }
         if (message.contains("Chambers of Xeric")) {
+            return "Chambers of Xeric";
+        }
+        // Chambers of Xeric time lines often omit the raid name but include the Olm split
+        if (message.contains("Olm Duration")) {
             return "Chambers of Xeric";
         }
         if (message.contains("Corrupted challenge")) {
@@ -221,19 +251,30 @@ public class PbHandler extends BaseEventHandler {
         return "Doom of Mokhaiotl";
     }
 
-    private String extractTeamSize(String message) {
+    private String extractTeamSize(String message, String bossName) {
         Matcher teamMatcher = TEAM_SIZE_PATTERN.matcher(message);
         if (teamMatcher.find()) {
-            return teamMatcher.group("size");
+            String raw = teamMatcher.group("size");
+            if (raw == null) {
+                return "Solo";
+            }
+            if (raw.equalsIgnoreCase("solo")) {
+                return "Solo";
+            }
+            return raw;
         }
 
-        if (message.contains("Tombs of Amascut")) {
+        boolean mentionsToa = message.contains("Tombs of Amascut") || (bossName != null && bossName.contains("Tombs of Amascut"));
+        boolean mentionsTob = message.contains("Theatre of Blood") || (bossName != null && bossName.contains("Theatre of Blood"));
+        boolean mentionsRoyalTitans = message.contains("Royal Titans") || (bossName != null && bossName.contains("Royal Titans"));
+
+        if (mentionsToa) {
             return getToaTeamSize();
         }
-        if (message.contains("Theatre of Blood")) {
+        if (mentionsTob) {
             return getTobTeamSize();
         }
-        if (message.contains("Royal Titans")) {
+        if (mentionsRoyalTitans) {
             return getRoyalTitansTeamSize();
         }
 
@@ -244,6 +285,7 @@ public class PbHandler extends BaseEventHandler {
         DebugLogger.log("[PbHandler.java:247] updateKillData called with newData: " + newData);
         killData.getAndUpdate(old -> {
             if (old == null) {
+                lastKillDataUpdate = System.currentTimeMillis();
                 return newData;
             }
 
@@ -256,6 +298,7 @@ public class PbHandler extends BaseEventHandler {
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
             DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage).toString());
+            lastKillDataUpdate = System.currentTimeMillis();
             return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
         });
         DebugLogger.log("[PbHandler.java:263] updateKillData completed. boss / time / count:" + newData.boss + "/" + newData.time + "/" + newData.count);
@@ -447,5 +490,623 @@ public class PbHandler extends BaseEventHandler {
     private String getRoyalTitansTeamSize() {
         int size = client.getPlayers().size();
         return size == 1 ? "Solo" : String.valueOf(size);
+    }
+
+    public void generateTestBossMessage(String bossName) {
+        generateTestBossMessage(bossName, shouldSendTestAsPb);
+    }
+
+    public void generateTestBossMessage(String bossName, boolean newPersonalBest) {
+        DebugLogger.log("Got bossName and newPersonalBest from generateTestBossMessage call:");
+        DebugLogger.log(bossName + " - " + newPersonalBest + " -- status of bool in pbhandler= " + shouldSendTestAsPb);
+        if (bossName == null) {
+            return;
+        }
+        String b = bossName.toLowerCase(Locale.ROOT).trim();
+        switch (b) {
+            /* Chambers of Xeric */
+            case "cox":
+            case "chambers":
+            case "chambers of xeric":
+                onGameMessage("Congratulations - Your raid is complete!");
+                onGameMessage(newPersonalBest
+                    ? "Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11"
+                    : "Team size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
+                onGameMessage("Your completed Chambers of Xeric count is 52.");
+                return;
+            case "cox cm":
+            case "chambers cm":
+            case "chambers of xeric challenge mode":
+            case "challenge mode":
+                onGameMessage("Congratulations - Your raid is complete!");
+                onGameMessage(newPersonalBest
+                    ? "Team size: 3 players Duration: 32:32 (new personal best) Olm Duration: 4:11"
+                    : "Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+                onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+                return;
+
+            /* Tombs of Amascut */
+            case "toa entry":
+            case "tombs entry":
+            case "tombs of amascut: entry mode":
+            case "tombs of amascut entry mode":
+                onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+                onGameMessage(newPersonalBest
+                    ? "Tombs of Amascut: Entry Mode total completion time: 14:36.4 (new personal best)"
+                    : "Tombs of Amascut: Entry Mode total completion time: 16:37.4. Personal best: 14:37.4");
+                onGameMessage("Your completed Tombs of Amascut: Entry Mode count is 15.");
+                return;
+            case "toa":
+            case "tombs":
+            case "tombs of amascut":
+                onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+                onGameMessage(newPersonalBest
+                    ? "Tombs of Amascut total completion time: 14:36.4 (new personal best)"
+                    : "Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
+                onGameMessage("Your completed Tombs of Amascut count is 15.");
+                return;
+            case "toa expert":
+            case "tombs expert":
+            case "tombs of amascut expert mode":
+                onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+                onGameMessage(newPersonalBest
+                    ? "Tombs of Amascut: Expert Mode total completion time: 18:37.4 (new personal best)"
+                    : "Tombs of Amascut: Expert Mode total completion time: 1:23:38.2. Personal best: 1:20:38.4");
+                onGameMessage("Your completed Tombs of Amascut: Expert Mode count is 20.");
+                return;
+
+            /* Theatre of Blood */
+            case "tob entry":
+            case "theatre entry":
+            case "theatre of blood: entry mode":
+            case "theatre of blood entry mode":
+                onGameMessage(newPersonalBest
+                    ? "Theatre of Blood completion time: 25:40 (new personal best)"
+                    : "Theatre of Blood completion time: 18:12. Personal best: 17:09");
+                onGameMessage("Your completed Theatre of Blood: Entry Mode count is: 1.");
+                return;
+            case "tob":
+            case "theatre":
+            case "theatre of blood":
+                onGameMessage(newPersonalBest
+                    ? "Theatre of Blood completion time: 25:40 (new personal best)"
+                    : "Theatre of Blood completion time: 18:12. Personal best: 17:09");
+                onGameMessage("Your completed Theatre of Blood count is 11.");
+                return;
+            case "tob hard":
+            case "tob hm":
+            case "theatre of blood: hard mode":
+            case "theatre of blood hard mode":
+                onGameMessage(newPersonalBest
+                    ? "Theatre of Blood completion time: 24:40 (new personal best)"
+                    : "Theatre of Blood completion time: 25:12. Personal best: 23:09");
+                onGameMessage("Your completed Theatre of Blood: Hard Mode count is 11.");
+                return;
+
+            /* Gauntlet */
+            case "gauntlet":
+                onGameMessage(newPersonalBest
+                    ? "Challenge duration: 6:22 (new personal best)."
+                    : "Challenge duration: 3:06. Personal best: 1:47.");
+                onGameMessage("Your Gauntlet completion count is 40.");
+                return;
+            case "cg":
+            case "corrupted gauntlet":
+                onGameMessage(newPersonalBest
+                    ? "Corrupted challenge duration: 7:55 (new personal best)."
+                    : "Corrupted challenge duration: 3:06. Personal best: 1:47.");
+                onGameMessage("Your Corrupted Gauntlet completion count is 40.");
+                return;
+
+            /* Nightmare */
+            case "nightmare":
+                onGameMessage(newPersonalBest
+                    ? "Team size: 6+ players Fight duration: 3:57 (new personal best)"
+                    : "Team size: 6+ players Fight duration: 1:46. Personal best: 1:46");
+                onGameMessage("Your nightmare kill count is 31.");
+                return;
+            case "phosani":
+            case "phosani's nightmare":
+                onGameMessage(newPersonalBest
+                    ? "Team size: Solo Fight Duration: 1:05:30 (new personal best)"
+                    : "Team size: Solo Fight Duration: 8:58. Personal best: 8:30");
+                onGameMessage("Your Phosani's Nightmare kill count is: 100.");
+                return;
+
+            /* Other bosses */
+            case "zulrah":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 0:58 (new personal best)"
+                    : "Fight duration: 1:02. Personal best: 0:59");
+                onGameMessage("Congratulations - Your Zulrah kill count is: 559.");
+                return;
+            case "hydra":
+            case "alchemical hydra":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 1:20 (new personal best)."
+                    : "Fight duration: 1:49. Personal best: 1:28.");
+                onGameMessage("Your Alchemical Hydra kill count is: 150.");
+                return;
+            case "amoxliatl":
+            case "amoxialtl":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 0:29.40 (new personal best)"
+                    : "Fight duration: 1:05.40. Personal best: 0:29.40");
+                onGameMessage("Your Amoxliatl kill count is: 42.");
+                return;
+            case "araxxor":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 1:15.60 (new personal best)"
+                    : "Fight duration: 1:19.20. Personal best: 1:00.00");
+                onGameMessage("Your Araxxor kill count is 75.");
+                return;
+            case "duke":
+            case "duke sucellus":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 1:34.20 (new personal best)"
+                    : "Fight duration: 2:52.20. Personal best: 1:37.80");
+                onGameMessage("Your Duke Sucellus kill count is: 150.");
+                return;
+            case "jad":
+            case "tztok-jad":
+            case "fight caves":
+                onGameMessage(newPersonalBest
+                    ? "Duration: 1:47:28.20 (new personal best)"
+                    : "Duration: 59:20. Personal best: 46:16");
+                onGameMessage("Your TzTok-Jad kill count is 5.");
+                return;
+            case "colosseum":
+            case "fortis colosseum":
+            case "sol heredit":
+                onGameMessage(newPersonalBest
+                    ? "Colosseum duration: 26:13.20 (new personal best)"
+                    : "Colosseum duration: 37:51.60. Personal best: 30:12.00");
+                onGameMessage("Your Sol Heredit kill count is: 10.");
+                return;
+            case "fragment of seren":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 3:29 (new personal best)."
+                    : "Fight duration: 4:25.20. Personal best: 3:25.20.");
+                onGameMessage("Your Fragment of Seren kill count is: 2.");
+                return;
+            case "galvek":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:19 (new personal best)"
+                    : "Fight duration: 3:48.60. Personal best: 2:58.80");
+                onGameMessage("Your Galvek kill count is: 2.");
+                return;
+            case "grotesque guardians":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 1:55 (new personal best)"
+                    : "Fight duration: 2:12. Personal best: 1:18");
+                onGameMessage("Your Grotesque Guardians kill count is 413.");
+                return;
+            case "hespori":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 0:35 (new personal best)"
+                    : "Fight duration: 1:16. Personal best: 0:44");
+                onGameMessage("Your Hespori kill count is: 134.");
+                return;
+            case "colossal wyrm basic":
+            case "colossal wyrm agility basic":
+                onGameMessage(newPersonalBest
+                    ? "Lap duration: 2:52.80 (new personal best)"
+                    : "Lap duration: 2:52.80. Personal best: 1:22.20");
+                onGameMessage("Your Colossal Wyrm Agility Course (Basic) lap count is: 3.");
+                return;
+            case "colossal wyrm advanced":
+            case "colossal wyrm agility advanced":
+                onGameMessage(newPersonalBest
+                    ? "Lap duration: 1:01.80 (new personal best)"
+                    : "Lap duration: 1:01.80. Personal best: 0:59.40");
+                onGameMessage("Your Colossal Wyrm Agility Course (Advanced) lap count is: 217.");
+                return;
+            case "priff agility":
+            case "prifddinas agility":
+                onGameMessage(newPersonalBest
+                    ? "Lap duration: 1:15.00 (new personal best)"
+                    : "Lap duration: 1:15.00. Personal best: 1:04.80");
+                onGameMessage("Your Prifddinas Agility Course lap count is: 92.");
+                return;
+            case "sepulchre floor":
+            case "hallowed sepulchre floor":
+                onGameMessage(newPersonalBest
+                    ? "Floor 4 time: 1:46.80 (new personal best)"
+                    : "Floor 4 time: 1:46.80. Personal best: 1:36.60");
+                onGameMessage("You have completed Floor 4 of the Hallowed Sepulchre! Total completions: 125.");
+                return;
+            case "sepulchre total":
+            case "hallowed sepulchre total":
+                onGameMessage(newPersonalBest
+                    ? "Overall time: 6:48.60 (new personal best)"
+                    : "Overall time: 6:48.60. Personal best: 6:18.00");
+                onGameMessage("You have completed Floor 5 of the Hallowed Sepulchre! Total completions: 95.");
+                return;
+            case "inferno":
+            case "tzkal-zuk":
+                onGameMessage(newPersonalBest
+                    ? "Duration: 2:21:41 (new personal best)"
+                    : "Duration: 2:23:41. Personal best: 1:09:04");
+                onGameMessage("Your TzKal-Zuk kill count is 1.");
+                return;
+            case "muspah":
+            case "phantom muspah":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:02 (new personal best)"
+                    : "Fight duration: 3:11. Personal best: 2:17");
+                onGameMessage("Your Phantom Muspah kill count is: 12.");
+                return;
+            case "six jads":
+            case "6 jads":
+            case "sixth challenge":
+                onGameMessage(newPersonalBest
+                    ? "Challenge duration: 6:31.80 (new personal best)"
+                    : "Challenge duration: 6:02. Personal best: 5:31");
+                onGameMessage("Your completion count for Tzhaar-Ket-Rak's Sixth Challenge is 1.");
+                return;
+            case "hueycoatl":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 3:04 (new personal best)"
+                    : "Fight duration: 3:09.60. Personal best: 0:58.20");
+                onGameMessage("Your Hueycoatl kill count is 3.");
+                return;
+            case "leviathan":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:16.80 (new personal best)"
+                    : "Fight duration: 3:19. Personal best: 2:50");
+                onGameMessage("Your Leviathan kill count is 2.");
+                return;
+            case "royal titans":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:50 (new personal best)"
+                    : "Fight Duration: 2:33. Personal best: 0:53");
+                onGameMessage("Your Royal Titans kill count is: 9.");
+                return;
+            case "whisperer":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:18.60 (new personal best)"
+                    : "Fight duration: 3:06.00. Personal best: 2:29.40");
+                onGameMessage("Your whisperer kill count is 4.");
+                return;
+            case "vardorvis":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 2:39 (new personal best)"
+                    : "Fight duration: 4:04. Personal best: 1:13");
+                onGameMessage("Your Vardorvis kill count is: 18.");
+                return;
+            case "vorkath":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 1:53 (new personal best)"
+                    : "Fight duration: 4:04. Personal best: 1:13");
+                onGameMessage("Your Vorkath kill count is: 168.");
+                return;
+            case "yama":
+                onGameMessage(newPersonalBest
+                    ? "Fight duration: 3:22 (new personal best)"
+                    : "Fight duration: 4:04. Personal best: 3:50");
+                onGameMessage("Your Yama success count is 20.");
+                return;
+
+            /* Doom of Mokhaiotl */
+            case "doom-4":
+            case "doom-l4":
+                onGameMessage(newPersonalBest
+                    ? "Delve level: 4 duration: 1:53 (new personal best)"
+                    : "Delve level: 4 duration: 2:34. Personal best: 1:54");
+                return;
+            case "doom1-8":
+            case "doom-all":
+                onGameMessage(newPersonalBest
+                    ? "Delve level 1 - 8 duration: 9:33 (new personal best)"
+                    : "Delve level 1 - 8 duration: 9:40. Personal best: 9:33");
+                onGameMessage("Deep delves completed: 2");
+                return;
+
+            default:
+                return;
+        }
+    }
+    @VisibleForTesting
+    public void generateTestMessage() {
+        DebugLogger.log("Generating test message...");
+        //Chambers of Xeric Challenge Mode Test
+        /*
+          onGameMessage("Congratulations - Your raid is complete!");
+          // onGameMessage("Team size: 3 players Duration: 32:32 Personal best: 28:26 Olm Duration: 4:11");
+          // onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric Challenge Mode count is 61.");
+        */
+
+        //Chambers of Xeric Test
+
+          onGameMessage("Congratulations - Your raid is complete!");
+          onGameMessage("Team size: 3 players Duration: 27:32 Personal best: 22:26 Olm Duration: 4:11");
+          onGameMessage("Team size: 3 players Duration: 27:32 (new personal best) Olm Duration: 4:11");
+          onGameMessage("Your completed Chambers of Xeric count is 52.");
+
+
+        //Tombs of Amascut: Entry Mode Test
+        /*
+        onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+        onGameMessage("Tombs of Amascut: Entry Mode challenge completion time: 14:40. Personal best: 12:16");
+        // onGameMessage("Tombs of Amascut: Entry Mode total completion time: 16:37.4. Personal best: 14:37.4");
+        // onGameMessage("Tombs of Amascut: Entry Mode total completion time: 14:36.4 (new personal best)");
+        onGameMessage("Your completed Tombs of Amascut: Entry Mode count is 15.");
+        */
+
+        //Tombs of Amascut Test
+        /*
+        onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+        onGameMessage("Tombs of Amascut challenge completion time: 14:40. Personal best: 12:16");
+        // onGameMessage("Tombs of Amascut total completion time: 16:37.4. Personal best: 14:37.4");
+        // onGameMessage("Tombs of Amascut total completion time: 14:36.4 (new personal best)");
+        onGameMessage("Your completed Tombs of Amascut count is 15.");
+        */
+
+        //Tombs of Amascut Expert Mode Test
+        /*
+          onGameMessage("Challenge complete: The Wardens. Duration: 3:02");
+          onGameMessage("Tombs of Amascut: Expert Mode challenge completion time: 20:40. Personal best: 18:16");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 1:23:38.2. Personal best: 1:20:38.4");
+          // onGameMessage("Tombs of Amascut: Expert Mode total completion time: 18:37.4 (new personal best)");
+          onGameMessage("Your completed Tombs of Amascut: Expert Mode count is 20.");
+        */
+
+        //Theatre of Blood: Entry Mode Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          // onGameMessage("Theatre of Blood completion time: 25:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");
+          onGameMessage("Your completed Theatre of Blood: Entry Mode count is: 1.");
+        */
+
+        //Theatre of Blood Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 18:12. Personal best: 17:09");
+          // onGameMessage("Theatre of Blood completion time: 25:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 23:01. Personal best: 21:41");
+          onGameMessage("Your completed Theatre of Blood count is 11.");
+        */
+
+        //Theatre of Blood Hard Mode Test
+        /*
+          // onGameMessage("Theatre of Blood completion time: 25:12. Personal best: 23:09");
+          // onGameMessage("Theatre of Blood completion time: 24:40 (new personal best)");
+          onGameMessage("Theatre of Blood total completion time: 28:01. Personal best: 25:41");
+          onGameMessage("Your completed Theatre of Blood: Hard Mode count is 11.");
+
+        */
+
+        //Gauntlet Test
+        /*
+          // onGameMessage("Challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("Challenge duration: 6:22 (new personal best).");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Gauntlet completion count is 40.");
+        */
+
+
+        //Corrupted Gauntlet Test
+        /*
+          // onGameMessage("Corrupted challenge duration: 3:06. Personal best: 1:47.");
+          // onGameMessage("Corrupted challenge duration: 7:55 (new personal best).");
+          onGameMessage("Preparation time: 2:06. Hunllef kill time: 1:00.");
+          onGameMessage("Your Corrupted Gauntlet completion count is 40.");
+        */
+
+        //Nightmare Test
+        /*
+          onGameMessage("Your nightmare kill count is 31.");
+          // onGameMessage("Team size: 6+ players Fight duration: 1:46. Personal best: 1:46");
+          // onGameMessage("Team size: 6+ players Fight duration: 3:57 (new personal best)");
+        */
+
+        //Phosani Nightmare Test
+        /*
+          onGameMessage("Your Phosani's Nightmare kill count is: 100.");
+          // onGameMessage("Team size: Solo Fight Duration: 8:58. Personal best: 8:30");
+          // onGameMessage("Team size: Solo Fight Duration: 1:05:30 (new personal best)");
+        */
+
+        //Zulrah Test
+        /*
+          onGameMessage("Congratulations - Your Zulrah kill count is: 559.");
+          // onGameMessage("Fight duration: 1:02. Personal best: 0:59");
+          // onGameMessage("Fight duration: 0:58 (new personal best)");
+        */
+
+        //Alchemical Hydra Test
+        /*
+        onGameMessage("Your Alchemical Hydra kill count is: 150.");
+        // onGameMessage("Fight duration: 1:49. Personal best: 1:28.");
+        // onGameMessage("Fight duration: 1:20 (new personal best).");
+
+         */
+
+        //Amoxialtl Test
+        /*
+          onGameMessage("Your Amoxliatl kill count is: 42.");
+          // onGameMessage("Fight duration: 1:05.40. Personal best: 0:29.40");
+          // onGameMessage("Fight duration: 0:29.40 (new personal best)");
+        */
+
+        //Araxxor Test
+        /*
+          onGameMessage("Your Araxxor kill count is 75.");
+          // onGameMessage("Fight duration: 1:19.20. Personal best: 1:00.00");
+          // onGameMessage("Fight duration: 1:15.60 (new personal best)");
+        */
+
+        //Duke Succelus Test
+        /*
+          onGameMessage("Your Duke Sucellus kill count is: 150.");
+          // onGameMessage("Fight duration: 2:52.20. Personal best: 1:37.80");
+          // onGameMessage("Fight duration: 1:34.20 (new personal best)");
+        */
+
+        //Fight Caves Test
+        /*
+          onGameMessage("Your TzTok-Jad kill count is 5.");
+          // onGameMessage("Duration: 59:20. Personal best: 46:16");
+          // onGameMessage("Duration: 1:47:28.20 (new personal best)");
+        */
+
+        //Fortis Colosseum Test
+        /*
+          onGameMessage("Your Sol Heredit kill count is: 10.");
+          onGameMessage("Wave 12 completed! Wave duration: 37:51.60");
+          // onGameMessage("Colosseum duration: 37:51.60. Personal best: 30:12.00");
+          // onGameMessage("Colosseum duration: 26:13.20 (new personal best)");
+        */
+
+        //Fragment of Seren Test
+        /*
+          onGameMessage("Your Fragment of Seren kill count is: 2.");
+          // onGameMessage("Fight duration: 4:25.20. Personal best: 3:25.20.");
+          // onGameMessage("Fight duration: 3:29 (new personal best).");
+        */
+
+        //Galvek Test
+        /*
+          onGameMessage("Your Galvek kill count is: 2.");
+          // onGameMessage("Fight duration: 3:48.60. Personal best: 2:58.80");
+          // onGameMessage("Fight duration: 2:19 (new personal best)");
+        */
+
+        //Grotesque Guardians Test
+/*
+          //onGameMessage("Fight duration: 2:12. Personal best: 1:18");
+          //onGameMessage("Fight duration: 1:55 (new personal best)");
+          onGameMessage("Your Grotesque Guardians kill count is 413.");
+*/
+
+        //Hespori Test
+        /*
+          onGameMessage("Your Hespori kill count is: 134.");
+          // onGameMessage("Fight duration: 1:16. Personal best: 0:44");
+          // onGameMessage("Fight duration: 0:35 (new personal best)");
+        */
+
+        //Colossal Wyrm Agility (Basic) Test
+        /*
+          onGameMessage("Your Colossal Wyrm Agility Course (Basic) lap count is: 3.");
+          // onGameMessage("Lap duration: 2:52.80. Personal best: 1:22.20");
+          // onGameMessage("Lap duration: 2:52.80 (new personal best)");
+        */
+
+        //Colossal Wyrm Agility (Advanced) Test
+        /*
+          onGameMessage("Your Colossal Wyrm Agility Course (Advanced) lap count is: 217.");
+          // onGameMessage("Lap duration: 1:01.80. Personal best: 0:59.40");
+          // onGameMessage("Lap duration: 1:01.80 (new personal best)");
+        */
+
+        //Priff Agility Test
+        /*
+          onGameMessage("Your Prifddinas Agility Course lap count is: 92.");
+          // onGameMessage("Lap duration: 1:15.00. Personal best: 1:04.80");
+          // onGameMessage("Lap duration: 1:15.00 (new personal best)");
+        */
+
+        //Hallowed Sepluchre Floor Test
+        /*
+          onGameMessage("You have completed Floor 4 of the Hallowed Sepulchre! Total completions: 125.");
+          // onGameMessage("Floor 4 time: 1:46.80. Personal best: 1:36.60");
+          // onGameMessage("Floor 4 time: 1:46.80 (new personal best)");
+        */
+
+        //Hallowed Sepluchre Total Test
+        /*
+          onGameMessage("You have completed Floor 5 of the Hallowed Sepulchre! Total completions: 95.");
+          // onGameMessage("Floor 5 time: 2:49.80. Personal best: 2:38.40");
+          // onGameMessage("Overall time: 6:48.60. Personal best: 6:18.00");
+          // onGameMessage("Overall time: 6:48.60 (new personal best)");
+        */
+
+        //Inferno Test
+        /*
+          onGameMessage("Your TzKal-Zuk kill count is 1.");
+          // onGameMessage("Duration: 2:23:41. Personal best: 1:09:04");
+          // onGameMessage("Duration: 2:21:41 (new personal best)");
+        */
+
+        //Phantom Muspah Test
+        /*
+          onGameMessage("Your Phantom Muspah kill count is: 12.");
+          // onGameMessage("Fight duration: 3:11. Personal best: 2:17");
+          // onGameMessage("Fight duration: 2:02 (new personal best)");
+        */
+
+        //Six Jads Test
+        /*
+          onGameMessage("Your completion count for Tzhaar-Ket-Rak's Sixth Challenge is 1.");
+          // onGameMessage("Challenge duration: 6:02. Personal best: 5:31");
+          // onGameMessage("Challenge duration: 6:31.80 (new personal best");
+        */
+
+        //Hueycoatl Test
+        /*
+          onGameMessage("Your Hueycoatl kill count is 3.");
+          // onGameMessage("Fight duration: 3:09.60. Personal best: 0:58.20");
+          // onGameMessage("Fight duration: 3:04 (new personal best)");
+        */
+
+        //Leviathan Test
+        /*
+          onGameMessage("Your Leviathan kill count is 2.");
+          // onGameMessage("Fight duration: 3:19. Personal best: 2:50");
+          // onGameMessage("Fight duration: 2:16.80 (new personal best)");
+        */
+
+        //Royal Titans Test
+        /*
+          onGameMessage("Your Royal Titans kill count is: 9.");
+          // onGameMessage("Fight Duration: 2:33. Personal best: 0:53");
+          // onGameMessage("Fight duration: 2:50 (new personal best)");
+        */
+
+        //Whisperer Test
+        /*
+          onGameMessage("Your whisperer kill count is 4.");
+          // onGameMessage("Fight duration: 3:06.00. Personal best: 2:29.40");
+          // onGameMessage("Fight duration: 2:18.60 (new personal best)");
+        */
+
+        //Vardorvis Test
+        /*
+          onGameMessage("Your Vardorvis kill count is: 18.");
+          // onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("Fight duration: 2:39 (new personal best)");
+        */
+
+        //Vorkath Test
+        /*
+          onGameMessage("Your Vorkath kill count is: 168.");
+          //onGameMessage("Fight duration: 4:04. Personal best: 1:13");
+          // onGameMessage("Fight duration: 1:53 (new personal best)");
+        */
+
+        //Yama Test
+        /*
+        onGameMessage("Your Yama success count is 20.");
+        // onGameMessage("Fight duration: 4:04. Personal best: 3:50");
+        // onGameMessage("Fight duration: 3:22 (new personal best)");\
+        */
+
+        //Doom Mokhaiotl Level 4 Test
+        /*
+        // onGameMessage("Delve level: 4 duration: 2:34. Personal best: 1:54");
+        // onGameMessage("Delve level: 4 (new personal best)");
+        onGameMessage("Total duration: 6:29");
+         */
+
+
+        //Doom Mokhaiotl 1-8 Test
+        /*
+        onGameMessage("Delve level: 8 duration: 1:30. Personal best: 1:11");
+        // onGameMessage("Delve level 1 - 8 duration: 9:40. Personal best: 9:33");
+        // onGameMessage("Delve level 1 - 8 duration: 9:33 (new personal best)");
+        onGameMessage("Deep delves completed: 2");
+         */
     }
 }

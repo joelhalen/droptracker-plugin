@@ -10,8 +10,10 @@ import java.util.Date;
 
 import io.droptracker.DropTrackerConfig;
 import javax.inject.Inject;
-import net.runelite.client.RuneLite;
 
+import lombok.extern.slf4j.Slf4j;
+import net.runelite.client.RuneLite;
+@Slf4j
 public class DebugLogger {
 
     private static final String PLUGIN_DIR_NAME = "droptracker";
@@ -58,6 +60,7 @@ public class DebugLogger {
         if (instance == null || !instance.isEnabled()) {
             return;
         }
+        log.debug("DebugLogger message: " + message);
         instance.writeLine(message);
     }
 

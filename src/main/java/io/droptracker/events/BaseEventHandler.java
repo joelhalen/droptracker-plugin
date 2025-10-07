@@ -7,6 +7,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.SubmissionManager;
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
@@ -198,6 +199,7 @@ public abstract class BaseEventHandler {
      * @param type the event type identifier
      */
     protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
+        DebugLogger.log("Sending webhook body: " + webhook.toString());
         if (webhook == null) {
             log.warn("Attempted to send null webhook data");
             return;
