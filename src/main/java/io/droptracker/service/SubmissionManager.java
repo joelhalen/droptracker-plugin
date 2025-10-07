@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
 import net.runelite.api.annotations.Component;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.DrawManager;
@@ -79,12 +80,17 @@ public class SubmissionManager {
         this.drawManager = drawManager;
     }
 
-    public static void modWidget(boolean shouldHide, Client client, ClientThread clientThread, @Component int info) {
+    public static void hideWidget(Client client, ClientThread clientThread, @Component int info) {
+        Widget widget = client.getWidget(info);
+        if (widget != null) {
+            widget.setHidden(true);
+        }
+    }
+    public static void showWidget(Client client, ClientThread clientThread, @Component int info) {
         clientThread.invoke(() -> {
             Widget widget = client.getWidget(info);
-            if (widget != null) {
-                widget.setHidden(shouldHide);
-            }
+            if (widget != null)
+                widget.setHidden(false);
         });
     }
 
@@ -328,6 +334,7 @@ public class SubmissionManager {
 
         if (requiredScreenshot) {
             boolean shouldHideDm = config.hideDMs();
+            System.out.println("Got shouldHideDm as: " + shouldHideDm);
             captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
         } else {
             sendDataToDropTracker(customWebhookBody, (byte[]) null);
@@ -566,13 +573,13 @@ public class SubmissionManager {
 
     private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
         // First hide DMs if configured
-        modWidget(hideDMs, client, clientThread, UrlManager.PRIVATE_CHAT_WIDGET);
+        hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
 
         drawManager.requestNextFrameListener(image -> {
             BufferedImage bufferedImage = (BufferedImage) image;
 
             // Restore DM visibility immediately after capturing
-            modWidget(false, client, clientThread, UrlManager.PRIVATE_CHAT_WIDGET);
+            showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
 
             byte[] imageBytes = null;
             try {
@@ -583,6 +590,7 @@ public class SubmissionManager {
             } catch (IOException e) {
                 log.error("Error converting image to byte array", e);
             }
+
             sendDataToDropTracker(webhook, imageBytes);
         });
     }
