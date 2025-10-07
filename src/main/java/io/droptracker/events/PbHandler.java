@@ -89,12 +89,10 @@ public class PbHandler extends BaseEventHandler {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        DebugLogger.log("[PbHandler.java:92] onGameMessage: " + message);
         parseMessage(message).ifPresent(this::updateKillData);
     }
 
     public void onFriendsChatNotification(String message) {
-        DebugLogger.log("[PbHandler.java:97] onFriendsChatNotification: " + message);
         if (message.startsWith("Congratulations - your raid is complete!")) {
             onGameMessage(message);
         }
@@ -102,7 +100,6 @@ public class PbHandler extends BaseEventHandler {
 
     public void onTick() {
         KillData data = killData.get();
-        DebugLogger.log("[PbHandler.java:105] onTick: " + data);
         if (data == null) {
             if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
                 reset();
