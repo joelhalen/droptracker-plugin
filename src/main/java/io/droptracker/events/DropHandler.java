@@ -39,7 +39,7 @@ public class DropHandler extends BaseEventHandler {
     @Inject
     private ItemManager itemManager;
 
-	private ArrayList<Integer> valuedItemIds;
+
 
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived event) {
@@ -115,11 +115,11 @@ public class DropHandler extends BaseEventHandler {
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
-		if (this.valuedItemIds == null) {
+		if (plugin.valuedItemIds == null) {
 			/* Load target 'valued item ids' if they are not present
 			To help properly screenshot un-tradeables that are later given values
 			 */
-			valuedItemIds = api.getValuedUntradeables();
+			plugin.valuedItemIds = api.getValuedUntradeables();
 		}
 		AtomicReference<Boolean> untradeableScreenshot = null;
 		clientThread.invokeLater(() -> {
@@ -133,7 +133,7 @@ public class DropHandler extends BaseEventHandler {
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
 				/* Check if the itemId exists in the valued list we obtained */
-				if (valuedItemIds.contains(itemId)) {
+				if (plugin.valuedItemIds.contains(itemId)) {
 					untradeableScreenshot.set(true);
 				}
 				int qty = item.getQuantity();

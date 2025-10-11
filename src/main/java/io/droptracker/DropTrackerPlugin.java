@@ -33,6 +33,7 @@ import com.google.gson.*;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -156,6 +157,8 @@ public class DropTrackerPlugin extends Plugin {
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
+	public ArrayList<Integer> valuedItemIds;
+
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, gson, httpClient, this, client);
@@ -164,7 +167,13 @@ public class DropTrackerPlugin extends Plugin {
 		}
 		// Preload webhook URLs asynchronously
 		executor.submit(() -> urlManager.loadEndpoints());
+		// Load untradeable item IDs on startup for screenshotting purposes
+		executor.submit(() -> loadUntradeables());
 
+	}
+
+	private void loadUntradeables() {
+		this.valuedItemIds = api.getValuedUntradeables();
 	}
 
 

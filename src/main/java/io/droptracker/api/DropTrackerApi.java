@@ -474,13 +474,15 @@ public class DropTrackerApi {
                     ArrayList<Integer> itemIdList = new ArrayList<>();
                     for (String itemIdString : valuedList) {
                         try {
-                            int itemId = Integer.parseInt(itemIdString.trim());
+                            String idStripped = itemIdString.replace("\"", "").replace("[", "").replace("]", "");
+                            int itemId = Integer.parseInt(idStripped.trim());
                             itemIdList.add(itemId);
                         } catch (NumberFormatException e) {
                             // Handle cases where a part of the string isn't a valid integer
                             System.err.println("Skipping invalid item ID: " + itemIdString);
                         }
                     }
+                    DebugLogger.log("Loaded item ID list: " + itemIdList.toString());
                     return itemIdList;
                 }
             }
