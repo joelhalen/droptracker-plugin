@@ -10,6 +10,7 @@ import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
+import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import net.runelite.api.Client;
@@ -442,6 +443,51 @@ public class DropTrackerApi {
                 }
             }
         });
+    }
+
+    /**
+     * Query the API (or github pages) for a list of 'valuable' untradeables; or in other words,
+     * a list of items that have modified 'true' values based on what they are components towards
+     * For example, a bludgeon axon should be worth 1/3 the price of a bludgeon.
+     * Since this list should be updated infrequently, we can simply load only if not present.
+     */
+    public ArrayList<Integer> getValuedUntradeables() {
+        String valued;
+        String url;
+        if (config.useApi()) {
+            url = getApiUrl() + "/value_mods";
+        } else {
+            url = "https://droptracker-io.githubpages.io/valued_items.json";
+        }
+        try {
+            Request request = new Request.Builder().url(url).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                if (!response.isSuccessful()) {
+                    throw new IOException("API request failed with status: " + response.code());
+                }
+                if (response.body() == null) {
+                    throw new IOException("Empty response body");
+                } else {
+                    valued = response.body().string();
+                    String[] valuedList = valued.split(",");
+                    ArrayList<Integer> itemIdList = new ArrayList<>();
+                    for (String itemIdString : valuedList) {
+                        try {
+                            int itemId = Integer.parseInt(itemIdString.trim());
+                            itemIdList.add(itemId);
+                        } catch (NumberFormatException e) {
+                            // Handle cases where a part of the string isn't a valid integer
+                            System.err.println("Skipping invalid item ID: " + itemIdString);
+                        }
+                    }
+                    return itemIdList;
+                }
+            }
+        } catch (IOException e) {
+            DebugLogger.log("Unable to load 'valued untradeables' from " + (config.useApi() ? "API" : "GitHub") + e);
+            return null;
+        }
     }
 
     public interface PanelDataLoadedCallback {
