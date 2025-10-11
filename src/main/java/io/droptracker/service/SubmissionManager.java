@@ -288,13 +288,13 @@ public class SubmissionManager {
         }
     }
 
-    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
+    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue, boolean valueModified) {
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
         }
 
-        boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue();
+        boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue() || valueModified;
 
         // Create ValidSubmission for drops only when they qualify for group notifications
         ValidSubmission dropSubmission = null;

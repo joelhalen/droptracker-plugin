@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.inject.Inject;
 
@@ -13,7 +14,6 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.DebugLogger;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
@@ -38,6 +38,8 @@ public class DropHandler extends BaseEventHandler {
 
     @Inject
     private ItemManager itemManager;
+
+	private ArrayList<Integer> valuedItemIds;
 
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived event) {
@@ -113,6 +115,13 @@ public class DropHandler extends BaseEventHandler {
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
+		if (this.valuedItemIds == null) {
+			/* Load target 'valued item ids' if they are not present
+			To help properly screenshot un-tradeables that are later given values
+			 */
+			valuedItemIds = api.getValuedUntradeables();
+		}
+		AtomicReference<Boolean> untradeableScreenshot = null;
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
@@ -120,8 +129,13 @@ public class DropHandler extends BaseEventHandler {
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
 			AtomicInteger singleValue = new AtomicInteger(0);
+			
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
+				/* Check if the itemId exists in the valued list we obtained */
+				if (valuedItemIds.contains(itemId)) {
+					untradeableScreenshot.set(true);
+				}
 				int qty = item.getQuantity();
 				int price = itemManager.getItemPrice(itemId);
 				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
@@ -147,14 +161,20 @@ public class DropHandler extends BaseEventHandler {
 			}
 
 			// Now do the heavy work off the client thread
-			int valueToSend = totalValue.get();
+
 
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
+
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						sendData(customWebhookBody, valueToSend, singleValue.get());
+						int valueToSend = totalValue.get();
+						/* 'untradeableScreenshot' is true here if any of the obtained items' IDs were contained
+						inside the list of valuedItemIds, populated through the api call (or github pages url).
+						*/
+						Boolean valueModified = (untradeableScreenshot.get() != null && untradeableScreenshot.get() == true);
+						sendData(customWebhookBody, valueToSend, singleValue.get(), valueModified);
 					}
 				} catch (Exception e) {
 					log.error("Error processing drop event", e);
