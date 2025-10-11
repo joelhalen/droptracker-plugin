@@ -57,7 +57,14 @@ public class DebugLogger {
 
     public static void log(String message) {
         DebugLogger instance = activeInstance;
-        if (instance == null || !instance.isEnabled()) {
+        if (instance == null) {
+            return;
+        }
+        if (!instance.isEnabled()) {
+            /* Still forwarding these messages to the default Sl4fj logger;
+                since we use the DebugLogger throughout as an alternative in our plugin
+            */
+            log.debug(message);
             return;
         }
         log.debug("DebugLogger message: " + message);
