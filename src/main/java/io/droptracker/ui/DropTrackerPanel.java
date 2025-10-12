@@ -69,7 +69,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JPanel groupStatsPanel;
 	private JLabel communicationStatusLabel;
 
-	private boolean testing = true;
+	private boolean testing = false;
 
 	@Inject
 	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
@@ -94,7 +94,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		headerPanel = new JPanel(new BorderLayout());
 
 		addHeaderElements();
-
+		/* Test button
 		if(testing){
 			DebugLogger.log("Testing is set true... adding button");
 			JButton testButton = new JButton("Create Game Message");
@@ -102,6 +102,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			testButton.setAlignmentX(Component.CENTER_ALIGNMENT);
 			headerPanel.add(testButton, BorderLayout.NORTH);
 		}
+		 */
 
 		// Create tabbed pane
 		tabbedPane = new JTabbedPane();

@@ -320,6 +320,7 @@ public interface DropTrackerConfig extends Config {
     default boolean receiveInGameMessages() {
         return true;
     }
+    /*
     @ConfigItem(
         name = "[ADVANCED] Custom API Endpoint",
         keyName = "customApiEndpoint",
@@ -327,6 +328,8 @@ public interface DropTrackerConfig extends Config {
         position = 3,
         section = apiSection
     )
+
+     */
     default String customApiEndpoint() {
         return "";
     }
