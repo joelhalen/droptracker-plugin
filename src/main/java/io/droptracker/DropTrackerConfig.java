@@ -409,6 +409,7 @@ public interface DropTrackerConfig extends Config {
             hidden = true
     )
     default String customApiEndpoint() {return "";}
+    void setCustomApiEndpoint(String customApiEndpoint);
 
     @ConfigItem(
         name = "lastAccountHash",

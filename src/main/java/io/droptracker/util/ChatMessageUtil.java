@@ -57,17 +57,11 @@ public class ChatMessageUtil {
         {
             LinkBrowser.browse("https://www.droptracker.io/wiki/why-api/");
         }
-//        if (event.getCommand().equals("pbtest"))
-//        {
-//            if (event.getArguments() != null) {
-//                String targetBoss = event.getArguments()[0];
-//                plugin.pbHandler.generateTestBossMessage(targetBoss);
-//            }
-//        }
-//        if (event.getCommand().equals("pb"))
-//        {
-//            plugin.pbHandler.shouldSendTestAsPb = true;
-//        }
+        if (event.getCommand().equals("debugurl"))
+        {
+            String apiUrlToUse = event.getArguments()[0];
+            config.setCustomApiEndpoint(apiUrlToUse);
+        }
     }
 
     public void sendChatMessage(String messageContent) {
