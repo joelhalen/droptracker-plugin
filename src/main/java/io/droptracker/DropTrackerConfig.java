@@ -330,9 +330,7 @@ public interface DropTrackerConfig extends Config {
     )
 
      */
-    default String customApiEndpoint() {
-        return "";
-    }
+
 
     @ConfigItem(
         name = "Debug Logging",
@@ -403,6 +401,14 @@ public interface DropTrackerConfig extends Config {
         return null;
     }
     void setLastAccountName(String accountName);
+
+    @ConfigItem(
+            name = "customApiEndpoint",
+            keyName = "customApiEndpoint",
+            description = "customApiEndpoint",
+            hidden = true
+    )
+    default String customApiEndpoint() {return "";}
 
     @ConfigItem(
         name = "lastAccountHash",
