@@ -320,7 +320,19 @@ public interface DropTrackerConfig extends Config {
     default boolean receiveInGameMessages() {
         return true;
     }
+    /*
+    @ConfigItem(
+        name = "[ADVANCED] Custom API Endpoint",
+        keyName = "customApiEndpoint",
+        description = "<html><b>Warning!</b>: Changing this option will likely cause<br>your submissions to no longer be processed at all!<br>This is intended as a debugging option.</html>",
+        position = 3,
+        section = apiSection
+    )
 
+     */
+    default String customApiEndpoint() {
+        return "";
+    }
 
     @ConfigItem(
         name = "Debug Logging",
@@ -391,15 +403,6 @@ public interface DropTrackerConfig extends Config {
         return null;
     }
     void setLastAccountName(String accountName);
-    @ConfigItem(
-            name = "Custom API Endpoint",
-            keyName = "customApiEndpoint",
-            description = "customApiEndpoint",
-            hidden = true
-    )
-    default String customApiEndpoint() {
-        return "";
-    }
 
     @ConfigItem(
         name = "lastAccountHash",
