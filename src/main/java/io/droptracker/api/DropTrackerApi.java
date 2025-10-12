@@ -457,7 +457,7 @@ public class DropTrackerApi {
         if (config.useApi()) {
             url = getApiUrl() + "/value_mods";
         } else {
-            url = "https://droptracker-io.githubpages.io/valued_items.";
+            url = "https://droptracker-io.github.io/content/valued_items.txt";
         }
         try {
             Request request = new Request.Builder().url(url).build();
