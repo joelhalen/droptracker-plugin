@@ -145,7 +145,8 @@ public class SubmissionManager {
                 if (config.screenshotPBs() && isPb) {
                     requiredScreenshot = true;
                 }
-                if (isPb) {
+                // Check if we should create any ValidSubmission objects for this pb
+                if (isPb && config.useApi()) {
                     ValidSubmission pbSubmission = null;
                     for (GroupConfig groupConfig : api.getGroupConfigs()) {
                         if (groupConfig.isSendPbs()) {
@@ -176,20 +177,23 @@ public class SubmissionManager {
                 }
                 // Create ValidSubmission for collection log entries
                 ValidSubmission clogSubmission = null;
-                for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                    if (groupConfig.isSendClogs()) {
-                        if (groupConfig.isOnlyScreenshots()) {
-                            if (!requiredScreenshot) {
-                                continue; // Skip this group if screenshots required but not happening
+                // Check if we should create any ValidSubmission objects for this collection log slot
+                if (config.useApi()) {
+                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                        if (groupConfig.isSendClogs()) {
+                            if (groupConfig.isOnlyScreenshots()) {
+                                if (!requiredScreenshot) {
+                                    continue; // Skip this group if screenshots required but not happening
+                                }
                             }
-                        }
 
-                        // Create or find existing submission for this webhook
-                        if (clogSubmission == null) {
-                            clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
-                            addSubmissionToMemory(clogSubmission);
-                        } else {
-                            clogSubmission.addGroupId(groupConfig.getGroupId());
+                            // Create or find existing submission for this webhook
+                            if (clogSubmission == null) {
+                                clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
+                                addSubmissionToMemory(clogSubmission);
+                            } else {
+                                clogSubmission.addGroupId(groupConfig.getGroupId());
+                            }
                         }
                     }
                 }
@@ -205,20 +209,23 @@ public class SubmissionManager {
                 }
                 // Create ValidSubmission for combat achievements
                 ValidSubmission caSubmission = null;
-                for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                    if (groupConfig.isSendCAs()) {
-                        if (groupConfig.isOnlyScreenshots()) {
-                            if (!requiredScreenshot) {
-                                continue; // Skip this group if screenshots required but not happening
+                // Check if we should create any ValidSubmission objects for this combat achievement
+                if (config.useApi()) {
+                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
+                        if (groupConfig.isSendCAs()) {
+                            if (groupConfig.isOnlyScreenshots()) {
+                                if (!requiredScreenshot) {
+                                    continue; // Skip this group if screenshots required but not happening
+                                }
                             }
-                        }
 
-                        // Create or find existing submission for this webhook
-                        if (caSubmission == null) {
-                            caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
-                            addSubmissionToMemory(caSubmission);
-                        } else {
-                            caSubmission.addGroupId(groupConfig.getGroupId());
+                            // Create or find existing submission for this webhook
+                            if (caSubmission == null) {
+                                caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
+                                addSubmissionToMemory(caSubmission);
+                            } else {
+                                caSubmission.addGroupId(groupConfig.getGroupId());
+                            }
                         }
                     }
                 }
