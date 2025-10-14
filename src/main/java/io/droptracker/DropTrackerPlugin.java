@@ -499,11 +499,11 @@ public class DropTrackerPlugin extends Plugin {
 		if (oldState == GameState.HOPPING) {
 			return;
 		}
+		/* Ensure 'justLoggedIn' flag is not set */
+		if (justLoggedIn.get()) {
+			return;
+		}
 		if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
-			/* Ensure 'justLoggedIn' flag is not set */
-			if (justLoggedIn.get()) {
-				return;
-			}
 			chatMessageUtil.warnClogSetting();
 		}
 		if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
