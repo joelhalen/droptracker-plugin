@@ -72,9 +72,22 @@ public class ChatMessageUtil {
             sendChatMessage("All outgoing requests will now be sent to " + apiUrlToUse);
         }
     }
-
+    public void warnApiSetting() {
+        String message = "It is strongly recommended that you enable our API connections in the DropTracker plugin configuration. To learn more, type ::droptracker";
+        Color color = ColorUtil.fromString("red");
+        String formatted = String.format("[%s] %s: %s",
+                ColorUtil.wrapWithColorTag("DropTracker.io", color),
+                "Warning",
+                ColorUtil.wrapWithColorTag(message, color));
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(formatted)
+                        .build()
+        );
+    }
     public void warnClogSetting() {
-        String message = "Your collection log slot will not be tracked unless you enabled the game setting: Collection log - New addition notification";
+        String message = "Your collection log slots will not be tracked unless you enabled the game setting: Collection log - New addition notification";
         Color color = ColorUtil.fromString("red");
         String formatted = String.format("[%s] %s: %s",
                 ColorUtil.wrapWithColorTag("DropTracker.io", color),

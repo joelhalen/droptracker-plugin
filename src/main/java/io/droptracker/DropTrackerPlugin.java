@@ -506,6 +506,10 @@ public class DropTrackerPlugin extends Plugin {
 			}
 			chatMessageUtil.warnClogSetting();
 		}
+		if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
+			/* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
+			chatMessageUtil.warnApiSetting();
+		}
 	}
 
 
