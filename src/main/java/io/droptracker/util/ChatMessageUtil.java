@@ -11,8 +11,13 @@ import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.LinkBrowser;
+
+import java.awt.*;
 
 
 public class ChatMessageUtil {
@@ -24,6 +29,9 @@ public class ChatMessageUtil {
     private DropTrackerApi api;
     @Inject
     private DropTrackerPlugin plugin;
+
+    @Inject
+    private ChatMessageManager chatMessageManager;
 
     @Inject
     private Client client;
@@ -61,7 +69,23 @@ public class ChatMessageUtil {
         {
             String apiUrlToUse = event.getArguments()[0];
             config.setCustomApiEndpoint(apiUrlToUse);
+            sendChatMessage("All outgoing requests will now be sent to " + apiUrlToUse);
         }
+    }
+
+    public void warnClogSetting() {
+        String message = "Your collection log slot will not be tracked unless you enabled the game setting: Collection log - New addition notification";
+        Color color = ColorUtil.fromString("red");
+        String formatted = String.format("[%s] %s: %s",
+                ColorUtil.wrapWithColorTag("DropTracker.io", color),
+                "Warning",
+                ColorUtil.wrapWithColorTag(message, color));
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(formatted)
+                        .build()
+        );
     }
 
     public void sendChatMessage(String messageContent) {
@@ -75,8 +99,16 @@ public class ChatMessageUtil {
                 .append(ChatColorType.NORMAL);
         messageBuilder.append(messageContent);
         final String finalMessage = messageBuilder.build();
-        clientThread.invokeLater(() -> {
-            client.addChatMessage(ChatMessageType.CONSOLE, finalMessage, finalMessage, "DropTracker.io");
-        });
+        Color color = ColorUtil.fromString("red");
+        String formatted = String.format("[%s] %s: %s",
+                ColorUtil.wrapWithColorTag("DropTracker.io", color),
+                "Warning",
+                ColorUtil.wrapWithColorTag(finalMessage, Color.black));
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(finalMessage)
+                        .build()
+        );
     }
 }

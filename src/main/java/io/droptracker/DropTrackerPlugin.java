@@ -36,6 +36,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -61,6 +62,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -74,6 +76,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 
 
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.ImageUtil;
 import okhttp3.*;
 
@@ -122,6 +125,8 @@ public class DropTrackerPlugin extends Plugin {
 	public ChatMessageUtil chatMessageUtil;
 	@Inject
 	private SubmissionManager submissionManager;
+
+	private AtomicBoolean justLoggedIn = new AtomicBoolean(false);
 
 	@Inject
 	private ScheduledExecutorService executor;
@@ -479,6 +484,28 @@ public class DropTrackerPlugin extends Plugin {
 			return;
 		}
 		experienceHandler.onGameStateChanged(gameStateChanged);
+	}
+	@Subscribe
+	void onGameState(GameState oldState, GameState newState) {
+		/* Only process on gamestate changes, and after the first logged-in tick is complete*/
+		if (oldState == newState) {
+			return;
+		}
+		if (newState != GameState.LOGGED_IN) {
+			justLoggedIn.set(false);
+		} else {
+			justLoggedIn.set(true);
+		}
+		if (oldState == GameState.HOPPING) {
+			return;
+		}
+		if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
+			/* Ensure 'justLoggedIn' flag is not set */
+			if (justLoggedIn.get()) {
+				return;
+			}
+			chatMessageUtil.warnClogSetting();
+		}
 	}
 
 
