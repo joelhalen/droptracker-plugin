@@ -342,7 +342,6 @@ public class SubmissionManager {
 
         if (requiredScreenshot) {
             boolean shouldHideDm = config.hideDMs();
-            System.out.println("Got shouldHideDm as: " + shouldHideDm);
             captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
         } else {
             sendDataToDropTracker(customWebhookBody, (byte[]) null);
