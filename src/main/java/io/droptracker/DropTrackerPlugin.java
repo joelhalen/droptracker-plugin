@@ -494,6 +494,7 @@ public class DropTrackerPlugin extends Plugin {
     GameState previousState = gameState.getAndSet(newState);
     if (previousState == newState) {
       // no real change occured (just momentarily went through LOADING); ignore
+		return;
     }
 
     // Track if the user just logged in
