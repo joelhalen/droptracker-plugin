@@ -74,7 +74,7 @@ public class ChatMessageUtil {
     }
     public void warnApiSetting() {
         String message = "It is strongly recommended that you enable our API connections in the DropTracker plugin configuration. To learn more, type ::droptracker";
-        Color color = ColorUtil.fromString("red");
+        Color color = ColorUtil.fromHex("#ff0000");
         String formatted = String.format("[%s] %s: %s",
                 ColorUtil.wrapWithColorTag("DropTracker.io", color),
                 "Warning",
@@ -88,7 +88,7 @@ public class ChatMessageUtil {
     }
     public void warnClogSetting() {
         String message = "Your collection log slots will not be tracked unless you enabled the game setting: Collection log - New addition notification";
-        Color color = ColorUtil.fromString("red");
+        Color color = ColorUtil.fromHex("#ff0000");
         String formatted = String.format("[%s] %s: %s",
                 ColorUtil.wrapWithColorTag("DropTracker.io", color),
                 "Warning",
