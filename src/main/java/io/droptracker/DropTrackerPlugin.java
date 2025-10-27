@@ -498,7 +498,7 @@ public class DropTrackerPlugin extends Plugin {
     // Track if the user just logged in
     justLoggedIn.set(newState == GameState.LOGGED_IN);
 
-    if (previousState === GameState.HOPPING) {
+    if (previousState == GameState.HOPPING) {
       // ignore
       return;
     }
