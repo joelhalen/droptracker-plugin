@@ -17,7 +17,7 @@ BSD 2-Clause License
 		and/or other materials provided with the distribution.
 
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-		AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+		AND ANY EXPRESS OR 951bd712c5b3a41fd2f42f0cdfbfb1c27154b1bfIMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 		IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 		DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 		FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
@@ -157,7 +157,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private Client client;
 
-	public String pluginVersion = "5.2.0";
+	public String pluginVersion = "5.2.1";
 
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
