@@ -505,7 +505,7 @@ public class DropTrackerPlugin extends Plugin {
 
     // Ensure the user didn't just logged in
     if (justLoggedIn.get()) {
-      return
+      return;
     }
 
     if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
