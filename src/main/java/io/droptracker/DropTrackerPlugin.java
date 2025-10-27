@@ -162,6 +162,8 @@ public class DropTrackerPlugin extends Plugin {
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
+	private final AtomicReference<GameState> gameState = new AtomicReference<>();
+
 	public ArrayList<Integer> valuedItemIds;
 
 	@Override
@@ -238,6 +240,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
+    gameState.lazySet(null);
 		if (navButton != null) {
 			clientToolbar.removeNavigation(navButton);
 			navButton = null;
@@ -480,40 +483,46 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged) {
+    GameState newState = gameStateChanged.getGameState();
+
+    if (newState == GameState.LOADING) {
+      // an intermediate state that is irrelevant; ignore
+      return;
+    }
+
+    GameState previousState = gameState.getAndSet(newState);
+    if (previousState == newState) {
+      // no real change occured (just momentarily went through LOADING); ignore
+    }
+
+    // Track if the user just logged in
+    justLoggedIn.set(newState == GameState.LOGGED_IN);
+
+    if (previousState === GameState.HOPPING) {
+      // ignore
+      return;
+    }
+
+    // Ensure the user didn't just logged in
+    if (justLoggedIn.get()) {
+      return
+    }
+
+    if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
+      chatMessageUtil.warnClogSetting();
+    }
+
+    if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
+    /* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
+      chatMessageUtil.warnApiSetting();
+    }
+
+    // Experience tracking
 		if (!isTracking || !config.trackExperience()) {
 			return;
 		}
 		experienceHandler.onGameStateChanged(gameStateChanged);
 	}
-	@Subscribe
-	void onGameState(GameState oldState, GameState newState) {
-		/* Only process on gamestate changes, and after the first logged-in tick is complete*/
-		if (oldState == newState) {
-			return;
-		}
-		if (newState != GameState.LOGGED_IN) {
-			justLoggedIn.set(false);
-		} else {
-			justLoggedIn.set(true);
-		}
-		if (oldState == GameState.HOPPING) {
-			return;
-		}
-		/* Ensure 'justLoggedIn' flag is not set */
-		if (justLoggedIn.get()) {
-			return;
-		}
-		if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
-			chatMessageUtil.warnClogSetting();
-		}
-		if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
-			/* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
-			chatMessageUtil.warnApiSetting();
-		}
-	}
-
-
-
 
 	public String getLocalPlayerName() {
 		if (client.getLocalPlayer() != null) {
@@ -528,8 +537,4 @@ public class DropTrackerPlugin extends Plugin {
 										  String totalReceivedAllTime, String totalLootNpcAllTime) {
 
 	}
-
-
-
-
 }
