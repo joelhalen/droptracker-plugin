@@ -162,6 +162,8 @@ public class DropTrackerPlugin extends Plugin {
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
+  private GameState oldState;
+
 	public ArrayList<Integer> valuedItemIds;
 
 	@Override
@@ -486,26 +488,33 @@ public class DropTrackerPlugin extends Plugin {
 		experienceHandler.onGameStateChanged(gameStateChanged);
 	}
 	@Subscribe
-	void onGameState(GameState oldState, GameState newState) {
+	void onGameState(GameState newState) {
 		/* Only process on gamestate changes, and after the first logged-in tick is complete*/
 		if (oldState == newState) {
 			return;
 		}
+
+    oldState = newState;
+
 		if (newState != GameState.LOGGED_IN) {
 			justLoggedIn.set(false);
 		} else {
 			justLoggedIn.set(true);
 		}
+
 		if (oldState == GameState.HOPPING) {
 			return;
 		}
+
 		/* Ensure 'justLoggedIn' flag is not set */
 		if (justLoggedIn.get()) {
 			return;
 		}
+
 		if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
 			chatMessageUtil.warnClogSetting();
 		}
+
 		if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
 			/* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
 			chatMessageUtil.warnApiSetting();
