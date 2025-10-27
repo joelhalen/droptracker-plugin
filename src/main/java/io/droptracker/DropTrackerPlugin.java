@@ -488,13 +488,11 @@ public class DropTrackerPlugin extends Plugin {
 
     if (newState == GameState.LOADING) {
       // an intermediate state that is irrelevant; ignore
-		System.out.println("newState is loading...?");
       return;
     }
 
     GameState previousState = gameState.getAndSet(newState);
     if (previousState == newState) {
-		System.out.println("previousState == newState");
       // no real change occured (just momentarily went through LOADING); ignore
 		return;
     }
@@ -503,24 +501,20 @@ public class DropTrackerPlugin extends Plugin {
     justLoggedIn.set(newState == GameState.LOGGED_IN);
 
     if (previousState == GameState.HOPPING) {
-		System.out.println("previousState is hopping....");
       // ignore
       return;
     }
 
     // Ensure the user didn't just logged in
     if (justLoggedIn.get()) {
-		System.out.println("justLoggedIn.get() is true");
       return;
     }
 
     if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
-		System.out.println("clientgetVarbitValue is false and config.clogEmbeds is true");
       chatMessageUtil.warnClogSetting();
     }
 
     if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
-		System.out.println("api is off and custom api endpoint is empty..");
     /* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
       chatMessageUtil.warnApiSetting();
     }
