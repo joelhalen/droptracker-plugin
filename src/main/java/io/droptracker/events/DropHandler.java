@@ -173,9 +173,13 @@ public class DropHandler extends BaseEventHandler {
 						/* 'untradeableScreenshot' is true here if any of the obtained items' IDs were contained
 						inside the list of valuedItemIds, populated through the api call (or github pages url).
 						*/
-						Boolean untradeable = untradeableScreenshot.get(); // Get the value *once*
-
-						Boolean valueModified = (untradeable != null && untradeable == true);
+						Boolean valueModified;
+						if (untradeableScreenshot != null) {
+							Boolean untradeable = untradeableScreenshot.get(); // Get the value *once*
+							valueModified = (untradeable != null && untradeable == true);
+						} else {
+							valueModified = false;
+						}
 						sendData(customWebhookBody, valueToSend, singleValue.get(), valueModified);
 					}
 				} catch (Exception e) {

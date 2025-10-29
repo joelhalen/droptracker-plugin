@@ -112,7 +112,7 @@ public class ChatMessageUtil {
                 .append(ChatColorType.NORMAL);
         messageBuilder.append(messageContent);
         final String finalMessage = messageBuilder.build();
-        Color color = ColorUtil.fromString("red");
+        Color color = ColorUtil.fromHex("#ff0000");
         String formatted = String.format("[%s] %s: %s",
                 ColorUtil.wrapWithColorTag("DropTracker.io", color),
                 "Warning",
