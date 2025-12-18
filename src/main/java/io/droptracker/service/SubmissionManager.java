@@ -349,15 +349,7 @@ public class SubmissionManager {
     }
 
     private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
-        if (customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
-            for (CustomWebhookBody.Embed embed : customWebhookBody.getEmbeds()) {
-                for (CustomWebhookBody.Field field : embed.getFields()) {
-                    if (field.getName().equalsIgnoreCase("source_type")) {
-                        DebugLogger.log("A " + field.getValue() + " submission was processed & is being sent to discord: " + customWebhookBody.toString());
-                    }
-                }
-            }
-        }
+
         sendWebhookWithRetry(customWebhookBody, screenshot, 0);
     }
 
@@ -406,7 +398,6 @@ public class SubmissionManager {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                DebugLogger.log("onFailure received; scheduleRetryOrFail method called...");
                 scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, e);
             }
 
@@ -414,7 +405,6 @@ public class SubmissionManager {
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (ResponseBody body = response.body()) {
                     if (config.useApi()) {
-                        DebugLogger.log("onResponse received with API enabled...");
                         api.lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
                         if (body != null) {
                             try {
