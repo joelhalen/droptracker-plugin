@@ -453,12 +453,9 @@ public class DropTrackerApi {
      */
     public ArrayList<Integer> getValuedUntradeables() {
         String valued;
-        String url;
-        if (config.useApi()) {
-            url = getApiUrl() + "/value_mods";
-        } else {
-            url = "https://droptracker-io.github.io/content/valued_items.txt";
-        }
+        /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */
+
+        String url = "https://droptracker-io.github.io/content/valued_items.txt";
         try {
             Request request = new Request.Builder().url(url).build();
             try (Response response = httpClient.newCall(request).execute()) {

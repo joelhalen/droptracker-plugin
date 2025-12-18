@@ -178,6 +178,8 @@ public class DropTrackerPlugin extends Plugin {
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
 
+		DebugLogger.log("Plugin started. API " + (config.useApi() ? "enabled" : "disabled") + ". Side panel: " + (config.showSidePanel() ? "enabled" : "disabled") + (config.customApiEndpoint().equals("") ? "Default API url used." : "Custom API endpoint:" + config.customApiEndpoint()));
+		DebugLogger.log("Plugin version: " + pluginVersion);
 	}
 
 	private void loadUntradeables() {

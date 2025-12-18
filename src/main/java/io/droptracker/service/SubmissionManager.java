@@ -349,7 +349,15 @@ public class SubmissionManager {
     }
 
     private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
-        DebugLogger.log("data has arrived at final sendDataToDropTracker method; == " + customWebhookBody.toString());
+        if (customWebhookBody.getEmbeds() != null && !customWebhookBody.getEmbeds().isEmpty()) {
+            for (CustomWebhookBody.Embed embed : customWebhookBody.getEmbeds()) {
+                for (CustomWebhookBody.Field field : embed.getFields()) {
+                    if (field.getName().equalsIgnoreCase("source_type")) {
+                        DebugLogger.log("A " + field.getValue() + " submission was processed & is being sent to discord: " + customWebhookBody.toString());
+                    }
+                }
+            }
+        }
         sendWebhookWithRetry(customWebhookBody, screenshot, 0);
     }
 
@@ -382,7 +390,6 @@ public class SubmissionManager {
         } else {
             url = api.getApiUrl() + "/webhook";
         }
-        DebugLogger.log("Using the following URL for this submission: " + url);
         HttpUrl u = HttpUrl.parse(url);
         if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {
             log.debug("Invalid or malformed webhook URL: {}", url);
