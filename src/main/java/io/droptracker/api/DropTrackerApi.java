@@ -44,6 +44,9 @@ public class DropTrackerApi {
     private boolean isLoadingGroupConfigs = false;
 
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+
+    /** Optional callback invoked after group configs are successfully loaded */
+    private Runnable onGroupConfigsLoadedCallback;
     
    
 
@@ -54,6 +57,13 @@ public class DropTrackerApi {
             this.httpClient = httpClient;
             this.plugin = plugin;
             this.client = client;
+    }
+
+    /**
+     * Set a callback to be invoked when group configs are successfully loaded.
+     */
+    public void setOnGroupConfigsLoadedCallback(Runnable callback) {
+        this.onGroupConfigsLoadedCallback = callback;
     }
     
 
@@ -111,6 +121,15 @@ public class DropTrackerApi {
                     }
                     
                     lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
+                    
+                    // Notify listeners that group configs are now available
+                    if (onGroupConfigsLoadedCallback != null) {
+                        try {
+                            onGroupConfigsLoadedCallback.run();
+                        } catch (Exception callbackEx) {
+                            log.debug("Error in group config loaded callback: " + callbackEx.getMessage());
+                        }
+                    }
                     
                 } catch (IOException e) {
                     log.debug("Couldn't load group config in side panel (IOException) " + e);

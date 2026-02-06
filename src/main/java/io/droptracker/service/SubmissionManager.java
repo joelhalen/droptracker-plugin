@@ -1,12 +1,15 @@
 package io.droptracker.service;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
+import com.google.gson.reflect.TypeToken;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.api.GroupConfig;
+import io.droptracker.models.submissions.SubmissionStatus;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
@@ -19,22 +22,29 @@ import net.runelite.api.WorldType;
 import net.runelite.api.annotations.Component;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.RuneLite;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.Text;
 import okhttp3.*;
-import okio.Buffer;
 import org.jetbrains.annotations.NotNull;
 
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import java.io.*;
+import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
@@ -51,10 +61,12 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-    /// Store a list of submissions that the player has received which qualified for a notification to be sent
+
+    /** Thread-safe list of submissions the player has received which qualified for notifications */
     @Getter
-    private final List<ValidSubmission> validSubmissions = new ArrayList<>();
-    /// Callback for UI updates when submissions change
+    private final List<ValidSubmission> validSubmissions = new CopyOnWriteArrayList<>();
+
+    /** Callback for UI updates when submissions change */
     @Setter
     private SubmissionUpdateCallback updateCallback;
     @Setter
@@ -62,12 +74,25 @@ public class SubmissionManager {
     @Inject
     private ScheduledExecutorService executor;
 
-    // Variables to store counts and values for the UI
-    public int totalSubmissions = 0;
-    public int notificationsSent = 0;
-    public int failedSubmissions = 0;
-    public Long totalValue = 0L;
-    
+    /** Total GP value of drops submitted this session */
+    @Getter
+    private long sessionTotalValue = 0L;
+
+    /** Debounced save handle */
+    private ScheduledFuture<?> pendingSave;
+    private final AtomicBoolean saveScheduled = new AtomicBoolean(false);
+
+    /** Directory for persisting submissions */
+    private static final String PERSISTENCE_DIR = "droptracker";
+    private static final String PERSISTENCE_FILE_PREFIX = "submissions_";
+    private static final int MAX_PERSISTED_SUBMISSIONS = 50;
+
+    /** Pending webhooks that arrived before group configs were loaded */
+    private final List<PendingEvent> pendingEvents = new CopyOnWriteArrayList<>();
+    private volatile boolean groupConfigsLoaded = false;
+
+    private static final long BASE_RETRY_DELAY_MS = 1000L;
+
     @Inject
     public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
         this.config = config;
@@ -81,12 +106,15 @@ public class SubmissionManager {
         this.drawManager = drawManager;
     }
 
+    // ========== Widget Helpers ==========
+
     public static void hideWidget(Client client, ClientThread clientThread, @Component int info) {
         Widget widget = client.getWidget(info);
         if (widget != null) {
             widget.setHidden(true);
         }
     }
+
     public static void showWidget(Client client, ClientThread clientThread, @Component int info) {
         clientThread.invoke(() -> {
             Widget widget = client.getWidget(info);
@@ -95,267 +123,221 @@ public class SubmissionManager {
         });
     }
 
-    private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
-        return byteArrayOutputStream.toByteArray();
-    }
+    // ========== Public Entry Points for Event Handlers ==========
 
     /**
-     * Notifies the UI callback that submissions have been updated
+     * Entry point for non-drop events (PBs, CLogs, CAs, Pets, Quests, Levels, XP, etc.)
      */
-    private void notifyUpdateCallback() {
-        if (updatesEnabled && updateCallback != null) {
-            updateCallback.onSubmissionsUpdated();
-        }
-    }
-
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
-        /* Drops are still handled in a separate method due to the way values are handled */
-        /* Here, we send the webhook and submission type, and check against the stored group config values
-         * to determine whether the submission "should" create a notification on Discord based on their group settings.
-         * If so, we create a ValidSubmission object and add it to the in-memory list, allowing the UI to display the submission,
-         * and later updating the status of it with whether or not it properly got sent to the API and had its notifications
-         * processed properly for the target group(s).
-         */
-        var requiredScreenshot = false;
-        var shouldHideDm = config.hideDMs();
+        boolean requiredScreenshot = false;
+        boolean shouldHideDm = config.hideDMs();
 
+        // Check if the user has this event type enabled locally
         switch (type) {
             case DROP:
-                // We do not need to do anything for drop submissions as the required processing is done prior to being sent here
+                // Drops use the value-based overload; this should not be called for drops
                 break;
-
             case KILL_TIME:
-                // Kc / kill time
-                List<CustomWebhookBody.Embed> embeds = webhook.getEmbeds();
-                if (!config.pbEmbeds()) {
-                    return;
-                }
-                boolean isPb = false;
-                for (CustomWebhookBody.Embed embed : embeds) {
-                    for (CustomWebhookBody.Field field : embed.getFields()) {
-                        if (field.getName().equalsIgnoreCase("is_pb")) {
-                            if (field.getValue().equalsIgnoreCase("true")) {
-                                isPb = true;
-                            }
-                        }
-                    }
-                }
+                if (!config.pbEmbeds()) return;
+                boolean isPb = isFieldTrue(webhook, "is_pb");
                 if (config.screenshotPBs() && isPb) {
                     requiredScreenshot = true;
                 }
-                // Check if we should create any ValidSubmission objects for this pb
-                if (isPb && config.useApi()) {
-                    ValidSubmission pbSubmission = null;
-                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                        if (groupConfig.isSendPbs()) {
-                            if (groupConfig.isOnlyScreenshots()) {
-                                if (!requiredScreenshot) {
-                                    continue; // Skip this group if screenshots required but not happening
-                                }
-                            }
-
-                            // Create or find existing submission for this webhook
-                            if (pbSubmission == null) {
-                                pbSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.KILL_TIME);
-                                addSubmissionToMemory(pbSubmission);
-                            } else {
-                                pbSubmission.addGroupId(groupConfig.getGroupId());
-                            }
-                        }
+                if (!isPb) {
+                    // Non-PB kill times: just send, no ValidSubmission tracking
+                    if (requiredScreenshot) {
+                        captureScreenshotAndSend(webhook, null, shouldHideDm);
+                    } else {
+                        sendWebhookDirect(webhook, null, null);
                     }
+                    return;
                 }
                 break;
-
             case COLLECTION_LOG:
-                if (!config.clogEmbeds()) {
-                    return;
-                }
-                if (config.screenshotNewClogs()) {
-                    requiredScreenshot = true;
-                }
-                // Create ValidSubmission for collection log entries
-                ValidSubmission clogSubmission = null;
-                // Check if we should create any ValidSubmission objects for this collection log slot
-                if (config.useApi()) {
-                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                        if (groupConfig.isSendClogs()) {
-                            if (groupConfig.isOnlyScreenshots()) {
-                                if (!requiredScreenshot) {
-                                    continue; // Skip this group if screenshots required but not happening
-                                }
-                            }
-
-                            // Create or find existing submission for this webhook
-                            if (clogSubmission == null) {
-                                clogSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COLLECTION_LOG);
-                                addSubmissionToMemory(clogSubmission);
-                            } else {
-                                clogSubmission.addGroupId(groupConfig.getGroupId());
-                            }
-                        }
-                    }
-                }
+                if (!config.clogEmbeds()) return;
+                if (config.screenshotNewClogs()) requiredScreenshot = true;
                 break;
-
             case COMBAT_ACHIEVEMENT:
-                // combat achievements
-                if (!config.caEmbeds()) {
-                    return;
-                }
-                if (config.screenshotCAs()) {
-                    requiredScreenshot = true;
-                }
-                // Create ValidSubmission for combat achievements
-                ValidSubmission caSubmission = null;
-                // Check if we should create any ValidSubmission objects for this combat achievement
-                if (config.useApi()) {
-                    for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                        if (groupConfig.isSendCAs()) {
-                            if (groupConfig.isOnlyScreenshots()) {
-                                if (!requiredScreenshot) {
-                                    continue; // Skip this group if screenshots required but not happening
-                                }
-                            }
-
-                            // Create or find existing submission for this webhook
-                            if (caSubmission == null) {
-                                caSubmission = new ValidSubmission(webhook, groupConfig.getGroupId(), SubmissionType.COMBAT_ACHIEVEMENT);
-                                addSubmissionToMemory(caSubmission);
-                            } else {
-                                caSubmission.addGroupId(groupConfig.getGroupId());
-                            }
-                        }
-                    }
-                }
+                if (!config.caEmbeds()) return;
+                if (config.screenshotCAs()) requiredScreenshot = true;
                 break;
-
             case LEVEL_UP:
-                if (!config.levelEmbed()){
-                    return;
-                }
-                if(config.screenshotLevel()){
-                    requiredScreenshot = true;
-                }
-                CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
-                // Check the skills that leveled up
-                for (CustomWebhookBody.Field field : embed.getFields()) {
-                    String fieldName = field.getName();
-                    if (fieldName.endsWith("_level") && !fieldName.equals("total_level") && !fieldName.equals("combat_level")) {
-                        int newLevel = Integer.parseInt(field.getValue());
-                        // Check if this level qualifies for a screenshot
-                        if (newLevel >= config.minLevelToScreenshot()) {
-                            break;
-                        }
-                    }
-                }
+                if (!config.levelEmbed()) return;
+                if (config.screenshotLevel()) requiredScreenshot = true;
                 break;
-
             case QUEST_COMPLETION:
-                // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                if (!config.questsEmbed()) {
-                    return;
-                }
-                if (config.screenshotQuests()) {
-                    // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                    requiredScreenshot = true;
-                }
+                if (!config.questsEmbed()) return;
+                if (config.screenshotQuests()) requiredScreenshot = true;
                 break;
-
-            case EXPERIENCE:
-                /* We don't need to take screenshots for experience */
-                break;
-
-            case EXPERIENCE_MILESTONE:
-                /* We don't need to take screenshots for experience milestones */
-                break;
-
-            case ADVENTURE_LOG:
-                // Nothing extra needs to be done for adventure log data
-                break;
-
             case PET:
-                // TODO -- need to add group config values for tracking for ValidSubmission object creation where necessary later
-                if(!config.petEmbeds()){
-                    break;
-                }
-                if (config.screenshotPets()) {
-                    requiredScreenshot = true;
-                }
+                if (!config.petEmbeds()) return;
+                if (config.screenshotPets()) requiredScreenshot = true;
+                break;
+            case EXPERIENCE:
+            case EXPERIENCE_MILESTONE:
+                // No screenshots for experience events
+                break;
+            case ADVENTURE_LOG:
+                // No extra processing needed
                 break;
         }
 
-        // UI notification is handled by addSubmissionToMemory() when submissions are actually added
+        // Create ValidSubmission if the event qualifies for any group
+        ValidSubmission submission = createSubmissionIfQualified(webhook, type, requiredScreenshot, 0, 0);
 
         if (requiredScreenshot) {
-            captureScreenshotWithPrivacy(webhook, shouldHideDm);
+            captureScreenshotAndSend(webhook, submission, shouldHideDm);
         } else {
-            sendDataToDropTracker(webhook, (byte[]) null);
+            sendWebhookDirect(webhook, null, submission);
         }
     }
 
+    /**
+     * Entry point for drop events (value-based qualification)
+     */
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue, boolean valueModified) {
-        // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
             return;
         }
 
-        boolean requiredScreenshot = config.screenshotDrops() && totalValue > config.screenshotValue() || valueModified;
+        boolean requiredScreenshot = (config.screenshotDrops() && totalValue > config.screenshotValue()) || valueModified;
 
-        // Create ValidSubmission for drops only when they qualify for group notifications
-        ValidSubmission dropSubmission = null;
-        
-        // Check each group configuration to see if this drop qualifies
-        if (config.useApi()) {
-            for (GroupConfig groupConfig : api.getGroupConfigs()) {
-                if (groupConfig.isSendDrops() && totalValue >= groupConfig.getMinimumDropValue()) {
-                    // Check if group allows stacked items
-                    if (!groupConfig.isSendStackedItems() && totalValue > singleValue) {
-                        continue; // Skip this group if items were stacked but group disabled that
-                    }
+        // Create ValidSubmission if the drop qualifies for any group
+        ValidSubmission submission = createSubmissionIfQualified(customWebhookBody, SubmissionType.DROP, requiredScreenshot, totalValue, singleValue);
 
-                    if (groupConfig.isOnlyScreenshots()) {
-                        if (!requiredScreenshot) {
-                            continue; // Skip this group if screenshots required but not happening
-                        }
-                    }
-
-                    // Create or find existing submission for this webhook
-                    if (dropSubmission == null) {
-                        dropSubmission = new ValidSubmission(customWebhookBody, groupConfig.getGroupId(), SubmissionType.DROP);
-                        addSubmissionToMemory(dropSubmission);
-                    } else {
-                        dropSubmission.addGroupId(groupConfig.getGroupId());
-                    }
-                }
-            }
-        }
-        
-        // Update total value statistics  
-        this.totalValue += (long) totalValue;
-
-        // Notify UI if submissions were added
-        if (dropSubmission != null) {
-            notifyUpdateCallback();
+        // Update session value statistics
+        this.sessionTotalValue += (long) totalValue;
+        if (submission != null) {
+            submission.setTotalValue(totalValue);
         }
 
         if (requiredScreenshot) {
             boolean shouldHideDm = config.hideDMs();
-            captureScreenshotWithPrivacy(customWebhookBody, shouldHideDm);
+            captureScreenshotAndSend(customWebhookBody, submission, shouldHideDm);
         } else {
-            sendDataToDropTracker(customWebhookBody, (byte[]) null);
+            sendWebhookDirect(customWebhookBody, null, submission);
         }
     }
 
-    private void sendDataToDropTracker(CustomWebhookBody customWebhookBody, byte[] screenshot) {
+    // ========== Unified Qualification Logic ==========
 
-        sendWebhookWithRetry(customWebhookBody, screenshot, 0);
+    /**
+     * Checks all group configurations to determine if this event qualifies for tracked notifications.
+     * Creates a single ValidSubmission covering all qualifying groups, or returns null if none qualify.
+     */
+    private ValidSubmission createSubmissionIfQualified(
+            CustomWebhookBody webhook, SubmissionType type,
+            boolean hasScreenshot, int totalValue, int singleValue) {
+
+        if (!config.useApi()) {
+            return null;
+        }
+
+        List<GroupConfig> groupConfigs = api.getGroupConfigs();
+
+        // If group configs haven't loaded yet, queue the event for later evaluation
+        if (groupConfigs == null || groupConfigs.isEmpty()) {
+            if (!groupConfigsLoaded) {
+                pendingEvents.add(new PendingEvent(webhook, type, hasScreenshot, totalValue, singleValue));
+                DebugLogger.log("Group configs not loaded yet, queued event of type " + type);
+            }
+            return null;
+        }
+
+        ValidSubmission submission = null;
+
+        for (GroupConfig groupConfig : groupConfigs) {
+            if (!doesEventQualifyForGroup(type, groupConfig, hasScreenshot, totalValue, singleValue)) {
+                continue;
+            }
+
+            if (submission == null) {
+                submission = new ValidSubmission(webhook, groupConfig.getGroupId(), type);
+                addSubmissionToMemory(submission);
+            } else {
+                submission.addGroupId(groupConfig.getGroupId());
+            }
+        }
+
+        return submission;
     }
 
-    private static final long BASE_RETRY_DELAY_MS = 1000L;
+    /**
+     * Determines whether a specific event type qualifies for notifications in a given group.
+     */
+    private boolean doesEventQualifyForGroup(SubmissionType type, GroupConfig groupConfig,
+                                              boolean hasScreenshot, int totalValue, int singleValue) {
+        // If the group requires screenshots and we don't have one, skip
+        if (groupConfig.isOnlyScreenshots() && !hasScreenshot) {
+            return false;
+        }
 
-    private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt) {
+        switch (type) {
+            case DROP:
+                if (!groupConfig.isSendDrops()) return false;
+                if (totalValue < groupConfig.getMinimumDropValue()) return false;
+                // Check stacked items: if group doesn't allow stacked and total > single, skip
+                if (!groupConfig.isSendStackedItems() && totalValue > singleValue && singleValue > 0) return false;
+                return true;
+
+            case KILL_TIME:
+                return groupConfig.isSendPbs();
+
+            case COLLECTION_LOG:
+                return groupConfig.isSendClogs();
+
+            case COMBAT_ACHIEVEMENT:
+                return groupConfig.isSendCAs();
+
+            case LEVEL_UP:
+                return groupConfig.isSendXP();
+
+            case QUEST_COMPLETION:
+                return groupConfig.isSendQuests();
+
+            case PET:
+                return groupConfig.isSendPets();
+
+            case EXPERIENCE:
+            case EXPERIENCE_MILESTONE:
+                // XP events typically don't create group notifications,
+                // but respect the group config if present
+                return groupConfig.isSendXP();
+
+            case ADVENTURE_LOG:
+                // Adventure log currently has no group-level toggle
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    // ========== Send Logic ==========
+
+    /**
+     * Sends a webhook directly (with optional screenshot and ValidSubmission tracking).
+     * This is the single send method -- the ValidSubmission is passed through, not looked up.
+     */
+    private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission) {
+        if (isFakeWorld()) {
+            DebugLogger.log("Returning due to this being a fake world");
+            return;
+        }
+
+        if (submission != null) {
+            submission.markAsSending();
+            if (screenshot != null) {
+                submission.setScreenshotData(screenshot);
+            }
+            notifyUpdateCallback();
+            schedulePersistence();
+        }
+
+        sendWebhookWithRetry(webhook, screenshot, 0, submission);
+    }
+
+    private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt, ValidSubmission submission) {
         if (isFakeWorld()) {
             DebugLogger.log("Returning due to this being a fake world");
             return;
@@ -377,7 +359,7 @@ public class SubmissionManager {
             try {
                 url = UrlManager.getRandomUrl();
             } catch (Exception e) {
-                return; // Exit gracefully
+                return;
             }
         } else {
             url = api.getApiUrl() + "/webhook";
@@ -393,12 +375,10 @@ public class SubmissionManager {
                 .post(requestBody)
                 .build();
 
-        ValidSubmission validSubmission = findValidSubmissionForWebhook(webhook);
-
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, e);
+                scheduleRetryOrFail(webhook, screenshot, submission, attempt, e);
             }
 
             @Override
@@ -432,9 +412,10 @@ public class SubmissionManager {
                         int code = response.code();
 
                         if (code == 400 || code == 401 || code == 403) {
-                            if (validSubmission != null) {
-                                validSubmission.markAsFailed("HTTP " + code);
+                            if (submission != null) {
+                                submission.markAsFailed("HTTP " + code);
                                 notifyUpdateCallback();
+                                schedulePersistence();
                             }
                             return;
                         }
@@ -449,26 +430,26 @@ public class SubmissionManager {
                             });
                         }
 
-                        scheduleRetryOrFail(webhook, screenshot, validSubmission, attempt, new IOException("HTTP " + code + ": " + response.message()));
+                        scheduleRetryOrFail(webhook, screenshot, submission, attempt, new IOException("HTTP " + code + ": " + response.message()));
                         return;
                     }
 
                     // Success
-                    if (validSubmission != null) {
-                        validSubmission.markAsSuccess();
+                    if (submission != null) {
+                        submission.markAsSuccess();
                         notifyUpdateCallback();
+                        schedulePersistence();
                     }
-                    notificationsSent++;
 
-                    if (config.useApi() && validSubmission != null && validSubmission.getUuid() != null && !validSubmission.getUuid().isEmpty()) {
+                    // Check if the API has already processed this submission
+                    if (config.useApi() && submission != null && submission.getUuid() != null && !submission.getUuid().isEmpty()) {
                         executor.submit(() -> {
                             try {
-                                boolean processed = api.checkSubmissionProcessed(validSubmission.getUuid());
+                                boolean processed = api.checkSubmissionProcessed(submission.getUuid());
                                 if (processed) {
-                                    validSubmission.markAsProcessed();
-                                    if (updatesEnabled) {
-                                        notifyUpdateCallback();
-                                    }
+                                    submission.markAsProcessed();
+                                    notifyUpdateCallback();
+                                    schedulePersistence();
                                 }
                             } catch (IOException ignored) {
                             }
@@ -479,44 +460,84 @@ public class SubmissionManager {
         });
     }
 
-    private void scheduleRetryOrFail(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission validSubmission, int attempt, Throwable e) {
+    private void scheduleRetryOrFail(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission, int attempt, Throwable e) {
         int maxAttempts = 10;
         if (attempt < maxAttempts) {
             long delay = BASE_RETRY_DELAY_MS * (1L << Math.min(attempt, 16));
-            if (validSubmission != null) {
-                validSubmission.markAsRetrying();
+            if (submission != null) {
+                submission.markAsRetrying();
                 notifyUpdateCallback();
+                schedulePersistence();
             }
-            executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1), delay, java.util.concurrent.TimeUnit.MILLISECONDS);
+            executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1, submission), delay, TimeUnit.MILLISECONDS);
             log.debug("Scheduled webhook retry in {} ms (attempt {}/{})", delay, attempt + 1, maxAttempts);
         } else {
-            if (validSubmission != null) {
+            if (submission != null) {
                 String reason = e != null && e.getMessage() != null ? e.getMessage() : "Retry limit reached";
-                validSubmission.markAsFailed(reason);
+                submission.markAsFailed(reason);
                 notifyUpdateCallback();
+                schedulePersistence();
             }
-            failedSubmissions++;
             log.warn("Exhausted retry attempts when sending webhook");
         }
     }
 
+    // ========== Screenshot Capture ==========
+
+    private void captureScreenshotAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+        hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+
+        drawManager.requestNextFrameListener(image -> {
+            BufferedImage bufferedImage = (BufferedImage) image;
+            showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+
+            byte[] imageBytes = null;
+            try {
+                imageBytes = convertImageToByteArray(bufferedImage);
+                if (imageBytes.length > 5 * 1024 * 1024) {
+                    // TODO: perform compression here
+                }
+            } catch (IOException e) {
+                log.error("Error converting image to byte array", e);
+            }
+
+            sendWebhookDirect(webhook, imageBytes, submission);
+        });
+    }
+
+    private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
+        return byteArrayOutputStream.toByteArray();
+    }
+
+    // ========== Submission Management ==========
+
     public void addSubmissionToMemory(ValidSubmission validSubmission) {
-        if (validSubmissions.size() > 20) {
-            // Remove oldest submissions once the list starts to exceed 20
-            validSubmissions.remove(0);
+        // Prune oldest processed submissions to stay within limits
+        while (validSubmissions.size() >= MAX_PERSISTED_SUBMISSIONS) {
+            // Prefer removing oldest processed submission first
+            ValidSubmission toRemove = null;
+            for (ValidSubmission s : validSubmissions) {
+                if (s.getStatus() == SubmissionStatus.PROCESSED) {
+                    toRemove = s;
+                    break;
+                }
+            }
+            if (toRemove != null) {
+                validSubmissions.remove(toRemove);
+            } else {
+                // Remove the oldest submission regardless
+                validSubmissions.remove(0);
+            }
         }
         validSubmissions.add(validSubmission);
-        
-        // Increment total submissions when player generates a qualifying submission
-        totalSubmissions++;
-        
         notifyUpdateCallback();
+        schedulePersistence();
     }
 
     /**
      * Retry a failed submission using the stored webhook data
-     *
-     * @param validSubmission The submission to retry
      */
     public void retrySubmission(ValidSubmission validSubmission) {
         if (validSubmission == null || validSubmission.getOriginalWebhook() == null) {
@@ -525,41 +546,246 @@ public class SubmissionManager {
         }
         validSubmission.markAsRetrying();
         notifyUpdateCallback();
-        sendWebhookWithRetry(validSubmission.getOriginalWebhook(), null, 0);
+        schedulePersistence();
+        // Use stored screenshot data if available
+        byte[] screenshot = validSubmission.getScreenshotData();
+        sendWebhookWithRetry(validSubmission.getOriginalWebhook(), screenshot, 0, validSubmission);
     }
 
     /**
-     * Remove a submission from the in-memory list (e.g., when user dismisses it)
-     *
-     * @param validSubmission The submission to remove
+     * Remove a submission from the list (e.g., when user dismisses it)
      */
     public void removeSubmission(ValidSubmission validSubmission) {
         validSubmissions.remove(validSubmission);
         notifyUpdateCallback();
+        schedulePersistence();
     }
-    
+
+    // ========== Statistics (derived from list) ==========
+
     /**
-     * Get retry service statistics for UI display
+     * Count of all submissions that qualified for group notifications this session
      */
-    public String getRetryStatusText() {
-        // Simple status for UI: based on last communication time; detailed queue/health removed
-        return "";
+    public int getTotalSubmissions() {
+        return validSubmissions.size();
     }
-    
+
     /**
-     * Clear the retry queue (for manual intervention)
+     * Count of submissions that were successfully sent or processed
      */
-    public void clearRetryQueue() {
-        // No-op after removing queue; keep method to avoid UI breakage if referenced elsewhere
-        notifyUpdateCallback();
+    public int getNotificationsSent() {
+        int count = 0;
+        for (ValidSubmission s : validSubmissions) {
+            if (s.getStatus() == SubmissionStatus.SENT || s.getStatus() == SubmissionStatus.PROCESSED) {
+                count++;
+            }
+        }
+        return count;
     }
-    
+
     /**
-     * Enable or disable retry processing
+     * Count of submissions that failed
      */
-    public void setRetryProcessingEnabled(boolean enabled) {
-        // No-op in simplified retry model
+    public int getFailedSubmissions() {
+        int count = 0;
+        for (ValidSubmission s : validSubmissions) {
+            if (s.getStatus() == SubmissionStatus.FAILED) {
+                count++;
+            }
+        }
+        return count;
     }
+
+    /**
+     * Total GP value of drops submitted (session-only, not derived from list because
+     * non-qualifying drops also contribute to GP value)
+     */
+    public long getTotalValue() {
+        return sessionTotalValue;
+    }
+
+    // ========== Pending Status Polling ==========
+
+    /**
+     * Poll the API to update statuses of pending submissions.
+     */
+    public void checkPendingStatuses() {
+        if (!config.useApi()) {
+            return;
+        }
+        executor.submit(() -> {
+            try {
+                boolean changed = false;
+                for (ValidSubmission submission : validSubmissions) {
+                    SubmissionStatus status = submission.getStatus();
+                    if (status == null || status.isTerminal()) {
+                        continue;
+                    }
+                    String uuid = submission.getUuid();
+                    if (uuid == null || uuid.isEmpty()) {
+                        continue;
+                    }
+                    try {
+                        boolean processed = api.checkSubmissionProcessed(uuid);
+                        if (processed) {
+                            submission.markAsProcessed();
+                            changed = true;
+                        }
+                    } catch (IOException e) {
+                        log.debug("/check failed for uuid {}: {}", uuid, e.getMessage());
+                    }
+                }
+                if (changed) {
+                    notifyUpdateCallback();
+                    schedulePersistence();
+                }
+            } catch (Exception e) {
+                log.debug("Error while checking pending statuses: {}", e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Check if there are any submissions in active (non-terminal) states
+     */
+    public boolean hasActiveSubmissions() {
+        for (ValidSubmission submission : validSubmissions) {
+            SubmissionStatus status = submission.getStatus();
+            if (status != null && status.isActive()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ========== Group Config Loading Notification ==========
+
+    /**
+     * Called when group configs have been loaded. Re-evaluates any events that were
+     * queued while configs were unavailable.
+     */
+    public void onGroupConfigsLoaded() {
+        this.groupConfigsLoaded = true;
+        if (pendingEvents.isEmpty()) {
+            return;
+        }
+
+        DebugLogger.log("Group configs loaded, processing " + pendingEvents.size() + " pending events");
+        List<PendingEvent> toProcess = new ArrayList<>(pendingEvents);
+        pendingEvents.clear();
+
+        for (PendingEvent event : toProcess) {
+            // Re-run qualification now that configs are available
+            createSubmissionIfQualified(event.webhook, event.type, event.hasScreenshot, event.totalValue, event.singleValue);
+        }
+
+        if (!validSubmissions.isEmpty()) {
+            notifyUpdateCallback();
+            schedulePersistence();
+        }
+    }
+
+    // ========== Persistence ==========
+
+    /**
+     * Load persisted submissions from disk for the given account hash.
+     */
+    public void loadSubmissions(String accountHash) {
+        if (accountHash == null || accountHash.isEmpty() || "-1".equals(accountHash)) {
+            return;
+        }
+
+        Path filePath = getSubmissionFilePath(accountHash);
+        if (!Files.exists(filePath)) {
+            return;
+        }
+
+        executor.submit(() -> {
+            try {
+                String json = new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
+                Type listType = new TypeToken<List<ValidSubmission>>() {}.getType();
+                Gson persistGson = new GsonBuilder().create();
+                List<ValidSubmission> loaded = persistGson.fromJson(json, listType);
+                if (loaded != null && !loaded.isEmpty()) {
+                    // Only load submissions that are still actionable (not yet processed, or recently processed)
+                    for (ValidSubmission s : loaded) {
+                        // Fix null status from old persistence format
+                        if (s.getStatus() == null) {
+                            s.markAsFailed("Unknown state after restart");
+                        }
+                        // Don't re-add if we already have it in memory (by UUID)
+                        if (s.getUuid() != null && findByUuid(s.getUuid()) != null) {
+                            continue;
+                        }
+                        validSubmissions.add(s);
+                    }
+                    DebugLogger.log("Loaded " + loaded.size() + " persisted submissions for account " + accountHash);
+                    notifyUpdateCallback();
+                }
+            } catch (Exception e) {
+                log.debug("Failed to load persisted submissions: {}", e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Save current submissions to disk. This is debounced to avoid excessive I/O.
+     */
+    private void schedulePersistence() {
+        if (executor == null) {
+            return;
+        }
+        if (saveScheduled.compareAndSet(false, true)) {
+            pendingSave = executor.schedule(() -> {
+                saveScheduled.set(false);
+                persistSubmissions();
+            }, 2, TimeUnit.SECONDS);
+        }
+    }
+
+    private void persistSubmissions() {
+        String accountHash = client != null ? String.valueOf(client.getAccountHash()) : null;
+        if (accountHash == null || "-1".equals(accountHash)) {
+            return;
+        }
+
+        try {
+            Path filePath = getSubmissionFilePath(accountHash);
+            Files.createDirectories(filePath.getParent());
+
+            // Only persist submissions that have webhook data (can be retried) or are recent
+            List<ValidSubmission> toSave = new ArrayList<>();
+            for (ValidSubmission s : validSubmissions) {
+                toSave.add(s);
+                if (toSave.size() >= MAX_PERSISTED_SUBMISSIONS) {
+                    break;
+                }
+            }
+
+            Gson persistGson = new GsonBuilder().setPrettyPrinting().create();
+            String json = persistGson.toJson(toSave);
+            Files.write(filePath, json.getBytes(StandardCharsets.UTF_8));
+            DebugLogger.log("Persisted " + toSave.size() + " submissions to disk");
+        } catch (Exception e) {
+            log.debug("Failed to persist submissions: {}", e.getMessage());
+        }
+    }
+
+    private Path getSubmissionFilePath(String accountHash) {
+        return RuneLite.RUNELITE_DIR.toPath().resolve(PERSISTENCE_DIR).resolve(PERSISTENCE_FILE_PREFIX + accountHash + ".json");
+    }
+
+    private ValidSubmission findByUuid(String uuid) {
+        if (uuid == null) return null;
+        for (ValidSubmission s : validSubmissions) {
+            if (uuid.equals(s.getUuid())) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    // ========== Utilities ==========
 
     private boolean isFakeWorld() {
         var worldType = client.getWorldType();
@@ -580,141 +806,49 @@ public class SubmissionManager {
         return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
     }
 
-    private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
-        // First hide DMs if configured
-        hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-
-        drawManager.requestNextFrameListener(image -> {
-            BufferedImage bufferedImage = (BufferedImage) image;
-
-            // Restore DM visibility immediately after capturing
-            showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-
-            byte[] imageBytes = null;
-            try {
-                imageBytes = convertImageToByteArray(bufferedImage);
-                if (imageBytes.length > 5 * 1024 * 1024) {
-                    // perform compression here
+    /**
+     * Check if a specific embed field has value "true"
+     */
+    private boolean isFieldTrue(CustomWebhookBody webhook, String fieldName) {
+        if (webhook == null || webhook.getEmbeds() == null) return false;
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                if (field.getName().equalsIgnoreCase(fieldName)
+                        && field.getValue().equalsIgnoreCase("true")) {
+                    return true;
                 }
-            } catch (IOException e) {
-                log.error("Error converting image to byte array", e);
-            }
-
-            sendDataToDropTracker(webhook, imageBytes);
-        });
-    }
-    
-    /**
-     * Process a queued submission from the retry service
-     */
-    // Queue processing removed in simplified retry model
-    
-    /**
-     * Find a ValidSubmission that matches the given webhook
-     */
-    private ValidSubmission findValidSubmissionForWebhook(CustomWebhookBody webhook) {
-        if (webhook == null) return null;
-        
-        // Try to match based on webhook content - prefer identity match
-        for (ValidSubmission submission : validSubmissions) {
-            if (submission.getOriginalWebhook() == webhook) {
-                return submission;
             }
         }
-        
-        // Try to match based on recent submissions with pending status
-        for (int i = validSubmissions.size() - 1; i >= 0 && i >= validSubmissions.size() - 5; i--) {
-            ValidSubmission submission = validSubmissions.get(i);
-            if ("pending".equals(submission.getStatus()) || "retrying".equals(submission.getStatus())) {
-                return submission;
-            }
-        }
-        
-        return null;
-    }
-    
-    /**
-     * Determine the submission type from webhook content
-     */
-    private SubmissionType getSubmissionTypeFromWebhook(CustomWebhookBody webhook) {
-        if (webhook == null || webhook.getEmbeds() == null || webhook.getEmbeds().isEmpty()) {
-            return SubmissionType.DROP; // Default fallback
-        }
-        
-        CustomWebhookBody.Embed embed = webhook.getEmbeds().get(0);
-        String title = embed.getTitle();
-        
-        if (title != null) {
-            String lowerTitle = title.toLowerCase();
-            if (lowerTitle.contains("personal best") || lowerTitle.contains("pb")) {
-                return SubmissionType.KILL_TIME;
-            }
-            if (lowerTitle.contains("collection log") || lowerTitle.contains("clog")) {
-                return SubmissionType.COLLECTION_LOG;
-            }
-            if (lowerTitle.contains("combat achievement") || lowerTitle.contains("ca")) {
-                return SubmissionType.COMBAT_ACHIEVEMENT;
-            }
-            if (lowerTitle.contains("level") || lowerTitle.contains("leveled")) {
-                return SubmissionType.LEVEL_UP;
-            }
-            if (lowerTitle.contains("quest")) {
-                return SubmissionType.QUEST_COMPLETION;
-            }
-            if (lowerTitle.contains("pet")) {
-                return SubmissionType.PET;
-            }
-            if (lowerTitle.contains("experience") || lowerTitle.contains("xp")) {
-                return SubmissionType.EXPERIENCE;
-            }
-        }
-        
-        return SubmissionType.DROP; // Default fallback
+        return false;
     }
 
-    /**
-     * Poll the API to update statuses of pending submissions. Only runs if API is enabled.
-     * This should be invoked periodically by the UI timer when the side panel is visible.
-     */
-    public void checkPendingStatuses() {
-        if (!config.useApi()) {
-            return;
+    private void notifyUpdateCallback() {
+        if (updatesEnabled && updateCallback != null) {
+            updateCallback.onSubmissionsUpdated();
         }
-        // Avoid blocking EDT: schedule on executor
-        executor.submit(() -> {
-            try {
-                boolean changed = false;
-                for (ValidSubmission submission : new java.util.ArrayList<>(validSubmissions)) {
-                    String status = submission.getStatus();
-                    if (status == null) {
-                        continue;
-                    }
-                    // Poll anything not completed (processed) and not failed
-                    if (!"processed".equalsIgnoreCase(status) && !"failed".equalsIgnoreCase(status)) {
-                        String uuid = submission.getUuid();
-                        if (uuid == null || uuid.isEmpty()) {
-                            continue;
-                        }
-                        try {
-                            boolean processed = api.checkSubmissionProcessed(uuid);
-                            if (processed) {
-                                submission.markAsProcessed();
-                                changed = true;
-                            }
-                        } catch (IOException e) {
-                            // Swallow per-submission errors to continue polling others
-                            log.debug("/check failed for uuid {}: {}", uuid, e.getMessage());
-                        }
-                    }
-                }
-                if (changed && updatesEnabled) {
-                    notifyUpdateCallback();
-                }
-            } catch (Exception e) {
-                log.debug("Error while checking pending statuses: {}", e.getMessage());
-            }
-        });
     }
+
+    // ========== Legacy API compatibility ==========
+
+    /** @deprecated Use derived methods instead. Kept for backward compat. */
+    @Deprecated
+    public String getRetryStatusText() {
+        return "";
+    }
+
+    /** @deprecated No-op. Kept for backward compat. */
+    @Deprecated
+    public void clearRetryQueue() {
+        notifyUpdateCallback();
+    }
+
+    /** @deprecated No-op. Kept for backward compat. */
+    @Deprecated
+    public void setRetryProcessingEnabled(boolean enabled) {
+        // No-op
+    }
+
+    // ========== Inner Classes ==========
 
     public interface SubmissionUpdateCallback {
         void onSubmissionsUpdated();
@@ -727,15 +861,34 @@ public class SubmissionManager {
 
         @SerializedName("rank_update")
         private String rankUpdate;
-        
+
         @SerializedName("status")
         private String status;
-        
+
         @SerializedName("processed")
         private Boolean processed;
-        
+
         @SerializedName("submission_id")
         private String submissionId;
     }
 
+    /**
+     * Represents an event that arrived before group configs were loaded.
+     * Stored temporarily until configs arrive, then re-evaluated.
+     */
+    private static class PendingEvent {
+        final CustomWebhookBody webhook;
+        final SubmissionType type;
+        final boolean hasScreenshot;
+        final int totalValue;
+        final int singleValue;
+
+        PendingEvent(CustomWebhookBody webhook, SubmissionType type, boolean hasScreenshot, int totalValue, int singleValue) {
+            this.webhook = webhook;
+            this.type = type;
+            this.hasScreenshot = hasScreenshot;
+            this.totalValue = totalValue;
+            this.singleValue = singleValue;
+        }
+    }
 }

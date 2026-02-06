@@ -142,6 +142,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	public Boolean isTracking = true;
 	public Integer ticksSinceNpcDataUpdate = 0;
+	private boolean loginWarningsShown = false;
 
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
 
@@ -170,6 +171,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void startUp() {
 		api = new DropTrackerApi(config, gson, httpClient, this, client);
+		// Wire up group config loaded callback to process any queued events
+		api.setOnGroupConfigsLoadedCallback(() -> submissionManager.onGroupConfigsLoaded());
 		if(config.showSidePanel()) {
 			createSidePanel();
 		}
@@ -268,6 +271,7 @@ public class DropTrackerPlugin extends Plugin {
 	protected void resetAll() {
 		kcService.reset();
 		petHandler.reset();
+		loginWarningsShown = false;
 	}
 
 	@Subscribe
@@ -416,8 +420,10 @@ public class DropTrackerPlugin extends Plugin {
 				if(petHandler.isEnabled()) {
 					petHandler.onGameMessage(chatMessage);
 				}
+				break;
 			case FRIENDSCHATNOTIFICATION:
 				pbHandler.onFriendsChatNotification(chatMessage);
+				break;
 			case CLAN_MESSAGE:
 			case CLAN_GIM_MESSAGE:
                 petHandler.onClanChatNotification(chatMessage);
@@ -446,6 +452,20 @@ public class DropTrackerPlugin extends Plugin {
 			}
 			config.setLastAccountName(playerName);
 			config.setLastAccountHash(String.valueOf(client.getAccountHash()));
+			// Load persisted submissions for this account
+			submissionManager.loadSubmissions(String.valueOf(client.getAccountHash()));
+
+			// Show login warnings once, now that varbits are guaranteed to be loaded
+			if (!loginWarningsShown) {
+				loginWarningsShown = true;
+				if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
+					chatMessageUtil.warnClogSetting();
+				}
+				if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
+					chatMessageUtil.warnApiSetting();
+				}
+			}
+
 			SwingUtilities.invokeLater(() -> {
 				try {
 					if (panel != null) {
@@ -463,14 +483,10 @@ public class DropTrackerPlugin extends Plugin {
 		}
 
 		/* Call individual event handlers */
-		experienceHandler.onTick();
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
-
 		petHandler.onTick();
 
-
-		// Also tick the experience handler
 		if (config.trackExperience()) {
 			experienceHandler.onTick();
 		}
@@ -512,14 +528,8 @@ public class DropTrackerPlugin extends Plugin {
       return;
     }
 
-    if (config.clogEmbeds() && client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) == 0) {
-      chatMessageUtil.warnClogSetting();
-    }
-
-    if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
-    /* Warn non-API users that they are strongly recommended to enable it for heightened reliability */
-      chatMessageUtil.warnApiSetting();
-    }
+    // Login warnings (clog setting, API setting) are now handled in onGameTick
+    // after the player is fully loaded and varbits are guaranteed to be populated.
 
     // Experience tracking
 		if (!isTracking || !config.trackExperience()) {

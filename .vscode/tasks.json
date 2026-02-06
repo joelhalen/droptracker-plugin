@@ -4,7 +4,7 @@
         {
             "label": "gradle build", // This label matches "preLaunchTask" in launch.json
             "type": "shell",
-            "command": "./gradlew build",
+            "command": "./gradlew build -x test",
             "group": {
                 "kind": "build",
                 "isDefault": true

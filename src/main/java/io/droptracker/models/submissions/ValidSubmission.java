@@ -1,14 +1,9 @@
 package io.droptracker.models.submissions;
 
-import java.awt.Font;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
-
-import javax.swing.BoxLayout;
-import javax.swing.JPanel;
-import javax.swing.JTextArea;
 
 import io.droptracker.models.CustomWebhookBody;
 import lombok.Data;
@@ -47,8 +42,8 @@ public class ValidSubmission {
     private String initialResponse;
     // time that the API responded with a successful processing of the submission
     private String timeProcessedAt;
-    // current status of the submission
-    private String status;
+    // current status of the submission (enum-based)
+    private SubmissionStatus status;
     
     // number of retry attempts made
     private int retryAttempts;
@@ -61,11 +56,17 @@ public class ValidSubmission {
     
     // Store the entire webhook data for retry functionality
     private CustomWebhookBody originalWebhook;
+    
+    // Store screenshot bytes for retry (transient - not persisted to disk)
+    private transient byte[] screenshotData;
+    
+    // Total value of the submission (used for drops)
+    private long totalValue;
 
     // Default constructor
     public ValidSubmission() {
         this.timeReceived = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
-        this.status = "pending";
+        this.status = SubmissionStatus.PENDING;
         this.groupIds = new String[0];
         this.retryResponses = new String[0];
         this.retryAttempts = 0;
@@ -114,11 +115,19 @@ public class ValidSubmission {
                             case "npc":
                             case "npc_name":
                             case "boss":
+                            case "source":
                                 this.npcName = fieldValue;
                                 break;
                             case "account_hash":
+                            case "acc_hash":
                             case "player":
+                            case "player_name":
                                 this.accountHash = fieldValue;
+                                break;
+                            case "pet_name":
+                                if (this.itemName == null) {
+                                    this.itemName = fieldValue;
+                                }
                                 break;
                         }
                     }
@@ -140,143 +149,150 @@ public class ValidSubmission {
      * Mark the submission as failed with a reason
      */
     public void markAsFailed(String reason) {
-        this.status = "failed";
+        this.status = SubmissionStatus.FAILED;
         this.lastFailureReason = reason;
-    }
-    
-    /**
-     * Mark the submission as queued for retry
-     */
-    public void markAsQueued() {
-        this.status = "queued";
     }
     
     /**
      * Mark the submission as currently retrying
      */
     public void markAsRetrying() {
-        this.status = "retrying";
+        this.status = SubmissionStatus.RETRYING;
         this.retryAttempts++;
+    }
+    
+    /**
+     * Mark the submission as actively sending
+     */
+    public void markAsSending() {
+        this.status = SubmissionStatus.SENDING;
     }
     
     /**
      * Mark the submission as successfully sent
      */
     public void markAsSuccess() {
-        this.status = "sent";
+        this.status = SubmissionStatus.SENT;
         this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
     }
     
     /**
-     * Mark the submission as processed by the API
+     * Mark the submission as processed by the API.
+     * Note: we intentionally do NOT null out originalWebhook here so the user
+     * can still manually retry if the "processed" status was incorrect.
      */
     public void markAsProcessed() {
-        this.status = "processed";
+        this.status = SubmissionStatus.PROCESSED;
         this.timeProcessedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME);
-        // Clear webhook data to free memory since we no longer need to retry
-        this.originalWebhook = null;
     }
     
     /**
      * Check if this submission can be retried
      */
     public boolean canRetry() {
-        // only allow up to 5 retries from the API panel--after this, we assume it's "broken" somehow
-        return retryAttempts < 5 && !"sent".equals(status) && !"processed".equals(status);
+        return retryAttempts < 5 && originalWebhook != null && status.canRetry();
     }
     
     /**
      * Get a human-readable status description
      */
     public String getStatusDescription() {
+        if (status == null) {
+            return "Unknown";
+        }
         switch (status) {
-            case "pending":
-                return "Sending...";
-            case "sent":
-                return "Sent successfully";
-            case "processed":
-                return "Processed by API";
-            case "failed":
+            case FAILED:
                 return "Failed" + (lastFailureReason != null ? ": " + lastFailureReason : "");
-            case "queued":
-                return "Queued for retry";
-            case "retrying":
+            case RETRYING:
                 return "Retrying... (attempt " + (retryAttempts + 1) + ")";
             default:
-                return status;
+                return status.getDescription();
+        }
+    }
+    
+    /**
+     * Get a display-friendly label for the submission type
+     */
+    public String getTypeLabel() {
+        if (type == null) {
+            return "Submission";
+        }
+        switch (type) {
+            case DROP: return "Drop";
+            case KILL_TIME: return "Personal Best";
+            case COLLECTION_LOG: return "Collection Log";
+            case COMBAT_ACHIEVEMENT: return "Combat Achievement";
+            case LEVEL_UP: return "Level Up";
+            case QUEST_COMPLETION: return "Quest Completion";
+            case EXPERIENCE: return "Experience";
+            case EXPERIENCE_MILESTONE: return "Experience Milestone";
+            case PET: return "Pet";
+            case ADVENTURE_LOG: return "Adventure Log";
+            default: return "Submission";
+        }
+    }
+    
+    /**
+     * Get a short label for the submission type (used in the UI type indicator)
+     */
+    public String getTypeShortLabel() {
+        if (type == null) {
+            return "SUB";
+        }
+        switch (type) {
+            case DROP: return "DROP";
+            case KILL_TIME: return "PB";
+            case COLLECTION_LOG: return "CLOG";
+            case COMBAT_ACHIEVEMENT: return "CA";
+            case LEVEL_UP: return "LVL";
+            case QUEST_COMPLETION: return "QST";
+            case PET: return "PET";
+            case EXPERIENCE: return "XP";
+            case EXPERIENCE_MILESTONE: return "XP";
+            case ADVENTURE_LOG: return "LOG";
+            default: return "SUB";
         }
     }
 
-    public JPanel toSubmissionPanel() {
-        JPanel entryPanel = new JPanel();
-        entryPanel.setLayout(new BoxLayout(entryPanel, BoxLayout.Y_AXIS));
-
-        // Create a text area to display the submission information
-        JTextArea textArea = new JTextArea();
-        String text;
-        switch (this.type) {
-            case DROP:
-                text = "Drop: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case KILL_TIME:
-                text = "Personal Best: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case COLLECTION_LOG:
-                text = "Collection Log: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case COMBAT_ACHIEVEMENT:
-                text = "Combat Achievement: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case LEVEL_UP:
-                text = "Level Up: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case QUEST_COMPLETION:
-                text = "Quest Completion: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case EXPERIENCE:
-                text = "Experience: " + this.itemName + " - " + this.timeSinceReceived();
-                break;
-            case EXPERIENCE_MILESTONE:
-                text = "Experience Milestone: " + this.itemName + " - " + this.timeSinceReceived();
-                break;  
-            case PET:
-                text = "Pet: " + this.itemName + " - " + this.timeSinceReceived();
-                break;  
-            default:
-                text = "Unknown submission type: " + this.type;
-                break;
+    /**
+     * Get a single-line display text for this submission
+     */
+    public String getDisplayText() {
+        String name = itemName;
+        if (name == null || name.trim().isEmpty()) {
+            name = description;
         }
-        textArea.setText(text);
-        textArea.setEditable(false);
-        textArea.setLineWrap(true);
-        textArea.setWrapStyleWord(true);
-        textArea.setFont(new Font("Arial", Font.PLAIN, 12));    
-        entryPanel.add(textArea);
-        return entryPanel;
+        if (name == null || name.trim().isEmpty()) {
+            name = "Unknown";
+        }
+        return getTypeLabel() + ": " + name;
     }
 
-    private String timeSinceReceived() {
-            if (timeReceived == null) {
-                return "Unknown";
-            }
-            try {
-                DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-                LocalDateTime receivedDate = LocalDateTime.parse(timeReceived, formatter);
-                LocalDateTime now = LocalDateTime.now();
-                
-                Duration duration = Duration.between(receivedDate, now);
-                
-                if (duration.toDays() > 0) {
-                    return duration.toDays() + " days ago";
-                } else if (duration.toHours() > 0) {
-                    return duration.toHours() + " hours ago"; 
-                } else if (duration.toMinutes() > 0) {
-                    return duration.toMinutes() + " minutes ago";
-                } else {
-                    return "Just now";
-                }
-            } catch (Exception e) {
-                return "Unknown";
-            }
+    /**
+     * Get the time since this submission was received, as a human-readable string
+     */
+    public String getTimeSinceReceived() {
+        if (timeReceived == null) {
+            return "Unknown";
         }
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+            LocalDateTime receivedDate = LocalDateTime.parse(timeReceived, formatter);
+            LocalDateTime now = LocalDateTime.now();
+            
+            Duration duration = Duration.between(receivedDate, now);
+            
+            if (duration.toDays() > 0) {
+                return duration.toDays() + " days ago";
+            } else if (duration.toHours() > 0) {
+                return duration.toHours() + " hours ago"; 
+            } else if (duration.toMinutes() > 0) {
+                return duration.toMinutes() + " minutes ago";
+            } else {
+                return "Just now";
+            }
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
 }
