@@ -363,6 +363,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority=1)
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
+		System.out.println("[DT-DEBUG] onNpcLootReceived: npc=" + npcLootReceived.getNpc().getName() + " id=" + npcLootReceived.getNpc().getId() + " items=" + npcLootReceived.getItems().size());
 		if (npcLootReceived.getNpc().getId() == NpcID.YAMA) {
 			/* Handled by onServerNpcLoot */
             return;
@@ -379,6 +380,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority=1)
 	public void onLootReceived(LootReceived lootReceived) {
+		System.out.println("[DT-DEBUG] onLootReceived: name=" + lootReceived.getName() + " type=" + lootReceived.getType() + " items=" + lootReceived.getItems().size() + " isTracking=" + isTracking);
 		dropHandler.onLootReceived(lootReceived);
 		kcService.onLoot(lootReceived);
 	}
@@ -442,6 +444,9 @@ public class DropTrackerPlugin extends Plugin {
                 break;
 			default:
 				break;
+		}
+		if (message.getType() == ChatMessageType.GAMEMESSAGE && (chatMessage.contains("completion count") || chatMessage.contains("kill count") || chatMessage.contains("chest count"))) {
+			System.out.println("[DT-DEBUG] KC message: type=" + message.getType() + " msg=" + chatMessage);
 		}
 		kcService.onGameMessage(chatMessage);
 	}

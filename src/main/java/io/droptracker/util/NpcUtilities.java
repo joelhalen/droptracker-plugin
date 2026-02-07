@@ -36,13 +36,17 @@ public class NpcUtilities {
     @SuppressWarnings("null")
     public static String getStandardizedSource(LootReceived event, DropTrackerPlugin plugin) {
         if (isCorruptedGauntlet(event, plugin)) {
+            System.out.println("[DT-DEBUG] getStandardizedSource: corrupted gauntlet detected -> " + CG_NAME);
             return CG_NAME;
         }
         if (plugin.lastDrop == null) {
+            System.out.println("[DT-DEBUG] getStandardizedSource: lastDrop=null, using eventName=" + event.getName());
             return event.getName();
         } else if (shouldUseChatName(event, plugin) && plugin.lastDrop.getSource() != null) {
+            System.out.println("[DT-DEBUG] getStandardizedSource: using chatName=" + plugin.lastDrop.getSource() + " for event=" + event.getName());
             return plugin.lastDrop.getSource(); // distinguish entry/expert/challenge modes
         }
+        System.out.println("[DT-DEBUG] getStandardizedSource: fallthrough, using eventName=" + event.getName() + " (lastDrop.source=" + plugin.lastDrop.getSource() + ")");
         return event.getName();
     }
 

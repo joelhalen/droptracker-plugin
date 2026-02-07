@@ -146,6 +146,7 @@ public class KCService {
         NpcUtilities.parseBoss(message, plugin).ifPresent(pair -> {
             String boss = pair.getKey();
             Integer kc = pair.getValue();
+            System.out.println("[DT-DEBUG] KCService.onGameMessage: parsed boss=" + boss + " kc=" + kc);
 
             // Update cache. We store kc - 1 since onNpcLootReceived will increment; kc - 1 + 1 == kc
             String cacheKey = getCacheKey(LootRecordType.UNKNOWN, boss);
@@ -155,6 +156,7 @@ public class KCService {
                 // populate lastDrop to workaround loot tracker quirks
                 // (RuneLite fires LootReceived with "The Gauntlet" for both regular and corrupted)
                 plugin.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
+                System.out.println("[DT-DEBUG] KCService: set lastDrop=" + boss + " (gauntlet/raid workaround)");
 
                 if (!isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {   
                     // onLoot will already increment kc, no need to schedule task below.

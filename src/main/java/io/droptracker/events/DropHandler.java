@@ -76,13 +76,14 @@ public class DropHandler extends BaseEventHandler {
 	public void onLootReceived(LootReceived lootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
+			System.out.println("[DT-DEBUG] DropHandler.onLootReceived SKIPPED: isTracking=false");
 			return;
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
-		log.debug("onLootReceived: name={}, type={}, itemCount={}", npcName, lootReceived.getType(), lootReceived.getItems().size());
+		System.out.println("[DT-DEBUG] DropHandler.onLootReceived: rawName=" + lootReceived.getName() + " standardized=" + npcName + " type=" + lootReceived.getType() + " items=" + lootReceived.getItems().size() + " lastDrop=" + (plugin.lastDrop != null ? plugin.lastDrop.getSource() : "null"));
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
-			log.debug("Special NPC loot received: {}", npcName);
+			System.out.println("[DT-DEBUG]   -> routing as SPECIAL NPC: " + npcName);
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
@@ -94,18 +95,20 @@ public class DropHandler extends BaseEventHandler {
 			return;
 		}
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
-			log.debug("onLootReceived: skipping type={} for source={} (not EVENT or PICKPOCKET)", lootReceived.getType(), npcName);
+			System.out.println("[DT-DEBUG]   -> SKIPPED: type=" + lootReceived.getType() + " not EVENT/PICKPOCKET");
 			return;
 		}
-		log.debug("Processing EVENT/PICKPOCKET loot: source={}, items={}", npcName, lootReceived.getItems().size());
+		System.out.println("[DT-DEBUG]   -> processing EVENT/PICKPOCKET: source=" + npcName);
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 		kcService.onLoot(lootReceived);
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
+		System.out.println("[DT-DEBUG] processDropEvent: npc=" + npcName + " sourceType=" + sourceType + " recordType=" + lootRecordType + " itemCount=" + items.size());
 		chatMessageUtil.checkForMessage();
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
+			System.out.println("[DT-DEBUG]   processDropEvent SKIPPED: isTracking=false");
 			return;
 		} 
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
@@ -157,6 +160,7 @@ public class DropHandler extends BaseEventHandler {
 				embeds.add(itemEmbed);
 			}
 
+			System.out.println("[DT-DEBUG]   clientThread callback: player=" + localPlayerName + " stackedItems=" + stackedItems.size() + " embeds=" + embeds.size() + " totalValue=" + totalValue.get());
 			// Now do the heavy work off the client thread
 			executor.submit(() -> {
 				try {
@@ -166,9 +170,13 @@ public class DropHandler extends BaseEventHandler {
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
 						int valueToSend = totalValue.get();
 						Boolean valueModified = untradeableScreenshot.get();
+						System.out.println("[DT-DEBUG]   SENDING: embeds=" + customWebhookBody.getEmbeds().size() + " value=" + valueToSend + " valueModified=" + valueModified);
 						sendData(customWebhookBody, valueToSend, singleValue.get(), valueModified);
+					} else {
+						System.out.println("[DT-DEBUG]   NOT SENDING: embeds empty");
 					}
 				} catch (Exception e) {
+					System.out.println("[DT-DEBUG]   ERROR in executor: " + e.getMessage());
 					log.error("Error processing drop event", e);
 				}
 			});
