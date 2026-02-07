@@ -84,7 +84,6 @@ Video capture is designed to be lightweight, but it has two important dependenci
 
 **PLEASE NOTE**: If you are not a member of a group that has subscribed at the necessary tier for video capture, enabling it will **still capture videos**, but they won't be uploaded!
 
-(Massive shout-out to [@dennisdevulder](https://github.com/dennisdevulder) for all of the heavy lifting here -- we ride on the shoulders of giants!)
   - Captures a short clip from an in-memory rolling buffer (pre-event + post-event).
   - Uploads the clip frames to cloud storage using a **presigned upload URL** from the API.
   - Sends the submission with a **`video_key`** that the backend uses to associate the uploaded video.
