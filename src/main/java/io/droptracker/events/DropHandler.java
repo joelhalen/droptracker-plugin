@@ -90,6 +90,12 @@ public class DropHandler extends BaseEventHandler {
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
+			if(npcName.equals("Corrupted Hunllef")) {
+				npcName = "The Corrupted Gauntlet";
+			}
+			if(npcName.equals("Crystalline Hunllef")) {
+				npcName = "The Gauntlet";
+			}
 
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;

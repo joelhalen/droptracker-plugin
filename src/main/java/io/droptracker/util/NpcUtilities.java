@@ -25,7 +25,7 @@ public class NpcUtilities {
     public static final String COX = "Chambers of Xeric";
 
     public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor", "Branda the Fire Queen",
-            "Eldric the Ice King", "Dusk");
+            "Eldric the Ice King", "Dusk", "Corrupted Hunllef", "Crystalline Hunllef");
     public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians", "Yama");
 
     public static final Pattern PRIMARY_REGEX = Pattern.compile(
