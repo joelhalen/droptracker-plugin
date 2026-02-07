@@ -8,6 +8,7 @@ import com.google.gson.JsonSyntaxException;
 
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.SerializedDrop;
+import io.droptracker.models.submissions.Drop;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
@@ -152,6 +153,8 @@ public class KCService {
 
             if (boss.equals(NpcUtilities.GAUNTLET_BOSS) || boss.equals(NpcUtilities.CG_BOSS) || boss.startsWith(NpcUtilities.TOA) || boss.startsWith(NpcUtilities.TOB) || boss.startsWith(NpcUtilities.COX)) {
                 // populate lastDrop to workaround loot tracker quirks
+                // (RuneLite fires LootReceived with "The Gauntlet" for both regular and corrupted)
+                plugin.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());
 
                 if (!isPluginDisabled(RL_LOOT_PLUGIN_NAME)) {   
                     // onLoot will already increment kc, no need to schedule task below.

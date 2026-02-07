@@ -388,6 +388,87 @@ public class DropTrackerApi {
         return false;
     }
 
+    // ========== Video Upload ==========
+
+    /**
+     * Response from the presigned video upload URL endpoint.
+     */
+    public static class PresignedUrlResponse {
+        public String uploadUrl;
+        public String key;
+        public boolean quotaExceeded = false;
+        public String message;
+    }
+
+    /**
+     * Gets a presigned upload URL from the API for uploading video frames.
+     * The server returns an upload URL (e.g. to cloud storage) and a key
+     * that can later be included in the webhook to reference the video.
+     *
+     * @param fps The frames per second the video was recorded at
+     * @return The presigned URL response, or null on failure
+     */
+    public PresignedUrlResponse getPresignedVideoUploadUrl(int fps) {
+        if (!config.useApi()) {
+            return null;
+        }
+
+        String apiUrl = getApiUrl();
+        String endpoint = apiUrl + "/presigned_upload_url?fps=" + fps;
+
+        HttpUrl url = HttpUrl.parse(endpoint);
+        if (url == null) {
+            log.warn("Invalid presigned upload URL: {}", endpoint);
+            return null;
+        }
+
+        Request request = new Request.Builder()
+            .url(url)
+            .get()
+            .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            String body = response.body() != null ? response.body().string() : "";
+
+            if (response.code() == 402) {
+                // Quota exceeded
+                PresignedUrlResponse result = new PresignedUrlResponse();
+                result.quotaExceeded = true;
+                try {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> map = gson.fromJson(body, java.util.Map.class);
+                    result.message = map != null && map.get("message") != null
+                        ? String.valueOf(map.get("message"))
+                        : "Daily video limit reached";
+                } catch (Exception e) {
+                    result.message = "Daily video limit reached";
+                }
+                return result;
+            }
+
+            if (!response.isSuccessful()) {
+                log.error("Failed to get presigned URL: {} - {}", response.code(), response.message());
+                return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> map = gson.fromJson(body, java.util.Map.class);
+            if (map == null || !map.containsKey("upload_url") || !map.containsKey("key")) {
+                log.error("Presigned URL response missing required fields");
+                return null;
+            }
+
+            PresignedUrlResponse result = new PresignedUrlResponse();
+            result.uploadUrl = String.valueOf(map.get("upload_url"));
+            result.key = String.valueOf(map.get("key"));
+            return result;
+        } catch (IOException e) {
+            log.error("Error getting presigned video upload URL", e);
+            return null;
+        }
+    }
+
     /**
      * Asynchronously fetches the latest welcome string to avoid blocking the EDT.
      * @param callback Function to call with the result when ready

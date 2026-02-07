@@ -14,6 +14,8 @@ import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.video.VideoQuality;
+import io.droptracker.video.VideoRecorder;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +63,7 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
+    private final VideoRecorder videoRecorder;
 
     /** Thread-safe list of submissions the player has received which qualified for notifications */
     @Getter
@@ -94,7 +97,7 @@ public class SubmissionManager {
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
     @Inject
-    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager) {
+    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager, VideoRecorder videoRecorder) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
@@ -104,6 +107,7 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
+        this.videoRecorder = videoRecorder;
     }
 
     // ========== Widget Helpers ==========
@@ -146,9 +150,9 @@ public class SubmissionManager {
                 if (!isPb) {
                     // Non-PB kill times: just send, no ValidSubmission tracking
                     if (requiredScreenshot) {
-                        captureScreenshotAndSend(webhook, null, shouldHideDm);
+                        captureAndSend(webhook, null, shouldHideDm);
                     } else {
-                        sendWebhookDirect(webhook, null, null);
+                        sendWebhookDirect(webhook, null, null, null);
                     }
                     return;
                 }
@@ -186,9 +190,9 @@ public class SubmissionManager {
         ValidSubmission submission = createSubmissionIfQualified(webhook, type, requiredScreenshot, 0, 0);
 
         if (requiredScreenshot) {
-            captureScreenshotAndSend(webhook, submission, shouldHideDm);
+            captureAndSend(webhook, submission, shouldHideDm);
         } else {
-            sendWebhookDirect(webhook, null, submission);
+            sendWebhookDirect(webhook, null, null, submission);
         }
     }
 
@@ -213,9 +217,9 @@ public class SubmissionManager {
 
         if (requiredScreenshot) {
             boolean shouldHideDm = config.hideDMs();
-            captureScreenshotAndSend(customWebhookBody, submission, shouldHideDm);
+            captureAndSend(customWebhookBody, submission, shouldHideDm);
         } else {
-            sendWebhookDirect(customWebhookBody, null, submission);
+            sendWebhookDirect(customWebhookBody, null, null, submission);
         }
     }
 
@@ -316,10 +320,15 @@ public class SubmissionManager {
     // ========== Send Logic ==========
 
     /**
-     * Sends a webhook directly (with optional screenshot and ValidSubmission tracking).
+     * Sends a webhook directly (with optional screenshot, video key, and ValidSubmission tracking).
      * This is the single send method -- the ValidSubmission is passed through, not looked up.
+     *
+     * @param webhook The webhook body to send
+     * @param screenshot Optional JPEG screenshot bytes
+     * @param videoKey Optional cloud storage key for an uploaded video, or null
+     * @param submission Optional ValidSubmission for status tracking
      */
-    private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission) {
+    private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, String videoKey, ValidSubmission submission) {
         if (isFakeWorld()) {
             DebugLogger.log("Returning due to this being a fake world");
             return;
@@ -332,6 +341,13 @@ public class SubmissionManager {
             }
             notifyUpdateCallback();
             schedulePersistence();
+        }
+
+        // If a video key is present, inject it into the webhook embeds so the API can reference it
+        if (videoKey != null && !videoKey.isEmpty()) {
+            for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+                embed.addField("video_key", videoKey, true);
+            }
         }
 
         sendWebhookWithRetry(webhook, screenshot, 0, submission);
@@ -482,8 +498,29 @@ public class SubmissionManager {
         }
     }
 
-    // ========== Screenshot Capture ==========
+    // ========== Capture (Screenshot or Video) ==========
 
+    /**
+     * Routes capture to either screenshot-only or video based on the configured capture mode.
+     *
+     * @param webhook The webhook body to send after capture
+     * @param submission Optional ValidSubmission for tracking
+     * @param hideDMs Whether to hide PM chat during capture
+     */
+    private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+        VideoQuality captureMode = config.captureMode();
+
+        if (captureMode.requiresVideo()) {
+            captureVideoAndSend(webhook, submission, hideDMs);
+        } else {
+            captureScreenshotAndSend(webhook, submission, hideDMs);
+        }
+    }
+
+    /**
+     * Captures a single screenshot and sends the webhook with it.
+     * This is the original screenshot-only path.
+     */
     private void captureScreenshotAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
         hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
 
@@ -501,8 +538,120 @@ public class SubmissionManager {
                 log.error("Error converting image to byte array", e);
             }
 
-            sendWebhookDirect(webhook, imageBytes, submission);
+            sendWebhookDirect(webhook, imageBytes, null, submission);
         });
+    }
+
+    /**
+     * Captures a video clip (pre-event buffer + post-event recording) and uploads it
+     * via a presigned URL, then sends the webhook with the screenshot and video key.
+     * Falls back to screenshot-only if video capture or upload fails.
+     */
+    private void captureVideoAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+        if (hideDMs) {
+            hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+        }
+
+        videoRecorder.captureEventVideo((screenshotBytes, videoFrames, fps) -> {
+            if (hideDMs) {
+                showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+            }
+
+            // If no video frames were captured, fall back to screenshot-only
+            if (videoFrames == null || videoFrames.isEmpty()) {
+                log.debug("No video frames captured, falling back to screenshot-only");
+                sendWebhookDirect(webhook, screenshotBytes, null, submission);
+                return;
+            }
+
+            // Upload video frames via presigned URL on a background thread
+            executor.submit(() -> {
+                String videoKey = uploadVideoFrames(videoFrames, fps);
+                sendWebhookDirect(webhook, screenshotBytes, videoKey, submission);
+            });
+        });
+    }
+
+    /**
+     * Uploads MJPEG video frames to cloud storage via a presigned URL obtained from the API.
+     * Frames are streamed directly to the upload URL to minimize memory overhead.
+     *
+     * @param frames List of JPEG frame byte arrays
+     * @param fps The frames per second the video was recorded at
+     * @return The video storage key if upload succeeded, or null on failure
+     */
+    private String uploadVideoFrames(List<byte[]> frames, int fps) {
+        if (!config.useApi()) {
+            log.debug("API disabled, skipping video upload");
+            return null;
+        }
+
+        try {
+            // Step 1: Get a presigned upload URL from the API
+            DropTrackerApi.PresignedUrlResponse presigned = api.getPresignedVideoUploadUrl(fps);
+
+            if (presigned == null) {
+                log.error("Failed to get presigned URL for video upload");
+                return null;
+            }
+
+            if (presigned.quotaExceeded) {
+                log.debug("Video quota exceeded: {}", presigned.message);
+                return null;
+            }
+
+            // Step 2: Stream MJPEG frames to the presigned URL
+            long totalSize = 0;
+            for (byte[] frame : frames) {
+                totalSize += frame.length;
+            }
+
+            final long finalTotalSize = totalSize;
+            final List<byte[]> finalFrames = frames;
+
+            // Use streaming RequestBody to avoid buffering all frames in memory
+            RequestBody streamingBody = new RequestBody() {
+                @Override
+                public MediaType contentType() {
+                    return MediaType.parse("application/octet-stream");
+                }
+
+                @Override
+                public long contentLength() {
+                    return finalTotalSize;
+                }
+
+                @Override
+                public void writeTo(okio.BufferedSink sink) throws IOException {
+                    // MJPEG format: concatenated JPEG frames
+                    for (byte[] frame : finalFrames) {
+                        sink.write(frame);
+                    }
+                    sink.flush();
+                }
+            };
+
+            Request uploadRequest = new Request.Builder()
+                .url(presigned.uploadUrl)
+                .addHeader("Content-Type", "application/octet-stream")
+                .addHeader("Content-Length", String.valueOf(totalSize))
+                .put(streamingBody)
+                .build();
+
+            try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
+                if (response.isSuccessful()) {
+                    log.debug("Video uploaded successfully: key={}, size={}KB, frames={}",
+                        presigned.key, totalSize / 1024, frames.size());
+                    return presigned.key;
+                } else {
+                    log.error("Video upload failed: {} - {}", response.code(), response.message());
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error uploading video frames", e);
+            return null;
+        }
     }
 
     private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {

@@ -59,6 +59,7 @@ import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.video.VideoRecorder;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
@@ -127,6 +128,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private SubmissionManager submissionManager;
 
+	@Inject
+	private VideoRecorder videoRecorder;
+
 	private AtomicBoolean justLoggedIn = new AtomicBoolean(false);
 
 	@Inject
@@ -180,6 +184,11 @@ public class DropTrackerPlugin extends Plugin {
 		executor.submit(() -> urlManager.loadEndpoints());
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
+
+		// Start video recording if capture mode is set to video
+		if (config.captureMode().requiresVideo()) {
+			videoRecorder.startRecording();
+		}
 
 		DebugLogger.log("Plugin started. API " + (config.useApi() ? "enabled" : "disabled") + ". Side panel: " + (config.showSidePanel() ? "enabled" : "disabled") + (config.customApiEndpoint().equals("") ? "Default API url used." : "Custom API endpoint:" + config.customApiEndpoint()));
 		DebugLogger.log("Plugin version: " + pluginVersion);
@@ -247,6 +256,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void shutDown() {
     gameState.lazySet(null);
+		// Stop video recording
+		videoRecorder.stopRecording();
+
 		if (navButton != null) {
 			clientToolbar.removeNavigation(navButton);
 			navButton = null;
@@ -313,10 +325,10 @@ public class DropTrackerPlugin extends Plugin {
 						createSidePanel();
 					}
 				}
+			} else if (configChanged.getKey().equals("captureMode")) {
+				// Handle dynamic switching between screenshot-only and video mode
+				videoRecorder.updateCaptureRateIfNeeded();
 			}
-
-
-			//sendChatReminder();
 		}
 	}
 

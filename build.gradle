@@ -19,6 +19,10 @@ dependencies {
 	compileOnly 'org.jetbrains:annotations:23.0.0'
     annotationProcessor 'org.projectlombok:lombok:1.18.20'
 
+    // LWJGL for OpenGL PBO-based async frame capture (bundled at runtime by RuneLite)
+    compileOnly 'org.lwjgl:lwjgl:3.3.1'
+    compileOnly 'org.lwjgl:lwjgl-opengl:3.3.1'
+
     testImplementation 'junit:junit:4.12'
     testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
     testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion

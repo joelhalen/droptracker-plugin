@@ -39,8 +39,6 @@ public class DropHandler extends BaseEventHandler {
     @Inject
     private ItemManager itemManager;
 
-
-
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived event) {
 		chatMessageUtil.checkForMessage();
@@ -50,7 +48,6 @@ public class DropHandler extends BaseEventHandler {
 		NPC npc = event.getNpc();
 		Collection<ItemStack> items = event.getItems();
 		processDropEvent(npc.getName(), "npc", LootRecordType.NPC, items);
-		//sendChatReminder();
 	}
 
 	@Subscribe
@@ -62,7 +59,6 @@ public class DropHandler extends BaseEventHandler {
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", LootRecordType.PLAYER, items);
 		kcService.onPlayerKill(playerLootReceived);
-		//sendChatReminder();
 	}
 
 	@Subscribe(priority=1)
@@ -72,6 +68,7 @@ public class DropHandler extends BaseEventHandler {
 			return;
 		}
 		var comp = event.getComposition();
+		log.debug("onServerNpcLoot: processing {} (npcId={})", comp.getName(), comp.getId());
 		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
@@ -83,7 +80,7 @@ public class DropHandler extends BaseEventHandler {
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
-		log.debug("onLootReceived called ...");
+		log.debug("onLootReceived: name={}, type={}, itemCount={}", npcName, lootReceived.getType(), lootReceived.getItems().size());
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
 			log.debug("Special NPC loot received: {}", npcName);
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
@@ -97,12 +94,12 @@ public class DropHandler extends BaseEventHandler {
 			return;
 		}
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
+			log.debug("onLootReceived: skipping type={} for source={} (not EVENT or PICKPOCKET)", lootReceived.getType(), npcName);
 			return;
 		}
-		log.debug("Other NPC loot received: {}", npcName);
+		log.debug("Processing EVENT/PICKPOCKET loot: source={}, items={}", npcName, lootReceived.getItems().size());
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 		kcService.onLoot(lootReceived);
-		//sendChatReminder();
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
@@ -121,7 +118,7 @@ public class DropHandler extends BaseEventHandler {
 			 */
 			plugin.valuedItemIds = api.getValuedUntradeables();
 		}
-		AtomicReference<Boolean> untradeableScreenshot = null;
+		final AtomicReference<Boolean> untradeableScreenshot = new AtomicReference<>(false);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
@@ -133,7 +130,7 @@ public class DropHandler extends BaseEventHandler {
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
 				/* Check if the itemId exists in the valued list we obtained */
-				if (plugin.valuedItemIds.contains(itemId)) {
+				if (plugin.valuedItemIds != null && plugin.valuedItemIds.contains(itemId)) {
 					untradeableScreenshot.set(true);
 				}
 				int qty = item.getQuantity();
@@ -161,8 +158,6 @@ public class DropHandler extends BaseEventHandler {
 			}
 
 			// Now do the heavy work off the client thread
-
-
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
@@ -170,16 +165,7 @@ public class DropHandler extends BaseEventHandler {
 
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
 						int valueToSend = totalValue.get();
-						/* 'untradeableScreenshot' is true here if any of the obtained items' IDs were contained
-						inside the list of valuedItemIds, populated through the api call (or github pages url).
-						*/
-						Boolean valueModified;
-						if (untradeableScreenshot != null) {
-							Boolean untradeable = untradeableScreenshot.get(); // Get the value *once*
-							valueModified = (untradeable != null && untradeable == true);
-						} else {
-							valueModified = false;
-						}
+						Boolean valueModified = untradeableScreenshot.get();
 						sendData(customWebhookBody, valueToSend, singleValue.get(), valueModified);
 					}
 				} catch (Exception e) {

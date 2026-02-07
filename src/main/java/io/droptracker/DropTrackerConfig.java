@@ -1,5 +1,6 @@
 package io.droptracker;
 
+import io.droptracker.video.VideoQuality;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -283,6 +284,18 @@ public interface DropTrackerConfig extends Config {
     )
     default boolean hideDMs() {
         return false;
+    }
+
+    @ConfigItem(
+        keyName = "captureMode",
+        name = "Capture Mode",
+        description = "Choose whether to attach screenshots or short video clips to submissions.\n"
+            + "Video requires the GPU plugin to be enabled.",
+        position = 8,
+        section = miscSettings
+    )
+    default VideoQuality captureMode() {
+        return VideoQuality.SCREENSHOT_ONLY;
     }
 
     /* API Configuration */
