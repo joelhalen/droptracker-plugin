@@ -510,7 +510,8 @@ public class SubmissionManager {
     private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
         VideoQuality captureMode = config.captureMode();
 
-        if (captureMode.requiresVideo()) {
+        if (captureMode.requiresVideo() && config.useApi()) {
+            log.info("Capture mode is VIDEO; capturing clip.");
             captureVideoAndSend(webhook, submission, hideDMs);
         } else {
             captureScreenshotAndSend(webhook, submission, hideDMs);
@@ -522,11 +523,15 @@ public class SubmissionManager {
      * This is the original screenshot-only path.
      */
     private void captureScreenshotAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
-        hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+        if (hideDMs) {
+            hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+        }
 
         drawManager.requestNextFrameListener(image -> {
             BufferedImage bufferedImage = (BufferedImage) image;
-            showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+            if (hideDMs) {
+                showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
+            }
 
             byte[] imageBytes = null;
             try {
@@ -559,15 +564,27 @@ public class SubmissionManager {
 
             // If no video frames were captured, fall back to screenshot-only
             if (videoFrames == null || videoFrames.isEmpty()) {
-                log.debug("No video frames captured, falling back to screenshot-only");
+                log.warn("No video frames captured, falling back to screenshot-only");
                 sendWebhookDirect(webhook, screenshotBytes, null, submission);
                 return;
             }
 
+            log.info("Captured video frames: frames={}, fps={}", videoFrames.size(), fps);
+
             // Upload video frames via presigned URL on a background thread
             executor.submit(() -> {
                 String videoKey = uploadVideoFrames(videoFrames, fps);
-                sendWebhookDirect(webhook, screenshotBytes, videoKey, submission);
+
+                // If upload failed, fall back to screenshot-only (keeps existing behavior).
+                if (videoKey == null || videoKey.isEmpty()) {
+                    log.warn("Video upload failed; sending screenshot-only");
+                    sendWebhookDirect(webhook, screenshotBytes, null, submission);
+                    return;
+                }
+
+                // Video mode should replace screenshot attachments (do not send image.jpeg alongside).
+                log.info("Video uploaded (key={}); sending webhook without screenshot attachment", videoKey);
+                sendWebhookDirect(webhook, null, videoKey, submission);
             });
         });
     }
@@ -582,21 +599,35 @@ public class SubmissionManager {
      */
     private String uploadVideoFrames(List<byte[]> frames, int fps) {
         if (!config.useApi()) {
-            log.debug("API disabled, skipping video upload");
+            // Video uploads require the API (presigned upload URL + key).
+            // If the user has API disabled, we should be loud about why uploads never happen.
+            log.warn("Video upload skipped: API disabled (useApi=false). Falling back to screenshot-only.");
             return null;
         }
 
         try {
+            if (frames == null || frames.isEmpty()) {
+                log.warn("Video upload skipped: no frames provided");
+                return null;
+            }
+
             // Step 1: Get a presigned upload URL from the API
             DropTrackerApi.PresignedUrlResponse presigned = api.getPresignedVideoUploadUrl(fps);
 
             if (presigned == null) {
-                log.error("Failed to get presigned URL for video upload");
+                log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
                 return null;
             }
 
+            if (presigned.message != null && !presigned.message.isEmpty()) {
+                if (presigned.message.contains("missing upgrade")) {
+                    chatMessageUtil.sendChatMessage("Video capture requires you to be a member of a tier 3 group in the DropTracker. Consider subscribing to unlock this feature.");
+                    return null;
+                }
+            }
+
             if (presigned.quotaExceeded) {
-                log.debug("Video quota exceeded: {}", presigned.message);
+                log.warn("Video upload skipped: quota exceeded ({})", presigned.message);
                 return null;
             }
 
@@ -644,12 +675,14 @@ public class SubmissionManager {
                         presigned.key, totalSize / 1024, frames.size());
                     return presigned.key;
                 } else {
-                    log.error("Video upload failed: {} - {}", response.code(), response.message());
+                    log.warn("Video upload failed: HTTP {} {} (frames={}, size={}KB)",
+                        response.code(), response.message(), frames.size(), totalSize / 1024);
                     return null;
                 }
             }
         } catch (Exception e) {
-            log.error("Error uploading video frames", e);
+            log.warn("Video upload failed with exception: {}", e.getMessage());
+            log.debug("Video upload exception details", e);
             return null;
         }
     }

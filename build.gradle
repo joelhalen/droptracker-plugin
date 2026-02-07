@@ -14,18 +14,23 @@ def runeLiteVersion = 'latest.release'
 
 dependencies {
     compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
-
     compileOnly 'org.projectlombok:lombok:1.18.20'
-	compileOnly 'org.jetbrains:annotations:23.0.0'
+    compileOnly 'org.jetbrains:annotations:23.0.0'
     annotationProcessor 'org.projectlombok:lombok:1.18.20'
-
-    // LWJGL for OpenGL PBO-based async frame capture (bundled at runtime by RuneLite)
+    
     compileOnly 'org.lwjgl:lwjgl:3.3.1'
     compileOnly 'org.lwjgl:lwjgl-opengl:3.3.1'
-
+    
     testImplementation 'junit:junit:4.12'
-    testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
-    testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
+    testImplementation (group: 'net.runelite', name:'client', version: runeLiteVersion) {
+        exclude group: 'org.lwjgl', module: 'lwjgl'
+        exclude group: 'org.lwjgl', module: 'lwjgl-opengl'
+    }
+    testImplementation (group: 'net.runelite', name:'jshell', version: runeLiteVersion)
+    
+    // Only include Windows natives for testing
+    testRuntimeOnly 'org.lwjgl:lwjgl:3.3.2:natives-windows'
+    testRuntimeOnly 'org.lwjgl:lwjgl-opengl:3.3.2:natives-windows'
 }
 
 group = 'com.joelhalen.droptracker'

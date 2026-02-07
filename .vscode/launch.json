@@ -7,12 +7,12 @@
             "request": "launch",
             "mainClass": "io.droptracker.DropTrackerPluginTest",
             "projectName": "droptracker-plugin",
+            "console": "integratedTerminal",
             "env": {
                 "RUNELITE_PLUGIN_DEVELOPMENT": "true",
                 "RUNELITE_PLUGIN_DEVELOPMENT_MODE": "true"
             },
-            "vmArgs": "-ea",
-            "preLaunchTask": "gradle build"
+            "vmArgs": "-ea"
         }
     ]
 }

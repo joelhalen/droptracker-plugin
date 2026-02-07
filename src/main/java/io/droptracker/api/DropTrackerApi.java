@@ -410,17 +410,28 @@ public class DropTrackerApi {
      */
     public PresignedUrlResponse getPresignedVideoUploadUrl(int fps) {
         if (!config.useApi()) {
+            log.warn("Skipping presigned video URL request: API disabled (useApi=false)");
             return null;
         }
 
         String apiUrl = getApiUrl();
-        String endpoint = apiUrl + "/presigned_upload_url?fps=" + fps;
-
-        HttpUrl url = HttpUrl.parse(endpoint);
-        if (url == null) {
-            log.warn("Invalid presigned upload URL: {}", endpoint);
+        if (client == null || client.getAccountHash() == -1) {
+            log.warn("Cannot request presigned URL: missing acc_hash");
             return null;
         }
+
+        HttpUrl base = HttpUrl.parse(apiUrl + "/presigned_upload_url");
+        if (base == null) {
+            log.warn("Invalid presigned upload base URL: {}", apiUrl);
+            return null;
+        }
+
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("fps", String.valueOf(fps))
+            .addQueryParameter("acc_hash", String.valueOf(client.getAccountHash()))
+            .build();
+
+        log.info("Requesting presigned video upload URL (fps={}, acc_hash={})", fps, client.getAccountHash());
 
         Request request = new Request.Builder()
             .url(url)
@@ -444,11 +455,12 @@ public class DropTrackerApi {
                 } catch (Exception e) {
                     result.message = "Daily video limit reached";
                 }
+                log.warn("Presigned video upload URL request quota exceeded: {}", result.message);
                 return result;
             }
 
             if (!response.isSuccessful()) {
-                log.error("Failed to get presigned URL: {} - {}", response.code(), response.message());
+                log.error("Failed to get presigned URL: {} - {}. Body: {}", response.code(), response.message(), body);
                 return null;
             }
 
