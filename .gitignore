@@ -8,3 +8,8 @@ nbactions.xml
 nb-configuration.xml
 nbproject/
 bin/*
+bin
+runelite-client
+runelite-client/*
+runelite
+runelite/*
