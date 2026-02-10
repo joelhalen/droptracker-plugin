@@ -31,6 +31,17 @@ dependencies {
     // Only include Windows natives for testing
     testRuntimeOnly 'org.lwjgl:lwjgl:3.3.2:natives-windows'
     testRuntimeOnly 'org.lwjgl:lwjgl-opengl:3.3.2:natives-windows'
+
+    // Needed to run RuneLite from this project (run.bat calls the run task)
+    runtimeOnly(group: 'net.runelite', name: 'client', version: runeLiteVersion) {
+        // RuneLite's Gradle metadata can request natives for multiple platforms.
+        // For this Windows-only runner, exclude LWJGL and add Windows artifacts explicitly.
+        exclude group: 'org.lwjgl'
+    }
+    runtimeOnly 'org.lwjgl:lwjgl:3.3.2'
+    runtimeOnly 'org.lwjgl:lwjgl-opengl:3.3.2'
+    runtimeOnly 'org.lwjgl:lwjgl:3.3.2:natives-windows'
+    runtimeOnly 'org.lwjgl:lwjgl-opengl:3.3.2:natives-windows'
 }
 
 group = 'com.joelhalen.droptracker'
@@ -42,3 +53,20 @@ tasks.withType(JavaCompile) {
 	options.encoding = 'UTF-8'
 	options.release.set(11)
 }
+
+tasks.register('runRuneLite', JavaExec) {
+    group = 'runelite'
+    description = 'Run RuneLite with this plugin on the classpath'
+
+    // RuneLite's main entrypoint
+    mainClass.set('net.runelite.client.RuneLite')
+
+    // Include plugin classes/resources + RuneLite client + runtime deps
+    classpath = sourceSets.main.runtimeClasspath
+
+    // Helpful for local debugging; can be removed if undesired
+    jvmArgs = [
+        '-ea'
+    ]
+}
+
