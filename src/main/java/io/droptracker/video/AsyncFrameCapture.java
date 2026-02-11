@@ -38,18 +38,21 @@ import org.lwjgl.system.MemoryStack;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Async PBO-based frame capture for GPU-accelerated screenshot readback.
  * Adapted from the osrs-tracker-plugin by Dennis De Vulder (BSD 2-Clause).
  *
- * Uses double-buffered Pixel Buffer Objects (PBOs) to avoid stalling the
- * client/GL thread during glReadPixels. The DMA transfer happens asynchronously:
- * - Frame N: issue glReadPixels into PBO[current] (returns immediately, async DMA)
- * - Frame N+1: map PBO[prev] and read back pixels (DMA already complete, no stall)
+ * Uses a small ring of Pixel Buffer Objects (PBOs) to avoid stalling the
+ * client/GL thread during glReadPixels and to move memory copies off the GL thread.
+ * The DMA transfer happens asynchronously:
+ * - Frame N: issue glReadPixels into a free PBO slot (returns immediately, async DMA)
+ * - Later frame: map a completed PBO, pass mapped buffer to async encoder thread
+ * - On encoder completion: schedule GL-thread unmap and recycle the slot
  *
- * Client thread cost per frame: ~0.1ms (two buffer binds + one async readPixels)
+ * Client thread cost per frame stays low (buffer binds + async readPixels + map handoff)
  * vs ~13-28ms with synchronous screenshot() calls.
  *
  * When no GL context is available (GPU plugin disabled), notifies VideoRecorder
@@ -62,9 +65,16 @@ public class AsyncFrameCapture
     private final VideoRecorder recorder;
     private final Runnable onPboUnsupported;
 
-    // Double-buffered PBOs
-    private final int[] pboIds = new int[2];
-    private int pboIndex = 0;
+    // Small PBO ring so mapped slots can stay in-flight while background threads process.
+    private static final int PBO_COUNT = 4;
+    private static final byte PBO_STATE_FREE = 0;
+    private static final byte PBO_STATE_DMA_PENDING = 1;
+    private static final byte PBO_STATE_MAPPED_IN_FLIGHT = 2;
+
+    private final int[] pboIds = new int[PBO_COUNT];
+    private final byte[] pboStates = new byte[PBO_COUNT];
+    private final ConcurrentLinkedQueue<Integer> completedPboUnmaps = new ConcurrentLinkedQueue<>();
+    private int writeSearchStartIndex = 0;
 
     // Dimensions tracking for resize detection
     private int lastWidth = 0;
@@ -72,7 +82,6 @@ public class AsyncFrameCapture
 
     // State
     private boolean pboInitialized = false;
-    private boolean firstFrame = true;
     private volatile boolean pboUnsupported = false;
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
@@ -109,8 +118,8 @@ public class AsyncFrameCapture
 
         shutdownRequested.set(false);
         pboUnsupported = false;
-        firstFrame = true;
-        pboIndex = 0;
+        writeSearchStartIndex = 0;
+        completedPboUnmaps.clear();
         nextCaptureTimeNs = 0;
 
         everyFrameListener = this::onFrame;
@@ -132,12 +141,10 @@ public class AsyncFrameCapture
             everyFrameListener = null;
         }
 
-        // Schedule PBO cleanup on the GL thread
+        // Schedule PBO cleanup on the GL thread once mapped in-flight buffers are drained.
         if (pboInitialized)
         {
-            drawManager.requestNextFrameListener(image -> {
-                cleanupPBOs();
-            });
+            requestCleanupWhenIdle();
         }
 
         log.debug("PBO capture stopped");
@@ -157,6 +164,8 @@ public class AsyncFrameCapture
      */
     private void onFrame()
     {
+        drainCompletedUnmaps();
+
         if (shutdownRequested.get() || !recorder.isCurrentlyRecording())
         {
             return;
@@ -237,49 +246,49 @@ public class AsyncFrameCapture
             {
                 if (pboInitialized)
                 {
+                    if (hasMappedPbosInFlight())
+                    {
+                        // Wait for writer thread to finish with mapped buffers before reallocating.
+                        return;
+                    }
                     cleanupPBOs();
                 }
                 initPBOs(width, height);
-                firstFrame = true;
             }
 
-            int prevIndex = 1 - pboIndex;
-            int currentIndex = pboIndex;
-
-            // Step 1: Read back previous frame's PBO (DMA already complete)
-            if (!firstFrame)
+            // Step 1: Map one completed DMA PBO and hand it to encoder thread.
+            int readIndex = findPendingReadPbo();
+            if (readIndex >= 0)
             {
-                GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[prevIndex]);
+                GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[readIndex]);
                 ByteBuffer mappedBuffer = GL15.glMapBuffer(GL21.GL_PIXEL_PACK_BUFFER, GL15.GL_READ_ONLY);
 
                 if (mappedBuffer != null)
                 {
-                    int dataSize = lastWidth * lastHeight * 4;
-                    byte[] pixelCopy = new byte[dataSize];
-                    mappedBuffer.rewind();
-                    mappedBuffer.get(pixelCopy);
-                    GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
-
-                    ByteBuffer pixelData = ByteBuffer.wrap(pixelCopy);
-                    recorder.submitCapturedFrame(pixelData, lastWidth, lastHeight);
+                    pboStates[readIndex] = PBO_STATE_MAPPED_IN_FLIGHT;
+                    ByteBuffer readOnlyPixels = mappedBuffer.asReadOnlyBuffer();
+                    readOnlyPixels.rewind();
+                    recorder.submitCapturedFrame(readOnlyPixels, lastWidth, lastHeight, () -> completedPboUnmaps.offer(readIndex));
                 }
                 else
                 {
-                    GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
+                    pboStates[readIndex] = PBO_STATE_FREE;
                 }
+
+                GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
             }
 
-            // Step 2: Issue async glReadPixels into current PBO (returns immediately)
-            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[currentIndex]);
-            GL11.glReadBuffer(GL11.GL_FRONT);
-            GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, 0);
-
-            // Unbind PBO to avoid interfering with RuneLite's rendering
-            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
-
-            // Swap ping-pong index
-            pboIndex = prevIndex;
-            firstFrame = false;
+            // Step 2: Issue async glReadPixels into one free PBO slot.
+            int writeIndex = findFreeWritePbo();
+            if (writeIndex >= 0)
+            {
+                GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[writeIndex]);
+                GL11.glReadBuffer(GL11.GL_FRONT);
+                GL11.glReadPixels(0, 0, width, height, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, 0);
+                GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
+                pboStates[writeIndex] = PBO_STATE_DMA_PENDING;
+                writeSearchStartIndex = (writeIndex + 1) % PBO_COUNT;
+            }
         }
         catch (Exception e)
         {
@@ -288,7 +297,7 @@ public class AsyncFrameCapture
     }
 
     /**
-     * Initializes double-buffered PBOs for the given dimensions.
+     * Initializes PBO ring buffers for the given dimensions.
      */
     private void initPBOs(int width, int height)
     {
@@ -296,10 +305,11 @@ public class AsyncFrameCapture
 
         GL15.glGenBuffers(pboIds);
 
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < PBO_COUNT; i++)
         {
             GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[i]);
             GL15.glBufferData(GL21.GL_PIXEL_PACK_BUFFER, bufferSize, GL15.GL_STREAM_READ);
+            pboStates[i] = PBO_STATE_FREE;
         }
 
         GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
@@ -308,7 +318,7 @@ public class AsyncFrameCapture
         lastHeight = height;
         pboInitialized = true;
 
-        log.debug("PBOs initialized: {}x{}", width, height);
+        log.debug("PBOs initialized: {}x{} (count={})", width, height, PBO_COUNT);
     }
 
     /**
@@ -322,10 +332,85 @@ public class AsyncFrameCapture
         }
 
         GL15.glDeleteBuffers(pboIds);
-        pboIds[0] = 0;
-        pboIds[1] = 0;
+        for (int i = 0; i < PBO_COUNT; i++)
+        {
+            pboIds[i] = 0;
+            pboStates[i] = PBO_STATE_FREE;
+        }
+        completedPboUnmaps.clear();
         pboInitialized = false;
         lastWidth = 0;
         lastHeight = 0;
     }
+
+    /**
+     * Drains completed encoder callbacks and unmaps PBOs on the GL thread.
+     */
+    private void drainCompletedUnmaps()
+    {
+        Integer pboIndex;
+        while ((pboIndex = completedPboUnmaps.poll()) != null)
+        {
+            if (pboIndex < 0 || pboIndex >= PBO_COUNT || pboStates[pboIndex] != PBO_STATE_MAPPED_IN_FLIGHT)
+            {
+                continue;
+            }
+
+            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, pboIds[pboIndex]);
+            GL15.glUnmapBuffer(GL21.GL_PIXEL_PACK_BUFFER);
+            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
+            pboStates[pboIndex] = PBO_STATE_FREE;
+        }
+    }
+
+    private int findPendingReadPbo()
+    {
+        for (int i = 0; i < PBO_COUNT; i++)
+        {
+            if (pboStates[i] == PBO_STATE_DMA_PENDING)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private int findFreeWritePbo()
+    {
+        for (int offset = 0; offset < PBO_COUNT; offset++)
+        {
+            int idx = (writeSearchStartIndex + offset) % PBO_COUNT;
+            if (pboStates[idx] == PBO_STATE_FREE)
+            {
+                return idx;
+            }
+        }
+        return -1;
+    }
+
+    private boolean hasMappedPbosInFlight()
+    {
+        for (byte state : pboStates)
+        {
+            if (state == PBO_STATE_MAPPED_IN_FLIGHT)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void requestCleanupWhenIdle()
+    {
+        drawManager.requestNextFrameListener(image -> {
+            drainCompletedUnmaps();
+            if (hasMappedPbosInFlight())
+            {
+                requestCleanupWhenIdle();
+                return;
+            }
+            cleanupPBOs();
+        });
+    }
+
 }

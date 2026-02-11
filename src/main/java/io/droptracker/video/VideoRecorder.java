@@ -182,6 +182,20 @@ public class VideoRecorder
      */
     void submitCapturedFrame(ByteBuffer rgbaPixels, int width, int height)
     {
+        submitCapturedFrame(rgbaPixels, width, height, null);
+    }
+
+    /**
+     * Submits a raw RGBA frame from PBO readback for async encoding and storage.
+     * Invokes onComplete after encode pipeline finishes (success or failure).
+     *
+     * @param rgbaPixels Raw RGBA pixel data from PBO (bottom-up, OpenGL convention)
+     * @param width The width of the image in pixels
+     * @param height The height of the image in pixels
+     * @param onComplete Optional completion callback, invoked on async writer thread
+     */
+    void submitCapturedFrame(ByteBuffer rgbaPixels, int width, int height, Runnable onComplete)
+    {
         long currentTimeMs = System.currentTimeMillis();
         boolean shouldBlur = getCachedSensitiveContentVisible(currentTimeMs);
 
@@ -198,6 +212,10 @@ public class VideoRecorder
             finally
             {
                 pendingEncodes.decrementAndGet();
+                if (onComplete != null)
+                {
+                    onComplete.run();
+                }
             }
         });
     }
