@@ -2,6 +2,7 @@ package io.droptracker.ui;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
+import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 
 import javax.inject.Inject;
@@ -13,7 +14,6 @@ import io.droptracker.ui.pages.HomePanel;
 import io.droptracker.ui.pages.ApiPanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
 
-import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.ui.ColorScheme;
@@ -55,6 +55,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private DropTrackerConfig config;
 	@Inject
 	private SubmissionManager submissionManager;
+	private NearbyPlayerTracker nearbyPlayerTracker;
 	
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -69,14 +70,13 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JPanel groupStatsPanel;
 	private JLabel communicationStatusLabel;
 
-	private boolean testing = false;
-
 	@Inject
-	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
+	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client, NearbyPlayerTracker nearbyPlayerTracker) {
 		this.config = config;
 		this.api = api;
 		this.plugin = plugin;
 		this.client = client;
+		this.nearbyPlayerTracker = nearbyPlayerTracker;
 
 		
 		setLayout(new BorderLayout());
@@ -119,7 +119,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		// Tabs for users with API enabled
 		if (config.useApi()) {
 			// API Info tab
-			apiPanel = new ApiPanel(config, api, submissionManager, this);
+			apiPanel = new ApiPanel(config, api, submissionManager, nearbyPlayerTracker, this);
 			apiInfoPanel = apiPanel.create();   // Store reference
 			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);

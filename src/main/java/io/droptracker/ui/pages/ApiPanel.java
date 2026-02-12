@@ -5,6 +5,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionStatus;
 import io.droptracker.models.submissions.ValidSubmission;
+import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.PanelElements;
@@ -29,6 +30,7 @@ public class ApiPanel {
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
     private final SubmissionManager submissionManager;
+    private final NearbyPlayerTracker nearbyPlayerTracker;
 
     private JPanel apiPanel;
     private JPanel submissionsPanel;
@@ -40,10 +42,17 @@ public class ApiPanel {
     private JScrollPane groupsScrollPane;
     private final Map<String, Boolean> groupExpandStates = new HashMap<>();
 
-    public ApiPanel(DropTrackerConfig config, DropTrackerApi api, SubmissionManager submissionManager, DropTrackerPanel mainPanel) {
+    public ApiPanel(
+        DropTrackerConfig config,
+        DropTrackerApi api,
+        SubmissionManager submissionManager,
+        NearbyPlayerTracker nearbyPlayerTracker,
+        DropTrackerPanel mainPanel
+    ) {
         this.config = config;
         this.api = api;
         this.submissionManager = submissionManager;
+        this.nearbyPlayerTracker = nearbyPlayerTracker;
         this.mainPanel = mainPanel;
     }
 
@@ -60,6 +69,8 @@ public class ApiPanel {
         apiPanel.add(statisticsPanel);
         apiPanel.add(Box.createRigidArea(new Dimension(0, 5)));
         apiPanel.add(submissionsPanel);
+        apiPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        apiPanel.add(initializeDebugButtonsPanel());
         apiPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         apiPanel.add(configPanel);
         apiPanel.add(Box.createVerticalGlue());
@@ -85,6 +96,31 @@ public class ApiPanel {
         JPanel wrapperPanel = new JPanel(new BorderLayout());
         wrapperPanel.add(apiPanel, BorderLayout.CENTER);
         return wrapperPanel;
+    }
+
+    private JPanel initializeDebugButtonsPanel() {
+        JPanel debugPanel = new JPanel();
+        debugPanel.setLayout(new BoxLayout(debugPanel, BoxLayout.Y_AXIS));
+        debugPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        debugPanel.setBorder(new EmptyBorder(8, 10, 8, 10));
+        debugPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 48));
+        debugPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 56));
+        debugPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 40));
+
+        JButton testNearbyPlayersButton = new JButton("Print Nearby Players");
+        testNearbyPlayersButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        testNearbyPlayersButton.setFont(FontManager.getRunescapeSmallFont());
+        testNearbyPlayersButton.setToolTipText("Print nearby player names to console.");
+        testNearbyPlayersButton.addActionListener(e -> {
+            if (nearbyPlayerTracker != null) {
+                nearbyPlayerTracker.printNearbyPlayersToConsole(20);
+            } else {
+                System.out.println("[DropTracker] Nearby player tracker unavailable.");
+            }
+        });
+
+        debugPanel.add(testNearbyPlayersButton);
+        return debugPanel;
     }
 
     private void initializeSubmissionsPanel() {

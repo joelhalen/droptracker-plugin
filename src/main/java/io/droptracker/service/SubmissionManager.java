@@ -64,6 +64,7 @@ public class SubmissionManager {
     private final UrlManager urlManager;
     private final DrawManager drawManager;
     private final VideoRecorder videoRecorder;
+    private final NearbyPlayerTracker nearbyPlayerTracker;
 
     /** Thread-safe list of submissions the player has received which qualified for notifications */
     @Getter
@@ -97,7 +98,19 @@ public class SubmissionManager {
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
     @Inject
-    public SubmissionManager(DropTrackerConfig config, DropTrackerApi api, ChatMessageUtil chatMessageUtil, Gson gson, OkHttpClient okHttpClient, Client client, ClientThread clientThread, UrlManager urlManager, DrawManager drawManager, VideoRecorder videoRecorder) {
+    public SubmissionManager(
+        DropTrackerConfig config,
+        DropTrackerApi api,
+        ChatMessageUtil chatMessageUtil,
+        Gson gson,
+        OkHttpClient okHttpClient,
+        Client client,
+        ClientThread clientThread,
+        UrlManager urlManager,
+        DrawManager drawManager,
+        VideoRecorder videoRecorder,
+        NearbyPlayerTracker nearbyPlayerTracker
+    ) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
@@ -108,6 +121,7 @@ public class SubmissionManager {
         this.urlManager = urlManager;
         this.drawManager = drawManager;
         this.videoRecorder = videoRecorder;
+        this.nearbyPlayerTracker = nearbyPlayerTracker;
     }
 
     // ========== Widget Helpers ==========
@@ -204,6 +218,8 @@ public class SubmissionManager {
             return;
         }
 
+        addParticipantsField(customWebhookBody);
+
         boolean requiredScreenshot = (config.screenshotDrops() && totalValue > config.screenshotValue()) || valueModified;
 
         // Create ValidSubmission if the drop qualifies for any group
@@ -220,6 +236,33 @@ public class SubmissionManager {
             captureAndSend(customWebhookBody, submission, shouldHideDm);
         } else {
             sendWebhookDirect(customWebhookBody, null, null, submission);
+        }
+    }
+
+    private void addParticipantsField(CustomWebhookBody webhook) {
+        if (webhook == null || webhook.getEmbeds() == null) {
+            return;
+        }
+
+        List<String> members = nearbyPlayerTracker.getNearbyPlayerNames(20);
+        String membersValue = members.isEmpty() ? "none" : String.join(",", members);
+
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            if (embed == null) {
+                continue;
+            }
+
+            boolean hasMembersField = false;
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                if (field != null && "members".equalsIgnoreCase(field.getName())) {
+                    hasMembersField = true;
+                    break;
+                }
+            }
+
+            if (!hasMembersField) {
+                embed.addField("members", membersValue, false);
+            }
         }
     }
 
