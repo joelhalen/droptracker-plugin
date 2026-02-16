@@ -86,10 +86,13 @@ public class WidgetEventHandler {
     private boolean scrollInterfaceLoaded = false;
     private String pohOwner;
 
-    private static final String TEAM_SIZES = "(?<teamsize>\\d+(?:\\+|-\\d+)? players?|Solo)";
+    private static final String TEAM_SIZES = "(?<teamsize>[^)]+)";
 
     private static final Pattern ADVENTURE_LOG_TITLE_PATTERN = Pattern.compile("The Exploits of (.+)");
-    private static final Pattern ADVENTURE_LOG_PB_PATTERN = Pattern.compile("Fastest (?:kill|run|Room time)(?: - \\(Team size: \\(?" + TEAM_SIZES + "\\)\\)?)?: (?<time>[0-9:]+(?:\\.[0-9]+)?)");
+    private static final Pattern ADVENTURE_LOG_PB_PATTERN = Pattern.compile(
+        "Fastest (?:kill|run|Room time|Overall time)(?: - \\(Team size: " + TEAM_SIZES + "\\))?:\\s*(?<time>[0-9:]+(?:\\.[0-9]+)?)?"
+    );
+    private static final Pattern ADVENTURE_LOG_PB_TIME_ONLY_PATTERN = Pattern.compile("^(?<time>[0-9:]+(?:\\.[0-9]+)?)$");
 
     static final int ADV_LOG_EXPLOITS_TEXT_INDEX = 1;
 
@@ -227,35 +230,40 @@ public class WidgetEventHandler {
             .toArray(String[]::new);
     
         for (int i = 0; i < text.length; ++i) {
-            String boss = longBossName(text[i]);
-    
+            String bossHeader = text[i] == null ? "" : text[i].trim();
+            if (bossHeader.isEmpty()) {
+                continue;
+            }
+
+            String boss = longBossName(bossHeader);
+            String pendingTeamSize = null;
+
             for (i = i + 1; i < text.length; ++i) {
-                String line = text[i];
+                String line = text[i] == null ? "" : text[i].trim();
                 if (line.isEmpty()) {
                     break;
                 }
-    
-                Matcher matcher = ADVENTURE_LOG_PB_PATTERN.matcher(line);
-                if (matcher.find()) {
-                    final double seconds = timeStringToSeconds(matcher.group("time"));
-                    String teamSize = matcher.group("teamsize");
-                    if (teamSize != null) {
-                        // 3 player -> 3 players
-                        // 1 player -> Solo
-                        // Solo -> Solo
-                        // 2 players -> 2 players
-                        if (teamSize.equals("1 player")) {
-                            teamSize = "Solo";
-                        } else if (teamSize.endsWith("player")) {
-                            teamSize = teamSize.replace("player", "").strip();
-                        } else if (teamSize.endsWith("players")) {
-                            teamSize = teamSize.replace("players", "").strip();
-                        }
 
-                        personalBests.add(new BossPB(boss, teamSize, seconds));
+                Matcher descriptorMatcher = ADVENTURE_LOG_PB_PATTERN.matcher(line);
+                if (descriptorMatcher.find()) {
+                    String normalizedTeamSize = normalizeTeamSize(descriptorMatcher.group("teamsize"));
+                    String inlineTime = descriptorMatcher.group("time");
+
+                    if (inlineTime != null && !inlineTime.isEmpty()) {
+                        final double seconds = timeStringToSeconds(inlineTime);
+                        personalBests.add(new BossPB(boss, normalizedTeamSize, seconds));
+                        pendingTeamSize = null;
                     } else {
-                        personalBests.add(new BossPB(boss, "Solo", seconds));
+                        pendingTeamSize = normalizedTeamSize;
                     }
+                    continue;
+                }
+
+                Matcher timeOnlyMatcher = ADVENTURE_LOG_PB_TIME_ONLY_PATTERN.matcher(line);
+                if (timeOnlyMatcher.find() && pendingTeamSize != null) {
+                    final double seconds = timeStringToSeconds(timeOnlyMatcher.group("time"));
+                    personalBests.add(new BossPB(boss, pendingTeamSize, seconds));
+                    pendingTeamSize = null;
                 }
             }
         }
@@ -583,6 +591,8 @@ public class WidgetEventHandler {
 
             // Theatre of Blood Hard Mode
             case "theatre of blood: hard mode":
+            case "theatre of blood - hard":
+            case "theatre of blood hard":
             case "tob cm":
             case "tob hm":
             case "tob hard mode":
@@ -1092,6 +1102,40 @@ public class WidgetEventHandler {
             return Integer.parseInt(s[0]) * 60 * 60 + Integer.parseInt(s[1]) * 60 + Double.parseDouble(s[2]);
         }
         return Double.parseDouble(timeString);
+    }
+
+    private static String normalizeTeamSize(String rawTeamSize)
+    {
+        if (rawTeamSize == null)
+        {
+            return "Solo";
+        }
+
+        String teamSize = rawTeamSize.toLowerCase().trim();
+        if (teamSize.isEmpty())
+        {
+            return "Solo";
+        }
+        if (teamSize.contains("solo"))
+        {
+            return "Solo";
+        }
+
+        // Handles values like "3 player hard mode", "4 players expert mode", "6+ players".
+        teamSize = teamSize
+            .replace("hard mode", "")
+            .replace("entry mode", "")
+            .replace("expert mode", "")
+            .replace("player", "")
+            .replace("players", "")
+            .trim();
+
+        if ("1".equals(teamSize))
+        {
+            return "Solo";
+        }
+
+        return teamSize.isEmpty() ? "Solo" : teamSize;
     }
     @Subscribe
     public void onGameStateChanged(GameStateChanged event)
