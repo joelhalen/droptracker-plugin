@@ -13,11 +13,14 @@ import net.runelite.client.util.Text;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Service for collecting nearby player names from active world views.
@@ -62,6 +65,36 @@ public class NearbyPlayerTracker
     }
 
     public List<String> getNearbyPlayerNames(int radiusTiles)
+    {
+        if (client.isClientThread())
+        {
+            return collectNearbyPlayerNames(radiusTiles);
+        }
+
+        CompletableFuture<List<String>> future = new CompletableFuture<>();
+        clientThread.invoke(() ->
+        {
+            try
+            {
+                future.complete(collectNearbyPlayerNames(radiusTiles));
+            }
+            catch (Exception e)
+            {
+                future.complete(Collections.emptyList());
+            }
+        });
+
+        try
+        {
+            return future.get(500, TimeUnit.MILLISECONDS);
+        }
+        catch (Exception e)
+        {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<String> collectNearbyPlayerNames(int radiusTiles)
     {
         Player localPlayer = client.getLocalPlayer();
         if (localPlayer == null || localPlayer.getWorldLocation() == null)

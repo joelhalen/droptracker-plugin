@@ -661,6 +661,7 @@ public class SubmissionManager {
                 log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
                 return null;
             }
+            log.info("Presigned: {}", GSON.toJson(presigned));
 
             if (presigned.message != null && !presigned.message.isEmpty()) {
                 if (presigned.message.contains("missing upgrade")) {
