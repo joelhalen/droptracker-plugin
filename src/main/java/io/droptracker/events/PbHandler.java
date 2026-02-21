@@ -280,7 +280,7 @@ public class PbHandler extends BaseEventHandler {
     }
 
     private void updateKillData(KillData newData) {
-        DebugLogger.log("[PbHandler.java:247] updateKillData called with newData: " + newData);
+        DebugLogger.log("[PbHandler][update] updateKillData called; newData=" + newData);
         killData.getAndUpdate(old -> {
             if (old == null) {
                 lastKillDataUpdate = System.currentTimeMillis();
@@ -288,25 +288,25 @@ public class PbHandler extends BaseEventHandler {
             }
 
             String boss = defaultIfNull(newData.boss, old.boss);
-            DebugLogger.log("[PbHandler.java:254] set boss to new data: " + newData.boss + " from old: " + old.boss);
+            DebugLogger.log("[PbHandler][update] boss merge; newBoss=" + newData.boss + ", oldBoss=" + old.boss);
             Integer count = defaultIfNull(newData.count, old.count);
             Duration time = newData.time != null && !newData.time.isZero() ? newData.time : old.time;
             Duration bestTime = newData.bestTime != null && !newData.bestTime.isZero() ? newData.bestTime : old.bestTime;
             boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
-            DebugLogger.log("[PbHandler.java:260] updateKillData completed -- returning: " + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage).toString());
+            DebugLogger.log("[PbHandler][update] merged killData=" + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage));
             lastKillDataUpdate = System.currentTimeMillis();
             return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
         });
-        DebugLogger.log("[PbHandler.java:263] updateKillData completed. boss / time / count:" + newData.boss + "/" + newData.time + "/" + newData.count);
+        DebugLogger.log("[PbHandler][update] updateKillData completed; boss=" + newData.boss + ", time=" + newData.time + ", count=" + newData.count);
     }
 
     // === KILL PROCESSING ===
     private void processKill(KillData data) {
-        DebugLogger.log("[PbHandler.java:109] processKill: " + data);
+        DebugLogger.log("[PbHandler][process] processKill invoked; data=" + data);
         if (data == null || !data.isValid()) {
-            DebugLogger.log("[PbHandler.java:268] Invalid kill data, skipping processing");
+            DebugLogger.log("[PbHandler][process] skipping invalid kill data");
             log.debug("Invalid kill data, skipping processing");
             return;
         }
@@ -319,7 +319,7 @@ public class PbHandler extends BaseEventHandler {
             (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD) {
             if (!data.boss.contains("1-8")) {
                 
-                DebugLogger.log("[PbHandler.java:281] Duplicate kill detected, skipping: " + killIdentifier);
+                DebugLogger.log("[PbHandler][process] duplicate kill detected; killIdentifier=" + killIdentifier);
                 log.debug("Duplicate kill detected, skipping: {}", killIdentifier);
                 return;
             }
@@ -329,7 +329,7 @@ public class PbHandler extends BaseEventHandler {
         lastProcessedTime = currentTime;
 
         if (clientThread == null) {
-            DebugLogger.log("[PbHandler.java:291] ClientThread is null, cannot process kill");
+            DebugLogger.log("[PbHandler][process] cannot process kill; clientThread=null");
             log.error("ClientThread is null, cannot process kill");
             return;
         }
@@ -338,7 +338,7 @@ public class PbHandler extends BaseEventHandler {
             try {
                 sendKillNotification(data);
             } catch (Exception e) {
-                DebugLogger.log("[PbHandler.java:300] Error processing kill notification: " + e.getMessage());
+                DebugLogger.log("[PbHandler][process] sendKillNotification failed; reason=" + e.getMessage());
                 log.error("Error processing kill notification: {}", e.getMessage(), e);
             }
         });

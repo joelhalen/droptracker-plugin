@@ -41,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
@@ -149,20 +150,26 @@ public class SubmissionManager {
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
         boolean requiredScreenshot = false;
         boolean shouldHideDm = config.hideDMs();
+        debugLogEventFlow("received", type, "entry=non-drop, useApi=" + config.useApi() + ", hideDMs=" + shouldHideDm);
 
         // Check if the user has this event type enabled locally
         switch (type) {
             case DROP:
                 // Drops use the value-based overload; this should not be called for drops
+                debugLogEventFlow("received", type, "non-drop entrypoint invoked for DROP type; ignoring");
                 break;
             case KILL_TIME:
-                if (!config.pbEmbeds()) return;
+                if (!config.pbEmbeds()) {
+                    debugLogEventFlow("skipped", type, "pbEmbeds=false");
+                    return;
+                }
                 boolean isPb = isFieldTrue(webhook, "is_pb");
                 if (config.screenshotPBs() && isPb) {
                     requiredScreenshot = true;
                 }
                 if (!isPb) {
                     // Non-PB kill times: just send, no ValidSubmission tracking
+                    debugLogEventFlow("send", type, "non-pb kill time; direct send; screenshotRequired=" + requiredScreenshot);
                     if (requiredScreenshot) {
                         captureAndSend(webhook, null, shouldHideDm);
                     } else {
@@ -172,23 +179,38 @@ public class SubmissionManager {
                 }
                 break;
             case COLLECTION_LOG:
-                if (!config.clogEmbeds()) return;
+                if (!config.clogEmbeds()) {
+                    debugLogEventFlow("skipped", type, "clogEmbeds=false");
+                    return;
+                }
                 if (config.screenshotNewClogs()) requiredScreenshot = true;
                 break;
             case COMBAT_ACHIEVEMENT:
-                if (!config.caEmbeds()) return;
+                if (!config.caEmbeds()) {
+                    debugLogEventFlow("skipped", type, "caEmbeds=false");
+                    return;
+                }
                 if (config.screenshotCAs()) requiredScreenshot = true;
                 break;
             case LEVEL_UP:
-                if (!config.levelEmbed()) return;
+                if (!config.levelEmbed()) {
+                    debugLogEventFlow("skipped", type, "levelEmbed=false");
+                    return;
+                }
                 if (config.screenshotLevel()) requiredScreenshot = true;
                 break;
             case QUEST_COMPLETION:
-                if (!config.questsEmbed()) return;
+                if (!config.questsEmbed()) {
+                    debugLogEventFlow("skipped", type, "questsEmbed=false");
+                    return;
+                }
                 if (config.screenshotQuests()) requiredScreenshot = true;
                 break;
             case PET:
-                if (!config.petEmbeds()) return;
+                if (!config.petEmbeds()) {
+                    debugLogEventFlow("skipped", type, "petEmbeds=false");
+                    return;
+                }
                 if (config.screenshotPets()) requiredScreenshot = true;
                 break;
             case EXPERIENCE:
@@ -202,10 +224,13 @@ public class SubmissionManager {
 
         // Create ValidSubmission if the event qualifies for any group
         ValidSubmission submission = createSubmissionIfQualified(webhook, type, requiredScreenshot, 0, 0);
+        debugLogEventFlow("qualification", type, "screenshotRequired=" + requiredScreenshot + ", " + summarizeSubmission(submission));
 
         if (requiredScreenshot) {
+            debugLogEventFlow("capture", type, "captureAndSend path selected");
             captureAndSend(webhook, submission, shouldHideDm);
         } else {
+            debugLogEventFlow("send", type, "sendWebhookDirect path selected");
             sendWebhookDirect(webhook, null, null, submission);
         }
     }
@@ -215,15 +240,20 @@ public class SubmissionManager {
      */
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue, boolean valueModified) {
         if (!config.lootEmbeds()) {
+            debugLogEventFlow("skipped", SubmissionType.DROP, "lootEmbeds=false");
             return;
         }
 
         addParticipantsField(customWebhookBody);
 
         boolean requiredScreenshot = (config.screenshotDrops() && totalValue > config.screenshotValue()) || valueModified;
+        debugLogEventFlow("received", SubmissionType.DROP, "totalValue=" + totalValue + ", singleValue=" + singleValue
+                + ", valueModified=" + valueModified + ", screenshotRequired=" + requiredScreenshot
+                + ", screenshotThreshold=" + config.screenshotValue());
 
         // Create ValidSubmission if the drop qualifies for any group
         ValidSubmission submission = createSubmissionIfQualified(customWebhookBody, SubmissionType.DROP, requiredScreenshot, totalValue, singleValue);
+        debugLogEventFlow("qualification", SubmissionType.DROP, summarizeSubmission(submission));
 
         // Update session value statistics
         this.sessionTotalValue += (long) totalValue;
@@ -233,8 +263,10 @@ public class SubmissionManager {
 
         if (requiredScreenshot) {
             boolean shouldHideDm = config.hideDMs();
+            debugLogEventFlow("capture", SubmissionType.DROP, "captureAndSend path selected; hideDMs=" + shouldHideDm);
             captureAndSend(customWebhookBody, submission, shouldHideDm);
         } else {
+            debugLogEventFlow("send", SubmissionType.DROP, "sendWebhookDirect path selected");
             sendWebhookDirect(customWebhookBody, null, null, submission);
         }
     }
@@ -277,6 +309,7 @@ public class SubmissionManager {
             boolean hasScreenshot, int totalValue, int singleValue) {
 
         if (!config.useApi()) {
+            debugLogEventFlow("qualification", type, "useApi=false; skipping group qualification");
             return null;
         }
 
@@ -286,15 +319,18 @@ public class SubmissionManager {
         if (groupConfigs == null || groupConfigs.isEmpty()) {
             if (!groupConfigsLoaded) {
                 pendingEvents.add(new PendingEvent(webhook, type, hasScreenshot, totalValue, singleValue));
-                DebugLogger.log("Group configs not loaded yet, queued event of type " + type);
+                debugLogEventFlow("qualification", type, "group configs unavailable; queued for later evaluation");
             }
+            debugLogEventFlow("qualification", type, "groupConfigs unavailable; queued=" + (!groupConfigsLoaded));
             return null;
         }
 
         ValidSubmission submission = null;
 
         for (GroupConfig groupConfig : groupConfigs) {
-            if (!doesEventQualifyForGroup(type, groupConfig, hasScreenshot, totalValue, singleValue)) {
+            String failReason = getQualificationFailureReason(type, groupConfig, hasScreenshot, totalValue, singleValue);
+            if (failReason != null) {
+                debugLogEventFlow("qualification-skip", type, "group=" + groupConfig.getGroupId() + ", reason=" + failReason);
                 continue;
             }
 
@@ -304,59 +340,69 @@ public class SubmissionManager {
             } else {
                 submission.addGroupId(groupConfig.getGroupId());
             }
+            debugLogEventFlow("qualification-pass", type, "group=" + groupConfig.getGroupId());
         }
 
+        if (submission == null) {
+            debugLogEventFlow("qualification", type, "no groups qualified");
+        } else {
+            debugLogEventFlow("qualification", type, summarizeSubmission(submission));
+        }
         return submission;
     }
 
     /**
-     * Determines whether a specific event type qualifies for notifications in a given group.
+     * Returns null when the event qualifies, otherwise a concise reason it was excluded.
      */
-    private boolean doesEventQualifyForGroup(SubmissionType type, GroupConfig groupConfig,
-                                              boolean hasScreenshot, int totalValue, int singleValue) {
+    private String getQualificationFailureReason(SubmissionType type, GroupConfig groupConfig,
+                                                 boolean hasScreenshot, int totalValue, int singleValue) {
         // If the group requires screenshots and we don't have one, skip
         if (groupConfig.isOnlyScreenshots() && !hasScreenshot) {
-            return false;
+            return "group requires screenshot";
         }
 
         switch (type) {
             case DROP:
-                if (!groupConfig.isSendDrops()) return false;
-                if (totalValue < groupConfig.getMinimumDropValue()) return false;
+                if (!groupConfig.isSendDrops()) return "group sendDrops=false";
+                if (totalValue < groupConfig.getMinimumDropValue()) {
+                    return "totalValue(" + totalValue + ") < groupMin(" + groupConfig.getMinimumDropValue() + ")";
+                }
                 // Check stacked items: if group doesn't allow stacked and total > single, skip
-                if (!groupConfig.isSendStackedItems() && totalValue > singleValue && singleValue > 0) return false;
-                return true;
+                if (!groupConfig.isSendStackedItems() && totalValue > singleValue && singleValue > 0) {
+                    return "stacked item and group sendStackedItems=false";
+                }
+                return null;
 
             case KILL_TIME:
-                return groupConfig.isSendPbs();
+                return groupConfig.isSendPbs() ? null : "group sendPbs=false";
 
             case COLLECTION_LOG:
-                return groupConfig.isSendClogs();
+                return groupConfig.isSendClogs() ? null : "group sendClogs=false";
 
             case COMBAT_ACHIEVEMENT:
-                return groupConfig.isSendCAs();
+                return groupConfig.isSendCAs() ? null : "group sendCAs=false";
 
             case LEVEL_UP:
-                return groupConfig.isSendXP();
+                return groupConfig.isSendXP() ? null : "group sendXP=false";
 
             case QUEST_COMPLETION:
-                return groupConfig.isSendQuests();
+                return groupConfig.isSendQuests() ? null : "group sendQuests=false";
 
             case PET:
-                return groupConfig.isSendPets();
+                return groupConfig.isSendPets() ? null : "group sendPets=false";
 
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:
                 // XP events typically don't create group notifications,
                 // but respect the group config if present
-                return groupConfig.isSendXP();
+                return groupConfig.isSendXP() ? null : "group sendXP=false";
 
             case ADVENTURE_LOG:
                 // Adventure log currently has no group-level toggle
-                return false;
+                return "adventure log unsupported for group notifications";
 
             default:
-                return false;
+                return "unsupported submission type";
         }
     }
 
@@ -373,9 +419,13 @@ public class SubmissionManager {
      */
     private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, String videoKey, ValidSubmission submission) {
         if (isFakeWorld()) {
-            DebugLogger.log("Returning due to this being a fake world");
+            debugLogEventFlow("skipped", submission != null ? submission.getType() : null, "fake world; webhook not sent");
             return;
         }
+
+        debugLogEventFlow("send", submission != null ? submission.getType() : null,
+                "attempting direct send; hasScreenshot=" + (screenshot != null) + ", hasVideoKey=" + (videoKey != null && !videoKey.isEmpty())
+                        + ", " + summarizeSubmission(submission));
 
         if (submission != null) {
             submission.markAsSending();
@@ -398,7 +448,7 @@ public class SubmissionManager {
 
     private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt, ValidSubmission submission) {
         if (isFakeWorld()) {
-            DebugLogger.log("Returning due to this being a fake world");
+            debugLogEventFlow("skipped", submission != null ? submission.getType() : null, "fake world during retry attempt=" + attempt);
             return;
         }
 
@@ -417,15 +467,22 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomUrl();
+                debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
+                        "using random webhook endpoint (API disabled); attempt=" + attempt);
             } catch (Exception e) {
+                debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                        "failed to resolve webhook endpoint: " + e.getMessage());
                 return;
             }
         } else {
             url = api.getApiUrl() + "/webhook";
+            debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
+                    "using API webhook endpoint; attempt=" + attempt + ", url=" + url);
         }
         HttpUrl u = HttpUrl.parse(url);
         if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {
             log.debug("Invalid or malformed webhook URL: {}", url);
+            debugLogEventFlow("failed", submission != null ? submission.getType() : null, "invalid webhook URL: " + url);
             return;
         }
 
@@ -437,6 +494,8 @@ public class SubmissionManager {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                debugLogEventFlow("retry", submission != null ? submission.getType() : null,
+                        "network failure on attempt=" + attempt + ": " + e.getMessage());
                 scheduleRetryOrFail(webhook, screenshot, submission, attempt, e);
             }
 
@@ -469,6 +528,8 @@ public class SubmissionManager {
 
                     if (!response.isSuccessful()) {
                         int code = response.code();
+                        debugLogEventFlow("response", submission != null ? submission.getType() : null,
+                                "unsuccessful HTTP response code=" + code + ", message=" + response.message() + ", attempt=" + attempt);
 
                         if (code == 400 || code == 401 || code == 403) {
                             if (submission != null) {
@@ -476,6 +537,8 @@ public class SubmissionManager {
                                 notifyUpdateCallback();
                                 schedulePersistence();
                             }
+                            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                                    "terminal HTTP failure code=" + code + "; no retry");
                             return;
                         }
 
@@ -499,6 +562,8 @@ public class SubmissionManager {
                         notifyUpdateCallback();
                         schedulePersistence();
                     }
+                    debugLogEventFlow("response", submission != null ? submission.getType() : null,
+                            "success HTTP response; attempt=" + attempt + ", " + summarizeSubmission(submission));
 
                     // Check if the API has already processed this submission
                     if (config.useApi() && submission != null && submission.getUuid() != null && !submission.getUuid().isEmpty()) {
@@ -509,8 +574,12 @@ public class SubmissionManager {
                                     submission.markAsProcessed();
                                     notifyUpdateCallback();
                                     schedulePersistence();
+                                    debugLogEventFlow("processed", submission.getType(),
+                                            "API check confirmed processed; uuid=" + submission.getUuid());
                                 }
                             } catch (IOException ignored) {
+                                debugLogEventFlow("processed", submission.getType(),
+                                        "API check failed for uuid=" + submission.getUuid() + ": " + ignored.getMessage());
                             }
                         });
                     }
@@ -530,6 +599,9 @@ public class SubmissionManager {
             }
             executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1, submission), delay, TimeUnit.MILLISECONDS);
             log.debug("Scheduled webhook retry in {} ms (attempt {}/{})", delay, attempt + 1, maxAttempts);
+            debugLogEventFlow("retry", submission != null ? submission.getType() : null,
+                    "scheduled retry in " + delay + "ms (nextAttempt=" + (attempt + 1) + "/" + maxAttempts + ")"
+                            + (e != null && e.getMessage() != null ? ", reason=" + e.getMessage() : ""));
         } else {
             if (submission != null) {
                 String reason = e != null && e.getMessage() != null ? e.getMessage() : "Retry limit reached";
@@ -538,6 +610,9 @@ public class SubmissionManager {
                 schedulePersistence();
             }
             log.warn("Exhausted retry attempts when sending webhook");
+            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                    "retry limit exhausted after " + maxAttempts + " attempts"
+                            + (e != null && e.getMessage() != null ? ", lastError=" + e.getMessage() : ""));
         }
     }
 
@@ -552,11 +627,16 @@ public class SubmissionManager {
      */
     private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
         VideoQuality captureMode = config.captureMode();
+        debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                "captureMode=" + captureMode + ", useApi=" + config.useApi() + ", hideDMs=" + hideDMs);
 
         if (captureMode.requiresVideo() && config.useApi()) {
             log.info("Capture mode is VIDEO; capturing clip.");
+            debugLogEventFlow("capture", submission != null ? submission.getType() : null, "capturing video");
             captureVideoAndSend(webhook, submission, hideDMs);
         } else {
+            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                    captureMode.requiresVideo() ? "video requested but API disabled; screenshot fallback" : "capturing screenshot");
             captureScreenshotAndSend(webhook, submission, hideDMs);
         }
     }
@@ -584,8 +664,12 @@ public class SubmissionManager {
                 }
             } catch (IOException e) {
                 log.error("Error converting image to byte array", e);
+                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                        "screenshot conversion failed: " + e.getMessage());
             }
 
+            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                    "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
             sendWebhookDirect(webhook, imageBytes, null, submission);
         });
     }
@@ -608,6 +692,8 @@ public class SubmissionManager {
             // If no video frames were captured, fall back to screenshot-only
             if (videoFrames == null || videoFrames.isEmpty()) {
                 log.warn("No video frames captured, falling back to screenshot-only");
+                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                        "no video frames captured; fallback to screenshot");
                 sendWebhookDirect(webhook, screenshotBytes, null, submission);
                 return;
             }
@@ -621,12 +707,16 @@ public class SubmissionManager {
                 // If upload failed, fall back to screenshot-only (keeps existing behavior).
                 if (videoKey == null || videoKey.isEmpty()) {
                     log.warn("Video upload failed; sending screenshot-only");
+                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                            "video upload failed; fallback to screenshot");
                     sendWebhookDirect(webhook, screenshotBytes, null, submission);
                     return;
                 }
 
                 // Video mode should replace screenshot attachments (do not send image.jpeg alongside).
                 log.info("Video uploaded (key={}); sending webhook without screenshot attachment", videoKey);
+                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                        "video uploaded; sending with videoKey=" + videoKey);
                 sendWebhookDirect(webhook, null, videoKey, submission);
             });
         });
@@ -896,7 +986,7 @@ public class SubmissionManager {
             return;
         }
 
-        DebugLogger.log("Group configs loaded, processing " + pendingEvents.size() + " pending events");
+        debugLogEventFlow("qualification", null, "group configs loaded; replaying pendingEvents=" + pendingEvents.size());
         List<PendingEvent> toProcess = new ArrayList<>(pendingEvents);
         pendingEvents.clear();
 
@@ -945,7 +1035,7 @@ public class SubmissionManager {
                         }
                         validSubmissions.add(s);
                     }
-                    DebugLogger.log("Loaded " + loaded.size() + " persisted submissions for account " + accountHash);
+                    debugLogEventFlow("persistence", null, "loaded submissions count=" + loaded.size() + ", accountHash=" + accountHash);
                     notifyUpdateCallback();
                 }
             } catch (Exception e) {
@@ -991,7 +1081,7 @@ public class SubmissionManager {
             Gson persistGson = new GsonBuilder().setPrettyPrinting().create();
             String json = persistGson.toJson(toSave);
             Files.write(filePath, json.getBytes(StandardCharsets.UTF_8));
-            DebugLogger.log("Persisted " + toSave.size() + " submissions to disk");
+            debugLogEventFlow("persistence", null, "persisted submissions count=" + toSave.size() + ", accountHash=" + accountHash);
         } catch (Exception e) {
             log.debug("Failed to persist submissions: {}", e.getMessage());
         }
@@ -1052,6 +1142,19 @@ public class SubmissionManager {
         if (updatesEnabled && updateCallback != null) {
             updateCallback.onSubmissionsUpdated();
         }
+    }
+
+    private void debugLogEventFlow(String stage, SubmissionType type, String message) {
+        DebugLogger.log("[SubmissionManager][" + stage + "][" + (type != null ? type : "UNKNOWN") + "] " + message);
+    }
+
+    private String summarizeSubmission(ValidSubmission submission) {
+        if (submission == null) {
+            return "submission=null";
+        }
+        return "submissionUuid=" + submission.getUuid()
+                + ", status=" + submission.getStatus()
+                + ", groups=" + Arrays.toString(submission.getGroupIds());
     }
 
     // ========== Legacy API compatibility ==========

@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 
 import io.droptracker.DropTrackerConfig;
@@ -26,6 +28,7 @@ public class DebugLogger {
     private final File logsDir;
     private final File currentLogFile;
     private final Object writeLock = new Object();
+    private volatile boolean sessionHeaderWritten = false;
     private FileWriter writer;
 
     @Inject
@@ -68,7 +71,21 @@ public class DebugLogger {
             return;
         }
         log.debug("DebugLogger message: " + message);
+        instance.ensureSessionHeader();
         instance.writeLine(message);
+    }
+
+    private void ensureSessionHeader() {
+        if (sessionHeaderWritten) {
+            return;
+        }
+        synchronized (writeLock) {
+            if (sessionHeaderWritten) {
+                return;
+            }
+            writeLine("---- Debug logging enabled for this session ----");
+            sessionHeaderWritten = true;
+        }
     }
 
     private void writeLine(String message) {
@@ -77,7 +94,8 @@ public class DebugLogger {
                 return;
             }
             try {
-                writer.write(message + System.lineSeparator());
+                String timestamp = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(LocalDateTime.now());
+                writer.write("[" + timestamp + "] " + message + System.lineSeparator());
                 writer.flush();
             } catch (IOException e) {
                 // Swallow to avoid impacting game thread; debugging only

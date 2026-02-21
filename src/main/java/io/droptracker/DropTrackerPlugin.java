@@ -190,8 +190,10 @@ public class DropTrackerPlugin extends Plugin {
 			videoRecorder.startRecording();
 		}
 
-		DebugLogger.log("Plugin started. API " + (config.useApi() ? "enabled" : "disabled") + ". Side panel: " + (config.showSidePanel() ? "enabled" : "disabled") + (config.customApiEndpoint().equals("") ? "Default API url used." : "Custom API endpoint:" + config.customApiEndpoint()));
-		DebugLogger.log("Plugin version: " + pluginVersion);
+		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
+			+ ", sidePanelEnabled=" + config.showSidePanel()
+			+ (config.customApiEndpoint().equals("") ? ", customApiEndpoint=default" : ", customApiEndpoint=" + config.customApiEndpoint()));
+		DebugLogger.log("[DropTrackerPlugin][startup] pluginVersion=" + pluginVersion);
 	}
 
 	private void loadUntradeables() {

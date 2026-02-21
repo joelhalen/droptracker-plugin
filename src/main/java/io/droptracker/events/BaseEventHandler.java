@@ -199,7 +199,9 @@ public abstract class BaseEventHandler {
      * @param type the event type identifier
      */
     protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
-        DebugLogger.log("Sending webhook body: " + webhook.toString());
+        DebugLogger.log("[BaseEventHandler][send] sendData called; type=" + type
+            + ", embedCount=" + (webhook != null && webhook.getEmbeds() != null ? webhook.getEmbeds().size() : 0)
+            + ", payload=" + webhook);
         if (webhook == null) {
             log.warn("Attempted to send null webhook data");
             return;

@@ -588,15 +588,16 @@ public class DropTrackerApi {
                             itemIdList.add(itemId);
                         } catch (NumberFormatException e) {
                             // Handle cases where a part of the string isn't a valid integer
-                            DebugLogger.log("Skipping invalid item ID: " + itemIdString);
+                            DebugLogger.log("[DropTrackerApi][untradeables] skipped invalid itemId token=" + itemIdString);
                         }
                     }
-                    DebugLogger.log("Loaded item ID list: " + itemIdList.toString());
+                    DebugLogger.log("[DropTrackerApi][untradeables] loaded itemId count=" + itemIdList.size());
                     return itemIdList;
                 }
             }
         } catch (IOException e) {
-            DebugLogger.log("Unable to load 'valued untradeables' from " + (config.useApi() ? "API" : "GitHub") + e);
+            DebugLogger.log("[DropTrackerApi][untradeables] failed to load from "
+                + (config.useApi() ? "API" : "GitHub") + "; reason=" + e.getMessage());
             return null;
         }
     }
