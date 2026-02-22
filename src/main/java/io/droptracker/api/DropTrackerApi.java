@@ -27,6 +27,9 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 public class DropTrackerApi {
+    private static final int GROUP_CONFIG_REFRESH_INTERVAL_SECONDS = 120;
+    private static final int GROUP_CONFIG_RETRY_INTERVAL_SECONDS = 60;
+
     private final DropTrackerConfig config;
     @Inject
     private Gson gson;
@@ -41,7 +44,10 @@ public class DropTrackerApi {
     public List<GroupConfig> groupConfigs = new ArrayList<>();
 
     private int lastGroupConfigUpdateUnix = 0;
+    private int lastGroupConfigLoadAttemptUnix = 0;
     private boolean isLoadingGroupConfigs = false;
+    private long lastGroupConfigAccountHash = -1L;
+    private String lastGroupConfigPlayerName = null;
 
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
 
@@ -75,27 +81,50 @@ public class DropTrackerApi {
             return;
         }
         
-        if (client.getAccountHash() == -1 || playerName == null) {
+        long accountHash = client.getAccountHash();
+        if (accountHash == -1 || playerName == null || playerName.isEmpty()) {
             return;
         }
-        
+
+        int nowUnix = (int) (System.currentTimeMillis() / 1000);
+        boolean accountOrPlayerChanged = accountHash != lastGroupConfigAccountHash
+            || !playerName.equals(lastGroupConfigPlayerName);
+
+        // If we changed account/player, allow an immediate refresh to avoid stale data.
+        if (accountOrPlayerChanged) {
+            groupConfigs = new ArrayList<>();
+            lastGroupConfigUpdateUnix = 0;
+        } else {
+            int minInterval = lastGroupConfigUpdateUnix > 0
+                ? GROUP_CONFIG_REFRESH_INTERVAL_SECONDS
+                : GROUP_CONFIG_RETRY_INTERVAL_SECONDS;
+            if ((nowUnix - lastGroupConfigLoadAttemptUnix) < minInterval) {
+                return;
+            }
+        }
+
         // Prevent concurrent loading
         if (isLoadingGroupConfigs) {
             return;
         }
-        
+
+        lastGroupConfigLoadAttemptUnix = nowUnix;
+        lastGroupConfigAccountHash = accountHash;
+        lastGroupConfigPlayerName = playerName;
         isLoadingGroupConfigs = true;
         
         CompletableFuture.runAsync(() -> {
             String responseData = null;
             try {
                 String apiUrl = getApiUrl();
-                String fullUrl = apiUrl + "/load_config?player_name=" + playerName + "&acc_hash=" + client.getAccountHash();
-                
-                HttpUrl url = HttpUrl.parse(fullUrl);
-                if (url == null) {
+                HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/load_config");
+                if (baseUrl == null) {
                     return;
                 }
+                HttpUrl url = baseUrl.newBuilder()
+                    .addQueryParameter("player_name", playerName)
+                    .addQueryParameter("acc_hash", String.valueOf(accountHash))
+                    .build();
                 
                 Request request = new Request.Builder().url(url).build();
                 
@@ -153,13 +182,10 @@ public class DropTrackerApi {
         if (!config.useApi()) {
             return null;
         }
-        /* Reload group configs if they haven't been updated in the last 120 seconds */
-        if (lastGroupConfigUpdateUnix < (int) (System.currentTimeMillis() / 1000) - 120 && !isLoadingGroupConfigs) {
-            try {
-                loadGroupConfigs(plugin.getLocalPlayerName());
-            } catch (IOException e) {
-                log.debug("Couldn't get group config in side panel (IOException) " + e);
-            }
+        try {
+            loadGroupConfigs(plugin.getLocalPlayerName());
+        } catch (IOException e) {
+            log.debug("Couldn't get group config in side panel (IOException) " + e);
         }
         
         return groupConfigs;
@@ -239,11 +265,14 @@ public class DropTrackerApi {
         }
 
         String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/group_search?name=" + groupName);
+        HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/group_search");
 
-        if (url == null) {
+        if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
+        HttpUrl url = baseUrl.newBuilder()
+            .addQueryParameter("name", groupName)
+            .build();
 
         Request request = new Request.Builder().url(url).build();
         lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
@@ -282,11 +311,14 @@ public class DropTrackerApi {
         }
 
         String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/player_search?name=" + playerName);
+        HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/player_search");
 
-        if (url == null) {
+        if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
+        HttpUrl url = baseUrl.newBuilder()
+            .addQueryParameter("name", playerName)
+            .build();
 
         Request request = new Request.Builder().url(url).build();
         lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
@@ -440,7 +472,8 @@ public class DropTrackerApi {
 
         try (Response response = httpClient.newCall(request).execute()) {
             lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-            String body = response.body() != null ? response.body().string() : "";
+            ResponseBody responseBody = response.body();
+            String body = responseBody != null ? responseBody.string() : "";
 
             if (response.code() == 402) {
                 // Quota exceeded
@@ -575,10 +608,11 @@ public class DropTrackerApi {
                 if (!response.isSuccessful()) {
                     throw new IOException("API request failed with status: " + response.code());
                 }
-                if (response.body() == null) {
+                ResponseBody responseBody = response.body();
+                if (responseBody == null) {
                     throw new IOException("Empty response body");
                 } else {
-                    valued = response.body().string();
+                    valued = responseBody.string();
                     String[] valuedList = valued.split(",");
                     ArrayList<Integer> itemIdList = new ArrayList<>();
                     for (String itemIdString : valuedList) {
