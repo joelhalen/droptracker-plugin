@@ -244,7 +244,9 @@ public class SubmissionManager {
             return;
         }
 
-        addParticipantsField(customWebhookBody);
+        NearbyPlayerTracker.NearbyPlayerTrace nearbyTrace = addParticipantsField(customWebhookBody);
+        debugLogEventFlow("nearby-trace", SubmissionType.DROP,
+            nearbyTrace != null ? nearbyTrace.toDebugSummary() : "trace unavailable");
 
         boolean requiredScreenshot = (config.screenshotDrops() && totalValue > config.screenshotValue()) || valueModified;
         debugLogEventFlow("received", SubmissionType.DROP, "totalValue=" + totalValue + ", singleValue=" + singleValue
@@ -271,18 +273,23 @@ public class SubmissionManager {
         }
     }
 
-    private void addParticipantsField(CustomWebhookBody webhook) {
+    private NearbyPlayerTracker.NearbyPlayerTrace addParticipantsField(CustomWebhookBody webhook) {
         if (webhook == null || webhook.getEmbeds() == null) {
-            return;
+            return NearbyPlayerTracker.NearbyPlayerTrace.empty(20, "webhook/embeds missing");
         }
 
-        List<String> members = nearbyPlayerTracker.getNearbyPlayerNames(20);
+        NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getNearbyPlayerTrace(20);
+        List<String> members = trace.getNearbyPlayers();
         String membersValue = members.isEmpty() ? "none" : String.join(",", members);
+        int embedsTouched = 0;
+        int embedsWithExistingMembersField = 0;
+        int membersFieldsAdded = 0;
 
         for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
             if (embed == null) {
                 continue;
             }
+            embedsTouched++;
 
             boolean hasMembersField = false;
             for (CustomWebhookBody.Field field : embed.getFields()) {
@@ -294,8 +301,18 @@ public class SubmissionManager {
 
             if (!hasMembersField) {
                 embed.addField("members", membersValue, false);
+                membersFieldsAdded++;
+            } else {
+                embedsWithExistingMembersField++;
             }
         }
+
+        debugLogEventFlow("nearby-trace", SubmissionType.DROP,
+            "members field enrichment: embedsTouched=" + embedsTouched
+                + ", existingMembersField=" + embedsWithExistingMembersField
+                + ", membersFieldsAdded=" + membersFieldsAdded
+                + ", membersValueLength=" + membersValue.length());
+        return trace;
     }
 
     // ========== Unified Qualification Logic ==========
