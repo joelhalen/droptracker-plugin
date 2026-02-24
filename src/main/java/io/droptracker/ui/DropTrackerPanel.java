@@ -55,7 +55,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private DropTrackerConfig config;
 	@Inject
 	private SubmissionManager submissionManager;
-	private NearbyPlayerTracker nearbyPlayerTracker;
 	
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
