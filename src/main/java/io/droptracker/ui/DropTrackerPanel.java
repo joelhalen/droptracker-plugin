@@ -2,7 +2,6 @@ package io.droptracker.ui;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
-import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 
 import javax.inject.Inject;
@@ -70,12 +69,11 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JLabel communicationStatusLabel;
 
 	@Inject
-	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client, NearbyPlayerTracker nearbyPlayerTracker) {
+	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
 		this.config = config;
 		this.api = api;
 		this.plugin = plugin;
 		this.client = client;
-		this.nearbyPlayerTracker = nearbyPlayerTracker;
 
 		
 		setLayout(new BorderLayout());
@@ -118,7 +116,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		// Tabs for users with API enabled
 		if (config.useApi()) {
 			// API Info tab
-			apiPanel = new ApiPanel(config, api, submissionManager, nearbyPlayerTracker, this);
+			apiPanel = new ApiPanel(config, api, submissionManager, this);
 			apiInfoPanel = apiPanel.create();   // Store reference
 			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
