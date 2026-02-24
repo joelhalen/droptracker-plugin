@@ -14,6 +14,8 @@ import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 
+import lombok.extern.slf4j.Slf4j;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -26,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class ApiPanel {
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
@@ -115,7 +118,7 @@ public class ApiPanel {
             if (nearbyPlayerTracker != null) {
                 nearbyPlayerTracker.printNearbyPlayersToConsole(20);
             } else {
-                System.out.println("[DropTracker] Nearby player tracker unavailable.");
+                log.debug("Nearby player tracker unavailable");
             }
         });
 

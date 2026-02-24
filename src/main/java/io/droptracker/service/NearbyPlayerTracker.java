@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 public class NearbyPlayerTracker
 {
     private static final int DEFAULT_RADIUS_TILES = 15;
-    private static final long RAID_MEMBER_TTL_MS = 120_000L;
 
     private final Client client;
     private final ClientThread clientThread;
@@ -57,11 +56,11 @@ public class NearbyPlayerTracker
             List<String> names = getNearbyPlayerNames(radiusTiles);
             if (names.isEmpty())
             {
-                System.out.println("No nearby players found.");
+                DebugLogger.log("[NearbyPlayerTracker] No nearby players found.");
                 return;
             }
 
-            System.out.println(String.join(", ", names));
+            DebugLogger.log("[NearbyPlayerTracker] " + String.join(", ", names));
         });
     }
 
@@ -170,7 +169,6 @@ public class NearbyPlayerTracker
             }
         }
 
-        purgeExpiredRaidMembers(nowMs);
         for (Map.Entry<String, Long> entry : recentRaidMembers.entrySet())
         {
             String memberName = entry.getKey();
@@ -247,7 +245,7 @@ public class NearbyPlayerTracker
             }
             scanStats.playersWithinRadius++;
 
-            String normalizedName = Text.removeTags(playerName).trim();
+            String normalizedName = Text.toJagexName(Text.removeTags(playerName)).trim();
             if (!normalizedName.isEmpty())
             {
                 if (names.add(normalizedName))
@@ -260,11 +258,6 @@ public class NearbyPlayerTracker
                 }
             }
         }
-    }
-
-    private void purgeExpiredRaidMembers(long nowMs)
-    {
-        recentRaidMembers.entrySet().removeIf(entry -> (nowMs - entry.getValue()) > RAID_MEMBER_TTL_MS);
     }
 
     @SuppressWarnings("deprecation")
@@ -297,7 +290,7 @@ public class NearbyPlayerTracker
             return null;
         }
 
-        String normalized = Text.removeTags(rawName).trim();
+        String normalized = Text.toJagexName(Text.removeTags(rawName)).trim();
         return normalized.isEmpty() ? null : normalized;
     }
 

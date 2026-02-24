@@ -648,7 +648,7 @@ public class SubmissionManager {
                 "captureMode=" + captureMode + ", useApi=" + config.useApi() + ", hideDMs=" + hideDMs);
 
         if (captureMode.requiresVideo() && config.useApi()) {
-            log.info("Capture mode is VIDEO; capturing clip.");
+            log.debug("Capture mode is VIDEO; capturing clip.");
             debugLogEventFlow("capture", submission != null ? submission.getType() : null, "capturing video");
             captureVideoAndSend(webhook, submission, hideDMs);
         } else {
@@ -715,7 +715,7 @@ public class SubmissionManager {
                 return;
             }
 
-            log.info("Captured video frames: frames={}, fps={}", videoFrames.size(), fps);
+            log.debug("Captured video frames: frames={}, fps={}", videoFrames.size(), fps);
 
             // Upload video frames via presigned URL on a background thread
             executor.submit(() -> {
@@ -731,7 +731,7 @@ public class SubmissionManager {
                 }
 
                 // Video mode should replace screenshot attachments (do not send image.jpeg alongside).
-                log.info("Video uploaded (key={}); sending webhook without screenshot attachment", videoKey);
+                log.debug("Video uploaded (key={}); sending webhook without screenshot attachment", videoKey);
                 debugLogEventFlow("capture", submission != null ? submission.getType() : null,
                         "video uploaded; sending with videoKey=" + videoKey);
                 sendWebhookDirect(webhook, null, videoKey, submission);
@@ -768,7 +768,7 @@ public class SubmissionManager {
                 log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
                 return null;
             }
-            log.info("Presigned: {}", GSON.toJson(presigned));
+            log.debug("Presigned upload URL obtained; key={}", presigned.key);
 
             if (presigned.message != null && !presigned.message.isEmpty()) {
                 if (presigned.message.contains("missing upgrade")) {

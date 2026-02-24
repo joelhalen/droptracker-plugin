@@ -29,7 +29,6 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
-import com.google.gson.*;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -77,10 +76,7 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 
-
-import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.ImageUtil;
-import okhttp3.*;
 
 @Slf4j
 @PluginDescriptor(
@@ -92,17 +88,11 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private DropTrackerConfig config;
 	@Inject
-	public static DropTrackerApi api;
+	private DropTrackerApi api;
 
 	private DropTrackerPanel panel;
 
 	private NavigationButton navButton;
-
-	@Inject
-	private Gson gson;
-
-	@Inject
-	private OkHttpClient httpClient;
 
 	@Inject
 	private KCService kcService;
@@ -144,8 +134,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	private boolean statsLoaded = false; 
 
-	public Boolean isTracking = true;
-	public Integer ticksSinceNpcDataUpdate = 0;
+	public boolean isTracking = true;
+	public int ticksSinceNpcDataUpdate = 0;
 	private boolean loginWarningsShown = false;
 
 	private static final BufferedImage PANEL_ICON = ImageUtil.loadImageResource(DropTrackerPlugin.class, "icon.png");
@@ -163,8 +153,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private Client client;
 
-	public String pluginVersion = "5.2.5";
-
+	public String pluginVersion = "5.3.0";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -174,8 +163,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
-		api = new DropTrackerApi(config, gson, httpClient, this, client);
-		// Wire up group config loaded callback to process any queued events
 		api.setOnGroupConfigsLoadedCallback(() -> submissionManager.onGroupConfigsLoaded());
 		if(config.showSidePanel()) {
 			createSidePanel();
@@ -234,14 +221,6 @@ public class DropTrackerPlugin extends Plugin {
 		clientToolbar.addNavigation(navButton);
 	}
 
-	// public void updateSubmissionsPanel() {
-	// 	if (panel != null) {
-	// 		panel.updateSentSubmissions();
-	// 	}
-	// }
-
-
-
 
 	public void updatePanelOnLogin(String chatMessage) {
 		if (chatMessage.contains("Welcome to Old School RuneScape.")) {
@@ -257,7 +236,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void shutDown() {
-    gameState.lazySet(null);
+		gameState.lazySet(null);
 		// Stop video recording
 		videoRecorder.stopRecording();
 
@@ -516,36 +495,27 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged) {
-    GameState newState = gameStateChanged.getGameState();
+		GameState newState = gameStateChanged.getGameState();
 
-    if (newState == GameState.LOADING) {
-      // an intermediate state that is irrelevant; ignore
-      return;
-    }
+		if (newState == GameState.LOADING) {
+			return;
+		}
 
-    GameState previousState = gameState.getAndSet(newState);
-    if (previousState == newState) {
-      // no real change occured (just momentarily went through LOADING); ignore
-		return;
-    }
+		GameState previousState = gameState.getAndSet(newState);
+		if (previousState == newState) {
+			return;
+		}
 
-    // Track if the user just logged in
-    justLoggedIn.set(newState == GameState.LOGGED_IN);
+		justLoggedIn.set(newState == GameState.LOGGED_IN);
 
-    if (previousState == GameState.HOPPING) {
-      // ignore
-      return;
-    }
+		if (previousState == GameState.HOPPING) {
+			return;
+		}
 
-    // Ensure the user didn't just logged in
-    if (justLoggedIn.get()) {
-      return;
-    }
+		if (justLoggedIn.get()) {
+			return;
+		}
 
-    // Login warnings (clog setting, API setting) are now handled in onGameTick
-    // after the player is fully loaded and varbits are guaranteed to be populated.
-
-    // Experience tracking
 		if (!isTracking || !config.trackExperience()) {
 			return;
 		}
@@ -560,9 +530,4 @@ public class DropTrackerPlugin extends Plugin {
 		}
 	}
 
-	public void sendRankChangeChatMessage(String rankChangeType, Integer currentRankNpc, Integer currentRankAll, Integer totalRankChange, String totalLootReceived,
-										  Integer totalRankChangeAtNpc, String totalLootNpc, Integer totalMembers, Integer totalMembersNpc,
-										  String totalReceivedAllTime, String totalLootNpcAllTime) {
-
-	}
 }

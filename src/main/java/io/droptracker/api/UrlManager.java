@@ -149,10 +149,10 @@ public class UrlManager {
 							log.error("[DropTracker] Decrypted URL is not based on discord; skipping");
 						}
 					} catch (Exception e) {
-						log.error("Decryption failed with error: " + e.getMessage());
+						log.error("Decryption failed: {}", e.getMessage());
 					}
 				} catch (Exception e) {
-					log.error("Error processing element: " + e.getMessage());
+					log.error("Error processing element: {}", e.getMessage());
 				}
 			}
 			if (!backupUrls.isEmpty()) {
@@ -238,17 +238,17 @@ public class UrlManager {
 							if (decryptedUrl.contains("discord")) {
 								endpointUrls.add(decryptedUrl);
 							} else {
-								log.error("[DropTracker] Decrypted URL is not based on discord; skipping: " + decryptedUrl);
+								log.error("Decrypted URL is not a Discord webhook; skipping: {}", decryptedUrl);
 							}
 						} catch (Exception e) {
-							log.error("Decryption failed with error: " + e.getMessage());
+							log.error("Decryption failed: {}", e.getMessage());
 						}
 					} catch (Exception e) {
-						log.error("Error processing element: " + e.getMessage());
+						log.error("Error processing element: {}", e.getMessage());
 					}
 				}
 			}
-			log.info("Successfully loaded {} webhook URLs from GitHub", endpointUrls.size());
+			log.debug("Successfully loaded {} webhook URLs from GitHub", endpointUrls.size());
 			endpointUrlsLoaded.complete(null);
 		} catch (Exception e) {
 			log.error("Failed to load webhook URLs from GitHub", e);

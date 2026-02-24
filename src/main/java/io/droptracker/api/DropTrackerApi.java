@@ -17,6 +17,7 @@ import net.runelite.api.Client;
 import org.jetbrains.annotations.NotNull;
 
 import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
+@Singleton
 public class DropTrackerApi {
     private static final int GROUP_CONFIG_REFRESH_INTERVAL_SECONDS = 120;
     private static final int GROUP_CONFIG_RETRY_INTERVAL_SECONDS = 60;
@@ -463,7 +465,7 @@ public class DropTrackerApi {
             .addQueryParameter("acc_hash", String.valueOf(client.getAccountHash()))
             .build();
 
-        log.info("Requesting presigned video upload URL (fps={}, acc_hash={})", fps, client.getAccountHash());
+        log.debug("Requesting presigned video upload URL (fps={}, acc_hash={})", fps, client.getAccountHash());
 
         Request request = new Request.Builder()
             .url(url)
