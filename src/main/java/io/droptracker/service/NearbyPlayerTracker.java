@@ -29,8 +29,6 @@ import java.util.concurrent.TimeUnit;
 @Singleton
 public class NearbyPlayerTracker
 {
-    private static final int DEFAULT_RADIUS_TILES = 15;
-
     private final Client client;
     private final ClientThread clientThread;
     private final PartyService partyService;
@@ -42,26 +40,6 @@ public class NearbyPlayerTracker
         this.client = client;
         this.clientThread = clientThread;
         this.partyService = partyService;
-    }
-
-    public void printNearbyPlayersToConsole()
-    {
-        printNearbyPlayersToConsole(DEFAULT_RADIUS_TILES);
-    }
-
-    public void printNearbyPlayersToConsole(int radiusTiles)
-    {
-        clientThread.invoke(() ->
-        {
-            List<String> names = getNearbyPlayerNames(radiusTiles);
-            if (names.isEmpty())
-            {
-                DebugLogger.log("[NearbyPlayerTracker] No nearby players found.");
-                return;
-            }
-
-            DebugLogger.log("[NearbyPlayerTracker] " + String.join(", ", names));
-        });
     }
 
     public List<String> getNearbyPlayerNames(int radiusTiles)
