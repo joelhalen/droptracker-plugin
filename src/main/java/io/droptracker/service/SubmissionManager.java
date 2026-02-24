@@ -1,7 +1,6 @@
 package io.droptracker.service;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 import io.droptracker.DropTrackerConfig;
@@ -1037,8 +1036,7 @@ public class SubmissionManager {
             try {
                 String json = new String(Files.readAllBytes(filePath), StandardCharsets.UTF_8);
                 Type listType = new TypeToken<List<ValidSubmission>>() {}.getType();
-                Gson persistGson = new GsonBuilder().create();
-                List<ValidSubmission> loaded = persistGson.fromJson(json, listType);
+                List<ValidSubmission> loaded = gson.fromJson(json, listType);
                 if (loaded != null && !loaded.isEmpty()) {
                     // Only load submissions that are still actionable (not yet processed, or recently processed)
                     for (ValidSubmission s : loaded) {
@@ -1095,8 +1093,7 @@ public class SubmissionManager {
                 }
             }
 
-            Gson persistGson = new GsonBuilder().setPrettyPrinting().create();
-            String json = persistGson.toJson(toSave);
+            String json = gson.newBuilder().setPrettyPrinting().create().toJson(toSave);
             Files.write(filePath, json.getBytes(StandardCharsets.UTF_8));
             debugLogEventFlow("persistence", null, "persisted submissions count=" + toSave.size() + ", accountHash=" + accountHash);
         } catch (Exception e) {
