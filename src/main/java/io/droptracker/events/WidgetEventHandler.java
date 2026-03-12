@@ -59,6 +59,34 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * Handles RuneLite widget events for the DropTracker plugin, specifically reading
+ * personal-best times from the Adventure Log in the player's own POH.
+ *
+ * <p><b>Adventure Log PB flow:</b>
+ * <ol>
+ *   <li>{@link #onWidgetLoaded} sets {@code advLogLoaded} and {@code bossLogLoaded} flags
+ *       when the Adventure Log or Boss Kill Log interfaces open.</li>
+ *   <li>On the following game tick, {@link #onGameTick} reads the POH owner's name from
+ *       the Adventure Log title widget (format: {@code "The Exploits of <name>"}).</li>
+ *   <li>When the Diary Scroll interface loads (one tick after the Adventure Log),
+ *       {@link #collectAndSendAdventureLogPBs} reads all PB entries from the scroll's
+ *       static child widgets, parsing each line with {@link #ADVENTURE_LOG_PB_PATTERN}.</li>
+ *   <li>If any PBs are found and the POH owner is the local player,
+ *       {@link #sendPersonalBestsWebhook} sends a batched embed to the DropTracker.</li>
+ * </ol>
+ * </p>
+ *
+ * <p><b>Boss name normalization:</b> The adventure log displays abbreviated or variant boss
+ * names. {@link #longBossName} maps these (e.g. {@code "corp"} → {@code "Corporeal Beast"})
+ * to canonical names used by the DropTracker backend.</p>
+ *
+ * <p><b>Pet list:</b> The player's owned pets are included in the adventure-log submission.
+ * {@link #getPetList} reads the list from the ChatCommands plugin's RS profile config,
+ * falling back to an older format via {@link #getPetListOld}.</p>
+ *
+ * <p>Adapted from RuneLite's ChatCommandsPlugin (© 2017 l2- / Adam).</p>
+ */
 public class WidgetEventHandler {
 
 
@@ -187,6 +215,13 @@ public class WidgetEventHandler {
 
 
 
+    /**
+     * Formats a seconds value as a human-readable time string ({@code m:ss} or {@code h:mm:ss}).
+     * Integer seconds are displayed without a decimal part; fractional seconds use {@code .2f}.
+     *
+     * @param seconds elapsed time in seconds (may be fractional)
+     * @return formatted time string, e.g. {@code "1:23"}, {@code "1:02:34"}, {@code "1:02.40"}
+     */
     @VisibleForTesting
     static String secondsToTimeString(double seconds)
     {
@@ -339,6 +374,17 @@ public class WidgetEventHandler {
         }
     }
 
+    /**
+     * Expands an abbreviated or alternate boss name (as it appears in the Adventure Log)
+     * to the canonical full name used by the DropTracker API.
+     *
+     * <p>Handles common abbreviations (e.g. {@code "corp"} → {@code "Corporeal Beast"}),
+     * raid variant names with team sizes, agility courses, and DT2 awakened variants.
+     * Also recursively handles the {@code " (Echo)"} suffix for echo bosses.</p>
+     *
+     * @param boss the raw boss name string from the adventure log widget
+     * @return the canonical full name (title-cased via {@link org.apache.commons.text.WordUtils#capitalize} as default)
+     */
     private static String longBossName(String boss)
     {
         String lowerBoss = boss.toLowerCase();
@@ -1030,7 +1076,9 @@ public class WidgetEventHandler {
     }
 
     /**
-     * Looks up the list of owned pets for the local player
+     * Reads the player's owned pet list from the ChatCommands plugin's RS profile config
+     * using the legacy {@code pets} key (list of {@link io.droptracker.models.Pet} objects).
+     * Returns an empty list if the config entry is absent or unparseable.
      */
     private List<Pet> getPetListOld()
     {
@@ -1052,6 +1100,13 @@ public class WidgetEventHandler {
         return petList != null ? petList : Collections.emptyList();
     }
 
+    /**
+     * Returns the player's owned pets as a list of item IDs.
+     * Prefers the newer {@code pets2} config key (list of integers); falls back to
+     * {@link #getPetListOld()} and maps each {@link io.droptracker.models.Pet} to its icon ID.
+     *
+     * @return list of pet item IDs, or empty if none are stored
+     */
     private List<Integer> getPetList()
     {
         List<Pet> old = getPetListOld();
@@ -1079,6 +1134,12 @@ public class WidgetEventHandler {
         return petList != null ? petList : Collections.emptyList();
     }
 
+    /**
+     * Parses a time string ({@code "m:ss"}, {@code "h:mm:ss"}, or plain decimal) into seconds.
+     *
+     * @param timeString the time string as it appears in the adventure log
+     * @return elapsed time in seconds (may be fractional)
+     */
     @VisibleForTesting
     static double timeStringToSeconds(String timeString)
     {

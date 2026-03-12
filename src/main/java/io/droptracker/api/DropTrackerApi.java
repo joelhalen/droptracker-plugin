@@ -24,6 +24,28 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * HTTP client for the DropTracker external API ({@code https://api.droptracker.io}).
+ *
+ * <p>All methods in this class require {@link DropTrackerConfig#useApi()} to return
+ * {@code true}; they return {@code null} / {@code false} / empty when the API is disabled.</p>
+ *
+ * <p><b>Key responsibilities:</b>
+ * <ul>
+ *   <li>{@link #loadGroupConfigs} — asynchronously fetches the player's group notification
+ *       settings and caches them in {@link #groupConfigs}. Refreshed automatically every
+ *       120 seconds by {@link #getGroupConfigs()}.</li>
+ *   <li>{@link #generateGuidForSubmission} — produces a unique submission identifier
+ *       (timestamp + account hash + random long) included in every webhook payload.</li>
+ *   <li>{@link #getTopGroups} / {@link #getTopPlayers} — leaderboard data for the side panel.</li>
+ *   <li>{@link #searchGroup} / {@link #lookupPlayer} — panel search functionality.</li>
+ *   <li>{@link #checkSubmissionProcessed} — polls the API to confirm a previously sent
+ *       submission was received and processed.</li>
+ *   <li>{@link #getLatestWelcomeString} / {@link #getLatestUpdateString} — async content
+ *       fetch for the side panel's welcome and news sections.</li>
+ * </ul>
+ * </p>
+ */
 @Slf4j
 public class DropTrackerApi {
     private final DropTrackerConfig config;
@@ -37,11 +59,16 @@ public class DropTrackerApi {
     @Inject
     private Client client;
 
+    /** Cached group configs for the current player, refreshed every 120 seconds. */
     public List<GroupConfig> groupConfigs = new ArrayList<>();
 
+    /** Unix timestamp of the last successful {@code /load_config} API response. */
     private int lastGroupConfigUpdateUnix = 0;
+
+    /** Guard flag preventing concurrent {@link #loadGroupConfigs} calls. */
     private boolean isLoadingGroupConfigs = false;
 
+    /** Unix timestamp of the last successful outbound API communication. */
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
     
    

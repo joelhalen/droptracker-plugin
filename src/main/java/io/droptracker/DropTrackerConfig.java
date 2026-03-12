@@ -5,17 +5,36 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
+/**
+ * RuneLite configuration interface for the DropTracker plugin.
+ *
+ * <p>Settings are grouped into logical sections that appear in the RuneLite config panel:
+ * <ol>
+ *   <li><b>Loot Tracking</b> – controls drop submission and screenshot thresholds</li>
+ *   <li><b>Personal Bests</b> – toggle PB tracking and screenshots</li>
+ *   <li><b>Collection Logs</b> – toggle collection-log unlock submissions</li>
+ *   <li><b>Combat Achievements</b> – toggle combat task submissions</li>
+ *   <li><b>Pet Tracking</b> – toggle pet drop submissions</li>
+ *   <li><b>Experience / Level</b> – toggle level-up and XP-milestone submissions</li>
+ *   <li><b>Quest Tracking</b> – toggle quest completion submissions</li>
+ *   <li><b>Miscellaneous</b> – privacy settings (PM hiding)</li>
+ *   <li><b>API Configuration</b> – external API connection toggle and in-game messages</li>
+ *   <li><b>Side Panel</b> – show/hide the DropTracker navigation panel</li>
+ * </ol>
+ *
+ * <p>Three hidden items ({@link #lastVersionNotified()}, {@link #lastAccountName()},
+ * {@link #lastAccountHash()}) are persisted by the plugin to detect account switches and
+ * suppress duplicate version-notification messages.</p>
+ */
 @ConfigGroup(DropTrackerConfig.GROUP)
 public interface DropTrackerConfig extends Config {
-    /*
-     * Section Positions:
-     * 1 (0) - General Settings
-     * 2 (1) - Values
-     * 2 (2) - Screenshots
-     */
+    /** The RuneLite config group key used for all DropTracker settings. */
     String GROUP = "droptracker";
 
-    /* Loot related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Loot Tracking
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Loot Tracking",
         description = "Define what rules you want set for loot",
@@ -58,7 +77,10 @@ public interface DropTrackerConfig extends Config {
         return 250000;
     }
 
-    /* Personal Best related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Personal Bests
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Personal Bests",
         description = "Should we send your personal bests to the DropTracker?",
@@ -90,7 +112,12 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    /* Collection Log related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Collection Logs
+    // Note: requires "Collection log - New addition notification" AND the
+    // "Notification" or "Popup" setting enabled in the OSRS game settings.
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Collection Logs",
         description = "<html>Define what rules you want set for Collection Log <br>"
@@ -123,7 +150,10 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    /* Combat Achievement related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Combat Achievements
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Combat Achievements",
         description = "Define what rules you want set for Combat Achievements",
@@ -155,7 +185,10 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    /* Pet related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Pet Tracking
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
             name = "Pet Tracking",
             description = "Should we send your pets to the DropTracker?",
@@ -187,7 +220,12 @@ public interface DropTrackerConfig extends Config {
     }
 
 
-    /* Experience/Level related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Experience / Level
+    // trackExperience controls overall XP tracking; levelEmbed controls the
+    // finer-grained level-up notifications within that.
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
             name = "Experience / Level ",
             description = "Should we send your experience to the DropTracker?",
@@ -234,7 +272,10 @@ public interface DropTrackerConfig extends Config {
     )
     default int minLevelToScreenshot() {return 1;}
 
-    /* Quest related Tracking */
+    // -------------------------------------------------------------------------
+    // Section: Quest Tracking
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
             name = "Quest Tracking",
             description = "Should we send your quests to the DropTracker?",
@@ -265,7 +306,10 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    /* Settings for Hiding Split Chat, Side Panel and API connections */
+    // -------------------------------------------------------------------------
+    // Section: Miscellaneous
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Miscellaneous",
         description = "Miscellaneous plugin config options",
@@ -285,7 +329,14 @@ public interface DropTrackerConfig extends Config {
         return false;
     }
 
-    /* API Configuration */
+    // -------------------------------------------------------------------------
+    // Section: API Configuration
+    // Enabling this section causes the plugin to make outbound connections to
+    // api.droptracker.io for group config loading, leaderboard data, and
+    // submission status checking. This section is closed by default to ensure
+    // users are aware of the external connection before enabling it.
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "API Configuration",
         description = "Configure settings related to integration with our external API",
@@ -321,9 +372,13 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
-    // Removed retry queue and maxRetryAttempts settings in favor of simplified per-call retry
+    // Retry queue and maxRetryAttempts were removed; retries are now handled inline by
+    // SubmissionManager using exponential back-off up to 10 attempts.
 
-    /* Side panel settings */
+    // -------------------------------------------------------------------------
+    // Section: Side Panel
+    // -------------------------------------------------------------------------
+
     @ConfigSection(
         name = "Side Panel",
         description = "Configure options related to the DropTracker Panel",
@@ -356,7 +411,14 @@ public interface DropTrackerConfig extends Config {
 		return true;
 	}
 
-    /* Hidden config items for storing internal info */
+    // -------------------------------------------------------------------------
+    // Hidden config items — not shown in the config panel; used for internal state.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Stores the last plugin version for which the player received a version-change notification.
+     * Prevents the notification from being shown again on subsequent logins for the same version.
+     */
     @ConfigItem(
         name = "lastVersionNotified",
         keyName = "lastVersionNotified",
@@ -368,6 +430,10 @@ public interface DropTrackerConfig extends Config {
     }
     public void setLastVersionNotified(String versionNotified);
 
+    /**
+     * Persists the last known logged-in player name. Used on startup to detect account switches
+     * and trigger a {@link io.droptracker.service.KCService#reset()} when needed.
+     */
     @ConfigItem(
         name = "lastAccountName",
         keyName = "lastAccountName",
@@ -379,6 +445,10 @@ public interface DropTrackerConfig extends Config {
     }
     void setLastAccountName(String accountName);
 
+    /**
+     * Persists the last known account hash. Sent alongside every webhook embed as {@code acc_hash}
+     * to allow the DropTracker API to uniquely identify the submitting account.
+     */
     @ConfigItem(
         name = "lastAccountHash",
         keyName = "lastAccountHash",

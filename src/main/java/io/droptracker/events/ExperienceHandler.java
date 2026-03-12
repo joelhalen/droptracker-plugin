@@ -31,31 +31,120 @@ import java.util.concurrent.BlockingQueue;
 
 import static net.runelite.api.Experience.MAX_REAL_LEVEL;
 
+/**
+ * Handles experience gain and level-up notifications.
+ *
+ * <p><b>Initialization delay:</b> Stat packets arrive over several game ticks after login.
+ * The handler waits {@link #INIT_GAME_TICKS} (~10 s) before recording the baseline skill
+ * levels to avoid treating existing XP as newly gained. If a {@link StatChanged} event
+ * arrives before initialization completes, a forced re-initialization is scheduled.</p>
+ *
+ * <p><b>Level-up accumulation:</b> Multiple skills may level up within the same tick (e.g.
+ * combat stats). Level-up names are queued in {@link #levelledSkills} and flushed after
+ * a 2-tick settling window so a single webhook embed covers all simultaneous level-ups.</p>
+ *
+ * <p><b>XP milestones:</b> After reaching 99 in a skill, each {@link #XP_INTERVAL_MILLIONS}
+ * million XP boundary triggers an XP-milestone notification (default: every 1 M XP).
+ * Milestones are also batched over the same 2-tick window.</p>
+ *
+ * <p><b>Virtual levels:</b> Levels above 99 (virtual levels up to 126, plus the sentinel
+ * {@link #LEVEL_FOR_MAX_XP} = 127 for 200 M XP) are tracked when
+ * {@link #TRACK_VIRTUAL_LEVELS} is {@code true}.</p>
+ *
+ * <p><b>World-switch reset:</b> When the player hops to a world with a different
+ * {@link WorldType} set (e.g. Seasonal → Standard), stored skill levels are cleared and
+ * re-initialized to prevent spurious level-up notifications.</p>
+ *
+ * <p>Enabled/disabled via {@link io.droptracker.DropTrackerConfig#trackExperience()}.</p>
+ */
 @Slf4j
 @Singleton
 public class ExperienceHandler extends BaseEventHandler {
+
+    /**
+     * Sentinel virtual level (127) used to represent a skill at the maximum XP of 200 M.
+     * {@link net.runelite.api.Experience#MAX_VIRT_LEVEL} is 126 (level reached just below 200 M);
+     * adding 1 gives a distinct value used only for the 200 M cap display.
+     */
     public static final int LEVEL_FOR_MAX_XP = Experience.MAX_VIRT_LEVEL + 1; // 127
+
+    /**
+     * Number of game ticks to wait after login before capturing the baseline skill levels.
+     * Approximately 10 seconds (16 × ~600 ms). Prevents the initial stat-packet delivery
+     * from being mis-classified as XP gains.
+     */
     static final @VisibleForTesting int INIT_GAME_TICKS = 16; // ~10s
+
+    /**
+     * World types that represent non-standard play environments (PvP Arena, Seasonal, etc.).
+     * Used to detect world-type changes that necessitate a level baseline re-initialization.
+     */
     private static final Set<WorldType> SPECIAL_WORLDS = EnumSet.of(WorldType.PVP_ARENA, WorldType.QUEST_SPEEDRUNNING, WorldType.BETA_WORLD, WorldType.NOSAVE_MODE, WorldType.TOURNAMENT_WORLD, WorldType.DEADMAN, WorldType.SEASONAL);
+
+    /** Total number of OSRS skills; used as the queue capacity for {@link #levelledSkills}. */
     private static final int SKILL_COUNT = Skill.values().length;
+
+    /** Display name used as the map key for the player's overall combat level. */
     private static final String COMBAT_NAME = "Combat";
+
+    /** Skills that contribute to the combat level formula. Populated in the static initializer. */
     private static final Set<String> COMBAT_COMPONENTS;
-    
-    // Configuration constants
-    private static final int XP_INTERVAL_MILLIONS = 1; // Track every 1M XP milestone
-    private static final int LEVEL_MIN_VALUE = 1; // Minimum level to track
-    private static final int LEVEL_INTERVAL = 1; // Track every level
-    private static final boolean TRACK_VIRTUAL_LEVELS = true; // Track levels above 99
-    private static final boolean TRACK_COMBAT_LEVEL = true; // Track combat level increases
-    
+
+    // -------------------------------------------------------------------------
+    // Tracking configuration constants
+    // These are currently hard-coded; future work could expose them as config items.
+    // -------------------------------------------------------------------------
+
+    /** Fire an XP-milestone notification for every N million XP gained past 99 (default: 1 M). */
+    private static final int XP_INTERVAL_MILLIONS = 1;
+
+    /** Minimum skill level required before a level-up notification is sent. */
+    private static final int LEVEL_MIN_VALUE = 1;
+
+    /** Send a notification every Nth level (1 = every level, 5 = multiples of 5, etc.). */
+    private static final int LEVEL_INTERVAL = 1;
+
+    /** When {@code true}, virtual levels above 99 (up to 126/127) trigger notifications. */
+    private static final boolean TRACK_VIRTUAL_LEVELS = true;
+
+    /** When {@code true}, overall combat level increases also trigger a notification. */
+    private static final boolean TRACK_COMBAT_LEVEL = true;
+
+    // -------------------------------------------------------------------------
+    // Mutable per-session state
+    // -------------------------------------------------------------------------
+
+    /**
+     * Queue of skill names (including {@link #COMBAT_NAME}) that leveled up this tick window.
+     * Drained in {@link #notifyLevels()} after the 2-tick settling period.
+     */
     private final BlockingQueue<String> levelledSkills = new ArrayBlockingQueue<>(SKILL_COUNT + 1);
+
+    /** Skills for which an XP milestone was crossed this tick window. */
     private final Set<Skill> xpReached = EnumSet.noneOf(Skill.class);
+
+    /** Most recent known level for each skill name (including {@link #COMBAT_NAME}). */
     private final Map<String, Integer> currentLevels = new HashMap<>();
+
+    /** Most recent known XP total for each skill. */
     private final Map<Skill, Integer> currentXp = new EnumMap<>(Skill.class);
-    private final Map<String, Integer> previousLevels = new HashMap<>(); // Track previous levels for level increase calculation
-    
+
+    /**
+     * Level each skill was at immediately before the current level-up event.
+     * Stored so the embed can report the number of levels gained in one session.
+     */
+    private final Map<String, Integer> previousLevels = new HashMap<>();
+
+    /** Ticks elapsed since a level-up or XP milestone was first queued; resets on new events. */
     private int ticksWaited = 0;
+
+    /** Ticks counted during the post-login initialization delay (counts up to {@link #INIT_GAME_TICKS}). */
     private int initTicks = 0;
+
+    /**
+     * The subset of {@link #SPECIAL_WORLDS} that were active when levels were last initialized.
+     * {@code null} until first initialization; compared on world-hop to detect environment changes.
+     */
     private Set<WorldType> specialWorldType = null;
 
     @Inject
@@ -70,6 +159,12 @@ public class ExperienceHandler extends BaseEventHandler {
         return config.trackExperience();
     }
 
+    /**
+     * Captures the current skill levels and XP totals from the game client as the baseline.
+     * Called once the {@link #INIT_GAME_TICKS} delay has elapsed to ensure the client has
+     * received the full stat packet for the logged-in character.
+     * Also records the current world type set so world-hops can be detected.
+     */
     private void initLevels() {
         for (Skill skill : Skill.values()) {
             int xp = client.getSkillExperience(skill);
@@ -86,6 +181,11 @@ public class ExperienceHandler extends BaseEventHandler {
         log.debug("Initialized current skill levels: {}", currentLevels);
     }
 
+    /**
+     * Clears all accumulated level/XP state and resets the initialization counter.
+     * Called on logout ({@link GameState#LOGIN_SCREEN}) and on world-hops that change
+     * the active {@link WorldType} set to prevent cross-session level confusion.
+     */
     public void reset() {
         levelledSkills.clear();
         clientThread.invoke(() -> {
@@ -99,6 +199,18 @@ public class ExperienceHandler extends BaseEventHandler {
         });
     }
 
+    /**
+     * Per-tick update driving the two-phase initialization and notification flush.
+     *
+     * <ol>
+     *   <li>If {@link #initTicks} has exceeded {@link #INIT_GAME_TICKS}, call
+     *       {@link #initLevels()} to capture the baseline skill state.</li>
+     *   <li>If the baseline isn't ready yet, increment {@link #initTicks} and wait.</li>
+     *   <li>Once initialized, if queued level-ups or XP milestones exist, increment
+     *       {@link #ticksWaited}. After 2 ticks fire {@link #attemptNotify()} to send
+     *       a single batched embed covering all simultaneous skill changes.</li>
+     * </ol>
+     */
     public void onTick() {
         if (this.initTicks > INIT_GAME_TICKS) {
             initLevels();
@@ -126,10 +238,25 @@ public class ExperienceHandler extends BaseEventHandler {
         }
     }
 
+    /**
+     * Delegates a skill XP change event to {@link #handleStatChange}.
+     *
+     * @param statChange the RuneLite stat-changed event
+     */
     public void onStatChanged(StatChanged statChange) {
         this.handleStatChange(statChange.getSkill(), statChange.getLevel(), statChange.getXp());
     }
 
+    /**
+     * Reacts to game state transitions.
+     * <ul>
+     *   <li>{@link GameState#LOGIN_SCREEN} – player logged out; reset all accumulated state.</li>
+     *   <li>{@link GameState#LOGGED_IN} with a different world-type set – player hopped worlds;
+     *       reset to re-initialize with the new character profile.</li>
+     * </ul>
+     *
+     * @param gameStateChanged the RuneLite game-state-changed event
+     */
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
         if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
             this.reset();
@@ -139,6 +266,23 @@ public class ExperienceHandler extends BaseEventHandler {
         }
     }
 
+    /**
+     * Core stat-change processing. Compares the incoming skill XP and level against the
+     * stored baseline and queues level-up / XP-milestone notifications as appropriate.
+     *
+     * <p>Edge cases handled:
+     * <ul>
+     *   <li>First stat event before baseline — forces re-initialization via {@link #INIT_GAME_TICKS}.</li>
+     *   <li>Level regression (de-leveling on seasonal worlds, etc.) — resets all state.</li>
+     *   <li>XP milestone only triggers for skills at or above {@link Experience#MAX_REAL_LEVEL}.</li>
+     *   <li>Combat level is recalculated from the 7 combat components after any component change.</li>
+     * </ul>
+     * </p>
+     *
+     * @param skill the skill whose XP changed
+     * @param level the new real skill level (as reported by the client)
+     * @param xp    the new XP total for the skill
+     */
     private void handleStatChange(Skill skill, int level, int xp) {
         if (xp <= 0 || level <= 1 || !isEnabled()) return;
 
@@ -191,6 +335,15 @@ public class ExperienceHandler extends BaseEventHandler {
         }
     }
 
+    /**
+     * Determines whether a skill level change constitutes a notification-worthy level-up and,
+     * if so, adds the skill name to {@link #levelledSkills}.
+     *
+     * @param configEnabled {@code true} if the relevant config toggle is on (e.g. combat tracking)
+     * @param skill         display name of the skill (or {@link #COMBAT_NAME})
+     * @param previousLevel the level before this change, or {@code null} if unknown
+     * @param currentLevel  the level after this change
+     */
     private void checkLevelUp(boolean configEnabled, String skill, Integer previousLevel, int currentLevel) {
         if (previousLevel == null || currentLevel <= previousLevel) {
             log.trace("Ignoring non-level-up for {}: {}", skill, currentLevel);
@@ -436,6 +589,23 @@ public class ExperienceHandler extends BaseEventHandler {
         sendData(webhook, SubmissionType.LEVEL_UP);
     }
 
+    /**
+     * Returns {@code true} if the new {@code level} meets the configured notification criteria.
+     *
+     * <p>A level qualifies when:
+     * <ul>
+     *   <li>It is at least {@link #LEVEL_MIN_VALUE}.</li>
+     *   <li>Virtual levels are tracked (or it is a real level, i.e. ≤ 99).</li>
+     *   <li>It falls on a {@link #LEVEL_INTERVAL} boundary — or any level in the range
+     *       {@code (previous, current]} crosses such a boundary (handles skipped levels).</li>
+     * </ul>
+     * </p>
+     *
+     * @param previous         level before the change
+     * @param level            level after the change
+     * @param skipVirtualCheck {@code true} for combat level (which has no virtual range)
+     * @return {@code true} if a notification should be sent for this level change
+     */
     private boolean checkLevelInterval(int previous, int level, boolean skipVirtualCheck) {
         if (level < LEVEL_MIN_VALUE)
             return false;
@@ -453,6 +623,12 @@ public class ExperienceHandler extends BaseEventHandler {
         return remainder == 0 || (level - remainder) > previous;
     }
 
+    /**
+     * Computes the player's current combat level from the seven contributing skills,
+     * preferring cached values in {@link #currentLevels} (capped at 99 for the formula).
+     *
+     * @return the calculated overall combat level
+     */
     private int calculateCombatLevel() {
         return Experience.getCombatLevel(
             getRealLevel(Skill.ATTACK),
@@ -465,6 +641,13 @@ public class ExperienceHandler extends BaseEventHandler {
         );
     }
 
+    /**
+     * Returns the real (non-virtual, capped at 99) level for a skill, using the cached
+     * value where available to avoid unnecessary client calls.
+     *
+     * @param skill the skill to query
+     * @return the real level (1–99)
+     */
     private int getRealLevel(Skill skill) {
         Integer cachedLevel = currentLevels.get(skill.getName());
         return cachedLevel != null
@@ -472,6 +655,17 @@ public class ExperienceHandler extends BaseEventHandler {
             : client.getRealSkillLevel(skill);
     }
 
+    /**
+     * Converts an XP total to its corresponding level, including virtual levels above 99.
+     * Returns the sentinel {@link #LEVEL_FOR_MAX_XP} (127) for the 200 M XP cap.
+     *
+     * <p>Note: {@link Experience#getLevelForXp(int)} is an O(log n) binary search;
+     * prefer {@link net.runelite.api.Client#getRealSkillLevel(Skill)} for real levels
+     * when a virtual result is not needed.</p>
+     *
+     * @param xp raw XP total
+     * @return virtual level (1–{@link #LEVEL_FOR_MAX_XP})
+     */
     private int getLevel(int xp) {
         // treat 200M XP as level 127
         if (xp >= Experience.MAX_SKILL_XP)
@@ -481,6 +675,12 @@ public class ExperienceHandler extends BaseEventHandler {
         return Experience.getLevelForXp(xp);
     }
 
+    /**
+     * Returns the intersection of the client's current world types with {@link #SPECIAL_WORLDS}.
+     * Used to detect environment changes on world-hop that require re-initialization.
+     *
+     * @return a mutable set of currently active special world types (may be empty)
+     */
     private Set<WorldType> getSpecialWorldTypes() {
         var world = client.getWorldType().clone();
         world.retainAll(SPECIAL_WORLDS); // O(1)

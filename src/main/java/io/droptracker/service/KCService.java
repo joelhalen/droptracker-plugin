@@ -38,17 +38,55 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Tracks and caches per-source kill counts for the local player.
+ *
+ * <p><b>Data sources (in priority order):</b>
+ * <ol>
+ *   <li>In-memory cache ({@link #killCounts}) — populated from loot and chat events during
+ *       the current session, expires after 10 minutes of inactivity.</li>
+ *   <li>RuneLite ChatCommands plugin config — provides kill counts persisted across sessions
+ *       (used when the ChatCommands plugin is enabled).</li>
+ *   <li>RuneLite LootTracker plugin config — provides kill counts derived from stored loot
+ *       history, adjusted for kills with no loot via the {@link Rarity} service.</li>
+ * </ol>
+ * </p>
+ *
+ * <p><b>Race condition handling:</b> Kill-count game messages may arrive before or after the
+ * corresponding loot event. When a chat-based KC is received, the value {@code kc - 1} is stored
+ * immediately (so a subsequent loot-event increment brings it to {@code kc}). A 15-second
+ * delayed task then merges the final {@code kc} to handle the case where the chat message
+ * arrived <em>after</em> the loot event.</p>
+ *
+ * <p><b>Special cases:</b>
+ * <ul>
+ *   <li>The Whisperer — RuneLite does not fire {@code NpcLootReceived}; handled via {@code LootReceived}.</li>
+ *   <li>Gauntlet/Corrupted Gauntlet — KC comes from game-message pattern, not loot event.</li>
+ *   <li>Clue scrolls — completion count is parsed from a specific game message and stored under
+ *       the key {@code "Clue Scroll (<tier>)"}.</li>
+ * </ul>
+ * </p>
+ *
+ * <p>Adapted from <a href="https://github.com/pajlads/DinkPlugin">DinkPlugin</a>.</p>
+ */
 @Slf4j
 @Singleton
 public class KCService {
 
-
+    /** RuneLite plugin name key for the Chat Commands plugin (used to check if it is enabled). */
     private static final String RL_CHAT_CMD_PLUGIN_NAME = ChatCommandsPlugin.class.getSimpleName().toLowerCase();
+
+    /** RuneLite plugin name key for the Loot Tracker plugin (used to check if it is enabled). */
     private static final String RL_LOOT_PLUGIN_NAME = LootTrackerPlugin.class.getSimpleName().toLowerCase();
+
+    /**
+     * Matches the clue-scroll completion message:
+     * {@code "You have completed 42 Medium Treasure Trails."}
+     * Named groups: {@code scrollType} (difficulty tier), {@code scrollCount} (cumulative count).
+     */
     private static final Pattern CLUE_SCROLL_REGEX = Pattern.compile("You have completed (?<scrollCount>\\d+) (?<scrollType>\\w+) Treasure Trails\\.");
 
     private ConfigManager configManager;
-
 
     private Gson gson;
 
@@ -60,6 +98,10 @@ public class KCService {
     @Inject
     private DropTrackerPlugin plugin;
 
+    /**
+     * In-memory kill-count cache keyed by {@link #getCacheKey(LootRecordType, String)}.
+     * Entries expire after 10 minutes of inactivity and the cache holds at most 64 entries.
+     */
     private static final Cache<String, Integer> killCounts = CacheBuilder.newBuilder()
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .maximumSize(64L)
@@ -77,11 +119,22 @@ public class KCService {
         this.plugin = plugin;
     }
 
+    /**
+     * Clears the last-drop reference and invalidates the entire kill-count cache.
+     * Called on account switch to prevent stale counts being attributed to a new player.
+     */
     public void reset() {
         plugin.lastDrop = null;
         KCService.killCounts.invalidateAll();
     }
 
+    /**
+     * Increments the cached kill count for the NPC that produced a loot event.
+     * Skips The Whisperer (handled by {@link #onLoot}) and Gauntlet bosses (handled
+     * by {@link #onGameMessage}).
+     *
+     * @param event the NPC loot-received event
+     */
     @SuppressWarnings("deprecation")
     public void onNpcKill(NpcLootReceived event) {
         NPC npc = event.getNpc();
@@ -109,6 +162,13 @@ public class KCService {
         }
     }
 
+    /**
+     * Handles general loot events. Increments the kill count only for The Whisperer
+     * (which RuneLite does not fire {@code NpcLootReceived} for) and non-NPC / non-player
+     * sources (raids, minigames, etc.). Player kills are handled by {@code onPlayerKill}.
+     *
+     * @param event the loot received event
+     */
     public void onLoot(LootReceived event) {
         boolean increment;
         switch (event.getType()) {
@@ -133,6 +193,16 @@ public class KCService {
         this.incrementKills(LootRecordType.NPC, event.getComposition().getName(), event.getItems());
     }
 
+    /**
+     * Parses kill-count game messages and clue-scroll completion messages to pre-populate the
+     * cache before (or after) the loot event arrives.
+     *
+     * <p>For bosses: stores {@code kc - 1} immediately (incremented by the loot event), then
+     * schedules a 15-second deferred task to write the final {@code kc} in case the message
+     * arrived after the loot event.</p>
+     *
+     * @param message the sanitized game chat message text
+     */
     public void onGameMessage(String message) {
         // update cached clue casket count
         Map.Entry<String, Integer> clue = parseClue(message);
@@ -173,13 +243,29 @@ public class KCService {
         });
     }
 
+    /**
+     * Returns the cached kill count for the given source, or {@code null} if not cached.
+     * Does not fall back to persistent storage; use {@link #getKillCountWithStorage} for that.
+     *
+     * @param type       the loot record type (NPC, EVENT, etc.)
+     * @param sourceName the canonical source name
+     * @return cached kill count, or {@code null}
+     */
     @Nullable
     public Integer getKillCount(LootRecordType type, String sourceName) {
         if (sourceName == null) return null;
-        // This static method is deprecated - use instance method instead
         return killCounts.getIfPresent(getCacheKey(type, sourceName));
     }
 
+    /**
+     * Returns the kill count for the given source, merging the in-memory cache with the
+     * value stored by the RuneLite LootTracker / ChatCommands plugins (if available).
+     * The higher of the two values is returned and written back to the cache.
+     *
+     * @param type       the loot record type
+     * @param sourceName the canonical source name
+     * @return the best available kill count, or {@code null} if unknown
+     */
     @Nullable
     public Integer getKillCountWithStorage(LootRecordType type, String sourceName) {
         if (sourceName == null) return null;

@@ -21,22 +21,71 @@ import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 
+/**
+ * Handles quest completion notifications.
+ *
+ * <p>Triggered when the quest-completion scroll widget ({@link net.runelite.api.gameval.InterfaceID#QUESTSCROLL})
+ * loads. The quest name is extracted from the scroll title text via two regex patterns:
+ * <ol>
+ *   <li>{@link #QUEST_PATTERN_1} – {@code "You have completed The Corsair Curse!"}</li>
+ *   <li>{@link #QUEST_PATTERN_2} – {@code "'One Small Favour' completed!"}</li>
+ * </ol>
+ *
+ * <p>Special-case transformations:
+ * <ul>
+ *   <li>Recipe for Disaster subquests are identified via {@link #RFD_TAGS}</li>
+ *   <li>Quests with "Quest" in the name have it re-appended via {@link #WORD_QUEST_IN_NAME_TAGS}</li>
+ *   <li>Known parsing edge-cases are corrected via {@link #QUEST_REPLACEMENTS}</li>
+ * </ul>
+ *
+ * <p>Quest counts and points are read from varbits after a 1-tick delay to ensure the client
+ * has applied the completed-quest state update.</p>
+ *
+ * <p>Enabled/disabled via {@link io.droptracker.DropTrackerConfig#questsEmbed()}.</p>
+ */
 @Slf4j
 @Singleton
 public class QuestHandler extends BaseEventHandler {
-    
+
+    /**
+     * Pattern 1 – matches {@code "You have completed <quest name>."}.
+     * Named groups: {@code verb} (optional action word), {@code quest} (parsed name).
+     */
     private static final Pattern QUEST_PATTERN_1 = Pattern.compile(".+?ve\\.*? (?<verb>been|rebuilt|.+?ed)? ?(?:the )?'?(?<quest>.+?)'?(?: [Qq]uest)?[!.]?$");
+
+    /**
+     * Pattern 2 – matches {@code "'<quest name>' completed!"}.
+     * Named groups: {@code quest} (parsed name), {@code verb} (optional).
+     */
     private static final Pattern QUEST_PATTERN_2 = Pattern.compile("'?(?<quest>.+?)'?(?: [Qq]uest)? (?<verb>[a-z]\\w+?ed)?(?: f.*?)?[!.]?$");
+
+    /**
+     * Tags that identify Recipe for Disaster subquests. When any of these appears in the
+     * combined quest+verb string, the name is prefixed with {@code "Recipe for Disaster - "}.
+     */
     private static final Collection<String> RFD_TAGS = ImmutableList.of("Another Cook", "freed", "defeated", "saved");
+
+    /**
+     * Quest name fragments for quests whose official title includes the word "Quest"
+     * (e.g. "Doric's Quest"). The word is appended after parsing to restore the full title.
+     */
     private static final Collection<String> WORD_QUEST_IN_NAME_TAGS = ImmutableList.of("Another Cook", "Doric", "Heroes", "Legends", "Observatory", "Olaf", "Waterfall");
+
+    /**
+     * Hard-coded overrides for known edge cases where the regex produces an incorrect name.
+     */
     private static final Map<String, String> QUEST_REPLACEMENTS = Map.of(
         "Lumbridge Cook... again", "Another Cook's",
         "Skrach 'Bone Crusher' Uglogwee", "Skrach Uglogwee"
     );
 
-    /* VarbitIDs for quest tracking */
+    /** Varbit ID: number of quests the player has completed. */
     private static final int VARBIT_QUESTS_COMPLETED_COUNT = 6347;
+
+    /** Varbit ID: total quests available in the game. */
     private static final int VARBIT_QUESTS_TOTAL_COUNT = 11877;
+
+    /** Varbit ID: maximum quest points achievable. */
     private static final int VARBIT_QP_MAX = 1782;
 
     
@@ -45,12 +94,18 @@ public class QuestHandler extends BaseEventHandler {
         return config.questsEmbed();
     }
 
+    /**
+     * Triggered when a widget loads. Checks for the quest-completion scroll and reads the
+     * title text, deferring to the next tick to ensure quest-state varbits are updated.
+     *
+     * @param event the widget-loaded event
+     */
     public void onWidgetLoaded(WidgetLoaded event) {
         if (event.getGroupId() == InterfaceID.QUESTSCROLL && isEnabled()) {
-            Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE); // Quest title widget
+            Widget questTitle = client.getWidget(InterfaceID.Questscroll.QUEST_TITLE);
             if (questTitle != null) {
                 String questText = questTitle.getText();
-                // 1 tick delay to ensure relevant varbits have been processed by the client
+                // 1-tick delay ensures varbits (quest count, QP) reflect the completed quest
                 clientThread.invokeLater(() -> handleQuestCompletion(questText));
             }
         }
@@ -104,8 +159,17 @@ public class QuestHandler extends BaseEventHandler {
         sendData(webhook, SubmissionType.QUEST_COMPLETION);
     }
 
-    /* Helper methods */
+    // =========================================================================
+    // Quest name parsing helpers
+    // =========================================================================
 
+    /**
+     * Parses the quest name from the completion scroll title text. Tries both regex patterns
+     * in sequence and falls back to {@link #cleanQuestName} for unmatched formats.
+     *
+     * @param text the raw widget text from the quest completion scroll title
+     * @return the canonical quest name, or {@code null} if parsing fails
+     */
     @Nullable
     private String parseQuestWidget(final String text) {
         if (text == null || text.isEmpty()) {

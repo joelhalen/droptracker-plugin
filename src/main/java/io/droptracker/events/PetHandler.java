@@ -23,31 +23,74 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Handles pet drop notifications.
+ *
+ * <p><b>Detection state machine:</b></p>
+ * <ol>
+ *   <li>A "funny feeling" game message primes the handler: {@link #petName} is set to the
+ *       sentinel value {@link #PRIMED_NAME} and the {@code duplicate} / {@code backpack} flags
+ *       are recorded.</li>
+ *   <li>The following game messages (same or subsequent ticks) populate {@link #petName}:
+ *     <ul>
+ *       <li>{@code "Untradeable drop: <pet>"} — from untradeable loot notifications setting</li>
+ *       <li>{@code "New item added to your collection log: <pet>"} — if clog notifications enabled</li>
+ *     </ul>
+ *   </li>
+ *   <li>An optional clan-chat message ({@link #CLAN_REGEX}) populates {@link #milestone} with
+ *       the KC at which the pet was received.</li>
+ *   <li>After up to {@link #MAX_TICKS_WAIT} ticks, {@link #handleNotify()} fires with whatever
+ *       data has accumulated.</li>
+ * </ol>
+ *
+ * <p><b>Duplicate detection:</b> The "would have been" phrase in the funny-feeling message
+ * indicates the player already owns the pet. Additionally, if collection-log notifications are
+ * enabled, the <em>absence</em> of a clog notification for the pet implies prior ownership.</p>
+ *
+ * <p><b>Kill count:</b> Pet names are mapped to their source NPC via {@link #PET_TO_SOURCE}
+ * and the KC is looked up via {@link KCService}.</p>
+ *
+ * <p>Enabled/disabled via {@link io.droptracker.DropTrackerConfig#petEmbeds()}.</p>
+ */
 @Slf4j
 @Singleton
 public class PetHandler extends BaseEventHandler {
 
+    /** Warning shown when the untradeable loot notification setting is disabled. */
     public static final String UNTRADEABLE_WARNING = "Pet Notifier cannot reliably identify pet names unless you enable the game setting: Untradeable loot notifications";
 
+    /**
+     * Matches the primary pet-drop game message, e.g.:
+     * {@code "You have a funny feeling like you're being followed."}
+     * or {@code "You feel something weird sneaking into your backpack."}
+     */
     @VisibleForTesting
     static final Pattern PET_REGEX = Pattern.compile("You (?:have a funny feeling like you|feel something weird sneaking).*");
 
+    /**
+     * Matches the clan-chat announcement for a pet drop, e.g.:
+     * {@code "PlayerName has a funny feeling like they're being followed: Pet name at 500 kills."}
+     * Named groups: {@code user}, {@code pet}, {@code milestone}.
+     */
     @VisibleForTesting
     static final Pattern CLAN_REGEX = Pattern.compile("\\b(?<user>[\\w\\s]+) (?:has a funny feeling like .+ followed|feels something weird sneaking into .+ backpack): (?<pet>.+) at (?<milestone>.+)");
 
+    /** Matches an untradeable drop notification to extract the pet name. */
     private static final Pattern UNTRADEABLE_REGEX = Pattern.compile("Untradeable drop: (.+)");
+
+    /** Matches a collection-log notification to extract the pet name. */
     private static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (.+)");
-    
+
     /**
-     * The maximum number ticks to wait for milestone to be populated,
-     * before firing notification with only the petName.
+     * Maximum ticks to wait for the clan-chat milestone message before firing the notification
+     * with only the pet name (no milestone information).
      */
     @VisibleForTesting
     static final int MAX_TICKS_WAIT = 5;
 
     /**
-     * Tracks the number of ticks that occur where milestone is not populated
-     * while petName is populated.
+     * Ticks elapsed since the handler was primed ({@link #petName} set) but the clan-chat
+     * milestone has not yet arrived.
      */
     private final AtomicInteger ticksWaited = new AtomicInteger();
 
@@ -62,25 +105,43 @@ public class PetHandler extends BaseEventHandler {
 
     private volatile String milestone = null;
 
+    /** True when the pet is a duplicate (player already owns it). */
     private volatile boolean duplicate = false;
 
+    /** True when the "backpack" variant of the funny-feeling message was received. */
     private volatile boolean backpack = false;
 
+    /** True when a collection-log notification was observed for this pet drop. */
     private volatile boolean collection = false;
 
+    /**
+     * Sentinel value assigned to {@link #petName} immediately after the "funny feeling" message
+     * is received, indicating the handler is primed and waiting for the pet name message.
+     */
     private static final String PRIMED_NAME = "";
 
     @Override
     public boolean isEnabled() {
-        return true; // Always track pets
+        return config.petEmbeds();
     }
 
+    /**
+     * Processes a game message for pet detection. Two phases:
+     * <ol>
+     *   <li>If not primed ({@link #petName} is null), checks for the funny-feeling trigger
+     *       and sets the primed state.</li>
+     *   <li>If primed, checks for untradeable-drop or collection-log messages that contain
+     *       the actual pet name, and records it.</li>
+     * </ol>
+     *
+     * @param chatMessage the sanitized game chat message text
+     */
     public void onGameMessage(String chatMessage) {
         if (!isEnabled()) return;
 
         if (petName == null) {
             if (PET_REGEX.matcher(chatMessage).matches()) {
-                // Prime the notifier to trigger next tick
+                // Prime the handler; pet name will arrive in a following message
                 this.petName = PRIMED_NAME;
                 this.duplicate = chatMessage.contains("would have been");
                 this.backpack = chatMessage.contains(" backpack");
@@ -97,9 +158,15 @@ public class PetHandler extends BaseEventHandler {
         }
     }
 
+    /**
+     * Processes a clan-chat notification that may contain the milestone kill count for this pet.
+     * Only processes messages matching the local player's name to avoid acting on clan members' pets.
+     *
+     * @param message the clan-chat message text
+     */
     public void onClanChatNotification(String message) {
         if (petName == null) {
-            // We have not received the normal message about a pet drop, so this clan message cannot be relevant to us
+            // Not primed — this clan message cannot be about our pet
             return;
         }
 
@@ -113,11 +180,15 @@ public class PetHandler extends BaseEventHandler {
         }
     }
 
+    /**
+     * Per-tick update. Fires the notification either when a milestone has been received or
+     * when {@link #MAX_TICKS_WAIT} ticks have elapsed without one.
+     */
     public void onTick() {
         if (petName == null) return;
 
         if (milestone != null || ticksWaited.incrementAndGet() > MAX_TICKS_WAIT) {
-            // ensure notifier was not disabled during wait ticks
+            // Fire with whatever data we have; milestone may still be null
             if (isEnabled()) {
                 this.handleNotify();
             }
@@ -125,6 +196,7 @@ public class PetHandler extends BaseEventHandler {
         }
     }
 
+    /** Resets all per-drop state after a notification has been sent or the wait times out. */
     public void reset() {
         this.petName = null;
         this.milestone = null;
@@ -134,12 +206,24 @@ public class PetHandler extends BaseEventHandler {
         this.ticksWaited.set(0);
     }
 
+    /**
+     * Builds and sends the pet drop webhook embed using the accumulated per-drop state.
+     *
+     * <p>Ownership history is determined as follows:
+     * <ul>
+     *   <li>{@code duplicate} flag set → definitely previously owned</li>
+     *   <li>Collection-log notification enabled → absence of clog notification implies prior ownership</li>
+     *   <li>Otherwise → ownership status unknown ({@code null})</li>
+     * </ul>
+     * </p>
+     */
     private void handleNotify() {
         Boolean previouslyOwned;
         if (duplicate) {
             previouslyOwned = true;
         } else if (client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) % 2 == 1) {
-            // when collection log chat notification is enabled, presence or absence of notification indicates ownership history
+            // When clog chat notifications are enabled, the absence of a clog notification
+            // for the pet means the player already has it in the collection log
             previouslyOwned = !collection;
         } else {
             previouslyOwned = null;
@@ -242,7 +326,11 @@ public class PetHandler extends BaseEventHandler {
         return PET_TO_SOURCE.containsKey(ucFirst(itemName));
     }
 
-    // Simplified pet to source mapping - just for basic KC tracking
+    /**
+     * Maps pet names (title-cased as they appear in game) to their source NPC/activity names.
+     * Used to look up the player's kill count at the time of the pet drop for inclusion in the
+     * webhook embed. Only covers pets with a known, single kill-count source.
+     */
     private static final Map<String, String> PET_TO_SOURCE = Map.ofEntries(
         Map.entry("Abyssal orphan", "Abyssal Sire"),
         Map.entry("Baby mole", "Giant Mole"),

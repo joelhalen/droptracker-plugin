@@ -26,6 +26,27 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 
+/**
+ * Handles all loot-drop events: NPC kills, PvP kills, server-authoritative loot (Yama),
+ * and miscellaneous loot events (events, pickpocketing).
+ *
+ * <p><b>Processing pipeline:</b>
+ * <ol>
+ *   <li>An incoming RuneLite loot event is received by one of the {@code on*} subscribers.</li>
+ *   <li>Special NPC name normalisations are applied (e.g. Royal Titans sub-bosses are merged
+ *       into a single source name).</li>
+ *   <li>{@link #processDropEvent} is called, which stacks identical items, prices each stack
+ *       via the {@link net.runelite.client.game.ItemManager}, and builds one embed per item.</li>
+ *   <li>The assembled {@link io.droptracker.models.CustomWebhookBody} is passed to
+ *       {@link io.droptracker.service.SubmissionManager#sendDataToDropTracker(
+ *       io.droptracker.models.CustomWebhookBody, int, int)} for group-config filtering and
+ *       delivery.</li>
+ * </ol>
+ *
+ * <p><b>Thread model:</b> Game-state reads (item prices, kill counts, item composition) are
+ * performed on the client thread via {@code clientThread.invokeLater()}. The subsequent HTTP
+ * submission is then dispatched to the shared executor to avoid blocking the client thread.</p>
+ */
 @Slf4j
 public class DropHandler extends BaseEventHandler {
 
@@ -38,6 +59,7 @@ public class DropHandler extends BaseEventHandler {
     @Inject
     private ItemManager itemManager;
 
+    /** Processes a standard NPC kill drop. */
     @Subscribe
 	public void onNpcLootReceived(NpcLootReceived event) {
 		chatMessageUtil.checkForMessage();
@@ -47,9 +69,9 @@ public class DropHandler extends BaseEventHandler {
 		NPC npc = event.getNpc();
 		Collection<ItemStack> items = event.getItems();
 		processDropEvent(npc.getName(), "npc", LootRecordType.NPC, items);
-		//sendChatReminder();
 	}
 
+    /** Processes loot from a PvP kill. The source type is set to {@code "pvp"}. */
 	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		chatMessageUtil.checkForMessage();
@@ -59,34 +81,51 @@ public class DropHandler extends BaseEventHandler {
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", LootRecordType.PLAYER, items);
 		kcService.onPlayerKill(playerLootReceived);
-		//sendChatReminder();
 	}
 
+    /**
+     * Processes Yama's server-authoritative loot event.
+     * Only called when the NPC composition ID matches {@code NpcID.YAMA}
+     * (routing is enforced in {@link io.droptracker.DropTrackerPlugin}).
+     */
 	@Subscribe
 	public void onServerNpcLoot(ServerNpcLoot event) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
-	
 		var comp = event.getComposition();
 		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
+    /**
+     * Handles loot that arrives via the LootTracker plugin's {@code LootReceived} event rather
+     * than the standard {@code NpcLootReceived}. This includes:
+     * <ul>
+     *   <li>Special NPCs listed in {@link NpcUtilities#SPECIAL_NPC_NAMES} (e.g. The Whisperer,
+     *       Araxxor, Royal Titans sub-bosses, Grotesque Guardians)</li>
+     *   <li>Skilling events ({@link LootRecordType#EVENT}) such as Tempoross, Wintertodt</li>
+     *   <li>Pickpocketing ({@link LootRecordType#PICKPOCKET})</li>
+     * </ul>
+     * Royal Titans (Branda / Eldric) and Grotesque Guardians (Dusk) have their sub-boss names
+     * normalised to a single shared source name before submission.
+     */
 	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
-		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
+		// Resolve the canonical source name, accounting for raid mode variants and special NPCs
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
 
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
 			log.debug("Special NPC loot received: {}", npcName);
+			// Merge Royal Titans sub-bosses into a single source
 			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
 				npcName = "Royal Titans";
 			}
+			// Grotesque Guardians only fires loot on the "Dusk" phase; normalise to the encounter name
 			if(npcName.equals("Dusk")){
 				npcName = "Grotesque Guardians";
 			}
@@ -94,27 +133,46 @@ public class DropHandler extends BaseEventHandler {
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
 		}
+		// Only process event-type and pickpocket loot beyond this point
 		if (lootReceived.getType() != LootRecordType.EVENT && lootReceived.getType() != LootRecordType.PICKPOCKET) {
 			return;
 		}
 		log.debug("Other NPC loot received: {}", npcName);
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 		kcService.onLoot(lootReceived);
-		//sendChatReminder();
 	}
 
+    /**
+     * Core drop processing method shared by all loot event subscribers.
+     *
+     * <p>Stacks identical item IDs, prices each stacked item via the item manager, builds one
+     * {@link io.droptracker.models.CustomWebhookBody.Embed} per distinct item, and submits the
+     * assembled webhook body to {@link io.droptracker.service.SubmissionManager}.</p>
+     *
+     * <p>Note that some NPCs (Grotesque Guardians, Yama) have a larger-than-normal gap between
+     * the kill-count chat message and the loot event. The {@code ticksSinceNpcDataUpdate} counter
+     * is adjusted to account for this so that kill-count correlation remains accurate.</p>
+     *
+     * @param npcName       canonical source name (NPC name, player name, event name, etc.)
+     * @param sourceType    human-readable category: {@code "npc"}, {@code "pvp"}, {@code "other"}
+     * @param lootRecordType the RuneLite loot record type used for kill-count cache keying
+     * @param items          the raw (possibly duplicate) item stacks from the loot event
+     */
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		chatMessageUtil.checkForMessage();
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			return;
-		} 
+		}
+		// Some NPCs have an unusually large tick gap between KC message and loot event;
+		// pulling this counter back keeps KC lookups correct for those sources.
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
+		// Expose this drop to ClogHandler so it can correlate a collection-log unlock
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
 		clientThread.invokeLater(() -> {
-			// Gather all game state info needed
+			// All game-state access (item prices, compositions) must happen on the client thread
 			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
@@ -134,26 +192,28 @@ public class DropHandler extends BaseEventHandler {
 				fieldData.put("item", itemComposition.getName());
 				fieldData.put("id", itemComposition.getId());
 				fieldData.put("quantity", qty);
-				fieldData.put("value", price);
+				fieldData.put("value", price);  // single-item price (used for screenshot threshold)
 				fieldData.put("source", npcName);
-				
+
 				if (npcName != null) {
 					Integer killCount = getKillCount(npcName);
 					fieldData.put("killcount", killCount);
 				}
-				
+
 				addFields(itemEmbed, fieldData);
 				embeds.add(itemEmbed);
 			}
 
-			// Now do the heavy work off the client thread
+			// Capture values before leaving the client thread
 			int valueToSend = totalValue.get();
 
+			// Dispatch HTTP work off the client thread to avoid frame stutter
 			executor.submit(() -> {
 				try {
 					CustomWebhookBody customWebhookBody = createWebhookBody(localPlayerName + " received some drops:");
 					customWebhookBody.getEmbeds().addAll(embeds);
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
+						// totalValue is used for screenshot threshold; singleValue is used to detect stacked items
 						sendData(customWebhookBody, valueToSend, singleValue.get());
 					}
 				} catch (Exception e) {
@@ -163,6 +223,14 @@ public class DropHandler extends BaseEventHandler {
 		});
 	}
 
+    /**
+     * Merges duplicate item IDs in a loot collection by summing their quantities.
+     * Some loot events (particularly raids) may deliver the same item in multiple
+     * {@link ItemStack} entries; stacking them prevents duplicate embed entries.
+     *
+     * @param items the raw item stacks from a loot event
+     * @return a new collection with at most one entry per item ID
+     */
     @SuppressWarnings("deprecation")
 	private static Collection<ItemStack> stack(Collection<ItemStack> items) {
 		final List<ItemStack> list = new ArrayList<>();

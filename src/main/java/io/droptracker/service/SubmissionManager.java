@@ -36,6 +36,42 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import static net.runelite.http.api.RuneLiteAPI.GSON;
 
+/**
+ * Central service responsible for delivering webhook payloads to the DropTracker backend
+ * (Discord webhooks or the {@code api.droptracker.io} API endpoint).
+ *
+ * <p><b>Submission pipeline:</b>
+ * <ol>
+ *   <li>An event handler (e.g. {@link io.droptracker.events.DropHandler}) builds a
+ *       {@link CustomWebhookBody} and calls {@link #sendDataToDropTracker(CustomWebhookBody, SubmissionType)}
+ *       (or the drop-specific overload).</li>
+ *   <li>The method checks the relevant config toggle and, for drops, the group-config
+ *       minimum-value threshold. If the submission qualifies for one or more groups, a
+ *       {@link ValidSubmission} is created and added to {@link #validSubmissions} for
+ *       display in the side panel.</li>
+ *   <li>If a screenshot is required (configurable per type), {@link #captureScreenshotWithPrivacy}
+ *       requests the next rendered frame from {@link DrawManager}, optionally hides the PM
+ *       chat widget first, and sends the compressed JPEG along with the JSON payload.</li>
+ *   <li>HTTP delivery is handled by {@link #sendWebhookWithRetry}, which retries up to
+ *       10 times with exponential back-off ({@code delay = 1000 * 2^attempt} ms).</li>
+ * </ol>
+ * </p>
+ *
+ * <p><b>Fake-world guard:</b> Submissions are silently dropped on non-standard worlds
+ * (beta, deadman, seasonal, etc.) via {@link #isFakeWorld()}.</p>
+ *
+ * <p><b>API mode vs. webhook mode:</b>
+ * <ul>
+ *   <li>API disabled — payload is posted to a random Discord webhook URL from {@link UrlManager}.</li>
+ *   <li>API enabled — payload is posted to {@code api.droptracker.io/webhook}; the response
+ *       may contain {@code notice} or {@code rank_update} fields that are displayed as in-game
+ *       chat messages.</li>
+ * </ul>
+ * </p>
+ *
+ * <p>UI updates are dispatched via the {@link SubmissionUpdateCallback} interface (implemented
+ * by the side panel) whenever the {@link #validSubmissions} list changes.</p>
+ */
 @Slf4j
 @Singleton
 public class SubmissionManager {
@@ -49,21 +85,33 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-    /// Store a list of submissions that the player has received which qualified for a notification to be sent
+
+    /**
+     * In-memory list of submissions that qualified for group notification during this session.
+     * Capped at 20 entries (oldest removed first) to bound memory usage.
+     */
     @Getter
     private final List<ValidSubmission> validSubmissions = new ArrayList<>();
-    /// Callback for UI updates when submissions change
+
+    /** Callback notified whenever {@link #validSubmissions} changes; used to refresh the panel. */
     @Setter
     private SubmissionUpdateCallback updateCallback;
+
+    /** When {@code false}, UI callbacks are suppressed (e.g. during panel teardown). */
     @Setter
     private boolean updatesEnabled = true;
+
     @Inject
     private ScheduledExecutorService executor;
 
-    // Variables to store counts and values for the UI
+    // Counters exposed to the side panel for display
+    /** Total number of submissions that qualified for at least one group notification. */
     public int totalSubmissions = 0;
+    /** Number of webhook POSTs that received a 2xx HTTP response. */
     public int notificationsSent = 0;
+    /** Number of submissions that exhausted all retry attempts without success. */
     public int failedSubmissions = 0;
+    /** Cumulative loot value (GP) of all drops sent this session. */
     public Long totalValue = 0L;
     
     @Inject
@@ -103,6 +151,16 @@ public class SubmissionManager {
         }
     }
 
+    /**
+     * Entry point for all non-drop submission types (PBs, clogs, CAs, level-ups, quests, pets, etc.).
+     *
+     * <p>Checks the config toggle for the given type, then for each matching {@link GroupConfig}
+     * creates or extends a {@link ValidSubmission}. Finally, either captures a screenshot
+     * (if the type + config requires one) or sends the payload immediately.</p>
+     *
+     * @param webhook the fully-populated webhook body to send
+     * @param type    the category of event being submitted
+     */
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
         /* Drops are still handled in a separate method due to the way values are handled */
         /* Here, we send the webhook and submission type, and check against the stored group config values
@@ -281,6 +339,15 @@ public class SubmissionManager {
         }
     }
 
+    /**
+     * Entry point for loot drop submissions. Validates the drop against each group's minimum
+     * value and stacked-item policy, creates a {@link ValidSubmission} if the drop qualifies,
+     * and captures a screenshot if the drop value exceeds {@link DropTrackerConfig#screenshotValue()}.
+     *
+     * @param customWebhookBody the webhook payload for this drop
+     * @param totalValue        combined GP value of all item stacks in the drop
+     * @param singleValue       GP value of the single most valuable item (used for stacked-item checks)
+     */
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue) {
         // Handles sending drops exclusively
         if (!config.lootEmbeds()) {
@@ -340,6 +407,21 @@ public class SubmissionManager {
 
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
+    /**
+     * Sends the webhook payload (with optional screenshot) to the configured endpoint,
+     * retrying on failure with exponential back-off.
+     *
+     * <p>Retry delay formula: {@code BASE_RETRY_DELAY_MS × 2^attempt}, capped at
+     * {@code 2^16 × 1000 ms} (~18 hours). After 10 failed attempts the submission is
+     * marked as failed and {@link #failedSubmissions} is incremented.</p>
+     *
+     * <p>On HTTP 400/401/403 the request is not retried (permanent client error).
+     * On HTTP 404 a new webhook list is fetched via {@link UrlManager#fetchNewList()}.</p>
+     *
+     * @param webhook    the webhook body to serialize and send
+     * @param screenshot optional JPEG screenshot bytes (may be {@code null})
+     * @param attempt    zero-based retry count
+     */
     private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt) {
         if (isFakeWorld()) {
             return;
@@ -564,6 +646,16 @@ public class SubmissionManager {
         return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
     }
 
+    /**
+     * Requests the next rendered game frame and, once received, converts it to a JPEG byte array
+     * and sends it alongside the webhook payload.
+     *
+     * <p>If {@code hideDMs} is {@code true}, the private-chat widget is hidden before the frame
+     * is captured and restored immediately afterwards to protect player privacy.</p>
+     *
+     * @param webhook the webhook body to include with the screenshot
+     * @param hideDMs whether to hide the PM chat widget during capture
+     */
     private void captureScreenshotWithPrivacy(CustomWebhookBody webhook, boolean hideDMs) {
         // First hide DMs if configured
         modWidget(hideDMs, client, clientThread, UrlManager.PRIVATE_CHAT_WIDGET);

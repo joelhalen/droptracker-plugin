@@ -29,12 +29,28 @@ import okhttp3.HttpUrl;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 
-/* Helps determine what URL to send submissions to, populates the list on startup, etc. */
+/**
+ * Manages the pool of Discord webhook endpoint URLs used when the external API is disabled.
+ *
+ * <p><b>URL rotation system:</b> Webhook URLs are stored encrypted in daily JSON files hosted
+ * on GitHub Pages ({@code droptracker-io.github.io/content/YYYYMMDD.json}). A matching
+ * key file ({@code YYYYMMDD-k.txt}) is fetched first; the key is passed to {@link FernetDecrypt}
+ * to decrypt each URL. This prevents hardcoded Discord webhook URLs from being scraped and
+ * abused by third parties.</p>
+ *
+ * <p><b>Fallback behaviour:</b> If the primary endpoint list is exhausted (HTTP 404), a
+ * backup list from an alternate URL pattern ({@code YYYYMMDD-1.json}) is fetched. After
+ * {@value #MAX_RESET_COUNT} resets without replenishment, submission processing is halted
+ * by setting {@link DropTrackerPlugin#isTracking} to {@code false}.</p>
+ *
+ * <p>{@link #PRIVATE_CHAT_WIDGET} is also exposed here as a convenience constant for
+ * {@link io.droptracker.service.SubmissionManager} to hide the PM chat widget during
+ * screenshot capture.</p>
+ */
 @Slf4j
 public class UrlManager {
 
     private final DropTrackerConfig config;
-
 
     @Inject
     private DropTrackerPlugin plugin;
@@ -45,6 +61,10 @@ public class UrlManager {
     @Inject
     private ChatMessageUtil chatMessageUtil;
 
+    /**
+     * RuneLite component ID for the private-chat (PM) widget container.
+     * Hidden before taking screenshots when {@link DropTrackerConfig#hideDMs()} is enabled.
+     */
 	public static final @Component int PRIVATE_CHAT_WIDGET = WidgetUtil.packComponentId(InterfaceID.PmChat.CONTAINER, 0);
 
     @Inject
@@ -55,15 +75,20 @@ public class UrlManager {
         this.chatMessageUtil = chatMessageUtil;
     }
 
-    
+
+    /** Completed when the initial endpoint list has been loaded; callers check {@code isDone()}. */
     private static CompletableFuture<Void> endpointUrlsLoaded = new CompletableFuture<>();
 
+    /** Active pool of decrypted Discord webhook URLs available for sending submissions. */
     public static List<String> endpointUrls = new ArrayList<>();
 
+    /** Number of times the endpoint list has been refreshed due to exhaustion (capped at 10). */
     private static int webhookResetCount = 0;
 
+    /** Staging list populated by {@link #fetchNewList} before swapping with {@link #endpointUrls}. */
 	public static List<String> backupUrls = new ArrayList<>();
-	
+
+    /** Tracks whether the current {@link #endpointUrls} came from the backup URL pattern. */
 	public static Boolean usingBackups = false;
 
 
@@ -196,7 +221,17 @@ public class UrlManager {
 	}
 
     
-	/* Load URLs in the background from the GitHub pages site */
+    /**
+     * Loads the initial pool of webhook URLs from GitHub Pages on plugin startup.
+     *
+     * <p>Fetches the daily encryption key ({@code YYYYMMDD-k.txt}) then the encrypted URL list
+     * ({@code YYYYMMDD.json}), decrypts each entry with {@link FernetDecrypt}, and populates
+     * {@link #endpointUrls}. Completes (or exceptionally completes) {@link #endpointUrlsLoaded}
+     * so that {@link #getRandomUrl()} can safely proceed.</p>
+     *
+     * <p>Should be called once from a background thread during plugin startup to avoid
+     * blocking the Swing EDT or the RuneLite client thread.</p>
+     */
 	public void loadEndpoints() {
 		try {
 			if (endpointUrls.isEmpty()) {
