@@ -12,36 +12,15 @@ repositories {
 
 def runeLiteVersion = 'latest.release'
 
-configurations {
-	localRunner.extendsFrom compileClasspath
-}
-
 dependencies {
     compileOnly group: 'net.runelite', name:'client', version: runeLiteVersion
     compileOnly 'org.projectlombok:lombok:1.18.20'
     compileOnly 'org.jetbrains:annotations:23.0.0'
     annotationProcessor 'org.projectlombok:lombok:1.18.20'
-    
-    compileOnly 'org.lwjgl:lwjgl:3.3.1'
-    compileOnly 'org.lwjgl:lwjgl-opengl:3.3.1'
-    
-    testImplementation 'junit:junit:4.12'
-    testImplementation (group: 'net.runelite', name:'client', version: runeLiteVersion) {
-        exclude group: 'org.lwjgl', module: 'lwjgl'
-        exclude group: 'org.lwjgl', module: 'lwjgl-opengl'
-    }
-    testImplementation (group: 'net.runelite', name:'jshell', version: runeLiteVersion)
-    
-    testRuntimeOnly 'org.lwjgl:lwjgl:3.3.2:natives-windows'
-    testRuntimeOnly 'org.lwjgl:lwjgl-opengl:3.3.2:natives-windows'
 
-    localRunner(group: 'net.runelite', name: 'client', version: runeLiteVersion) {
-        exclude group: 'org.lwjgl'
-    }
-    localRunner 'org.lwjgl:lwjgl:3.3.2'
-    localRunner 'org.lwjgl:lwjgl-opengl:3.3.2'
-    localRunner 'org.lwjgl:lwjgl:3.3.2:natives-windows'
-    localRunner 'org.lwjgl:lwjgl-opengl:3.3.2:natives-windows'
+    testImplementation 'junit:junit:4.12'
+    testImplementation group: 'net.runelite', name:'client', version: runeLiteVersion
+    testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
 group = 'com.joelhalen.droptracker'
@@ -58,7 +37,7 @@ tasks.register('runRuneLite', JavaExec) {
     group = 'runelite'
     description = 'Run RuneLite with this plugin on the classpath'
     mainClass.set('net.runelite.client.RuneLite')
-    classpath = sourceSets.main.output + configurations.localRunner
+    classpath = sourceSets.main.output + configurations.compileClasspath
     jvmArgs = ['-ea']
 }
 
