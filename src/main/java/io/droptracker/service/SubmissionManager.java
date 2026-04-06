@@ -473,8 +473,10 @@ public class SubmissionManager {
                 .addFormDataPart("payload_json", GSON.toJson(webhook));
 
         if (screenshot != null) {
-            requestBodyBuilder.addFormDataPart("file", "image.jpeg",
-                    RequestBody.create(MediaType.parse("image/jpeg"), screenshot));
+            String mimeType = detectImageMimeType(screenshot);
+            String filename = mimeType.equals("image/png") ? "image.png" : "image.jpeg";
+            requestBodyBuilder.addFormDataPart("file", filename,
+                    RequestBody.create(MediaType.parse(mimeType), screenshot));
         }
 
         MultipartBody requestBody = requestBodyBuilder.build();
@@ -674,9 +676,14 @@ public class SubmissionManager {
 
             byte[] imageBytes = null;
             try {
-                imageBytes = convertImageToByteArray(bufferedImage);
-                if (imageBytes.length > 5 * 1024 * 1024) {
-                    // TODO: perform compression here
+                int thresholdBytes = config.imageCompressionThresholdKb() * 1024;
+                byte[] pngBytes = convertImageToPngBytes(bufferedImage);
+                if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
+                    // PNG is within the threshold — send lossless
+                    imageBytes = pngBytes;
+                } else {
+                    // PNG exceeds threshold (or threshold is 0) — compress to JPEG
+                    imageBytes = convertImageToJpegBytes(bufferedImage);
                 }
             } catch (IOException e) {
                 log.error("Error converting image to byte array", e);
@@ -837,10 +844,29 @@ public class SubmissionManager {
         }
     }
 
-    private static byte[] convertImageToByteArray(BufferedImage bufferedImage) throws IOException {
+    private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
         return byteArrayOutputStream.toByteArray();
+    }
+
+    private static byte[] convertImageToPngBytes(BufferedImage bufferedImage) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        ImageIO.write(bufferedImage, "png", byteArrayOutputStream);
+        return byteArrayOutputStream.toByteArray();
+    }
+
+    /**
+     * Detects image MIME type from magic bytes.
+     * PNG files begin with 0x89 P N G; all others are treated as JPEG.
+     */
+    private static String detectImageMimeType(byte[] bytes) {
+        if (bytes != null && bytes.length >= 4
+                && bytes[0] == (byte) 0x89 && bytes[1] == 0x50
+                && bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        return "image/jpeg";
     }
 
     // ========== Submission Management ==========

@@ -298,6 +298,19 @@ public interface DropTrackerConfig extends Config {
         return VideoQuality.SCREENSHOT_ONLY;
     }
 
+    @ConfigItem(
+        keyName = "imageCompressionThresholdKb",
+        name = "Image Compression Threshold (KB)",
+        description = "<html>Maximum screenshot size (in KB) before JPEG compression is applied.<br>"
+            + "Screenshots smaller than this threshold are sent as lossless PNG.<br>"
+            + "Set to 0 to always compress to JPEG.</html>",
+        position = 9,
+        section = miscSettings
+    )
+    default int imageCompressionThresholdKb() {
+        return 500;
+    }
+
     /* API Configuration */
     @ConfigSection(
         name = "API Configuration",
