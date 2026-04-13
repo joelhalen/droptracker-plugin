@@ -68,6 +68,15 @@ public class PetHandler extends BaseEventHandler {
 
     private volatile boolean collection = false;
 
+    /**
+     * Stores a pet name detected from an untradeable-drop or collection-log message that
+     * arrived *before* the "You have a funny feeling…" game message.  For first-time pet
+     * drops the game sometimes sends the item-name notification ahead of the pet message,
+     * so we cache it here and consume it when PET_REGEX eventually fires.
+     */
+    private volatile String pendingPetName = null;
+    private volatile boolean pendingCollection = false;
+
     private static final String PRIMED_NAME = "";
 
     @Override
@@ -79,11 +88,30 @@ public class PetHandler extends BaseEventHandler {
         if (!isEnabled()) return;
 
         if (petName == null) {
+            // Pre-capture pet name from untradeable-drop or collection-log messages.
+            // For first-time pet drops the game can send these item-name notifications
+            // *before* "You have a funny feeling…", so we store any matching name here
+            // and consume it when PET_REGEX fires below.
+            parseItemFromGameMessage(chatMessage)
+                    .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
+                    .ifPresent(parseResult -> {
+                        this.pendingPetName = parseResult.itemName;
+                        this.pendingCollection = parseResult.collectionLog;
+                    });
+
             if (PET_REGEX.matcher(chatMessage).matches()) {
-                // Prime the notifier to trigger next tick
-                this.petName = PRIMED_NAME;
+                // If we already captured the name from a preceding message, use it
+                // directly; otherwise prime the notifier to wait for the next message.
+                if (pendingPetName != null) {
+                    this.petName = pendingPetName;
+                    this.collection = pendingCollection;
+                } else {
+                    this.petName = PRIMED_NAME;
+                }
                 this.duplicate = chatMessage.contains("would have been");
                 this.backpack = chatMessage.contains(" backpack");
+                this.pendingPetName = null;
+                this.pendingCollection = false;
             }
         } else if (PRIMED_NAME.equals(petName) || !collection) {
             parseItemFromGameMessage(chatMessage)
@@ -132,6 +160,8 @@ public class PetHandler extends BaseEventHandler {
         this.backpack = false;
         this.collection = false;
         this.ticksWaited.set(0);
+        this.pendingPetName = null;
+        this.pendingCollection = false;
     }
 
     private void handleNotify() {
@@ -172,11 +202,14 @@ public class PetHandler extends BaseEventHandler {
             fieldData.put("previously_owned", previouslyOwned);
         }
         
-        // Try to get KC information for the pet source
+        // Try to get KC information for the pet source.
+        // getKillCountWithStorage checks the in-memory cache AND falls back to data
+        // stored by the RuneLite Chat Commands / Loot Tracker plugins, so it works
+        // even on the very first kill of a session (when the cache is cold).
         String pet = petName != null ? ucFirst(petName) : null;
         if (pet != null && PET_TO_SOURCE.containsKey(pet)) {
             String source = PET_TO_SOURCE.get(pet);
-            Integer kc = kcService.getKillCount(LootRecordType.UNKNOWN, source);
+            Integer kc = kcService.getKillCountWithStorage(LootRecordType.UNKNOWN, source);
             if (kc != null && kc > 0) {
                 fieldData.put("source", source);
                 fieldData.put("killcount", kc);
