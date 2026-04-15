@@ -434,13 +434,10 @@ public class SubmissionManager {
      * @param submission Optional ValidSubmission for status tracking
      */
     private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, String videoKey, ValidSubmission submission) {
-        if (isFakeWorld()) {
-            debugLogEventFlow("skipped", submission != null ? submission.getType() : null, "fake world; webhook not sent");
-            return;
-        }
+        String worldTypeName = getWorldTypeName();
 
         debugLogEventFlow("send", submission != null ? submission.getType() : null,
-                "attempting direct send; hasScreenshot=" + (screenshot != null) + ", hasVideoKey=" + (videoKey != null && !videoKey.isEmpty())
+                "attempting direct send; world_type=" + worldTypeName + ", hasScreenshot=" + (screenshot != null) + ", hasVideoKey=" + (videoKey != null && !videoKey.isEmpty())
                         + ", " + summarizeSubmission(submission));
 
         if (submission != null) {
@@ -450,6 +447,11 @@ public class SubmissionManager {
             }
             notifyUpdateCallback();
             schedulePersistence();
+        }
+
+        // Inject world_type into every embed so the server can distinguish main-game vs. temporary world submissions
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            embed.addField("world_type", worldTypeName, true);
         }
 
         // If a video key is present, inject it into the webhook embeds so the API can reference it
@@ -463,10 +465,6 @@ public class SubmissionManager {
     }
 
     private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt, ValidSubmission submission) {
-        if (isFakeWorld()) {
-            debugLogEventFlow("skipped", submission != null ? submission.getType() : null, "fake world during retry attempt=" + attempt);
-            return;
-        }
 
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -1143,17 +1141,25 @@ public class SubmissionManager {
 
     // ========== Utilities ==========
 
-    private boolean isFakeWorld() {
+    /**
+     * Returns a string identifying the current world type for submission tagging.
+     * Returns "MAIN" for regular game worlds, or the specific WorldType name for
+     * temporary/special worlds (e.g. "BETA_WORLD", "DEADMAN", "SEASONAL").
+     * Submissions from all world types are sent to the server; this field lets the
+     * server separate main-game data from temporary-world data.
+     */
+    private String getWorldTypeName() {
         var worldType = client.getWorldType();
-        return worldType.contains(WorldType.BETA_WORLD)
-                || worldType.contains(WorldType.DEADMAN)
-                || worldType.contains(WorldType.FRESH_START_WORLD)
-                || worldType.contains(WorldType.LAST_MAN_STANDING)
-                || worldType.contains(WorldType.NOSAVE_MODE)
-                || worldType.contains(WorldType.PVP_ARENA)
-                || worldType.contains(WorldType.QUEST_SPEEDRUNNING)
-                || worldType.contains(WorldType.SEASONAL)
-                || worldType.contains(WorldType.TOURNAMENT_WORLD);
+        if (worldType.contains(WorldType.BETA_WORLD))         return "BETA_WORLD";
+        if (worldType.contains(WorldType.DEADMAN))            return "DEADMAN";
+        if (worldType.contains(WorldType.FRESH_START_WORLD))  return "FRESH_START_WORLD";
+        if (worldType.contains(WorldType.LAST_MAN_STANDING))  return "LAST_MAN_STANDING";
+        if (worldType.contains(WorldType.NOSAVE_MODE))        return "NOSAVE_MODE";
+        if (worldType.contains(WorldType.PVP_ARENA))          return "PVP_ARENA";
+        if (worldType.contains(WorldType.QUEST_SPEEDRUNNING)) return "QUEST_SPEEDRUNNING";
+        if (worldType.contains(WorldType.SEASONAL))           return "SEASONAL";
+        if (worldType.contains(WorldType.TOURNAMENT_WORLD))   return "TOURNAMENT_WORLD";
+        return "MAIN";
     }
 
     public String sanitize(String str) {
