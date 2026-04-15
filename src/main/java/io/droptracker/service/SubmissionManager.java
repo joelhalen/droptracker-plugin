@@ -1145,6 +1145,8 @@ public class SubmissionManager {
      * Returns a string identifying the current world type for submission tagging.
      * Returns "MAIN" for regular game worlds, or the specific WorldType name for
      * temporary/special worlds (e.g. "BETA_WORLD", "DEADMAN", "SEASONAL").
+     * LAST_MAN_STANDING worlds are intentionally treated as MAIN because LMS is
+     * played on rotating main-game worlds.
      * Submissions from all world types are sent to the server; this field lets the
      * server separate main-game data from temporary-world data.
      */
@@ -1153,7 +1155,6 @@ public class SubmissionManager {
         if (worldType.contains(WorldType.BETA_WORLD))         return "BETA_WORLD";
         if (worldType.contains(WorldType.DEADMAN))            return "DEADMAN";
         if (worldType.contains(WorldType.FRESH_START_WORLD))  return "FRESH_START_WORLD";
-        if (worldType.contains(WorldType.LAST_MAN_STANDING))  return "LAST_MAN_STANDING";
         if (worldType.contains(WorldType.NOSAVE_MODE))        return "NOSAVE_MODE";
         if (worldType.contains(WorldType.PVP_ARENA))          return "PVP_ARENA";
         if (worldType.contains(WorldType.QUEST_SPEEDRUNNING)) return "QUEST_SPEEDRUNNING";
