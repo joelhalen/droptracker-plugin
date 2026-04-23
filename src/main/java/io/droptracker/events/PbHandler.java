@@ -139,6 +139,11 @@ public class PbHandler extends BaseEventHandler {
         if (message.startsWith("Preparation")) {
             return Optional.empty();
         }
+        // Ignore raid target-time announcements (e.g. "Your party failed to beat the overall target time of 40:00.")
+        // These contain a time string but are unrelated to the player's personal best.
+        if (message.contains("target time")) {
+            return Optional.empty();
+        }
 
         // Try boss count first
         Optional<Pair<String, Integer>> bossCount = parseBossCount(message);
