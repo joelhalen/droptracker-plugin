@@ -24,7 +24,7 @@ dependencies {
 }
 
 group = 'com.joelhalen.droptracker'
-version = '5.3.0'
+version = '5.4.0'
 sourceCompatibility = JavaVersion.VERSION_11
 targetCompatibility = JavaVersion.VERSION_11
 
