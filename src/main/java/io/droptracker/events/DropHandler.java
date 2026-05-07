@@ -151,8 +151,8 @@ public class DropHandler extends BaseEventHandler {
 				fieldData.put("source", npcName);
 				
 				if (npcName != null) {
-					Integer killCount = getKillCount(npcName);
-					fieldData.put("killcount", killCount);
+					Integer killCount = kcService.getKillCountWithStorage(lootRecordType, npcName);
+					fieldData.put("killcount", killCount != null ? killCount : 0);
 				}
 				
 				addFields(itemEmbed, fieldData);
