@@ -279,7 +279,7 @@ public class SubmissionManager {
 
         NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getNearbyPlayerTrace(20);
         List<String> members = trace.getNearbyPlayers();
-        String membersValue = members.isEmpty() ? "none" : String.join(",", members);
+        String membersValue = String.join(",", members);
         int embedsTouched = 0;
         int embedsWithExistingMembersField = 0;
         int membersFieldsAdded = 0;
@@ -292,22 +292,25 @@ public class SubmissionManager {
 
             boolean hasMembersField = false;
             for (CustomWebhookBody.Field field : embed.getFields()) {
-                if (field != null && "members".equalsIgnoreCase(field.getName())) {
+                if (field != null && ("nearby_players".equalsIgnoreCase(field.getName())
+                        || "members".equalsIgnoreCase(field.getName()))) {
                     hasMembersField = true;
                     break;
                 }
             }
 
-            if (!hasMembersField) {
-                embed.addField("members", membersValue, false);
+            // Discord rejects embed fields with empty values, so omit the field
+            // entirely when no players are nearby rather than sending a sentinel.
+            if (!hasMembersField && !membersValue.isEmpty()) {
+                embed.addField("nearby_players", membersValue, false);
                 membersFieldsAdded++;
-            } else {
+            } else if (hasMembersField) {
                 embedsWithExistingMembersField++;
             }
         }
 
         debugLogEventFlow("nearby-trace", SubmissionType.DROP,
-            "members field enrichment: embedsTouched=" + embedsTouched
+            "nearby_players field enrichment: embedsTouched=" + embedsTouched
                 + ", existingMembersField=" + embedsWithExistingMembersField
                 + ", membersFieldsAdded=" + membersFieldsAdded
                 + ", membersValueLength=" + membersValue.length());

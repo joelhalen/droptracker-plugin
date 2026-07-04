@@ -4,6 +4,7 @@ import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.Varbits;
 import net.runelite.api.WorldView;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.party.PartyMember;
@@ -33,6 +34,13 @@ public class NearbyPlayerTracker
     private final ClientThread clientThread;
     private final PartyService partyService;
     private final Map<String, Long> recentRaidMembers = new HashMap<>();
+
+    /**
+     * How long a raid member stays in {@link #recentRaidMembers} after last being seen.
+     * Raid completion resets the raid varbits before the player opens the loot chest,
+     * so the roster must survive past the end of the raid context.
+     */
+    private static final long RAID_MEMBER_EXPIRY_MS = TimeUnit.MINUTES.toMillis(5);
 
     @Inject
     public NearbyPlayerTracker(Client client, ClientThread clientThread, PartyService partyService)
@@ -92,8 +100,10 @@ public class NearbyPlayerTracker
         String localName = normalizePlayerName(localPlayer.getName());
         int toaTeamCount = getToaTeamCount();
         int tobTeamCount = getTobTeamCount();
-        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1);
+        int coxTeamCount = getCoxTeamCount();
+        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1) || (coxTeamCount > 1);
         int recentRaidMembersBeforePurge = recentRaidMembers.size();
+        recentRaidMembers.values().removeIf(lastSeenMs -> nowMs - lastSeenMs > RAID_MEMBER_EXPIRY_MS);
         ScanStats scanStats = new ScanStats();
 
         WorldView topLevel = client.getTopLevelWorldView();
@@ -106,34 +116,7 @@ public class NearbyPlayerTracker
             }
         }
 
-        if (!inRaidContext)
-        {
-            recentRaidMembers.clear();
-            NearbyPlayerTrace trace = new NearbyPlayerTrace(
-                new ArrayList<>(names),
-                effectiveRadius,
-                localName,
-                center,
-                false,
-                "none",
-                toaTeamCount,
-                tobTeamCount,
-                partyService.isInParty(),
-                partyService.isInParty() ? partyService.getMembers().size() : 0,
-                scanStats.worldViewsScanned,
-                scanStats.playersSeen,
-                scanStats.playersWithinRadius,
-                scanStats.playersAdded,
-                recentRaidMembersBeforePurge,
-                recentRaidMembers.size(),
-                nowMs,
-                null
-            );
-            DebugLogger.log("[NearbyPlayerTracker] " + trace.toDebugSummary());
-            return trace;
-        }
-
-        if (partyService.isInParty())
+        if (inRaidContext && partyService.isInParty())
         {
             for (PartyMember member : partyService.getMembers())
             {
@@ -143,10 +126,11 @@ public class NearbyPlayerTracker
                     continue;
                 }
                 recentRaidMembers.put(memberName, nowMs);
-                names.add(memberName);
             }
         }
 
+        // Recent raid members are included even when the raid varbits have already
+        // reset — completion clears them before the loot chest is opened.
         for (Map.Entry<String, Long> entry : recentRaidMembers.entrySet())
         {
             String memberName = entry.getKey();
@@ -156,15 +140,34 @@ public class NearbyPlayerTracker
             }
         }
 
+        String raidType;
+        if (toaTeamCount > 1)
+        {
+            raidType = "toa";
+        }
+        else if (tobTeamCount > 1)
+        {
+            raidType = "tob";
+        }
+        else if (coxTeamCount > 1)
+        {
+            raidType = "cox";
+        }
+        else
+        {
+            raidType = "none";
+        }
+
         NearbyPlayerTrace trace = new NearbyPlayerTrace(
             new ArrayList<>(names),
             effectiveRadius,
             localName,
             center,
-            true,
-            toaTeamCount > 1 ? "toa" : "tob",
+            inRaidContext,
+            raidType,
             toaTeamCount,
             tobTeamCount,
+            coxTeamCount,
             partyService.isInParty(),
             partyService.isInParty() ? partyService.getMembers().size() : 0,
             scanStats.worldViewsScanned,
@@ -261,6 +264,15 @@ public class NearbyPlayerTracker
             Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
     }
 
+    private int getCoxTeamCount()
+    {
+        if (client.getVarbitValue(VarbitID.RAIDS_CLIENT_INDUNGEON) == 0)
+        {
+            return 0;
+        }
+        return Math.max(client.getVarbitValue(VarbitID.RAIDS_CLIENT_PARTYSIZE), 1);
+    }
+
     private String normalizePlayerName(String rawName)
     {
         if (rawName == null)
@@ -290,6 +302,7 @@ public class NearbyPlayerTracker
         private final String raidType;
         private final int toaTeamCount;
         private final int tobTeamCount;
+        private final int coxTeamCount;
         private final boolean inParty;
         private final int partySize;
         private final int worldViewsScanned;
@@ -310,6 +323,7 @@ public class NearbyPlayerTracker
             String raidType,
             int toaTeamCount,
             int tobTeamCount,
+            int coxTeamCount,
             boolean inParty,
             int partySize,
             int worldViewsScanned,
@@ -330,6 +344,7 @@ public class NearbyPlayerTracker
             this.raidType = raidType;
             this.toaTeamCount = toaTeamCount;
             this.tobTeamCount = tobTeamCount;
+            this.coxTeamCount = coxTeamCount;
             this.inParty = inParty;
             this.partySize = partySize;
             this.worldViewsScanned = worldViewsScanned;
@@ -351,6 +366,7 @@ public class NearbyPlayerTracker
                 null,
                 false,
                 "none",
+                0,
                 0,
                 0,
                 false,
@@ -383,6 +399,7 @@ public class NearbyPlayerTracker
                 + ", raidType=" + raidType
                 + ", toaTeamCount=" + toaTeamCount
                 + ", tobTeamCount=" + tobTeamCount
+                + ", coxTeamCount=" + coxTeamCount
                 + ", inParty=" + inParty
                 + ", partySize=" + partySize
                 + ", worldViewsScanned=" + worldViewsScanned
