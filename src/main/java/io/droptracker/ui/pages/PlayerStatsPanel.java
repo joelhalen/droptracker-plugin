@@ -225,23 +225,40 @@ public class PlayerStatsPanel {
         contentPanel.revalidate();
         contentPanel.repaint();
 
-        // Perform search in background
+        // Perform search in background. Keep the failure cause so the user can
+        // tell "player doesn't exist" apart from "the API call failed".
         CompletableFuture.supplyAsync(() -> {
             try {
-                PlayerSearchResult playerResult = api.lookupPlayer(toSearch);
-                return playerResult;
+                return new SearchOutcome(api.lookupPlayer(toSearch), null);
             } catch (Exception e) {
-                return null;
+                return new SearchOutcome(null, e);
             }
-        }).thenAccept(playerResult -> {
+        }).thenAccept(outcome -> {
             SwingUtilities.invokeLater(() -> {
-                if (playerResult != null) {
-                    showPlayerDetails(playerResult);
+                if (outcome.result != null) {
+                    showPlayerDetails(outcome.result);
+                } else if (outcome.error == null || isNotFound(outcome.error)) {
+                    showSearchError("Player '" + toSearch + "' was not found.");
                 } else {
-                    showSearchError("Player '" + toSearch + "' not found. API search failed.");
+                    showSearchError("Search failed — the DropTracker API could not be reached. Please try again.");
                 }
             });
         });
+    }
+
+    private static boolean isNotFound(Exception e) {
+        String message = e.getMessage();
+        return message != null && message.contains("status: 404");
+    }
+
+    private static class SearchOutcome {
+        final PlayerSearchResult result;
+        final Exception error;
+
+        SearchOutcome(PlayerSearchResult result, Exception error) {
+            this.result = result;
+            this.error = error;
+        }
     }
 
     private void showSearchError(String message) {

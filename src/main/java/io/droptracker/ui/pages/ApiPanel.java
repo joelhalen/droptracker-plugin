@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 public class ApiPanel {
     private final DropTrackerConfig config;
@@ -262,7 +263,9 @@ public class ApiPanel {
         groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
         groupsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
 
-        buildGroupConfigPanels(groupsContainer);
+        // Built empty here; refreshGroupConfigs() populates it asynchronously so the
+        // (potentially blocking) API fetch never runs on the Swing EDT.
+        buildGroupConfigPanels(groupsContainer, null);
 
         groupsScrollPane = new JScrollPane(groupsContainer);
         groupsScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -349,10 +352,9 @@ public class ApiPanel {
         return panel;
     }
 
-    private void buildGroupConfigPanels(JPanel parentPanel) {
+    private void buildGroupConfigPanels(JPanel parentPanel, List<GroupConfig> groupConfigs) {
         parentPanel.removeAll();
 
-        List<GroupConfig> groupConfigs = api.getGroupConfigs();
         if (groupConfigs != null && groupConfigs.size() > 0) {
             for (GroupConfig groupConfig : groupConfigs) {
                 JPanel groupContentPanel = createGroupConfigPanel(groupConfig);
@@ -924,19 +926,33 @@ public class ApiPanel {
             return;
         }
 
-        int scrollPosition = groupsScrollPane.getVerticalScrollBar().getValue();
+        // Fetch off the EDT — api.getGroupConfigs() may trigger a synchronized
+        // network load, which previously ran inside the 10s Swing timer and could
+        // freeze the whole client UI when the API was slow.
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return api.getGroupConfigs();
+            } catch (Exception e) {
+                return null;
+            }
+        }).thenAccept(groupConfigs -> SwingUtilities.invokeLater(() -> {
+            if (groupsContainerPanel == null || groupsScrollPane == null) {
+                return;
+            }
+            int scrollPosition = groupsScrollPane.getVerticalScrollBar().getValue();
 
-        buildGroupConfigPanels(groupsContainerPanel);
-        groupsContainerPanel.revalidate();
-        groupsContainerPanel.repaint();
+            buildGroupConfigPanels(groupsContainerPanel, groupConfigs);
+            groupsContainerPanel.revalidate();
+            groupsContainerPanel.repaint();
 
-        SwingUtilities.invokeLater(() -> {
-            groupsScrollPane.getVerticalScrollBar().setValue(scrollPosition);
-        });
+            SwingUtilities.invokeLater(() -> {
+                groupsScrollPane.getVerticalScrollBar().setValue(scrollPosition);
+            });
 
-        if (groupConfigPanel != null) {
-            groupConfigPanel.revalidate();
-            groupConfigPanel.repaint();
-        }
+            if (groupConfigPanel != null) {
+                groupConfigPanel.revalidate();
+                groupConfigPanel.repaint();
+            }
+        }));
     }
 }

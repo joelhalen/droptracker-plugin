@@ -91,15 +91,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		headerPanel = new JPanel(new BorderLayout());
 
 		addHeaderElements();
-		/* Test button
-		if(testing){
-			DebugLogger.log("[DropTrackerPanel][init] testing enabled; adding test button");
-			JButton testButton = new JButton("Create Game Message");
-			testButton.addActionListener(e -> plugin.pbHandler.generateTestMessage());
-			testButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-			headerPanel.add(testButton, BorderLayout.NORTH);
-		}
-		 */
 
 		// Create tabbed pane
 		tabbedPane = new JTabbedPane();
