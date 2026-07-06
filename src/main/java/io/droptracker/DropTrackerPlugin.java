@@ -61,6 +61,7 @@ import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.util.VersionUtil;
 import io.droptracker.video.VideoRecorder;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -474,6 +475,7 @@ public class DropTrackerPlugin extends Plugin {
 				if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
 					chatMessageUtil.warnApiSetting();
 				}
+				executor.submit(this::checkForPluginUpdates);
 			}
 
 			SwingUtilities.invokeLater(() -> {
@@ -558,6 +560,38 @@ public class DropTrackerPlugin extends Plugin {
 			return client.getLocalPlayer().getName();
 		} else {
 			return "";
+		}
+	}
+
+	/**
+	 * Best-effort update check against GET /plugin_version (runs on the executor).
+	 * Below the server's minimum version: warn every login. Behind the latest
+	 * version: prompt once per new version (tracked via lastVersionNotified).
+	 */
+	private void checkForPluginUpdates() {
+		DropTrackerApi.VersionInfo info = api.fetchVersionInfo();
+		if (info == null) {
+			return;
+		}
+
+		if (info.minimumVersion != null && VersionUtil.isOlderThan(pluginVersion, info.minimumVersion)) {
+			chatMessageUtil.sendChatMessage("Your DropTracker plugin (v" + pluginVersion
+				+ ") is older than the minimum supported version (v" + info.minimumVersion
+				+ ") — submissions may be rejected. Please update via the Plugin Hub.");
+			if (info.message != null && !info.message.isEmpty()) {
+				chatMessageUtil.sendChatMessage(info.message);
+			}
+			return;
+		}
+
+		if (info.latestVersion != null && VersionUtil.isOlderThan(pluginVersion, info.latestVersion)
+				&& !info.latestVersion.equals(config.lastVersionNotified())) {
+			config.setLastVersionNotified(info.latestVersion);
+			chatMessageUtil.sendChatMessage("A new DropTracker version is available (v" + info.latestVersion
+				+ ", you have v" + pluginVersion + "). Update via the Plugin Hub for the latest features and fixes.");
+			if (info.message != null && !info.message.isEmpty()) {
+				chatMessageUtil.sendChatMessage(info.message);
+			}
 		}
 	}
 
