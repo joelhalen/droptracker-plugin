@@ -4,6 +4,7 @@ import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.Varbits;
 import net.runelite.api.WorldView;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.callback.ClientThread;
@@ -38,9 +39,19 @@ public class NearbyPlayerTracker
     /**
      * How long a raid member stays in {@link #recentRaidMembers} after last being seen.
      * Raid completion resets the raid varbits before the player opens the loot chest,
-     * so the roster must survive past the end of the raid context.
+     * so the roster must survive past the end of the raid context. Players can idle in
+     * the treasure room for several minutes before opening the chest.
      */
-    private static final long RAID_MEMBER_EXPIRY_MS = TimeUnit.MINUTES.toMillis(5);
+    private static final long RAID_MEMBER_EXPIRY_MS = TimeUnit.MINUTES.toMillis(10);
+
+    /** Roster scans while inside a raid run every N game ticks (~0.6s each). */
+    private static final int ROSTER_SCAN_TICK_INTERVAL = 5;
+
+    /** Radius used for the periodic in-raid roster scan; raid rooms are large. */
+    private static final int ROSTER_SCAN_RADIUS_TILES = 40;
+
+    private int ticksSinceRosterScan = 0;
+    private boolean wasInRaid = false;
 
     @Inject
     public NearbyPlayerTracker(Client client, ClientThread clientThread, PartyService partyService)
@@ -49,6 +60,122 @@ public class NearbyPlayerTracker
         this.clientThread = clientThread;
         this.partyService = partyService;
     }
+
+    /**
+     * Called every game tick (client thread) so the raid roster is accumulated
+     * continuously while a raid is in progress, instead of only being sampled
+     * when a submission happens. By loot-chest time the raid varbits have already
+     * reset and teammates may have left, so a point-in-time scan is not enough
+     * (issue #43: ToB/ToA drops submitted with an empty participant list).
+     */
+    public void onGameTick()
+    {
+        boolean inRaid = isInRaidContext();
+        if (inRaid && !wasInRaid)
+        {
+            // Entering a new raid: drop any roster left over from a previous run so
+            // stale names can't leak into this raid's submissions.
+            recentRaidMembers.clear();
+            ticksSinceRosterScan = ROSTER_SCAN_TICK_INTERVAL; // scan immediately
+        }
+        wasInRaid = inRaid;
+
+        if (!inRaid)
+        {
+            return;
+        }
+
+        if (++ticksSinceRosterScan < ROSTER_SCAN_TICK_INTERVAL)
+        {
+            return;
+        }
+        ticksSinceRosterScan = 0;
+
+        long nowMs = System.currentTimeMillis();
+        Player localPlayer = client.getLocalPlayer();
+        String localName = localPlayer != null ? normalizePlayerName(localPlayer.getName()) : null;
+
+        recordNearbyPlayers(localPlayer, localName, nowMs);
+        recordTobPartyNames(localName, nowMs);
+        recordPartyServiceMembers(localName, nowMs);
+    }
+
+    private void recordNearbyPlayers(Player localPlayer, String localName, long nowMs)
+    {
+        if (localPlayer == null || localPlayer.getWorldLocation() == null)
+        {
+            return;
+        }
+        WorldPoint center = localPlayer.getWorldLocation();
+        WorldView topLevel = client.getTopLevelWorldView();
+        if (topLevel == null)
+        {
+            return;
+        }
+        ScanStats ignored = new ScanStats();
+        Set<String> names = new LinkedHashSet<>();
+        collectNamesFromWorldView(topLevel, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, names, nowMs, true, ignored);
+        for (WorldView subWorldView : topLevel.worldViews())
+        {
+            collectNamesFromWorldView(subWorldView, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, names, nowMs, true, ignored);
+        }
+    }
+
+    /**
+     * ToB publishes the party roster in varcstrings (health-orb name slots), which
+     * stay populated for the whole raid regardless of where teammates are standing.
+     */
+    private void recordTobPartyNames(String localName, long nowMs)
+    {
+        for (int varc = VarClientID.TOB_CLIENT_NAME0; varc <= VarClientID.TOB_CLIENT_NAME4; varc++)
+        {
+            String name = normalizePlayerName(client.getVarcStrValue(varc));
+            if (name != null && !name.equals(localName) && !"-".equals(name))
+            {
+                recentRaidMembers.put(name, nowMs);
+            }
+        }
+    }
+
+    private void recordPartyServiceMembers(String localName, long nowMs)
+    {
+        if (!partyService.isInParty())
+        {
+            return;
+        }
+        for (PartyMember member : partyService.getMembers())
+        {
+            String memberName = normalizePlayerName(member.getDisplayName());
+            if (memberName != null && !memberName.equals(localName))
+            {
+                recentRaidMembers.put(memberName, nowMs);
+            }
+        }
+    }
+
+    /**
+     * Whether the local player is currently inside a raid. Uses the raid *state*
+     * varbits rather than teammate health orbs — the orbs read zero in lobbies,
+     * during transitions, and after completion, which is exactly when we still
+     * need to know a raid is (or was) in progress.
+     */
+    private boolean isInRaidContext()
+    {
+        // ToB: 0=outside, 1=in party (lobby), 2=inside raid, 3=spectating
+        if (client.getVarbitValue(THEATRE_OF_BLOOD_STATE) >= 2)
+        {
+            return true;
+        }
+        // ToA: 0=outside, 1=in party (lobby), 2=inside raid
+        if (client.getVarbitValue(VarbitID.TOA_CLIENT_PARTYSTATUS) >= 2)
+        {
+            return true;
+        }
+        return client.getVarbitValue(VarbitID.RAIDS_CLIENT_INDUNGEON) == 1;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static final int THEATRE_OF_BLOOD_STATE = Varbits.THEATRE_OF_BLOOD;
 
     public List<String> getNearbyPlayerNames(int radiusTiles)
     {
@@ -101,9 +228,12 @@ public class NearbyPlayerTracker
         int toaTeamCount = getToaTeamCount();
         int tobTeamCount = getTobTeamCount();
         int coxTeamCount = getCoxTeamCount();
-        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1) || (coxTeamCount > 1);
+        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1) || (coxTeamCount > 1) || isInRaidContext();
         int recentRaidMembersBeforePurge = recentRaidMembers.size();
         recentRaidMembers.values().removeIf(lastSeenMs -> nowMs - lastSeenMs > RAID_MEMBER_EXPIRY_MS);
+        // The ToB roster varcstrings can outlive the raid-state varbits, so merge them
+        // at submission time too in case tick accumulation missed this raid.
+        recordTobPartyNames(localName, nowMs);
         ScanStats scanStats = new ScanStats();
 
         WorldView topLevel = client.getTopLevelWorldView();

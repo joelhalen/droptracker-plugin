@@ -54,6 +54,7 @@ import io.droptracker.events.PetHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
+import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
@@ -117,6 +118,9 @@ public class DropTrackerPlugin extends Plugin {
 	public ChatMessageUtil chatMessageUtil;
 	@Inject
 	private SubmissionManager submissionManager;
+
+	@Inject
+	private NearbyPlayerTracker nearbyPlayerTracker;
 
 	@Inject
 	private VideoRecorder videoRecorder;
@@ -429,6 +433,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameTick(GameTick event) {
+		// Keep the raid roster warm even while tracking is paused so that
+		// re-enabling mid-raid still produces complete participant lists.
+		nearbyPlayerTracker.onGameTick();
+
 		if (!isTracking) {
 			return;
 		}
@@ -504,6 +512,15 @@ public class DropTrackerPlugin extends Plugin {
 		GameState previousState = gameState.getAndSet(newState);
 		if (previousState == newState) {
 			return;
+		}
+
+		// Clear per-session handler state so a partially-coalesced PB, pet or
+		// collection-log popup from before a logout/hop can't fire stale
+		// notifications after the player comes back.
+		if (newState == GameState.LOGIN_SCREEN || newState == GameState.HOPPING) {
+			pbHandler.reset();
+			petHandler.reset();
+			clogHandler.reset();
 		}
 
 		justLoggedIn.set(newState == GameState.LOGGED_IN);
