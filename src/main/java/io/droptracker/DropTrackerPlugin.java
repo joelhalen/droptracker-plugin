@@ -46,6 +46,8 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
+import io.droptracker.events.DeathHandler;
+import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
@@ -113,6 +115,10 @@ public class DropTrackerPlugin extends Plugin {
 	public PetHandler petHandler;
 	@Inject
 	public ExperienceHandler experienceHandler;
+	@Inject
+	public DeathHandler deathHandler;
+	@Inject
+	public DiaryHandler diaryHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
@@ -417,6 +423,9 @@ public class DropTrackerPlugin extends Plugin {
 				if(petHandler.isEnabled()) {
 					petHandler.onGameMessage(chatMessage);
 				}
+				if(diaryHandler.isEnabled()) {
+					diaryHandler.onGameMessage(chatMessage);
+				}
 				break;
 			case FRIENDSCHATNOTIFICATION:
 				pbHandler.onFriendsChatNotification(chatMessage);
@@ -491,6 +500,11 @@ public class DropTrackerPlugin extends Plugin {
 		if (config.trackExperience()) {
 			experienceHandler.onTick();
 		}
+	}
+
+	@Subscribe
+	public void onActorDeath(ActorDeath actorDeath) {
+		deathHandler.onActorDeath(actorDeath);
 	}
 
 	@Subscribe

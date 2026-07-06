@@ -212,6 +212,20 @@ public class SubmissionManager {
                 }
                 if (config.screenshotPets()) requiredScreenshot = true;
                 break;
+            case DEATH:
+                if (!config.deathEmbeds()) {
+                    debugLogEventFlow("skipped", type, "deathEmbeds=false");
+                    return;
+                }
+                if (config.screenshotDeaths()) requiredScreenshot = true;
+                break;
+            case DIARY:
+                if (!config.diaryEmbeds()) {
+                    debugLogEventFlow("skipped", type, "diaryEmbeds=false");
+                    return;
+                }
+                if (config.screenshotDiaries()) requiredScreenshot = true;
+                break;
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:
                 // No screenshots for experience events
@@ -409,6 +423,12 @@ public class SubmissionManager {
 
             case PET:
                 return groupConfig.isSendPets() ? null : "group sendPets=false";
+
+            case DEATH:
+                return groupConfig.isSendDeaths() ? null : "group sendDeaths=false";
+
+            case DIARY:
+                return groupConfig.isSendDiaries() ? null : "group sendDiaries=false";
 
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:

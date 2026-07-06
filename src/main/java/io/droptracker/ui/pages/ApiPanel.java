@@ -711,6 +711,8 @@ public class ApiPanel {
 
         card.add(dismissButton, BorderLayout.EAST);
 
+        card.setToolTipText(buildValidSubmissionTooltip(submission));
+
         card.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseEntered(java.awt.event.MouseEvent e) {
@@ -879,11 +881,40 @@ public class ApiPanel {
                    .append("Configured for ").append(submission.getGroupIds().length).append(" group(s)</div>");
         }
 
+        String receivedAt = formatReceivedTime(submission.getTimeReceived());
+        if (receivedAt != null) {
+            tooltip.append("<div style='color: #C0C0C0; margin-bottom: 3px;'>")
+                   .append("Received: ").append(receivedAt).append("</div>");
+        }
+
+        if (submission.getRetryAttempts() > 0) {
+            tooltip.append("<div style='color: #FFA500; margin-bottom: 3px;'>")
+                   .append("Retry attempts: ").append(submission.getRetryAttempts()).append("</div>");
+        }
+
+        if (submission.getLastFailureReason() != null && !submission.getLastFailureReason().isEmpty()) {
+            tooltip.append("<div style='color: #FF6060; margin-bottom: 3px;'>")
+                   .append("Last failure: ").append(submission.getLastFailureReason()).append("</div>");
+        }
+
         tooltip.append("<div style='color: #A0A0A0; font-style: italic; margin-top: 5px;'>")
                .append("Click Retry to resend or \u00D7 to dismiss</div>");
 
         tooltip.append("</div></html>");
         return tooltip.toString();
+    }
+
+    /** Formats the ISO timeReceived value into a short human-readable time, or null. */
+    private String formatReceivedTime(String isoTime) {
+        if (isoTime == null || isoTime.isEmpty()) {
+            return null;
+        }
+        try {
+            java.time.LocalDateTime received = java.time.LocalDateTime.parse(isoTime, java.time.format.DateTimeFormatter.ISO_DATE_TIME);
+            return received.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm:ss"));
+        } catch (Exception e) {
+            return isoTime;
+        }
     }
 
     private Color getStatusColor(SubmissionStatus status) {

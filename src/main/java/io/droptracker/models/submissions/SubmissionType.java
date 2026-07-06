@@ -10,5 +10,7 @@ public enum SubmissionType {
     EXPERIENCE,
     EXPERIENCE_MILESTONE,
     ADVENTURE_LOG,
-    PET
+    PET,
+    DEATH,
+    DIARY
 }
