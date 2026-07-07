@@ -2,6 +2,7 @@ package io.droptracker.api;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.annotations.SerializedName;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
@@ -357,6 +358,43 @@ public class DropTrackerApi {
                 return "http://" + config.customApiEndpoint();
             }
             return config.customApiEndpoint();
+        }
+    }
+
+    /** Version metadata returned by GET /plugin_version. */
+    public static class VersionInfo {
+        @SerializedName("latest_version")
+        public String latestVersion;
+        @SerializedName("minimum_version")
+        public String minimumVersion;
+        @SerializedName("message")
+        public String message;
+    }
+
+    /**
+     * Fetches the latest/minimum plugin version from the API. The endpoint
+     * requires no auth, so this works even with the API integration disabled
+     * (falls back to the default API host in that case). Returns null on any
+     * failure — the version check is best-effort and must never break startup.
+     */
+    public VersionInfo fetchVersionInfo() {
+        String apiUrl = getApiUrl();
+        if (apiUrl == null || apiUrl.isEmpty()) {
+            apiUrl = "https://api.droptracker.io";
+        }
+        HttpUrl url = HttpUrl.parse(apiUrl + "/plugin_version");
+        if (url == null) {
+            return null;
+        }
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), VersionInfo.class);
+        } catch (Exception e) {
+            log.debug("Version check failed: {}", e.getMessage());
+            return null;
         }
     }
 

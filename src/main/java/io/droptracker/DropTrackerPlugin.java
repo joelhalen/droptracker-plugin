@@ -17,7 +17,7 @@ BSD 2-Clause License
 		and/or other materials provided with the distribution.
 
 		THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-		AND ANY EXPRESS OR 951bd712c5b3a41fd2f42f0cdfbfb1c27154b1bfIMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+		AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 		IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 		DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
 		FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
@@ -46,6 +46,8 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
+import io.droptracker.events.DeathHandler;
+import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
@@ -54,10 +56,12 @@ import io.droptracker.events.PetHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
+import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.util.VersionUtil;
 import io.droptracker.video.VideoRecorder;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -112,11 +116,18 @@ public class DropTrackerPlugin extends Plugin {
 	public PetHandler petHandler;
 	@Inject
 	public ExperienceHandler experienceHandler;
+	@Inject
+	public DeathHandler deathHandler;
+	@Inject
+	public DiaryHandler diaryHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
 	@Inject
 	private SubmissionManager submissionManager;
+
+	@Inject
+	private NearbyPlayerTracker nearbyPlayerTracker;
 
 	@Inject
 	private VideoRecorder videoRecorder;
@@ -413,6 +424,9 @@ public class DropTrackerPlugin extends Plugin {
 				if(petHandler.isEnabled()) {
 					petHandler.onGameMessage(chatMessage);
 				}
+				if(diaryHandler.isEnabled()) {
+					diaryHandler.onGameMessage(chatMessage);
+				}
 				break;
 			case FRIENDSCHATNOTIFICATION:
 				pbHandler.onFriendsChatNotification(chatMessage);
@@ -429,6 +443,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onGameTick(GameTick event) {
+		// Keep the raid roster warm even while tracking is paused so that
+		// re-enabling mid-raid still produces complete participant lists.
+		nearbyPlayerTracker.onGameTick();
+
 		if (!isTracking) {
 			return;
 		}
@@ -457,6 +475,7 @@ public class DropTrackerPlugin extends Plugin {
 				if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
 					chatMessageUtil.warnApiSetting();
 				}
+				executor.submit(this::checkForPluginUpdates);
 			}
 
 			SwingUtilities.invokeLater(() -> {
@@ -486,6 +505,11 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	@Subscribe
+	public void onActorDeath(ActorDeath actorDeath) {
+		deathHandler.onActorDeath(actorDeath);
+	}
+
+	@Subscribe
 	public void onStatChanged(StatChanged statChanged) {
 		if (!isTracking || !config.trackExperience()) {
 			return;
@@ -504,6 +528,15 @@ public class DropTrackerPlugin extends Plugin {
 		GameState previousState = gameState.getAndSet(newState);
 		if (previousState == newState) {
 			return;
+		}
+
+		// Clear per-session handler state so a partially-coalesced PB, pet or
+		// collection-log popup from before a logout/hop can't fire stale
+		// notifications after the player comes back.
+		if (newState == GameState.LOGIN_SCREEN || newState == GameState.HOPPING) {
+			pbHandler.reset();
+			petHandler.reset();
+			clogHandler.reset();
 		}
 
 		justLoggedIn.set(newState == GameState.LOGGED_IN);
@@ -527,6 +560,38 @@ public class DropTrackerPlugin extends Plugin {
 			return client.getLocalPlayer().getName();
 		} else {
 			return "";
+		}
+	}
+
+	/**
+	 * Best-effort update check against GET /plugin_version (runs on the executor).
+	 * Below the server's minimum version: warn every login. Behind the latest
+	 * version: prompt once per new version (tracked via lastVersionNotified).
+	 */
+	private void checkForPluginUpdates() {
+		DropTrackerApi.VersionInfo info = api.fetchVersionInfo();
+		if (info == null) {
+			return;
+		}
+
+		if (info.minimumVersion != null && VersionUtil.isOlderThan(pluginVersion, info.minimumVersion)) {
+			chatMessageUtil.sendChatMessage("Your DropTracker plugin (v" + pluginVersion
+				+ ") is older than the minimum supported version (v" + info.minimumVersion
+				+ ") — submissions may be rejected. Please update via the Plugin Hub.");
+			if (info.message != null && !info.message.isEmpty()) {
+				chatMessageUtil.sendChatMessage(info.message);
+			}
+			return;
+		}
+
+		if (info.latestVersion != null && VersionUtil.isOlderThan(pluginVersion, info.latestVersion)
+				&& !info.latestVersion.equals(config.lastVersionNotified())) {
+			config.setLastVersionNotified(info.latestVersion);
+			chatMessageUtil.sendChatMessage("A new DropTracker version is available (v" + info.latestVersion
+				+ ", you have v" + pluginVersion + "). Update via the Plugin Hub for the latest features and fixes.");
+			if (info.message != null && !info.message.isEmpty()) {
+				chatMessageUtil.sendChatMessage(info.message);
+			}
 		}
 	}
 

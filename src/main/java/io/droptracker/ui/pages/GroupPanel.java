@@ -221,34 +221,49 @@ public class GroupPanel {
         // Show loading message
         showLoadingState();
 
-        // Perform search in background
+        // Perform search in background. Keep the failure cause so the user can
+        // tell "group doesn't exist" apart from "the API call failed".
         CompletableFuture.supplyAsync(() -> {
             try {
-                GroupSearchResult groupResult = api.searchGroup(searchQuery);
-                return groupResult;
+                return new SearchOutcome(api.searchGroup(searchQuery), null);
             } catch (Exception e) {
-                return null;
+                return new SearchOutcome(null, e);
             }
-        }).thenAccept(groupResult -> {
+        }).thenAccept(outcome -> {
             SwingUtilities.invokeLater(() -> {
-                if (groupResult != null) {
-                    showGroupDetails(groupResult);
+                if (outcome.result != null) {
+                    showGroupDetails(outcome.result);
                     // Load the lootboard image when group is found
-                    if (groupResult.getGroupDropTrackerId() != null) {
-                        currentGroupId = groupResult.getGroupDropTrackerId();
+                    if (outcome.result.getGroupDropTrackerId() != null) {
+                        currentGroupId = outcome.result.getGroupDropTrackerId();
                         PanelElements.loadLootboardForGroup(currentGroupId);
                     }
-                    PanelElements.cachedGroupName = groupResult.getGroupName();
-                } else {
+                    PanelElements.cachedGroupName = outcome.result.getGroupName();
+                } else if (searchQuery.equalsIgnoreCase("test") || searchQuery.equalsIgnoreCase("demo")) {
                     // Fallback to demo data for testing
-                    if (searchQuery.equalsIgnoreCase("test") || searchQuery.equalsIgnoreCase("demo")) {
-                        showGroupDetails(createDemoGroupResult());
-                    } else {
-                        showSearchError("Group '" + searchQuery + "' not found. API search failed.");
-                    }
+                    showGroupDetails(createDemoGroupResult());
+                } else if (outcome.error == null || isNotFound(outcome.error)) {
+                    showSearchError("Group '" + searchQuery + "' was not found.");
+                } else {
+                    showSearchError("Search failed — the DropTracker API could not be reached. Please try again.");
                 }
             });
         });
+    }
+
+    private static boolean isNotFound(Exception e) {
+        String message = e.getMessage();
+        return message != null && message.contains("status: 404");
+    }
+
+    private static class SearchOutcome {
+        final GroupSearchResult result;
+        final Exception error;
+
+        SearchOutcome(GroupSearchResult result, Exception error) {
+            this.result = result;
+            this.error = error;
+        }
     }
 
     private void showLoadingState() {

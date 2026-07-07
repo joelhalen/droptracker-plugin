@@ -212,6 +212,20 @@ public class SubmissionManager {
                 }
                 if (config.screenshotPets()) requiredScreenshot = true;
                 break;
+            case DEATH:
+                if (!config.deathEmbeds()) {
+                    debugLogEventFlow("skipped", type, "deathEmbeds=false");
+                    return;
+                }
+                if (config.screenshotDeaths()) requiredScreenshot = true;
+                break;
+            case DIARY:
+                if (!config.diaryEmbeds()) {
+                    debugLogEventFlow("skipped", type, "diaryEmbeds=false");
+                    return;
+                }
+                if (config.screenshotDiaries()) requiredScreenshot = true;
+                break;
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:
                 // No screenshots for experience events
@@ -409,6 +423,12 @@ public class SubmissionManager {
 
             case PET:
                 return groupConfig.isSendPets() ? null : "group sendPets=false";
+
+            case DEATH:
+                return groupConfig.isSendDeaths() ? null : "group sendDeaths=false";
+
+            case DIARY:
+                return groupConfig.isSendDiaries() ? null : "group sendDiaries=false";
 
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:
@@ -675,26 +695,30 @@ public class SubmissionManager {
                 showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
             }
 
-            byte[] imageBytes = null;
-            try {
-                int thresholdBytes = config.imageCompressionThresholdKb() * 1024;
-                byte[] pngBytes = convertImageToPngBytes(bufferedImage);
-                if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
-                    // PNG is within the threshold — send lossless
-                    imageBytes = pngBytes;
-                } else {
-                    // PNG exceeds threshold (or threshold is 0) — compress to JPEG
-                    imageBytes = convertImageToJpegBytes(bufferedImage);
+            // PNG/JPEG encoding can take hundreds of ms for large frames; keep it
+            // off the frame-listener thread so the client doesn't stall.
+            executor.submit(() -> {
+                byte[] imageBytes = null;
+                try {
+                    int thresholdBytes = config.imageCompressionThresholdKb() * 1024;
+                    byte[] pngBytes = convertImageToPngBytes(bufferedImage);
+                    if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
+                        // PNG is within the threshold — send lossless
+                        imageBytes = pngBytes;
+                    } else {
+                        // PNG exceeds threshold (or threshold is 0) — compress to JPEG
+                        imageBytes = convertImageToJpegBytes(bufferedImage);
+                    }
+                } catch (IOException e) {
+                    log.error("Error converting image to byte array", e);
+                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                            "screenshot conversion failed: " + e.getMessage());
                 }
-            } catch (IOException e) {
-                log.error("Error converting image to byte array", e);
-                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                        "screenshot conversion failed: " + e.getMessage());
-            }
 
-            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                    "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
-            sendWebhookDirect(webhook, imageBytes, null, submission);
+                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                        "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
+                sendWebhookDirect(webhook, imageBytes, null, submission);
+            });
         });
     }
 
@@ -1205,26 +1229,6 @@ public class SubmissionManager {
         return "submissionUuid=" + submission.getUuid()
                 + ", status=" + submission.getStatus()
                 + ", groups=" + Arrays.toString(submission.getGroupIds());
-    }
-
-    // ========== Legacy API compatibility ==========
-
-    /** @deprecated Use derived methods instead. Kept for backward compat. */
-    @Deprecated
-    public String getRetryStatusText() {
-        return "";
-    }
-
-    /** @deprecated No-op. Kept for backward compat. */
-    @Deprecated
-    public void clearRetryQueue() {
-        notifyUpdateCallback();
-    }
-
-    /** @deprecated No-op. Kept for backward compat. */
-    @Deprecated
-    public void setRetryProcessingEnabled(boolean enabled) {
-        // No-op
     }
 
     // ========== Inner Classes ==========

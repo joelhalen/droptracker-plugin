@@ -91,15 +91,6 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		headerPanel = new JPanel(new BorderLayout());
 
 		addHeaderElements();
-		/* Test button
-		if(testing){
-			DebugLogger.log("[DropTrackerPanel][init] testing enabled; adding test button");
-			JButton testButton = new JButton("Create Game Message");
-			testButton.addActionListener(e -> plugin.pbHandler.generateTestMessage());
-			testButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-			headerPanel.add(testButton, BorderLayout.NORTH);
-		}
-		 */
 
 		// Create tabbed pane
 		tabbedPane = new JTabbedPane();
@@ -220,6 +211,24 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		logoPanel.add(logoLabel);
 		logoPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Small spacing between logo and info
 		logoPanel.add(infoPanel);
+
+		// Show which account the plugin is currently tracking, so auth problems
+		// (wrong account, not yet logged in) are visible at a glance.
+		JPanel accountPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+		accountPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+		JLabel accountLabel = new JLabel();
+		accountLabel.setFont(FontManager.getRunescapeSmallFont());
+		String lastAccount = config.lastAccountName();
+		if (lastAccount != null && !lastAccount.isEmpty()) {
+			accountLabel.setText("Tracking: " + lastAccount);
+			accountLabel.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		} else {
+			accountLabel.setText("No account linked yet — log in to begin tracking");
+			accountLabel.setForeground(ColorScheme.PROGRESS_INPROGRESS_COLOR);
+		}
+		accountPanel.add(accountLabel);
+		logoPanel.add(Box.createRigidArea(new Dimension(0, 2)));
+		logoPanel.add(accountPanel);
 		
 		// Add communication status on its own line if API is enabled
 		if (config.useApi()) {

@@ -64,6 +64,10 @@ public class ClogHandler extends BaseEventHandler {
         }
     }
 
+    public void reset() {
+        popupStarted.set(false);
+    }
+
     public void onScript(int scriptId) {
         if (scriptId == ScriptID.NOTIFICATION_START) {
             popupStarted.set(true);

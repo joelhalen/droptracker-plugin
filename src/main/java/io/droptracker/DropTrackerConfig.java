@@ -266,11 +266,71 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    @ConfigSection(
+            name = "Death Tracking",
+            description = "Should we send your deaths to the DropTracker?",
+            position = 8,
+            closedByDefault = true
+    )
+    String DeathSection = "Death Tracking";
+
+    @ConfigItem(
+            keyName = "deathEmbeds",
+            name = "Track Deaths",
+            description = "Do you want to send player deaths to the DropTracker?",
+            position = 1,
+            section = DeathSection
+    )
+    default boolean deathEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "screenshotDeaths",
+            name = "Screenshot Deaths",
+            description = "Do you want to send screenshots when you die?",
+            position = 2,
+            section = DeathSection
+    )
+    default boolean screenshotDeaths() {
+        return false;
+    }
+
+    @ConfigSection(
+            name = "Diary Tracking",
+            description = "Should we send your achievement diary completions to the DropTracker?",
+            position = 9,
+            closedByDefault = true
+    )
+    String DiarySection = "Diary Tracking";
+
+    @ConfigItem(
+            keyName = "diaryEmbeds",
+            name = "Track Diaries",
+            description = "Do you want to send achievement diary completions to the DropTracker?",
+            position = 1,
+            section = DiarySection
+    )
+    default boolean diaryEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "screenshotDiaries",
+            name = "Screenshot Diaries",
+            description = "Do you want to send screenshots when you complete an achievement diary?",
+            position = 2,
+            section = DiarySection
+    )
+    default boolean screenshotDiaries() {
+        return true;
+    }
+
     /* Settings for Hiding Split Chat, Side Panel and API connections */
     @ConfigSection(
         name = "Miscellaneous",
         description = "Miscellaneous plugin config options",
-        position = 8,
+        position = 10,
         closedByDefault = false
     )
     String miscSettings = "Additional Settings";

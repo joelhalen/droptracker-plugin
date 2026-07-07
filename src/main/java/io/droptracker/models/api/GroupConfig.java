@@ -45,6 +45,8 @@ public class GroupConfig {
     private boolean sendKills;
     @SerializedName("send_deaths")
     private boolean sendDeaths;
+    @SerializedName("send_diaries")
+    private boolean sendDiaries;
 
     /* Variables that we'll modify after init */
     @Setter

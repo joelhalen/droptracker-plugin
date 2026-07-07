@@ -52,6 +52,26 @@ public class PbHandler extends BaseEventHandler {
         Pattern.CASE_INSENSITIVE
     );
 
+    @VisibleForTesting
+    static Pattern bossCountPattern() {
+        return BOSS_COUNT_PATTERN;
+    }
+
+    @VisibleForTesting
+    static Pattern secondaryBossPattern() {
+        return SECONDARY_BOSS_PATTERN;
+    }
+
+    @VisibleForTesting
+    static Pattern timeWithPbPattern() {
+        return TIME_WITH_PB_PATTERN;
+    }
+
+    @VisibleForTesting
+    static Pattern teamSizePattern() {
+        return TEAM_SIZE_PATTERN;
+    }
+
     private final AtomicInteger badTicks = new AtomicInteger();
     private final AtomicReference<KillData> killData = new AtomicReference<>();
     private String lastProcessedKill = null;

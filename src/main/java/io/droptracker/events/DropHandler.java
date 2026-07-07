@@ -18,7 +18,6 @@ import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.NPC;
-import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.NpcLootReceived;
 import net.runelite.client.events.PlayerLootReceived;
 import net.runelite.client.events.ServerNpcLoot;
@@ -39,7 +38,12 @@ public class DropHandler extends BaseEventHandler {
     @Inject
     private ItemManager itemManager;
 
-    @Subscribe
+    /*
+     * NOTE: These handlers are NOT registered on the RuneLite event bus — they are
+     * invoked manually by DropTrackerPlugin's own @Subscribe methods, which also
+     * dispatch KCService. Do not call KCService from here, or kill counts get
+     * incremented twice per event.
+     */
 	public void onNpcLootReceived(NpcLootReceived event) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
@@ -50,7 +54,6 @@ public class DropHandler extends BaseEventHandler {
 		processDropEvent(npc.getName(), "npc", LootRecordType.NPC, items);
 	}
 
-	@Subscribe
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
@@ -58,10 +61,8 @@ public class DropHandler extends BaseEventHandler {
 		}
 		Collection<ItemStack> items = playerLootReceived.getItems();
 		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", LootRecordType.PLAYER, items);
-		kcService.onPlayerKill(playerLootReceived);
 	}
 
-	@Subscribe(priority=1)
 	public void onServerNpcLoot(ServerNpcLoot event) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
@@ -72,7 +73,6 @@ public class DropHandler extends BaseEventHandler {
 		processDropEvent(comp.getName(), "npc", LootRecordType.NPC, event.getItems());
 	}
 
-	@Subscribe
 	public void onLootReceived(LootReceived lootReceived) {
 		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
@@ -101,7 +101,6 @@ public class DropHandler extends BaseEventHandler {
 			return;
 		}
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
-		kcService.onLoot(lootReceived);
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {

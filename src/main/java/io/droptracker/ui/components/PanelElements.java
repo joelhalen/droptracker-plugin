@@ -39,6 +39,15 @@ public class PanelElements {
     public static String cachedGroupName = "All Players";
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
+    private static long cachedLootboardAtMs = 0;
+
+    /** Lootboards regenerate server-side; refetch after this long instead of caching forever. */
+    private static final long LOOTBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
+
+    private static boolean isLootboardCacheValid(int groupId) {
+        return cachedGroupId != null && cachedGroupId == groupId && cachedLootboardImage != null
+            && (System.currentTimeMillis() - cachedLootboardAtMs) < LOOTBOARD_CACHE_TTL_MS;
+    }
 
     static {
         Image collapsedImg = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/collapse.png");
@@ -83,7 +92,7 @@ public class PanelElements {
     // Method to load lootboard for a specific group ID
     public static void loadLootboardForGroup(int groupId) {
         // Check if we already have this group cached
-        if (cachedGroupId != null && cachedGroupId == groupId && cachedLootboardImage != null) {
+        if (isLootboardCacheValid(groupId)) {
             return;
         }
 
@@ -101,6 +110,7 @@ public class PanelElements {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
+                cachedLootboardAtMs = System.currentTimeMillis();
             });
         });
     }
@@ -108,7 +118,7 @@ public class PanelElements {
     // Method to load lootboard for a specific group ID with callback
     public static void loadLootboardForGroup(int groupId, Runnable onComplete) {
         // Check if we already have this group cached
-        if (cachedGroupId != null && cachedGroupId == groupId && cachedLootboardImage != null) {
+        if (isLootboardCacheValid(groupId)) {
             if (onComplete != null) {
                 SwingUtilities.invokeLater(onComplete);
             }
@@ -129,6 +139,7 @@ public class PanelElements {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
                 currentImageUrl = imageUrl;
+                cachedLootboardAtMs = System.currentTimeMillis();
                 // Call the completion callback
                 if (onComplete != null) {
                     onComplete.run();
@@ -184,7 +195,7 @@ public class PanelElements {
         imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         // Check if we already have the right group cached
-        if (cachedLootboardImage != null && cachedGroupId != null && cachedGroupId == groupId) {
+        if (isLootboardCacheValid(groupId)) {
             displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
             imageDialog.revalidate();
             imageDialog.repaint();

@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
 
@@ -45,6 +48,13 @@ public class UrlManager {
     @Inject
     private ChatMessageUtil chatMessageUtil;
 
+    @Inject
+    private ScheduledExecutorService executor;
+
+    /** How many times the initial endpoint load has failed; retried with backoff. */
+    private final AtomicInteger loadAttempts = new AtomicInteger(0);
+
+    private static final int MAX_LOAD_ATTEMPTS = 5;
 
     @Inject
     public UrlManager(DropTrackerConfig config, DropTrackerPlugin plugin, ClientThread clientThread, ChatMessageUtil chatMessageUtil) {
@@ -217,7 +227,9 @@ public class UrlManager {
 				if (loaded_key != null) {
 					FernetDecrypt.ENCRYPTION_KEY = loaded_key;
 				} else {
-					return;
+					// Treat a missing key like any other load failure so the retry
+					// logic below runs instead of leaving the future forever pending.
+					throw new IOException("Encryption key endpoint returned no content");
 				}
 				StringBuilder response = new StringBuilder();
 				String inputLine;
@@ -251,8 +263,19 @@ public class UrlManager {
 			log.debug("Successfully loaded {} webhook URLs from GitHub", endpointUrls.size());
 			endpointUrlsLoaded.complete(null);
 		} catch (Exception e) {
-			log.error("Failed to load webhook URLs from GitHub", e);
-			endpointUrlsLoaded.completeExceptionally(e);
+			// A transient network failure at client startup used to permanently
+			// disable webhook-mode submissions (the future completed exceptionally
+			// and nothing ever retried). Retry with linear backoff instead.
+			int attempt = loadAttempts.incrementAndGet();
+			if (attempt < MAX_LOAD_ATTEMPTS) {
+				long delaySeconds = 30L * attempt;
+				log.warn("Failed to load webhook URLs from GitHub (attempt {}/{}); retrying in {}s",
+					attempt, MAX_LOAD_ATTEMPTS, delaySeconds, e);
+				executor.schedule(this::loadEndpoints, delaySeconds, TimeUnit.SECONDS);
+			} else {
+				log.error("Failed to load webhook URLs from GitHub after {} attempts; giving up", attempt, e);
+				endpointUrlsLoaded.completeExceptionally(e);
+			}
 		}
 	}
 
