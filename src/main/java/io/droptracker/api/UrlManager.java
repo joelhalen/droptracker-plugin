@@ -187,7 +187,7 @@ public class UrlManager {
     
     /* Open a link in the browser */
     public void openLink(String destination) {
-		HttpUrl webUrl = HttpUrl.parse("https://discord.gg/dvb7yP7JJH");
+		HttpUrl webUrl = HttpUrl.parse("https://www.droptracker.io/discord");
 		if (!destination.contains("https://")) {
 			if (destination == "website" && config.useApi()) {
 				webUrl = HttpUrl.parse("https://www.droptracker.io/");
