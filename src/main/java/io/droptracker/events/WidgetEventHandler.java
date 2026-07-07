@@ -78,6 +78,9 @@ public class WidgetEventHandler {
     @Inject
     private SubmissionManager submissionManager;
 
+    @Inject
+    private BossNameRegistry bossNameRegistry;
+
     private int petsIconIdx = -1;
     private int[] pets;
 
@@ -348,9 +351,9 @@ public class WidgetEventHandler {
         }
     }
 
-    private static String longBossName(String boss)
+    private String longBossName(String boss)
     {
-        return BossNameRegistry.canonicalName(boss, WordUtils::capitalize);
+        return bossNameRegistry.canonicalName(boss, WordUtils::capitalize);
     }
 
     private void loadPets()

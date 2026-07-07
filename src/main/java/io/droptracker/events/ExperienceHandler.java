@@ -15,7 +15,6 @@ import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
-import com.google.gson.Gson;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -60,11 +59,8 @@ public class ExperienceHandler extends BaseEventHandler {
 
     @Inject
     private ClientThread clientThread;
-    
-    @Inject 
-    private static Gson gson;
 
-    
+
     @Override
     public boolean isEnabled() {
         return config.trackExperience();

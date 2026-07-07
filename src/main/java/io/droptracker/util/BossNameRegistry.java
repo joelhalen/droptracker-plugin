@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
 
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,19 +26,23 @@ import java.util.function.UnaryOperator;
  * unmapped-name fallback) intentionally remains in code rather than data.
  */
 @Slf4j
+@Singleton
 public final class BossNameRegistry {
 
     private static final String RESOURCE_PATH = "/io/droptracker/boss_names.json";
     private static final String ECHO_SUFFIX = " (echo)";
-    private static final Map<String, String> MAPPINGS = loadMappings();
 
-    private BossNameRegistry() {
+    private final Map<String, String> mappings;
+
+    @Inject
+    public BossNameRegistry(Gson gson) {
+        this.mappings = loadMappings(gson);
     }
 
-    private static Map<String, String> loadMappings() {
+    private static Map<String, String> loadMappings(Gson gson) {
         try (InputStream is = BossNameRegistry.class.getResourceAsStream(RESOURCE_PATH);
              Reader reader = new BufferedReader(new InputStreamReader(Objects.requireNonNull(is), StandardCharsets.UTF_8))) {
-            Map<String, String> mappings = new Gson().fromJson(reader,
+            Map<String, String> mappings = gson.fromJson(reader,
                     new TypeToken<Map<String, String>>() {}.getType());
             return Collections.unmodifiableMap(Objects.requireNonNull(mappings));
         } catch (Exception e) {
@@ -53,7 +59,7 @@ public final class BossNameRegistry {
      * @param shortName the short name to resolve
      * @return the canonical name, or the input unchanged when unmapped
      */
-    public static String canonicalName(String shortName) {
+    public String canonicalName(String shortName) {
         return canonicalName(shortName, UnaryOperator.identity());
     }
 
@@ -67,21 +73,21 @@ public final class BossNameRegistry {
      * @param unmappedFallback transformation applied to unmapped names
      * @return the canonical name, or the fallback-transformed input when unmapped
      */
-    public static String canonicalName(String shortName, UnaryOperator<String> unmappedFallback) {
+    public String canonicalName(String shortName, UnaryOperator<String> unmappedFallback) {
         String lowerBoss = shortName.toLowerCase();
         if (lowerBoss.endsWith(ECHO_SUFFIX)) {
             String actualBoss = lowerBoss.substring(0, lowerBoss.length() - ECHO_SUFFIX.length());
             return canonicalName(actualBoss, unmappedFallback) + " (Echo)";
         }
 
-        String mapped = MAPPINGS.get(lowerBoss);
+        String mapped = mappings.get(lowerBoss);
         return mapped != null ? mapped : unmappedFallback.apply(shortName);
     }
 
     /**
      * @return the number of short-name mappings loaded from the data file
      */
-    public static int size() {
-        return MAPPINGS.size();
+    public int size() {
+        return mappings.size();
     }
 }

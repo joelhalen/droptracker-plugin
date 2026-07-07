@@ -48,8 +48,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static net.runelite.http.api.RuneLiteAPI.GSON;
-
 @Slf4j
 @Singleton
 public class SubmissionManager {
@@ -491,7 +489,7 @@ public class SubmissionManager {
 
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("payload_json", GSON.toJson(webhook));
+                .addFormDataPart("payload_json", gson.toJson(webhook));
 
         if (screenshot != null) {
             String mimeType = detectImageMimeType(screenshot);
