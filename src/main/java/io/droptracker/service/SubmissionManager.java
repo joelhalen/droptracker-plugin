@@ -228,6 +228,12 @@ public class SubmissionManager {
             case EXPERIENCE_MILESTONE:
                 // No screenshots for experience events
                 break;
+            case EXPERIENCE_UPDATE:
+                // Background XP snapshot for event tracking: no screenshot,
+                // no group qualification and no UI submission tracking
+                debugLogEventFlow("send", type, "experience snapshot; direct send");
+                sendWebhookDirect(webhook, null, null, null);
+                return;
             case ADVENTURE_LOG:
                 // No extra processing needed
                 break;
@@ -433,6 +439,10 @@ public class SubmissionManager {
                 // XP events typically don't create group notifications,
                 // but respect the group config if present
                 return groupConfig.isSendXP() ? null : "group sendXP=false";
+
+            case EXPERIENCE_UPDATE:
+                // Snapshot syncs are sent directly and never tracked per-group
+                return "experience snapshots are not tracked per-group";
 
             case ADVENTURE_LOG:
                 // Adventure log currently has no group-level toggle
@@ -795,6 +805,7 @@ public class SubmissionManager {
 
             if (presigned == null) {
                 log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
+                debugLogEventFlow("video-upload", null, "presigned URL request failed (null response)");
                 return null;
             }
             log.debug("Presigned upload URL obtained; key={}", presigned.key);
@@ -802,12 +813,14 @@ public class SubmissionManager {
             if (presigned.message != null && !presigned.message.isEmpty()) {
                 if (presigned.message.contains("missing upgrade")) {
                     chatMessageUtil.sendChatMessage("Video capture requires you to be a member of a tier 3 group in the DropTracker. Consider subscribing to unlock this feature.");
+                    debugLogEventFlow("video-upload", null, "server denied: missing tier 3 upgrade");
                     return null;
                 }
             }
 
             if (presigned.quotaExceeded) {
                 log.warn("Video upload skipped: quota exceeded ({})", presigned.message);
+                debugLogEventFlow("video-upload", null, "quota exceeded: " + presigned.message);
                 return null;
             }
 
@@ -857,12 +870,15 @@ public class SubmissionManager {
                 } else {
                     log.warn("Video upload failed: HTTP {} {} (frames={}, size={}KB)",
                         response.code(), response.message(), frames.size(), totalSize / 1024);
+                    debugLogEventFlow("video-upload", null, "storage PUT failed; HTTP " + response.code()
+                            + " (frames=" + frames.size() + ", size=" + (totalSize / 1024) + "KB)");
                     return null;
                 }
             }
         } catch (Exception e) {
             log.warn("Video upload failed with exception: {}", e.getMessage());
             log.debug("Video upload exception details", e);
+            debugLogEventFlow("video-upload", null, "exception: " + e.getMessage());
             return null;
         }
     }

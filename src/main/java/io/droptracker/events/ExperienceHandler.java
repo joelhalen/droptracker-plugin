@@ -1,6 +1,7 @@
 package io.droptracker.events;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.gson.Gson;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Experience;
@@ -14,14 +15,17 @@ import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,19 +50,29 @@ public class ExperienceHandler extends BaseEventHandler {
     private static final int LEVEL_INTERVAL = 1; // Track every level
     private static final boolean TRACK_VIRTUAL_LEVELS = true; // Track levels above 99
     private static final boolean TRACK_COMBAT_LEVEL = true; // Track combat level increases
-    
+
+    // How often (in game ticks) to submit a full XP snapshot while an active
+    // event is tracking this player's experience (~2 minutes)
+    private static final int PERIODIC_SNAPSHOT_TICKS = 200;
+
     private final BlockingQueue<String> levelledSkills = new ArrayBlockingQueue<>(SKILL_COUNT + 1);
     private final Set<Skill> xpReached = EnumSet.noneOf(Skill.class);
     private final Map<String, Integer> currentLevels = new HashMap<>();
     private final Map<Skill, Integer> currentXp = new EnumMap<>(Skill.class);
     private final Map<String, Integer> previousLevels = new HashMap<>(); // Track previous levels for level increase calculation
-    
+    private final Map<Skill, Integer> lastSnapshotXp = new EnumMap<>(Skill.class);
+
     private int ticksWaited = 0;
     private int initTicks = 0;
+    private int ticksSinceSnapshot = 0;
+    private boolean loginSnapshotSent = false;
     private Set<WorldType> specialWorldType = null;
 
     @Inject
     private ClientThread clientThread;
+
+    @Inject
+    private Gson gson;
 
 
     @Override
@@ -80,6 +94,11 @@ public class ExperienceHandler extends BaseEventHandler {
         this.initTicks = 0;
         this.specialWorldType = getSpecialWorldTypes();
         log.debug("Initialized current skill levels: {}", currentLevels);
+
+        if (!loginSnapshotSent) {
+            loginSnapshotSent = true;
+            sendXpSnapshot("login");
+        }
     }
 
     public void reset() {
@@ -87,10 +106,13 @@ public class ExperienceHandler extends BaseEventHandler {
         clientThread.invoke(() -> {
             this.initTicks = 0;
             this.ticksWaited = 0;
+            this.ticksSinceSnapshot = 0;
+            this.loginSnapshotSent = false;
             xpReached.clear();
             currentXp.clear();
             currentLevels.clear();
             previousLevels.clear();
+            lastSnapshotXp.clear();
             this.specialWorldType = null;
         });
     }
@@ -104,6 +126,19 @@ public class ExperienceHandler extends BaseEventHandler {
         if (currentLevels.size() < SKILL_COUNT) {
             this.initTicks++;
             return;
+        }
+
+        // Periodic full-XP snapshot while an active event tracks this player's
+        // experience, so xp_target tasks progress without requiring level-ups
+        if (++this.ticksSinceSnapshot >= PERIODIC_SNAPSHOT_TICKS) {
+            this.ticksSinceSnapshot = 0;
+            if (config.useApi()) {
+                // rate-limited internally; picks up events activated mid-session
+                api.getGroupConfigs();
+                if (isXpEventTrackingActive()) {
+                    sendXpSnapshot("periodic");
+                }
+            }
         }
 
         // Handle level ups and XP milestones
@@ -128,7 +163,11 @@ public class ExperienceHandler extends BaseEventHandler {
 
     public void onGameStateChanged(GameStateChanged gameStateChanged) {
         if (gameStateChanged.getGameState() == GameState.LOGIN_SCREEN) {
+            // flush session gains before the cached state is cleared
+            sendXpSnapshot("logout");
             this.reset();
+        } else if (gameStateChanged.getGameState() == GameState.HOPPING) {
+            sendXpSnapshot("world_hop");
         } else if (gameStateChanged.getGameState() == GameState.LOGGED_IN && !getSpecialWorldTypes().equals(this.specialWorldType)) {
             // world switched where player may have different level profiles; re-initialize
             this.reset();
@@ -220,6 +259,75 @@ public class ExperienceHandler extends BaseEventHandler {
     }
 
     /**
+     * True when any of the player's groups has an active event with XP-based
+     * tasks, per the API-provided group configs. Requires the API integration.
+     */
+    private boolean isXpEventTrackingActive() {
+        if (!config.useApi() || api == null || api.groupConfigs == null) {
+            return false;
+        }
+        for (GroupConfig groupConfig : api.groupConfigs) {
+            if (groupConfig != null && groupConfig.isTrackXpEvents()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Submits a full snapshot of the player's current XP and levels across all
+     * skills as an {@code experience_update}. The backend uses these to update
+     * stored experience and advance event XP baselines/deltas; they never
+     * produce Discord notifications. Sent on login, logout and world-hop, and
+     * periodically while an event is tracking this player's XP. Skipped when
+     * nothing changed since the last snapshot.
+     */
+    private void sendXpSnapshot(String reason) {
+        if (!isEnabled() || currentXp.size() < SKILL_COUNT) {
+            return;
+        }
+        if (specialWorldType != null && !specialWorldType.isEmpty()) {
+            // temporary level profiles (deadman, speedrunning, ...) are not synced
+            return;
+        }
+        if (currentXp.equals(lastSnapshotXp)) {
+            return;
+        }
+
+        Map<String, List<Integer>> skillsData = new LinkedHashMap<>();
+        long totalXp = 0;
+        int totalLevel = 0;
+        for (Skill skill : Skill.values()) {
+            Integer xp = currentXp.get(skill);
+            Integer level = currentLevels.get(skill.getName());
+            if (xp == null || level == null) {
+                return; // not fully initialized yet; a later snapshot will cover it
+            }
+            skillsData.put(skill.getName().toLowerCase(), Arrays.asList(xp, level));
+            totalXp += xp;
+            totalLevel += Math.min(level, MAX_REAL_LEVEL);
+        }
+
+        Integer combatLevel = currentLevels.get(COMBAT_NAME);
+
+        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " experience update");
+        CustomWebhookBody.Embed embed = createEmbed("Experience Update", "experience_update");
+        embed.addField("snapshot_reason", reason, true);
+        embed.addField("total_level", String.valueOf(totalLevel), true);
+        embed.addField("total_xp", String.valueOf(totalXp), true);
+        embed.addField("combat_level", String.valueOf(combatLevel != null ? combatLevel : calculateCombatLevel()), true);
+        embed.addField("skills_data", gson.toJson(skillsData), false);
+        webhook.getEmbeds().add(embed);
+
+        lastSnapshotXp.clear();
+        lastSnapshotXp.putAll(currentXp);
+        this.ticksSinceSnapshot = 0;
+
+        log.debug("Sending XP snapshot (reason={}, totalXp={})", reason, totalXp);
+        sendData(webhook, SubmissionType.EXPERIENCE_UPDATE);
+    }
+
+    /**
      * Creates a simplified field data map for level-up submissions.
      * 
      * @param skillsTrainedList list of skill names that were trained
@@ -306,7 +414,7 @@ public class ExperienceHandler extends BaseEventHandler {
         
         // Create webhook body
         CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " reached an XP milestone!");
-        CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "xp_milestone");
+        CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "experience_milestone");
         
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);

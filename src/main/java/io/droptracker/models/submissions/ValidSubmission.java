@@ -226,6 +226,7 @@ public class ValidSubmission {
             case QUEST_COMPLETION: return "Quest Completion";
             case EXPERIENCE: return "Experience";
             case EXPERIENCE_MILESTONE: return "Experience Milestone";
+            case EXPERIENCE_UPDATE: return "Experience Sync";
             case PET: return "Pet";
             case ADVENTURE_LOG: return "Adventure Log";
             default: return "Submission";
@@ -249,6 +250,7 @@ public class ValidSubmission {
             case PET: return "PET";
             case EXPERIENCE: return "XP";
             case EXPERIENCE_MILESTONE: return "XP";
+            case EXPERIENCE_UPDATE: return "XP";
             case ADVENTURE_LOG: return "LOG";
             default: return "SUB";
         }

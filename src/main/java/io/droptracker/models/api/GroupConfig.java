@@ -47,6 +47,11 @@ public class GroupConfig {
     private boolean sendDeaths;
     @SerializedName("send_diaries")
     private boolean sendDiaries;
+    /* True when the API reports an active event with XP-based tasks that is
+     * tracking this player; the plugin then submits periodic experience
+     * snapshots instead of only level-ups. */
+    @SerializedName("track_xp_events")
+    private boolean trackXpEvents;
 
     /* Variables that we'll modify after init */
     @Setter

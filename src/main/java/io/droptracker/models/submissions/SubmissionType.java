@@ -9,6 +9,7 @@ public enum SubmissionType {
     QUEST_COMPLETION,
     EXPERIENCE,
     EXPERIENCE_MILESTONE,
+    EXPERIENCE_UPDATE,
     ADVENTURE_LOG,
     PET,
     DEATH,
