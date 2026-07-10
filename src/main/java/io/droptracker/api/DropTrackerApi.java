@@ -555,6 +555,46 @@ public class DropTrackerApi {
     }
 
     /**
+     * Reports a failed video upload so the server marks the pending upload
+     * ticket as failed with the real reason, instead of leaving it to age out
+     * as "presigned URL expired". Fire-and-forget: report failures are only
+     * logged, never surfaced to the user.
+     *
+     * @param key The video object key from the presigned upload response
+     * @param reason Short description of why the upload failed
+     */
+    public void reportVideoUploadFailure(String key, String reason) {
+        if (!config.useApi() || key == null || key.isEmpty()) {
+            return;
+        }
+        if (client == null || client.getAccountHash() == -1) {
+            return;
+        }
+
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("key", key);
+        payload.put("acc_hash", String.valueOf(client.getAccountHash()));
+        payload.put("reason", reason != null ? reason : "unknown");
+
+        Request request = new Request.Builder()
+            .url(getApiUrl() + "/video/upload-failed")
+            .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"), gson.toJson(payload)))
+            .build();
+
+        httpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                log.debug("Failed to report video upload failure for key {}", key, e);
+            }
+
+            @Override
+            public void onResponse(@NotNull Call call, @NotNull Response response) {
+                response.close();
+            }
+        });
+    }
+
+    /**
      * Asynchronously fetches the latest welcome string to avoid blocking the EDT.
      * @param callback Function to call with the result when ready
      */

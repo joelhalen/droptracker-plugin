@@ -89,6 +89,13 @@ public class SubmissionManager {
     private static final String PERSISTENCE_FILE_PREFIX = "submissions_";
     private static final int MAX_PERSISTED_SUBMISSIONS = 50;
 
+    /**
+     * Storage backends occasionally return transient 5xx on presigned PUTs
+     * (documented-expected for B2); retry a few times before falling back
+     * to screenshot-only.
+     */
+    private static final int MAX_UPLOAD_ATTEMPTS = 3;
+
     /** Pending webhooks that arrived before group configs were loaded */
     private final List<PendingEvent> pendingEvents = new CopyOnWriteArrayList<>();
     private volatile boolean groupConfigsLoaded = false;
@@ -862,19 +869,52 @@ public class SubmissionManager {
                 .put(streamingBody)
                 .build();
 
-            try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
-                if (response.isSuccessful()) {
-                    log.debug("Video uploaded successfully: key={}, size={}KB, frames={}",
-                        presigned.key, totalSize / 1024, frames.size());
-                    return presigned.key;
-                } else {
-                    log.warn("Video upload failed: HTTP {} {} (frames={}, size={}KB)",
-                        response.code(), response.message(), frames.size(), totalSize / 1024);
-                    debugLogEventFlow("video-upload", null, "storage PUT failed; HTTP " + response.code()
-                            + " (frames=" + frames.size() + ", size=" + (totalSize / 1024) + "KB)");
-                    return null;
+            // Retry transient failures against the same presigned URL: it stays
+            // valid for the full expiry window and re-requesting one would both
+            // consume another slot of the daily video quota and orphan this
+            // ticket as a pending row.
+            String failureReason = null;
+            for (int attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt++) {
+                try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
+                    if (response.isSuccessful()) {
+                        log.debug("Video uploaded successfully: key={}, size={}KB, frames={}, attempt={}",
+                            presigned.key, totalSize / 1024, frames.size(), attempt);
+                        return presigned.key;
+                    }
+
+                    failureReason = "HTTP " + response.code() + " " + response.message();
+                    log.warn("Video upload failed: {} (frames={}, size={}KB, attempt={}/{})",
+                        failureReason, frames.size(), totalSize / 1024, attempt, MAX_UPLOAD_ATTEMPTS);
+                    debugLogEventFlow("video-upload", null, "storage PUT failed; " + failureReason
+                            + " (frames=" + frames.size() + ", size=" + (totalSize / 1024) + "KB"
+                            + ", attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
+
+                    if (response.code() < 500) {
+                        // 4xx (expired/rejected URL, bad request) won't improve on retry
+                        break;
+                    }
+                } catch (IOException e) {
+                    failureReason = "I/O error: " + e.getMessage();
+                    log.warn("Video upload failed: {} (attempt={}/{})", failureReason, attempt, MAX_UPLOAD_ATTEMPTS);
+                    log.debug("Video upload exception details", e);
+                    debugLogEventFlow("video-upload", null, "storage PUT exception: " + e.getMessage()
+                            + " (attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
+                }
+
+                if (attempt < MAX_UPLOAD_ATTEMPTS) {
+                    try {
+                        Thread.sleep(1000L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
                 }
             }
+
+            // All attempts failed. Tell the server so the ticket is marked failed
+            // with the real reason instead of aging out as "presigned URL expired".
+            api.reportVideoUploadFailure(presigned.key, failureReason);
+            return null;
         } catch (Exception e) {
             log.warn("Video upload failed with exception: {}", e.getMessage());
             log.debug("Video upload exception details", e);

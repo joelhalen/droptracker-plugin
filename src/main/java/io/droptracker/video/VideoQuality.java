@@ -50,14 +50,17 @@ public enum VideoQuality
 	),
 
 	/**
-	 * Video recording - 10 seconds at 20 FPS, 80% JPEG quality, 1080p.
+	 * Video recording - 10 seconds at 20 FPS, 65% JPEG quality, 1080p.
 	 * Performance-oriented default to minimize CPU overhead.
+	 * Frames are intermediate data only: the server re-encodes to H.264 at
+	 * CRF 28, which flattens any quality above ~65%, so higher values just
+	 * inflate the upload (~2x) without improving the final video.
 	 */
 	VIDEO(
 		"Video (20 FPS)",
 		10000, // 10 seconds
 		20,    // 20 FPS
-		0.80f  // 80% JPEG quality
+		0.65f  // 65% JPEG quality
 	);
 
 	private final String displayName;
