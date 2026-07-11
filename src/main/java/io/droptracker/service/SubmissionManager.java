@@ -47,6 +47,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 @Slf4j
 @Singleton
@@ -763,10 +764,10 @@ public class SubmissionManager {
 
             log.debug("Captured video frames: frames={}, fps={}", videoFrames.size(), fps);
 
-            // Upload video frames via presigned URL on a background thread
-            executor.submit(() -> {
-                String videoKey = uploadVideoFrames(videoFrames, fps);
-
+            // Upload video frames via presigned URL on a background thread. Retries are
+            // scheduled on the executor rather than blocking, so the completion callback
+            // may run on either the initial submit thread or a later scheduled retry.
+            executor.submit(() -> uploadVideoFrames(videoFrames, fps, videoKey -> {
                 // If upload failed, fall back to screenshot-only (keeps existing behavior).
                 if (videoKey == null || videoKey.isEmpty()) {
                     log.warn("Video upload failed; sending screenshot-only");
@@ -781,7 +782,7 @@ public class SubmissionManager {
                 debugLogEventFlow("capture", submission != null ? submission.getType() : null,
                         "video uploaded; sending with videoKey=" + videoKey);
                 sendWebhookDirect(webhook, null, videoKey, submission);
-            });
+            }));
         });
     }
 
@@ -789,22 +790,28 @@ public class SubmissionManager {
      * Uploads MJPEG video frames to cloud storage via a presigned URL obtained from the API.
      * Frames are streamed directly to the upload URL to minimize memory overhead.
      *
+     * <p>Transient upload failures are retried with a backoff. Rather than blocking a thread
+     * between attempts, each retry is scheduled on the {@link ScheduledExecutorService}, so the
+     * {@code onComplete} callback may run on either the calling thread or a later scheduled thread.
+     *
      * @param frames List of JPEG frame byte arrays
      * @param fps The frames per second the video was recorded at
-     * @return The video storage key if upload succeeded, or null on failure
+     * @param onComplete Receives the video storage key if the upload succeeded, or {@code null} on failure
      */
-    private String uploadVideoFrames(List<byte[]> frames, int fps) {
+    private void uploadVideoFrames(List<byte[]> frames, int fps, Consumer<String> onComplete) {
         if (!config.useApi()) {
             // Video uploads require the API (presigned upload URL + key).
             // If the user has API disabled, we should be loud about why uploads never happen.
             log.warn("Video upload skipped: API disabled (useApi=false). Falling back to screenshot-only.");
-            return null;
+            onComplete.accept(null);
+            return;
         }
 
         try {
             if (frames == null || frames.isEmpty()) {
                 log.warn("Video upload skipped: no frames provided");
-                return null;
+                onComplete.accept(null);
+                return;
             }
 
             // Step 1: Get a presigned upload URL from the API
@@ -813,7 +820,8 @@ public class SubmissionManager {
             if (presigned == null) {
                 log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
                 debugLogEventFlow("video-upload", null, "presigned URL request failed (null response)");
-                return null;
+                onComplete.accept(null);
+                return;
             }
             log.debug("Presigned upload URL obtained; key={}", presigned.key);
 
@@ -821,14 +829,16 @@ public class SubmissionManager {
                 if (presigned.message.contains("missing upgrade")) {
                     chatMessageUtil.sendChatMessage("Video capture requires you to be a member of a tier 3 group in the DropTracker. Consider subscribing to unlock this feature.");
                     debugLogEventFlow("video-upload", null, "server denied: missing tier 3 upgrade");
-                    return null;
+                    onComplete.accept(null);
+                    return;
                 }
             }
 
             if (presigned.quotaExceeded) {
                 log.warn("Video upload skipped: quota exceeded ({})", presigned.message);
                 debugLogEventFlow("video-upload", null, "quota exceeded: " + presigned.message);
-                return null;
+                onComplete.accept(null);
+                return;
             }
 
             // Step 2: Stream MJPEG frames to the presigned URL
@@ -869,58 +879,64 @@ public class SubmissionManager {
                 .put(streamingBody)
                 .build();
 
-            // Retry transient failures against the same presigned URL: it stays
-            // valid for the full expiry window and re-requesting one would both
-            // consume another slot of the daily video quota and orphan this
-            // ticket as a pending row.
-            String failureReason = null;
-            for (int attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt++) {
-                try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
-                    if (response.isSuccessful()) {
-                        log.debug("Video uploaded successfully: key={}, size={}KB, frames={}, attempt={}",
-                            presigned.key, totalSize / 1024, frames.size(), attempt);
-                        return presigned.key;
-                    }
-
-                    failureReason = "HTTP " + response.code() + " " + response.message();
-                    log.warn("Video upload failed: {} (frames={}, size={}KB, attempt={}/{})",
-                        failureReason, frames.size(), totalSize / 1024, attempt, MAX_UPLOAD_ATTEMPTS);
-                    debugLogEventFlow("video-upload", null, "storage PUT failed; " + failureReason
-                            + " (frames=" + frames.size() + ", size=" + (totalSize / 1024) + "KB"
-                            + ", attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
-
-                    if (response.code() < 500) {
-                        // 4xx (expired/rejected URL, bad request) won't improve on retry
-                        break;
-                    }
-                } catch (IOException e) {
-                    failureReason = "I/O error: " + e.getMessage();
-                    log.warn("Video upload failed: {} (attempt={}/{})", failureReason, attempt, MAX_UPLOAD_ATTEMPTS);
-                    log.debug("Video upload exception details", e);
-                    debugLogEventFlow("video-upload", null, "storage PUT exception: " + e.getMessage()
-                            + " (attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
-                }
-
-                if (attempt < MAX_UPLOAD_ATTEMPTS) {
-                    try {
-                        Thread.sleep(1000L * attempt);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-            }
-
-            // All attempts failed. Tell the server so the ticket is marked failed
-            // with the real reason instead of aging out as "presigned URL expired".
-            api.reportVideoUploadFailure(presigned.key, failureReason);
-            return null;
+            attemptVideoUpload(uploadRequest, presigned, frames.size(), totalSize, 1, onComplete);
         } catch (Exception e) {
             log.warn("Video upload failed with exception: {}", e.getMessage());
             log.debug("Video upload exception details", e);
             debugLogEventFlow("video-upload", null, "exception: " + e.getMessage());
-            return null;
+            onComplete.accept(null);
         }
+    }
+
+    /**
+     * Performs a single video upload attempt against an already-obtained presigned URL.
+     *
+     * <p>Transient failures (5xx or I/O errors) with attempts remaining are re-scheduled on the
+     * {@link ScheduledExecutorService} with a linear backoff instead of blocking a thread. Retries
+     * reuse the same presigned URL: it stays valid for the full expiry window, and re-requesting one
+     * would both consume another slot of the daily video quota and orphan this ticket as a pending row.
+     */
+    private void attemptVideoUpload(Request uploadRequest, DropTrackerApi.PresignedUrlResponse presigned,
+            int frameCount, long totalSize, int attempt, Consumer<String> onComplete) {
+        String failureReason;
+        boolean retryable;
+        try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
+            if (response.isSuccessful()) {
+                log.debug("Video uploaded successfully: key={}, size={}KB, frames={}, attempt={}",
+                    presigned.key, totalSize / 1024, frameCount, attempt);
+                onComplete.accept(presigned.key);
+                return;
+            }
+
+            failureReason = "HTTP " + response.code() + " " + response.message();
+            log.warn("Video upload failed: {} (frames={}, size={}KB, attempt={}/{})",
+                failureReason, frameCount, totalSize / 1024, attempt, MAX_UPLOAD_ATTEMPTS);
+            debugLogEventFlow("video-upload", null, "storage PUT failed; " + failureReason
+                    + " (frames=" + frameCount + ", size=" + (totalSize / 1024) + "KB"
+                    + ", attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
+
+            // 4xx (expired/rejected URL, bad request) won't improve on retry; 5xx might.
+            retryable = response.code() >= 500;
+        } catch (IOException e) {
+            failureReason = "I/O error: " + e.getMessage();
+            log.warn("Video upload failed: {} (attempt={}/{})", failureReason, attempt, MAX_UPLOAD_ATTEMPTS);
+            log.debug("Video upload exception details", e);
+            debugLogEventFlow("video-upload", null, "storage PUT exception: " + e.getMessage()
+                    + " (attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
+            retryable = true;
+        }
+
+        if (retryable && attempt < MAX_UPLOAD_ATTEMPTS) {
+            long delay = 1000L * attempt;
+            executor.schedule(() -> attemptVideoUpload(uploadRequest, presigned, frameCount,
+                    totalSize, attempt + 1, onComplete), delay, TimeUnit.MILLISECONDS);
+            return;
+        }
+
+        // All attempts failed (or the failure is non-retryable). Tell the server so the ticket is
+        // marked failed with the real reason instead of aging out as "presigned URL expired".
+        api.reportVideoUploadFailure(presigned.key, failureReason);
+        onComplete.accept(null);
     }
 
     private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {
