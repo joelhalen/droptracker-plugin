@@ -8,7 +8,6 @@ import io.droptracker.ui.DropTrackerTheme;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
@@ -56,13 +55,13 @@ public class PanelElements {
         Image boardIcon = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/board.png");
         Image extLinkIcon = ImageUtil.loadImageResource(DropTrackerPlugin.class, "util/external-link.png");
         Image boardResized = boardIcon.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-        Image extRecolored = ImageUtil.recolorImage(extLinkIcon, ColorScheme.LIGHT_GRAY_COLOR);
+        Image extRecolored = ImageUtil.recolorImage(extLinkIcon, DropTrackerTheme.TEXT_MUTED);
         Image extLinkResized = extRecolored.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
 
         Image collapsedResized = collapsedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
         Image expandedResized = expandedImg.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-        Image collapsedRecolored = ImageUtil.recolorImage(collapsedResized, ColorScheme.LIGHT_GRAY_COLOR);
-        Image expandedRecolored = ImageUtil.recolorImage(expandedResized, ColorScheme.LIGHT_GRAY_COLOR);
+        Image collapsedRecolored = ImageUtil.recolorImage(collapsedResized, DropTrackerTheme.TEXT_MUTED);
+        Image expandedRecolored = ImageUtil.recolorImage(expandedResized, DropTrackerTheme.TEXT_MUTED);
         COLLAPSED_ICON = new ImageIcon(collapsedRecolored);
         EXPANDED_ICON = new ImageIcon(expandedRecolored);
         BOARD_ICON = new ImageIcon(boardResized);
@@ -206,12 +205,12 @@ public class PanelElements {
 
         // Show loading dialog first
         JLabel loadingLabel = new JLabel("Loading group " + groupId + " lootboard...");
-        loadingLabel.setForeground(Color.WHITE);
+        loadingLabel.setForeground(DropTrackerTheme.TEXT);
         loadingLabel.setFont(FontManager.getRunescapeBoldFont());
         loadingLabel.setHorizontalAlignment(JLabel.CENTER);
         loadingLabel.setVerticalAlignment(JLabel.CENTER);
         loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
         loadingLabel.setOpaque(true);
 
         // Add click to close
@@ -230,7 +229,7 @@ public class PanelElements {
                 imageDialog.repaint();
             } else {
                 loadingLabel.setText("Failed to load group " + groupId + " lootboard");
-                loadingLabel.setForeground(Color.RED);
+                loadingLabel.setForeground(DropTrackerTheme.RED);
                 imageDialog.revalidate();
                 imageDialog.repaint();
             }
@@ -248,12 +247,12 @@ public class PanelElements {
 
         // Show loading dialog first
         JLabel loadingLabel = new JLabel("Loading " + submissionType + " image...");
-        loadingLabel.setForeground(Color.WHITE);
+        loadingLabel.setForeground(DropTrackerTheme.TEXT);
         loadingLabel.setFont(FontManager.getRunescapeBoldFont());
         loadingLabel.setHorizontalAlignment(JLabel.CENTER);
         loadingLabel.setVerticalAlignment(JLabel.CENTER);
         loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
         loadingLabel.setOpaque(true);
 
         // Add click to close
@@ -287,7 +286,7 @@ public class PanelElements {
     private static void loadUrlImage(String imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame, String tooltip) {
         if (imageUrl == null || imageUrl.isEmpty()) {
             loadingLabel.setText("No image URL available");
-            loadingLabel.setForeground(Color.RED);
+            loadingLabel.setForeground(DropTrackerTheme.RED);
             return;
         }
 
@@ -307,7 +306,7 @@ public class PanelElements {
                     imageDialog.repaint();
                 } else {
                     loadingLabel.setText("Failed to load image... (likely a bug on our end)");
-                    loadingLabel.setForeground(Color.RED);
+                    loadingLabel.setForeground(DropTrackerTheme.RED);
                     imageDialog.revalidate();
                     imageDialog.repaint();
                 }
@@ -716,7 +715,7 @@ public class PanelElements {
                         pbContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         pbContainer.setText("PB");
                         pbContainer.setFont(FontManager.getRunescapeSmallFont());
-                        pbContainer.setForeground(Color.WHITE);
+                        pbContainer.setForeground(DropTrackerTheme.TEXT);
                         iconContainer = pbContainer;
 
                         // Load image asynchronously
@@ -871,10 +870,10 @@ public class PanelElements {
         // Create image label
         JLabel imageLabel = new JLabel();
         imageLabel.setPreferredSize(new Dimension(displayWidth, displayHeight));
-        imageLabel.setBorder(new StrokeBorder(new BasicStroke(2), ColorScheme.LIGHT_GRAY_COLOR));
+        imageLabel.setBorder(new StrokeBorder(new BasicStroke(2), DropTrackerTheme.SURFACE_3));
         imageLabel.setHorizontalAlignment(JLabel.CENTER);
         imageLabel.setVerticalAlignment(JLabel.CENTER);
-        imageLabel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        imageLabel.setBackground(DropTrackerTheme.SURFACE_1);
         imageLabel.setOpaque(true);
 
         // Scale image if needed
