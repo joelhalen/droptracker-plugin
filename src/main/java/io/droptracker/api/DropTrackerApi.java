@@ -519,14 +519,27 @@ public class DropTrackerApi {
     }
 
     public String getApiUrl() {
-        if (config.customApiEndpoint().equals("")) {
+        String custom = config.customApiEndpoint();
+        if (custom == null || custom.trim().isEmpty()) {
             return config.useApi() ? "https://api.droptracker.io" : "";
-        } else {
-            if (!config.customApiEndpoint().startsWith("http")) {
-                return "http://" + config.customApiEndpoint();
-            }
-            return config.customApiEndpoint();
         }
+        String normalized = custom.trim();
+        if (!normalized.startsWith("http")) {
+            normalized = "http://" + normalized;
+        }
+        // The website hosts never serve the plugin API; a custom endpoint pointing
+        // at them (a stale value in the hidden customApiEndpoint config) makes every
+        // API call chase a redirect into the site's 404 page. Fall back to the real
+        // API host instead of failing confusingly.
+        HttpUrl parsed = HttpUrl.parse(normalized);
+        if (parsed != null) {
+            String host = parsed.host().toLowerCase();
+            if (host.equals("droptracker.io") || host.equals("www.droptracker.io")) {
+                log.warn("customApiEndpoint points at the website ({}); using https://api.droptracker.io instead", custom);
+                return "https://api.droptracker.io";
+            }
+        }
+        return normalized;
     }
 
     /** Version metadata returned by GET /plugin_version. */
