@@ -9,9 +9,9 @@ import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.StateViews;
 import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
@@ -47,7 +47,7 @@ public class PlayerStatsPanel {
     public JPanel create() {
         var mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        mainPanel.setBackground(DropTrackerTheme.SURFACE_0);
 
         // Header section with title and search using LeaderboardComponents
         LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
@@ -60,7 +60,7 @@ public class PlayerStatsPanel {
         // Content panel that will change based on state
         contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        contentPanel.setBackground(DropTrackerTheme.SURFACE_0);
         contentPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Show default state
@@ -81,7 +81,7 @@ public class PlayerStatsPanel {
         // Create center panel for instructions and leaderboard
         JPanel defaultPanel = new JPanel();
         defaultPanel.setLayout(new BoxLayout(defaultPanel, BoxLayout.Y_AXIS));
-        defaultPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        defaultPanel.setBackground(DropTrackerTheme.SURFACE_0);
         defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         // Add some spacing
@@ -90,7 +90,7 @@ public class PlayerStatsPanel {
         // Instructions text
         JLabel instructionLabel = new JLabel("Search for a player by name above");
         instructionLabel.setFont(FontManager.getRunescapeFont());
-        instructionLabel.setForeground(Color.LIGHT_GRAY);
+        instructionLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         instructionLabel.setHorizontalAlignment(JLabel.CENTER);
 
@@ -103,13 +103,13 @@ public class PlayerStatsPanel {
         if (playerName != null && !"Not logged in".equals(playerName)) {
             // Button to view current player stats
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            buttonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+            buttonPanel.setBackground(DropTrackerTheme.SURFACE_0);
             buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
             buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
             buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
 
             JButton viewStatsButton = new JButton("⚡ View My Stats (" + playerName + ")");
-            viewStatsButton.setFont(FontManager.getRunescapeSmallFont());
+            DropTrackerTheme.styleButton(viewStatsButton);
             viewStatsButton.setPreferredSize(new Dimension(200, 30));
             viewStatsButton.setToolTipText("View your DropTracker statistics");
             viewStatsButton.addActionListener(e -> performPlayerSearch(playerName));
@@ -201,11 +201,7 @@ public class PlayerStatsPanel {
 
         // Show loading message
         contentPanel.removeAll();
-        JLabel loadingLabel = new JLabel("Searching for player...");
-        loadingLabel.setFont(FontManager.getRunescapeFont());
-        loadingLabel.setForeground(Color.LIGHT_GRAY);
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        contentPanel.add(loadingLabel);
+        contentPanel.add(StateViews.loading("Searching for player…"));
         contentPanel.revalidate();
         contentPanel.repaint();
 
@@ -264,12 +260,12 @@ public class PlayerStatsPanel {
         // Match GroupPanel structure exactly
         JPanel playerInfoPanel = new JPanel();
         playerInfoPanel.setLayout(new BoxLayout(playerInfoPanel, BoxLayout.Y_AXIS));
-        playerInfoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        playerInfoPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        playerInfoPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        playerInfoPanel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
 
         // Player header panel - like groupHeaderPanel
         JPanel playerHeaderPanel = new JPanel(new BorderLayout(10, 0));
-        playerHeaderPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        playerHeaderPanel.setBackground(DropTrackerTheme.SURFACE_1);
         playerHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
         playerHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
         playerHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -277,17 +273,17 @@ public class PlayerStatsPanel {
         // Player name and description
         JPanel playerNamePanel = new JPanel();
         playerNamePanel.setLayout(new BoxLayout(playerNamePanel, BoxLayout.Y_AXIS));
-        playerNamePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        playerNamePanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         JLabel playerNameLabel = new JLabel(playerResult.getPlayerName());
         playerNameLabel.setFont(FontManager.getRunescapeBoldFont());
-        playerNameLabel.setForeground(Color.WHITE);
+        playerNameLabel.setForeground(DropTrackerTheme.TEXT);
         playerNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         String statusText = playerResult.isRegistered() ? "Registered Player" : "Unregistered Player";
         JLabel playerDescLabel = new JLabel(statusText);
         playerDescLabel.setFont(FontManager.getRunescapeSmallFont());
-        playerDescLabel.setForeground(playerResult.isRegistered() ? Color.GREEN : Color.ORANGE);
+        playerDescLabel.setForeground(playerResult.isRegistered() ? DropTrackerTheme.GREEN : DropTrackerTheme.EMBER);
         playerDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         playerNamePanel.add(playerNameLabel);
@@ -311,7 +307,7 @@ public class PlayerStatsPanel {
 
         // Stats panel - exactly like GroupPanel statsPanel
         JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
-        statsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        statsPanel.setBackground(DropTrackerTheme.SURFACE_1);
         statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
         statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 100));
         statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
@@ -338,13 +334,13 @@ public class PlayerStatsPanel {
 
             @Override
             public void mouseEntered(java.awt.event.MouseEvent e) {
-                playerPointsBox.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+                playerPointsBox.setBackground(DropTrackerTheme.SURFACE_3);
                 playerPointsBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
 
             @Override
             public void mouseExited(java.awt.event.MouseEvent e) {
-                playerPointsBox.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+                playerPointsBox.setBackground(DropTrackerTheme.SURFACE_2);
                 playerPointsBox.setCursor(Cursor.getDefaultCursor());
             }
         });
@@ -353,19 +349,20 @@ public class PlayerStatsPanel {
         // Action buttons - exactly like GroupPanel actionPanel
         JPanel actionPanel = new JPanel();
         actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        actionPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        actionPanel.setBackground(DropTrackerTheme.SURFACE_1);
         actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
         actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
         actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JButton refreshButton = new JButton("Refresh Stats");
+        DropTrackerTheme.styleButton(refreshButton);
         refreshButton.setMargin(new Insets(0, 5, 0, 5));
         refreshButton.addActionListener(e -> {
             performPlayerSearch(playerResult.getPlayerName());
         });
 
         JButton viewProfileButton = new JButton("⇱ View Profile");
-        viewProfileButton.setFont(FontManager.getRunescapeSmallFont());
+        DropTrackerTheme.styleButton(viewProfileButton);
         viewProfileButton.setMargin(new Insets(0, 5, 0, 5));
         viewProfileButton.addActionListener(e -> {
             if (playerResult.getDropTrackerPlayerId() != null) {
@@ -388,48 +385,10 @@ public class PlayerStatsPanel {
         if (playerResult.getRecentSubmissions() != null && !playerResult.getRecentSubmissions().isEmpty()) {
             List<RecentSubmission> recentSubmissions = playerResult.getRecentSubmissions();
             playerInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, false));
-            playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         } else {
-            // Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
-            JPanel noSubmissionsContainer = new JPanel();
-            noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));
-            noSubmissionsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            noSubmissionsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
-            noSubmissionsContainer.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Match original
-            noSubmissionsContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
-            noSubmissionsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-            // Title panel to match original structure
-            JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-            titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-            titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-
-            JLabel title = new JLabel("Recent Submissions");
-            title.setFont(FontManager.getRunescapeSmallFont());
-            title.setForeground(Color.WHITE);
-            titlePanel.add(title);
-
-            // Content panel to match original structure
-            JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-            contentWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-            contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-
-            JLabel noSubmissionsLabel = new JLabel("No recent submissions available");
-            noSubmissionsLabel.setFont(FontManager.getRunescapeSmallFont());
-            noSubmissionsLabel.setForeground(Color.LIGHT_GRAY);
-            noSubmissionsLabel.setHorizontalAlignment(JLabel.CENTER);
-            contentWrapper.add(noSubmissionsLabel);
-
-            // Assemble the container exactly like the original
-            noSubmissionsContainer.add(titlePanel);
-            noSubmissionsContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Match original spacing
-            noSubmissionsContainer.add(contentWrapper);
-
-            playerInfoPanel.add(noSubmissionsContainer);
-            playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+            playerInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("No recent submissions available"));
         }
+        playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         playerInfoPanel.add(actionPanel);
 
@@ -445,13 +404,13 @@ public class PlayerStatsPanel {
 
         JPanel groupsContainer = new JPanel();
         groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
-        groupsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        groupsContainer.setBackground(DropTrackerTheme.SURFACE_1);
         groupsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Groups header
         JLabel groupsHeaderLabel = new JLabel("Groups:");
         groupsHeaderLabel.setFont(FontManager.getRunescapeSmallFont());
-        groupsHeaderLabel.setForeground(Color.LIGHT_GRAY);
+        groupsHeaderLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         groupsHeaderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         groupsContainer.add(groupsHeaderLabel);
 
@@ -465,7 +424,7 @@ public class PlayerStatsPanel {
 
             JLabel groupLabel = new JLabel(groupText.toString());
             groupLabel.setFont(FontManager.getRunescapeSmallFont());
-            groupLabel.setForeground(Color.LIGHT_GRAY);
+            groupLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
             groupLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
             groupsContainer.add(groupLabel);

@@ -406,41 +406,6 @@ public class PanelElements {
         return textArea;
     }
 
-    public static JPanel createFeaturePanel(String title, String description) {
-        // Create a panel with fixed dimensions
-        JPanel panel = new JPanel();
-        panel.setLayout(new BorderLayout());
-        panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
-
-        // Fixed height for the entire panel
-        Dimension panelSize = new Dimension(PluginPanel.PANEL_WIDTH, 90);
-        panel.setPreferredSize(panelSize);
-        panel.setMinimumSize(panelSize);
-        panel.setMaximumSize(panelSize);
-
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(Color.WHITE);
-
-        JTextArea descArea = new JTextArea(description);
-        descArea.setWrapStyleWord(true);
-        descArea.setLineWrap(true);
-        descArea.setOpaque(false);
-        descArea.setEditable(false);
-        descArea.setFocusable(false);
-        descArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        descArea.setForeground(Color.LIGHT_GRAY);
-        descArea.setFont(FontManager.getRunescapeSmallFont());
-        descArea.setBorder(new EmptyBorder(5, 0, 0, 0));
-
-        panel.add(titleLabel, BorderLayout.NORTH);
-        panel.add(descArea, BorderLayout.CENTER);
-
-        return panel;
-    }
-
-
     public static JPanel createCollapsiblePanel(String title, JPanel content, boolean isUnderlined) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));

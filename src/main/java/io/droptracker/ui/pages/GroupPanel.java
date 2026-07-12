@@ -9,9 +9,9 @@ import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.StateViews;
 import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
@@ -61,7 +61,7 @@ public class GroupPanel {
     public JPanel create() {
         var mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        mainPanel.setBackground(DropTrackerTheme.SURFACE_0);
 
         // Header section with title and search using LeaderboardComponents
         LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
@@ -74,7 +74,7 @@ public class GroupPanel {
         // Content panel that will change based on state - fix alignment
         contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        contentPanel.setBackground(DropTrackerTheme.SURFACE_0);
         contentPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Show default state
@@ -97,13 +97,13 @@ public class GroupPanel {
         // Create center panel for the button
         JPanel defaultPanel = new JPanel();
         defaultPanel.setLayout(new BoxLayout(defaultPanel, BoxLayout.Y_AXIS));
-        defaultPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        defaultPanel.setBackground(DropTrackerTheme.SURFACE_0);
         defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         // Instructions text
         JLabel instructionLabel = new JLabel("Search for a group by name above");
         instructionLabel.setFont(FontManager.getRunescapeFont());
-        instructionLabel.setForeground(Color.LIGHT_GRAY);
+        instructionLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         instructionLabel.setHorizontalAlignment(JLabel.CENTER);
 
@@ -115,7 +115,7 @@ public class GroupPanel {
 
         // Panel for first button - centered horizontally
         JPanel createButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        createButtonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        createButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
         createButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         createButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         createButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
@@ -123,7 +123,7 @@ public class GroupPanel {
 
         // Panel for second button - centered horizontally
         JPanel groupButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        groupButtonPanel.setBackground(ColorScheme.DARK_GRAY_COLOR);
+        groupButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
         groupButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         groupButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
         groupButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
@@ -260,11 +260,7 @@ public class GroupPanel {
 
     private void showLoadingState() {
         contentPanel.removeAll();
-        JLabel loadingLabel = new JLabel("Loading...");
-        loadingLabel.setFont(FontManager.getRunescapeFont());
-        loadingLabel.setForeground(Color.LIGHT_GRAY);
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        contentPanel.add(loadingLabel);
+        contentPanel.add(StateViews.loading("Searching for group…"));
         contentPanel.revalidate();
         contentPanel.repaint();
     }
@@ -305,7 +301,7 @@ public class GroupPanel {
         stats.setMonthlyLoot(row.getTotalLoot());
         partial.setGroupStats(stats);
         partial.setGroupTopPlayer(row.getTopMemberString());
-        showGroupDetails(partial);
+        showGroupDetails(partial, true);
 
         if (row.getGroupId() != null) {
             currentGroupId = row.getGroupId();
@@ -334,18 +330,27 @@ public class GroupPanel {
     }
 
     private void showGroupDetails(GroupSearchResult groupResult) {
+        showGroupDetails(groupResult, false);
+    }
+
+    /**
+     * Renders the group detail card. When {@code partial} is true the view was built
+     * from leaderboard-row data only, so the fields the row can't provide (description,
+     * recent submissions) show loading placeholders instead of empty states.
+     */
+    private void showGroupDetails(GroupSearchResult groupResult, boolean partial) {
         activeDetailGroupName = groupResult.getGroupName();
         contentPanel.removeAll();
 
         // Match PlayerStatsPanel structure exactly - no custom borders
         JPanel groupInfoPanel = new JPanel();
         groupInfoPanel.setLayout(new BoxLayout(groupInfoPanel, BoxLayout.Y_AXIS));
-        groupInfoPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        groupInfoPanel.setBorder(new EmptyBorder(10, 10, 10, 10)); // Same as playerInfoPanel
+        groupInfoPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        groupInfoPanel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
 
         // Group header panel - exactly like playerHeaderPanel with clear button
         JPanel groupHeaderPanel = new JPanel(new BorderLayout(10, 0));
-        groupHeaderPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        groupHeaderPanel.setBackground(DropTrackerTheme.SURFACE_1);
         groupHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
         groupHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
         groupHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -353,7 +358,7 @@ public class GroupPanel {
         // Group icon
         BufferedImage placeholderImg = new BufferedImage(50, 50, BufferedImage.TYPE_INT_ARGB);
         JLabel groupIcon = new JLabel(new ImageIcon(placeholderImg));
-        groupIcon.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
+        groupIcon.setBackground(DropTrackerTheme.SURFACE_2);
         groupIcon.setPreferredSize(new Dimension(50, 50));
         groupIcon.setMaximumSize(new Dimension(50, 50));
         groupIcon.setMinimumSize(new Dimension(50, 50));
@@ -362,17 +367,19 @@ public class GroupPanel {
         // Group name and description
         JPanel groupNamePanel = new JPanel();
         groupNamePanel.setLayout(new BoxLayout(groupNamePanel, BoxLayout.Y_AXIS));
-        groupNamePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        groupNamePanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         JLabel groupNameLabel = new JLabel(groupResult.getGroupName());
         groupNameLabel.setFont(FontManager.getRunescapeBoldFont());
-        groupNameLabel.setForeground(Color.WHITE);
+        groupNameLabel.setForeground(DropTrackerTheme.TEXT);
         groupNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        String description = groupResult.getGroupDescription() != null ? groupResult.getGroupDescription() : "";
+        String description = groupResult.getGroupDescription() != null
+            ? groupResult.getGroupDescription()
+            : (partial ? "Loading details…" : "");
         JLabel groupDescLabel = new JLabel("<html>" + description + "</html>");
         groupDescLabel.setFont(FontManager.getRunescapeSmallFont());
-        groupDescLabel.setForeground(Color.LIGHT_GRAY);
+        groupDescLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         groupDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         groupNamePanel.add(groupNameLabel);
@@ -390,7 +397,7 @@ public class GroupPanel {
 
         // Stats panel - exactly like playerStatsPanel
         JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
-        statsPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        statsPanel.setBackground(DropTrackerTheme.SURFACE_1);
         statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0)); // Same as playerStatsPanel
         statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 100));
         statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
@@ -425,13 +432,14 @@ public class GroupPanel {
         // Action buttons - exactly like actionPanel
         JPanel actionPanel = new JPanel();
         actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        actionPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        actionPanel.setBackground(DropTrackerTheme.SURFACE_1);
         actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
         actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
         actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
             JButton joinButton = new JButton("Discord");
+            DropTrackerTheme.styleButton(joinButton);
             joinButton.setMargin(new Insets(0, 5, 0, 5));
             joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
             actionPanel.add(joinButton);
@@ -449,45 +457,10 @@ public class GroupPanel {
         List<RecentSubmission> recentSubmissions = groupResult.getGroupRecentSubmissions();
         if (recentSubmissions != null && !recentSubmissions.isEmpty()) {
             groupInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, true));
+        } else if (partial) {
+            groupInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("Loading recent activity…"));
         } else {
-            // Create a placeholder panel that matches the exact dimensions of createRecentSubmissionPanel
-            JPanel noSubmissionsContainer = new JPanel();
-            noSubmissionsContainer.setLayout(new BoxLayout(noSubmissionsContainer, BoxLayout.Y_AXIS));
-            noSubmissionsContainer.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            noSubmissionsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
-            noSubmissionsContainer.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120)); // Match original
-            noSubmissionsContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
-            noSubmissionsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-            // Title panel to match original structure
-            JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-            titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-            titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-
-            JLabel title = new JLabel("Recent Submissions");
-            title.setFont(FontManager.getRunescapeSmallFont());
-            title.setForeground(Color.WHITE);
-            titlePanel.add(title);
-
-            // Content panel to match original structure
-            JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-            contentWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-            contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-            contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-
-            JLabel noSubmissionsLabel = new JLabel("No recent submissions available");
-            noSubmissionsLabel.setFont(FontManager.getRunescapeSmallFont());
-            noSubmissionsLabel.setForeground(Color.LIGHT_GRAY);
-            noSubmissionsLabel.setHorizontalAlignment(JLabel.CENTER);
-            contentWrapper.add(noSubmissionsLabel);
-
-            // Assemble the container exactly like the original
-            noSubmissionsContainer.add(titlePanel);
-            noSubmissionsContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Match original spacing
-            noSubmissionsContainer.add(contentWrapper);
-
-            groupInfoPanel.add(noSubmissionsContainer);
+            groupInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("No recent submissions available"));
         }
         groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         groupInfoPanel.add(actionPanel);
