@@ -294,13 +294,17 @@ public class DropTrackerPlugin extends Plugin {
 				if (config.showSidePanel()) {
 					createSidePanel();
 				}
-				// panel.refreshData();
-				if (client.getAccountHash() != -1) {
-					try {
-						api.lookupPlayer(client.getLocalPlayer().getName());
-					} catch (Exception e) {
-						log.debug("Couldn't look the current player up in the DropTracker database");
-					}
+				if (client.getAccountHash() != -1 && client.getLocalPlayer() != null) {
+					// Run off the calling thread; config changes can fire on the EDT and
+					// lookupPlayer performs blocking network I/O.
+					final String localName = client.getLocalPlayer().getName();
+					executor.submit(() -> {
+						try {
+							api.lookupPlayer(localName);
+						} catch (Exception e) {
+							log.debug("Couldn't look the current player up in the DropTracker database");
+						}
+					});
 				}
 			} else if (configChanged.getKey().equals("showSidePanel")) {
 				if (!config.showSidePanel()) {

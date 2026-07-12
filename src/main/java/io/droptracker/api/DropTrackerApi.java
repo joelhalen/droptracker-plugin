@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Singleton
@@ -38,6 +39,14 @@ public class DropTrackerApi {
     private Gson gson;
     @Inject
     private OkHttpClient httpClient;
+
+    /**
+     * Client used for lightweight panel-data GETs (searches, top lists, configs, news).
+     * Derived from the injected RuneLite client but with tight connect/read timeouts so a
+     * slow or unresponsive API never hangs panel loads for minutes. Submission uploads
+     * keep using the injected {@link #httpClient}, since those payloads can be large.
+     */
+    private OkHttpClient panelHttpClient;
     @Inject
     private DropTrackerPlugin plugin;
 
@@ -66,6 +75,10 @@ public class DropTrackerApi {
             this.httpClient = httpClient;
             this.plugin = plugin;
             this.client = client;
+            this.panelHttpClient = httpClient.newBuilder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build();
     }
 
     /**
@@ -130,10 +143,10 @@ public class DropTrackerApi {
                     .build();
                 
                 Request request = new Request.Builder().url(url).build();
-                
-                try (Response response = httpClient.newCall(request).execute()) {
+
+                try (Response response = panelHttpClient.newCall(request).execute()) {
                     lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-                    
+
                     if (!response.isSuccessful()) {
                         throw new IOException("API request failed with status: " + response.code());
                     }
@@ -180,18 +193,31 @@ public class DropTrackerApi {
         });
     }
 
-    /* Get all players' group configs from memory */
+    /**
+     * Returns the most recently loaded group configs from memory. This never performs
+     * any network I/O, so it is safe to call from the Swing EDT. Callers that want
+     * fresher data should invoke {@link #refreshGroupConfigsAsync()} first.
+     */
     public List<GroupConfig> getGroupConfigs() {
         if (!config.useApi()) {
             return null;
         }
+        return groupConfigs;
+    }
+
+    /**
+     * Schedules a rate-limited asynchronous refresh of the group configs. The actual
+     * network request runs off the calling thread, so this is safe to call from the EDT.
+     */
+    public void refreshGroupConfigsAsync() {
+        if (!config.useApi()) {
+            return;
+        }
         try {
             loadGroupConfigs(plugin.getLocalPlayerName());
         } catch (IOException e) {
-            log.debug("Couldn't get group config in side panel (IOException) " + e);
+            log.debug("Couldn't refresh group configs " + e);
         }
-        
-        return groupConfigs;
     }
 
     /* Submissions */
@@ -213,7 +239,7 @@ public class DropTrackerApi {
         try {
             HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
             Request request = new Request.Builder().url(url).build();
-            try (Response response = httpClient.newCall(request).execute()) {
+            try (Response response = panelHttpClient.newCall(request).execute()) {
                 lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
                 if (!response.isSuccessful()) {
                     throw new IOException("API request failed with status: " + response.code());
@@ -240,7 +266,7 @@ public class DropTrackerApi {
         try {
             HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
             Request request = new Request.Builder().url(url).build();
-            try (Response response = httpClient.newCall(request).execute()) {
+            try (Response response = panelHttpClient.newCall(request).execute()) {
                 lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
                 if (!response.isSuccessful()) {
                     throw new IOException("API request failed with status: " + response.code());
@@ -261,7 +287,7 @@ public class DropTrackerApi {
     /**
      * Sends a request to the API to search for a group and returns the GroupSearchResult.
      */
-    @SuppressWarnings({ "null", "unchecked" })
+    @SuppressWarnings("null")
     public GroupSearchResult searchGroup(String groupName) throws IOException {
         if (!config.useApi()) {
             return null;
@@ -280,7 +306,7 @@ public class DropTrackerApi {
         Request request = new Request.Builder().url(url).build();
         lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
 
-        try (Response response = httpClient.newCall(request).execute()) {
+        try (Response response = panelHttpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("API request failed with status: " + response.code());
             }
@@ -290,16 +316,10 @@ public class DropTrackerApi {
             }
 
             String responseData = response.body().string();
-            
-            // Try to parse as GroupSearchResult first
             try {
                 return gson.fromJson(responseData, GroupSearchResult.class);
-            } catch (Exception e) {
-                // If direct parsing fails, try to parse as Map and convert
-                // NOTE: This feels very ugly - we own the API. We should know the returned format
-                Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-                String jsonString = gson.toJson(responseMap);
-                return gson.fromJson(jsonString, GroupSearchResult.class);
+            } catch (JsonSyntaxException e) {
+                throw new IOException("Malformed /group_search response", e);
             }
         }
     }
@@ -325,7 +345,7 @@ public class DropTrackerApi {
 
         Request request = new Request.Builder().url(url).build();
         lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-        try (Response response = httpClient.newCall(request).execute()) {
+        try (Response response = panelHttpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("API request failed with status: " + response.code());
             }
@@ -335,17 +355,10 @@ public class DropTrackerApi {
             }
 
             String responseData = response.body().string();
-            
-            // Try to parse as PlayerSearchResult first
             try {
                 return gson.fromJson(responseData, PlayerSearchResult.class);
-            } catch (Exception e) {
-                // If direct parsing fails, try to parse as Map and convert
-                // NOTE: We own the API - we should make sure we return values that can be parsed
-                @SuppressWarnings("unchecked")
-                Map<String, Object> responseMap = gson.fromJson(responseData, Map.class);
-                String jsonString = gson.toJson(responseMap);
-                return gson.fromJson(jsonString, PlayerSearchResult.class);
+            } catch (JsonSyntaxException e) {
+                throw new IOException("Malformed /player_search response", e);
             }
         }
     }
@@ -387,7 +400,7 @@ public class DropTrackerApi {
             return null;
         }
         Request request = new Request.Builder().url(url).build();
-        try (Response response = httpClient.newCall(request).execute()) {
+        try (Response response = panelHttpClient.newCall(request).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
                 return null;
             }
@@ -607,11 +620,11 @@ public class DropTrackerApi {
         }
 
         Request request = new Request.Builder().url(endpoint).build();
-        httpClient.newCall(request).enqueue(new Callback() {
+        panelHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
-                javax.swing.SwingUtilities.invokeLater(() -> 
+                javax.swing.SwingUtilities.invokeLater(() ->
                     callback.accept("Welcome to the DropTracker!"));
             }
 
@@ -645,11 +658,11 @@ public class DropTrackerApi {
         }
 
         Request request = new Request.Builder().url(endpoint).build();
-        httpClient.newCall(request).enqueue(new Callback() {
+        panelHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
-                javax.swing.SwingUtilities.invokeLater(() -> 
+                javax.swing.SwingUtilities.invokeLater(() ->
                     callback.accept("Error fetching latest update: " + e.getMessage()));
             }
 
@@ -683,7 +696,7 @@ public class DropTrackerApi {
         String url = "https://droptracker-io.github.io/content/valued_items.txt";
         try {
             Request request = new Request.Builder().url(url).build();
-            try (Response response = httpClient.newCall(request).execute()) {
+            try (Response response = panelHttpClient.newCall(request).execute()) {
                 lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
                 if (!response.isSuccessful()) {
                     throw new IOException("API request failed with status: " + response.code());

@@ -43,6 +43,12 @@ public class GroupPanel {
     // Add field for tracking leaderboard placeholder
     private JPanel leaderboardPlaceholder;
 
+    /**
+     * Name of the group currently shown in the detail view. Used to make sure a
+     * late-arriving async enrichment doesn't clobber a newer view.
+     */
+    private String activeDetailGroupName;
+
     public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanel panel) {
         this.client = client;
         this.config = config;
@@ -84,6 +90,7 @@ public class GroupPanel {
 
 
     private void showDefaultState() {
+        activeDetailGroupName = null;
         contentPanel.removeAll();
 
         // Create center panel for the button
@@ -170,21 +177,8 @@ public class GroupPanel {
 
                     @Override
                     public void onItemClick(TopGroupResult.TopGroup group) {
-                        // Search for this group when clicked
-                        CompletableFuture.supplyAsync(() -> {
-                            try {
-                                showLoadingState();
-                                GroupSearchResult groupResult = api.searchGroup(group.getGroupName());
-                                if (groupResult != null) {
-                                    currentGroupId = groupResult.getGroupDropTrackerId();
-                                    PanelElements.loadLootboardForGroup(currentGroupId);
-                                    showGroupDetails(groupResult);
-                                }
-                                return null;
-                            } catch (Exception ex) {
-                                return null;
-                            }
-                        });
+                        // Render instantly from the row data; enrich asynchronously.
+                        showGroupDetailsFromRow(group);
                     }
                 }
         );
@@ -239,9 +233,6 @@ public class GroupPanel {
                         PanelElements.loadLootboardForGroup(currentGroupId);
                     }
                     PanelElements.cachedGroupName = outcome.result.getGroupName();
-                } else if (searchQuery.equalsIgnoreCase("test") || searchQuery.equalsIgnoreCase("demo")) {
-                    // Fallback to demo data for testing
-                    showGroupDetails(createDemoGroupResult());
                 } else if (outcome.error == null || isNotFound(outcome.error)) {
                     showSearchError("Group '" + searchQuery + "' was not found.");
                 } else {
@@ -278,6 +269,7 @@ public class GroupPanel {
     }
 
     private void showSearchError(String message) {
+        activeDetailGroupName = null;
         contentPanel.removeAll();
 
         JPanel errorPanel = LeaderboardComponents.createErrorPanel(message, () -> {
@@ -290,27 +282,58 @@ public class GroupPanel {
         contentPanel.repaint();
     }
 
-    private GroupSearchResult createDemoGroupResult() {
-        // Create demo data for testing
-        GroupSearchResult demo = new GroupSearchResult();
-        demo.setGroupName("Demo Group");
-        demo.setGroupDescription("This is a demo group that shows how the group panel works. You can see member statistics, lootboards, and other group information here.");
-        //demo.setGroupDropTrackerId(2);
-        demo.setGroupDropTrackerId(7);
-        currentGroupId = 7;
+    /**
+     * Instantly renders the group detail view from data already present in a top-groups
+     * leaderboard row (name, rank, total loot, member count, top member), then
+     * asynchronously enriches it with the full /group_search payload (description, icon,
+     * discord link, recent submissions) once that arrives. Never blocks on the network.
+     */
+    private void showGroupDetailsFromRow(TopGroupResult.TopGroup row) {
+        if (row == null || row.getGroupName() == null || row.getGroupName().trim().isEmpty()) {
+            return;
+        }
+        final String groupName = row.getGroupName();
 
-        // Create demo stats
+        // Build a partial result from the row's data and render it immediately.
+        GroupSearchResult partial = new GroupSearchResult();
+        partial.setGroupName(groupName);
+        partial.setGroupDropTrackerId(row.getGroupId());
         GroupSearchResult.GroupStats stats = new GroupSearchResult.GroupStats();
-        stats.setTotalMembers(5);
-        stats.setGlobalRank("127");
-        stats.setMonthlyLoot("15.2M"); // 15.2M GP
-        demo.setGroupStats(stats);
-        demo.setGroupTopPlayer("DemoPlayer");
+        stats.setTotalMembers(row.getMemberCount() != null ? row.getMemberCount() : 0);
+        stats.setGlobalRank(row.getRank() != null ? String.valueOf(row.getRank()) : null);
+        stats.setMonthlyLoot(row.getTotalLoot());
+        partial.setGroupStats(stats);
+        partial.setGroupTopPlayer(row.getTopMemberString());
+        showGroupDetails(partial);
 
-        return demo;
+        if (row.getGroupId() != null) {
+            currentGroupId = row.getGroupId();
+            PanelElements.loadLootboardForGroup(currentGroupId);
+            PanelElements.cachedGroupName = groupName;
+        }
+
+        // Enrich in the background; drop the result if the user has navigated away.
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return api.searchGroup(groupName);
+            } catch (Exception e) {
+                return null;
+            }
+        }).thenAccept(full -> SwingUtilities.invokeLater(() -> {
+            if (full == null || !groupName.equals(activeDetailGroupName)) {
+                return;
+            }
+            if (full.getGroupDropTrackerId() != null) {
+                currentGroupId = full.getGroupDropTrackerId();
+                PanelElements.loadLootboardForGroup(currentGroupId);
+            }
+            PanelElements.cachedGroupName = full.getGroupName();
+            showGroupDetails(full);
+        }));
     }
 
     private void showGroupDetails(GroupSearchResult groupResult) {
+        activeDetailGroupName = groupResult.getGroupName();
         contentPanel.removeAll();
 
         // Match PlayerStatsPanel structure exactly - no custom borders
@@ -345,7 +368,8 @@ public class GroupPanel {
         groupNameLabel.setForeground(Color.WHITE);
         groupNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel groupDescLabel = new JLabel("<html>" + groupResult.getGroupDescription() + "</html>");
+        String description = groupResult.getGroupDescription() != null ? groupResult.getGroupDescription() : "";
+        JLabel groupDescLabel = new JLabel("<html>" + description + "</html>");
         groupDescLabel.setFont(FontManager.getRunescapeSmallFont());
         groupDescLabel.setForeground(Color.LIGHT_GRAY);
         groupDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -371,19 +395,26 @@ public class GroupPanel {
         statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
         statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JPanel membersBox = PanelElements.createStatBox("Members", String.valueOf(groupResult.getGroupStats().getTotalMembers()));
-        JPanel rankBox = PanelElements.createStatBox("Global Rank", "#" + groupResult.getGroupStats().getGlobalRank());
-        JPanel lootBox = PanelElements.createStatBox("Monthly Loot", groupResult.getGroupStats().getMonthlyLoot() + " GP");
-        JPanel topPlayerBox = PanelElements.createStatBox("Top Player", groupResult.getGroupTopPlayer());
-        topPlayerBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        topPlayerBox.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                panel.selectPanel("players");
-                String topPlayer = groupResult.getGroupTopPlayer().split("\\(")[0].trim();
-                panel.updatePlayerPanel(topPlayer);
-            }
-        });
+        GroupSearchResult.GroupStats groupStats = groupResult.getGroupStats();
+        String memberText = groupStats != null ? String.valueOf(groupStats.getTotalMembers()) : "—";
+        String rankText = (groupStats != null && groupStats.getGlobalRank() != null) ? "#" + groupStats.getGlobalRank() : "—";
+        String lootText = (groupStats != null && groupStats.getMonthlyLoot() != null) ? groupStats.getMonthlyLoot() + " GP" : "—";
+        String topPlayer = groupResult.getGroupTopPlayer();
+
+        JPanel membersBox = PanelElements.createStatBox("Members", memberText);
+        JPanel rankBox = PanelElements.createStatBox("Global Rank", rankText);
+        JPanel lootBox = PanelElements.createStatBox("Monthly Loot", lootText);
+        JPanel topPlayerBox = PanelElements.createStatBox("Top Player", topPlayer != null ? topPlayer : "—");
+        if (topPlayer != null && !topPlayer.trim().isEmpty()) {
+            topPlayerBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            topPlayerBox.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    panel.selectPanel("players");
+                    panel.updatePlayerPanel(topPlayer.split("\\(")[0].trim());
+                }
+            });
+        }
 
         statsPanel.add(membersBox);
         statsPanel.add(rankBox);

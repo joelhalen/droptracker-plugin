@@ -20,7 +20,6 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -143,8 +142,7 @@ public class PlayerStatsPanel {
                     try {
                         return api.getTopPlayers();
                     } catch (Exception e) {
-                        // Fallback to demo data for testing
-                        return createDemoTopPlayersResult();
+                        return null;
                     }
                 },
                 this::showPlayerLeaderboard
@@ -181,21 +179,6 @@ public class PlayerStatsPanel {
                     }
                 }
         );
-    }
-
-    // Create demo data for testing (same as before)
-    private TopPlayersResult createDemoTopPlayersResult() {
-        TopPlayersResult demo = new TopPlayersResult();
-        List<TopPlayersResult.TopPlayer> players = new ArrayList<>();
-
-        players.add(new TopPlayersResult.TopPlayer("Woox", 1, "2.1B"));
-        players.add(new TopPlayersResult.TopPlayer("Lynx Titan", 2, "1.8B"));
-        players.add(new TopPlayersResult.TopPlayer("Zezima", 3, "1.2B"));
-        players.add(new TopPlayersResult.TopPlayer("B0aty", 4, "890M"));
-        players.add(new TopPlayersResult.TopPlayer("Framed", 5, "650M"));
-
-        demo.setPlayers(players);
-        return demo;
     }
 
     public void performPlayerSearch(String searchQuery) {

@@ -134,7 +134,7 @@ public class ExperienceHandler extends BaseEventHandler {
             this.ticksSinceSnapshot = 0;
             if (config.useApi()) {
                 // rate-limited internally; picks up events activated mid-session
-                api.getGroupConfigs();
+                api.refreshGroupConfigsAsync();
                 if (isXpEventTrackingActive()) {
                     sendXpSnapshot("periodic");
                 }

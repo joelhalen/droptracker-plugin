@@ -358,6 +358,9 @@ public class SubmissionManager {
             return null;
         }
 
+        // Keep configs warm; the refresh is rate-limited and fully async (previously this
+        // happened as a hidden side effect of getGroupConfigs()).
+        api.refreshGroupConfigsAsync();
         List<GroupConfig> groupConfigs = api.getGroupConfigs();
 
         // If group configs haven't loaded yet, queue the event for later evaluation

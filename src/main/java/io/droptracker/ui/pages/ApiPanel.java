@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 public class ApiPanel {
     private final DropTrackerConfig config;
@@ -957,16 +956,12 @@ public class ApiPanel {
             return;
         }
 
-        // Fetch off the EDT — api.getGroupConfigs() may trigger a synchronized
-        // network load, which previously ran inside the 10s Swing timer and could
-        // freeze the whole client UI when the API was slow.
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return api.getGroupConfigs();
-            } catch (Exception e) {
-                return null;
-            }
-        }).thenAccept(groupConfigs -> SwingUtilities.invokeLater(() -> {
+        // Kick a rate-limited async refresh, then render whatever is in memory right
+        // now. getGroupConfigs() is a pure in-memory read, so this never blocks the EDT;
+        // the next timer tick (or the configs-loaded callback) picks up fresh data.
+        api.refreshGroupConfigsAsync();
+        List<GroupConfig> groupConfigs = api.getGroupConfigs();
+        SwingUtilities.invokeLater(() -> {
             if (groupsContainerPanel == null || groupsScrollPane == null) {
                 return;
             }
@@ -984,6 +979,6 @@ public class ApiPanel {
                 groupConfigPanel.revalidate();
                 groupConfigPanel.repaint();
             }
-        }));
+        });
     }
 }
