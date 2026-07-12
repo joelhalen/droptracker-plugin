@@ -19,6 +19,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ImageUtil;
+import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
@@ -191,6 +192,13 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		titleCol.add(Box.createVerticalGlue());
 		topRow.add(titleCol, BorderLayout.CENTER);
 
+		JButton docsButton = new JButton("?");
+		DropTrackerTheme.styleButton(docsButton);
+		docsButton.setToolTipText("Open the DropTracker documentation");
+		docsButton.setPreferredSize(new Dimension(26, 26));
+		docsButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
+		docsButton.addActionListener(e -> LinkBrowser.browse("https://www.droptracker.io/docs"));
+
 		JButton refreshButton = new JButton("↻");
 		DropTrackerTheme.styleButton(refreshButton);
 		refreshButton.setToolTipText("Refresh panel");
@@ -198,8 +206,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		refreshButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
 		refreshButton.addActionListener(e -> init());
 
-		JPanel refreshWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+		JPanel refreshWrap = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
 		refreshWrap.setBackground(DropTrackerTheme.SURFACE_1);
+		refreshWrap.add(docsButton);
 		refreshWrap.add(refreshButton);
 		topRow.add(refreshWrap, BorderLayout.EAST);
 
