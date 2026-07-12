@@ -848,6 +848,24 @@ public class DropTrackerApi {
         });
     }
 
+    private static final String WELCOME_FALLBACK = "Welcome to the DropTracker!";
+    private static final String NEWS_FALLBACK =
+        "News is temporarily unavailable. Use the refresh button to try again.";
+
+    /**
+     * Returns true when a response body looks like an HTML document (e.g. a
+     * Cloudflare error/challenge page or a framework 404 page) rather than the
+     * plain-text content these endpoints serve. Such bodies must never be
+     * rendered in the side panel.
+     */
+    private static boolean looksLikeHtml(String body) {
+        if (body == null) {
+            return true;
+        }
+        String trimmed = body.trim();
+        return trimmed.isEmpty() || trimmed.startsWith("<");
+    }
+
     /**
      * Asynchronously fetches the latest welcome string to avoid blocking the EDT.
      * @param callback Function to call with the result when ready
@@ -874,21 +892,23 @@ public class DropTrackerApi {
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() ->
-                    callback.accept("Welcome to the DropTracker!"));
+                    callback.accept(WELCOME_FALLBACK));
             }
 
             @Override
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
-                    String result;
+                    String result = WELCOME_FALLBACK;
                     if (response.isSuccessful() && responseBody != null) {
-                        result = responseBody.string();
-                    } else {
-                        result = "Welcome to the DropTracker!";
+                        String body = responseBody.string();
+                        if (!looksLikeHtml(body)) {
+                            result = body;
+                        }
                     }
-                    
+
                     // Run callback on EDT to update UI safely
-                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(result));
+                    final String finalResult = result;
+                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(finalResult));
                 }
             }
         });
@@ -920,21 +940,26 @@ public class DropTrackerApi {
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
                 // Run callback on EDT to update UI safely
                 javax.swing.SwingUtilities.invokeLater(() ->
-                    callback.accept("Error fetching latest update: " + e.getMessage()));
+                    callback.accept(NEWS_FALLBACK));
             }
 
             @Override
             public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
                 try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
-                    String result;
+                    // Never render the response body on failure: error pages from
+                    // Cloudflare or the web server are full HTML documents, and this
+                    // used to paste them into the News panel verbatim.
+                    String result = NEWS_FALLBACK;
                     if (response.isSuccessful() && responseBody != null) {
-                        result = responseBody.string();
-                    } else {
-                        result = "Error fetching latest update: " + (responseBody != null ? responseBody.string() : "Unknown error");
+                        String body = responseBody.string();
+                        if (!looksLikeHtml(body)) {
+                            result = body;
+                        }
                     }
-                    
+
                     // Run callback on EDT to update UI safely
-                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(result));
+                    final String finalResult = result;
+                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(finalResult));
                 }
             }
         });
