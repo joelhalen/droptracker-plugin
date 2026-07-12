@@ -7,6 +7,7 @@ import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.LeaderboardComponents;
+import io.droptracker.ui.components.StateViews;
 import io.droptracker.ui.components.PanelElements;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
@@ -133,7 +134,7 @@ public class GroupPanel {
 
         if (config.useApi()) {
             // Create placeholder for leaderboard using LeaderboardComponents
-            leaderboardPlaceholder = LeaderboardComponents.createLoadingPlaceholder("Loading top groups...");
+            leaderboardPlaceholder = StateViews.loading("Loading top groups…");
             defaultPanel.add(leaderboardPlaceholder);
             defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
 
@@ -272,7 +273,7 @@ public class GroupPanel {
         activeDetailGroupName = null;
         contentPanel.removeAll();
 
-        JPanel errorPanel = LeaderboardComponents.createErrorPanel(message, () -> {
+        JPanel errorPanel = StateViews.error(message, "Back to Search", () -> {
             searchField.setText("");
             showDefaultState();
         });

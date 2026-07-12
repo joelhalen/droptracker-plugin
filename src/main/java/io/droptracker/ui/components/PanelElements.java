@@ -4,6 +4,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
+import io.droptracker.ui.DropTrackerTheme;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
@@ -162,21 +163,21 @@ public class PanelElements {
 
         // Add styling with border and background
         container.setOpaque(true);
-        container.setBackground(ColorScheme.DARK_GRAY_COLOR);
-        container.setBorder(new StrokeBorder(new BasicStroke(1), ColorScheme.BORDER_COLOR));
+        container.setBackground(DropTrackerTheme.SURFACE_2);
+        container.setBorder(new StrokeBorder(new BasicStroke(1), DropTrackerTheme.SURFACE_3));
 
         // Add hover effect
         if (withEffects) {
             container.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseEntered(MouseEvent e) {
-                    container.setBackground(ColorScheme.DARKER_GRAY_HOVER_COLOR);
+                    container.setBackground(DropTrackerTheme.SURFACE_3);
                     container.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 }
 
                 @Override
                 public void mouseExited(MouseEvent e) {
-                    container.setBackground(ColorScheme.DARK_GRAY_COLOR);
+                    container.setBackground(DropTrackerTheme.SURFACE_2);
                     container.setCursor(Cursor.getDefaultCursor());
                 }
             });
@@ -314,25 +315,28 @@ public class PanelElements {
         });
     }
 
-    // Helper method to create a stat box with fixed size
+    /**
+     * Stat tile mirroring the web stat tiles: small muted label above a bold gold value.
+     * Sized by the surrounding grid; intended for 2-column stat grids.
+     */
     public static JPanel createStatBox(String label, String value) {
         JPanel box = new JPanel();
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-        box.setBackground(ColorScheme.MEDIUM_GRAY_COLOR);
-        box.setBorder(new EmptyBorder(5, 5, 5, 5));
-
-        JLabel valueLabel = new JLabel(value);
-        valueLabel.setFont(FontManager.getRunescapeBoldFont());
-        valueLabel.setForeground(Color.WHITE);
-        valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        box.setBackground(DropTrackerTheme.SURFACE_2);
+        box.setBorder(DropTrackerTheme.cardBorder(5, 5, 5, 5));
 
         JLabel nameLabel = new JLabel(label);
         nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(Color.LIGHT_GRAY);
+        nameLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        box.add(valueLabel);
+        JLabel valueLabel = new JLabel(value);
+        valueLabel.setFont(FontManager.getRunescapeBoldFont());
+        valueLabel.setForeground(DropTrackerTheme.GOLD);
+        valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
         box.add(nameLabel);
+        box.add(valueLabel);
 
         return box;
     }
@@ -340,7 +344,7 @@ public class PanelElements {
     public static JPanel getLatestWelcomeContent(DropTrackerApi api) {
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BorderLayout());
-        contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        contentPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         // Start with default welcome text
         JTextArea textArea = collapsibleSubText("Welcome to the DropTracker!");
@@ -361,7 +365,7 @@ public class PanelElements {
     public static JPanel getLatestUpdateContent(DropTrackerConfig config, DropTrackerApi api) {
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BorderLayout());
-        contentPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        contentPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         String defaultUpdateText = "• Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
                 "• Added pet collection submissions when adventure logs are opened.\n\n" +
@@ -393,8 +397,8 @@ public class PanelElements {
         textArea.setOpaque(false);
         textArea.setEditable(false);
         textArea.setFocusable(false);
-        textArea.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        textArea.setForeground(Color.LIGHT_GRAY);
+        textArea.setBackground(DropTrackerTheme.SURFACE_1);
+        textArea.setForeground(DropTrackerTheme.TEXT_MUTED);
         Font textAreaFont = FontManager.getRunescapeSmallFont();
         textArea.setFont(textAreaFont);
         textArea.setBorder(new EmptyBorder(5, 5, 5, 5));
@@ -440,11 +444,11 @@ public class PanelElements {
     public static JPanel createCollapsiblePanel(String title, JPanel content, boolean isUnderlined) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        panel.setBackground(DropTrackerTheme.SURFACE_1);
+        panel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
 
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        headerPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         // Create title with optional underline
         JLabel titleLabel;
@@ -454,7 +458,7 @@ public class PanelElements {
             titleLabel = new JLabel(title);
         }
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setForeground(DropTrackerTheme.TEXT);
 
         JLabel toggleIcon = new JLabel(EXPANDED_ICON);
 
@@ -491,7 +495,7 @@ public class PanelElements {
         });
 
         panel.add(headerPanel);
-        panel.add(getJSeparator(ColorScheme.LIGHT_GRAY_COLOR));
+        panel.add(getJSeparator(DropTrackerTheme.SURFACE_3));
         panel.add(content);
 
         return panel;
@@ -519,19 +523,19 @@ public class PanelElements {
         if (withIcon) {
             button.setIcon(EXTERNAL_LINK_ICON);
         }
-        button.setText(text);
         button.setToolTipText(tooltip);
-        button.setFont(FontManager.getRunescapeSmallFont());
+        DropTrackerTheme.styleButton(button);
         button.setPreferredSize(new Dimension(150, 30));
         button.addActionListener(e -> action.run());
         return button;
     }
 
     public static JButton createLootboardButton(String text, String tooltip, Runnable action) {
-        JButton button = new JButton(text);
+        // No remote <img> tags here: Swing HTML would fetch them over the network.
+        JButton button = new JButton(text + " ⇱");
         button.setIcon(BOARD_ICON);
-        button.setText("<html>" + text + "&nbsp;&nbsp;<img src='https://www.droptracker.io/img/external-16px-g.png'></img></html>");
         button.setToolTipText(tooltip);
+        DropTrackerTheme.styleButton(button);
         button.addActionListener(e -> action.run());
         return button;
     }
@@ -542,7 +546,7 @@ public class PanelElements {
         // Main container with title and submissions
         JPanel container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        container.setBackground(DropTrackerTheme.SURFACE_1);
         container.setBorder(new EmptyBorder(10, 0, 10, 0));
         container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150)); // Increased from 120 to 150
         container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150));
@@ -551,18 +555,18 @@ public class PanelElements {
         // Title panel to ensure centering
         JPanel titlePanel = new JPanel();
         titlePanel.setLayout(new BoxLayout(titlePanel, BoxLayout.Y_AXIS)); // Changed to vertical layout
-        titlePanel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        titlePanel.setBackground(DropTrackerTheme.SURFACE_1);
         titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50)); // Increased from 20 to 50
         titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50));
 
         JLabel title = new JLabel("Recent Submissions");
         title.setFont(FontManager.getRunescapeSmallFont());
-        title.setForeground(Color.WHITE);
+        title.setForeground(DropTrackerTheme.TEXT);
         title.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the title
 
         // Create a text area that looks like a label but handles wrapping better
         JTextArea titleDesc = new JTextArea("Clicking an icon opens a screenshot, if available.");
-        titleDesc.setForeground(Color.LIGHT_GRAY);
+        titleDesc.setForeground(DropTrackerTheme.TEXT_MUTED);
         titleDesc.setFont(FontManager.getRunescapeSmallFont());
         titleDesc.setBackground(titlePanel.getBackground());
         titleDesc.setEditable(false);
@@ -587,13 +591,13 @@ public class PanelElements {
 
         // Submissions panel - use FlowLayout wrapper to center the GridBagLayout
         JPanel submissionWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        submissionWrapper.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        submissionWrapper.setBackground(DropTrackerTheme.SURFACE_1);
         submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); // Keep same
         submissionWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
 
         JPanel panel = new JPanel();
         panel.setLayout(new GridBagLayout());
-        panel.setBackground(ColorScheme.DARKER_GRAY_COLOR);
+        panel.setBackground(DropTrackerTheme.SURFACE_1);
         panel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
 
         submissionWrapper.add(updateValidSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
@@ -602,6 +606,48 @@ public class PanelElements {
         container.add(titlePanel);
         container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
         container.add(submissionWrapper);
+
+        return container;
+    }
+
+    /**
+     * Placeholder shown in place of the recent submissions grid when there is nothing to
+     * display (or when the data is still loading). Matches the dimensions of
+     * {@link #createRecentSubmissionPanel} so the layout doesn't jump when data arrives.
+     */
+    public static JPanel createRecentSubmissionsPlaceholder(String message) {
+        JPanel container = new JPanel();
+        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
+        container.setBackground(DropTrackerTheme.SURFACE_1);
+        container.setBorder(new EmptyBorder(10, 0, 10, 0));
+        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
+        container.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        titlePanel.setBackground(DropTrackerTheme.SURFACE_1);
+        titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+        titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+
+        JLabel title = new JLabel("Recent Submissions");
+        title.setFont(FontManager.getRunescapeSmallFont());
+        title.setForeground(DropTrackerTheme.TEXT);
+        titlePanel.add(title);
+
+        JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        contentWrapper.setBackground(DropTrackerTheme.SURFACE_1);
+        contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+        contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+
+        JLabel messageLabel = new JLabel(message);
+        messageLabel.setFont(FontManager.getRunescapeSmallFont());
+        messageLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        messageLabel.setHorizontalAlignment(JLabel.CENTER);
+        contentWrapper.add(messageLabel);
+
+        container.add(titlePanel);
+        container.add(Box.createRigidArea(new Dimension(0, 5)));
+        container.add(contentWrapper);
 
         return container;
     }
@@ -768,7 +814,7 @@ public class PanelElements {
         // If no icons were added, show a message
         if (successfullyAdded == 0) {
             JLabel debugLabel = new JLabel("No recent submissions to display");
-            debugLabel.setForeground(Color.LIGHT_GRAY);
+            debugLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
             debugLabel.setFont(FontManager.getRunescapeSmallFont());
             c.gridx = 0;
             c.gridy = 0;

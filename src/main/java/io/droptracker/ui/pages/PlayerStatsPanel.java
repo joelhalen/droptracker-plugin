@@ -7,6 +7,7 @@ import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopPlayersResult;
 import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.components.LeaderboardComponents;
+import io.droptracker.ui.components.StateViews;
 import io.droptracker.ui.components.PanelElements;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
@@ -120,7 +121,7 @@ public class PlayerStatsPanel {
 
         if (config.useApi()) {
             // Create placeholder for leaderboard (same pattern as GroupPanel)
-            leaderboardPlaceholder = LeaderboardComponents.createLoadingPlaceholder("Loading top players...");
+            leaderboardPlaceholder = StateViews.loading("Loading top players…");
             defaultPanel.add(leaderboardPlaceholder);
 
             // Start loading data
@@ -247,7 +248,7 @@ public class PlayerStatsPanel {
     private void showSearchError(String message) {
         contentPanel.removeAll();
 
-        JPanel errorPanel = LeaderboardComponents.createErrorPanel(message, () -> {
+        JPanel errorPanel = StateViews.error(message, "Back to Search", () -> {
             searchField.setText("");
             showDefaultState();
         });
