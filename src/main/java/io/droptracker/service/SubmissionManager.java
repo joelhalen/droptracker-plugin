@@ -1063,7 +1063,11 @@ public class SubmissionManager {
     // ========== Pending Status Polling ==========
 
     /**
-     * Poll the API to update statuses of pending submissions.
+     * Poll the API to update statuses of pending submissions. All pending uuids are
+     * checked with a single batch POST /check per tick; if the batch form is
+     * unavailable (older custom API endpoints), it falls back to per-uuid checks for
+     * that tick. A "pending" result is a normal long-lived state - submissions stay
+     * pending until the API processes them or the retry logic marks them failed.
      */
     public void checkPendingStatuses() {
         if (!config.useApi()) {
@@ -1071,7 +1075,8 @@ public class SubmissionManager {
         }
         executor.submit(() -> {
             try {
-                boolean changed = false;
+                List<ValidSubmission> pending = new ArrayList<>();
+                List<String> uuids = new ArrayList<>();
                 for (ValidSubmission submission : validSubmissions) {
                     SubmissionStatus status = submission.getStatus();
                     if (status == null || status.isTerminal()) {
@@ -1081,16 +1086,42 @@ public class SubmissionManager {
                     if (uuid == null || uuid.isEmpty()) {
                         continue;
                     }
-                    try {
-                        boolean processed = api.checkSubmissionProcessed(uuid);
-                        if (processed) {
+                    pending.add(submission);
+                    uuids.add(uuid);
+                }
+                if (pending.isEmpty()) {
+                    return;
+                }
+
+                boolean changed = false;
+                java.util.Map<String, Boolean> results = null;
+                try {
+                    results = api.checkSubmissionsProcessed(uuids);
+                } catch (IOException e) {
+                    log.debug("Batch /check failed ({}); falling back to per-uuid checks", e.getMessage());
+                }
+
+                if (results != null) {
+                    for (ValidSubmission submission : pending) {
+                        if (Boolean.TRUE.equals(results.get(submission.getUuid()))) {
                             submission.markAsProcessed();
                             changed = true;
                         }
-                    } catch (IOException e) {
-                        log.debug("/check failed for uuid {}: {}", uuid, e.getMessage());
+                    }
+                } else {
+                    // Legacy fallback: one request per pending submission.
+                    for (ValidSubmission submission : pending) {
+                        try {
+                            if (api.checkSubmissionProcessed(submission.getUuid())) {
+                                submission.markAsProcessed();
+                                changed = true;
+                            }
+                        } catch (IOException e) {
+                            log.debug("/check failed for uuid {}: {}", submission.getUuid(), e.getMessage());
+                        }
                     }
                 }
+
                 if (changed) {
                     notifyUpdateCallback();
                     schedulePersistence();

@@ -33,6 +33,12 @@ import java.util.concurrent.TimeUnit;
 public class DropTrackerApi {
     private static final int GROUP_CONFIG_REFRESH_INTERVAL_SECONDS = 120;
     private static final int GROUP_CONFIG_RETRY_INTERVAL_SECONDS = 60;
+    /** How long an aggregate /panel_data snapshot stays fresh for top-list reads. */
+    private static final int PANEL_DATA_TTL_SECONDS = 60;
+    /** After an aggregate fetch fails, skip further attempts for this long. */
+    private static final int PANEL_DATA_FAILURE_BACKOFF_SECONDS = 300;
+    /** Maximum number of uuids sent in one batch POST /check request. */
+    private static final int CHECK_BATCH_LIMIT = 100;
 
     private final DropTrackerConfig config;
     @Inject
@@ -63,6 +69,17 @@ public class DropTrackerApi {
 
     public int lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
 
+    /**
+     * Latest snapshot from the aggregate GET /panel_data endpoint. Guarded by
+     * {@link #panelDataLock}; may be null when the endpoint has never succeeded
+     * (e.g. custom API endpoints that predate the route).
+     */
+    private final Object panelDataLock = new Object();
+    private PanelData cachedPanelData;
+    private long cachedPanelDataAtMs = 0;
+    /** Last time an aggregate fetch failed; used to briefly stop retrying old endpoints. */
+    private long lastPanelDataFailureAtMs = 0;
+
     /** Optional callback invoked after group configs are successfully loaded */
     private Runnable onGroupConfigsLoadedCallback;
     
@@ -86,6 +103,111 @@ public class DropTrackerApi {
      */
     public void setOnGroupConfigsLoadedCallback(Runnable callback) {
         this.onGroupConfigsLoadedCallback = callback;
+    }
+
+    /* ===================== Aggregate panel data (GET /panel_data) ===================== */
+
+    /**
+     * Response shape of the aggregate GET /panel_data endpoint, which bundles
+     * everything the side panel needs to boot in a single round-trip.
+     */
+    public static class PanelData {
+        @SerializedName("configs")
+        public List<GroupConfig> configs;
+        @SerializedName("player_found")
+        public Boolean playerFound;
+        @SerializedName("top_groups")
+        public TopGroupResult topGroups;
+        @SerializedName("top_players")
+        public TopPlayersResult topPlayers;
+        @SerializedName("welcome")
+        public String welcome;
+        @SerializedName("news")
+        public String news;
+        @SerializedName("version")
+        public VersionInfo version;
+    }
+
+    /**
+     * Fetches the aggregate panel data snapshot, caching it on success. Both query
+     * params are optional; without them the response simply omits player configs.
+     * Returns null on any failure (network error, non-200 from an older custom API
+     * endpoint that doesn't have the route yet, malformed body) so callers can fall
+     * back to the individual endpoints. Performs blocking I/O - never call on the EDT.
+     */
+    private PanelData fetchPanelData(String playerName, Long accountHash) {
+        if (!config.useApi()) {
+            return null;
+        }
+        // Back off briefly after a failure so custom endpoints that predate the
+        // route aren't hit with a doomed extra request on every panel load.
+        synchronized (panelDataLock) {
+            if (lastPanelDataFailureAtMs > 0
+                && (System.currentTimeMillis() - lastPanelDataFailureAtMs) < PANEL_DATA_FAILURE_BACKOFF_SECONDS * 1000L) {
+                return null;
+            }
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/panel_data");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl.Builder urlBuilder = base.newBuilder();
+        if (playerName != null && !playerName.isEmpty()) {
+            urlBuilder.addQueryParameter("player_name", playerName);
+        }
+        if (accountHash != null && accountHash != -1L) {
+            urlBuilder.addQueryParameter("acc_hash", String.valueOf(accountHash));
+        }
+
+        Request request = new Request.Builder().url(urlBuilder.build()).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return recordPanelDataFailure("HTTP " + response.code());
+            }
+            PanelData data = gson.fromJson(response.body().string(), PanelData.class);
+            if (data == null) {
+                return recordPanelDataFailure("empty body");
+            }
+            synchronized (panelDataLock) {
+                cachedPanelData = data;
+                cachedPanelDataAtMs = System.currentTimeMillis();
+                lastPanelDataFailureAtMs = 0;
+            }
+            return data;
+        } catch (IOException | JsonSyntaxException e) {
+            return recordPanelDataFailure(e.getMessage());
+        }
+    }
+
+    private PanelData recordPanelDataFailure(String reason) {
+        synchronized (panelDataLock) {
+            lastPanelDataFailureAtMs = System.currentTimeMillis();
+        }
+        log.debug("/panel_data fetch failed; falling back to individual endpoints: {}", reason);
+        return null;
+    }
+
+    /** Cache-only read of the latest aggregate snapshot; safe to call from the EDT. */
+    private PanelData getCachedPanelData() {
+        synchronized (panelDataLock) {
+            return cachedPanelData;
+        }
+    }
+
+    /**
+     * Returns a fresh aggregate snapshot, fetching one if the cache is stale. The
+     * fetch happens under the lock so concurrent panel loaders share one request.
+     * Returns null when the aggregate endpoint is unavailable. Blocking - off-EDT only.
+     */
+    private PanelData getPanelDataFreshOrFetch() {
+        synchronized (panelDataLock) {
+            if (cachedPanelData != null
+                && (System.currentTimeMillis() - cachedPanelDataAtMs) < PANEL_DATA_TTL_SECONDS * 1000L) {
+                return cachedPanelData;
+            }
+            return fetchPanelData(null, null);
+        }
     }
     
 
@@ -132,6 +254,29 @@ public class DropTrackerApi {
         CompletableFuture.runAsync(() -> {
             String responseData = null;
             try {
+                // Prefer the aggregate /panel_data endpoint: one round-trip refreshes the
+                // configs plus the top lists, welcome/news text and version info.
+                PanelData panelData = fetchPanelData(playerName, accountHash);
+                if (panelData != null) {
+                    if (panelData.configs != null && !Boolean.FALSE.equals(panelData.playerFound)) {
+                        groupConfigs = new ArrayList<>(panelData.configs);
+                        lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
+                        if (onGroupConfigsLoadedCallback != null) {
+                            try {
+                                onGroupConfigsLoadedCallback.run();
+                            } catch (Exception callbackEx) {
+                                log.debug("Error in group config loaded callback: " + callbackEx.getMessage());
+                            }
+                        }
+                    } else {
+                        // Unknown player: same as the old /load_config 404 - leave
+                        // lastGroupConfigUpdateUnix unset so the retry schedule applies.
+                        log.debug("/panel_data returned no configs for {}; will retry", playerName);
+                    }
+                    return;
+                }
+
+                // Fallback: the legacy per-purpose /load_config endpoint.
                 String apiUrl = getApiUrl();
                 HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/load_config");
                 if (baseUrl == null) {
@@ -235,6 +380,11 @@ public class DropTrackerApi {
         if (!config.useApi()) {
             return null;
         }
+        // Prefer the aggregate snapshot; one /panel_data request serves both top lists.
+        PanelData panelData = getPanelDataFreshOrFetch();
+        if (panelData != null && panelData.topGroups != null && panelData.topGroups.getGroups() != null) {
+            return panelData.topGroups;
+        }
         String apiUrl = getApiUrl();
         try {
             HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
@@ -261,6 +411,11 @@ public class DropTrackerApi {
     public TopPlayersResult getTopPlayers() {
         if (!config.useApi()) {
             return null;
+        }
+        // Prefer the aggregate snapshot; one /panel_data request serves both top lists.
+        PanelData panelData = getPanelDataFreshOrFetch();
+        if (panelData != null && panelData.topPlayers != null && panelData.topPlayers.getPlayers() != null) {
+            return panelData.topPlayers;
         }
         String apiUrl = getApiUrl();
         try {
@@ -391,6 +546,11 @@ public class DropTrackerApi {
      * failure — the version check is best-effort and must never break startup.
      */
     public VersionInfo fetchVersionInfo() {
+        // Prefer version info already delivered by the aggregate /panel_data snapshot.
+        PanelData panelData = getCachedPanelData();
+        if (panelData != null && panelData.version != null && panelData.version.latestVersion != null) {
+            return panelData.version;
+        }
         String apiUrl = getApiUrl();
         if (apiUrl == null || apiUrl.isEmpty()) {
             apiUrl = "https://api.droptracker.io";
@@ -471,6 +631,87 @@ public class DropTrackerApi {
         }
 
         return false;
+    }
+
+    /** One entry in the batch POST /check response. */
+    private static class CheckResultEntry {
+        @SerializedName("uuid")
+        String uuid;
+        @SerializedName("processed")
+        Boolean processed;
+        @SerializedName("status")
+        String status;
+    }
+
+    /** Response shape of the batch POST /check form. */
+    private static class BatchCheckResponse {
+        @SerializedName("results")
+        List<CheckResultEntry> results;
+    }
+
+    /**
+     * Batch form of {@link #checkSubmissionProcessed(String)}: checks up to
+     * {@value #CHECK_BATCH_LIMIT} submission uuids in a single POST /check request
+     * ({"uuids": [...]}). Returns a map of uuid to processed-state for the uuids the
+     * API reported on. "pending" is a normal long-lived state, not an error.
+     *
+     * @throws IOException when the request fails or the body is unparseable (e.g. an
+     *         older custom endpoint that only supports the single-uuid form) so the
+     *         caller can fall back to per-uuid checks for this poll tick.
+     */
+    public Map<String, Boolean> checkSubmissionsProcessed(List<String> uuids) throws IOException {
+        if (!config.useApi() || uuids == null || uuids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+
+        List<String> capped = uuids.size() > CHECK_BATCH_LIMIT
+            ? new ArrayList<>(uuids.subList(0, CHECK_BATCH_LIMIT))
+            : uuids;
+
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/check");
+        if (url == null) {
+            throw new IllegalArgumentException("Invalid URL");
+        }
+
+        String jsonBody = gson.toJson(java.util.Collections.singletonMap("uuids", capped));
+        RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonBody);
+        Request request = new Request.Builder()
+            .url(url)
+            .post(body)
+            .build();
+
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+
+            if (!response.isSuccessful()) {
+                throw new IOException("Batch /check failed with status: " + response.code());
+            }
+            ResponseBody responseBody = response.body();
+            if (responseBody == null) {
+                throw new IOException("Empty batch /check response body");
+            }
+
+            BatchCheckResponse parsed;
+            try {
+                parsed = gson.fromJson(responseBody.string(), BatchCheckResponse.class);
+            } catch (JsonSyntaxException e) {
+                throw new IOException("Malformed batch /check response", e);
+            }
+            if (parsed == null || parsed.results == null) {
+                throw new IOException("Batch /check response missing results");
+            }
+
+            Map<String, Boolean> results = new java.util.HashMap<>();
+            for (CheckResultEntry entry : parsed.results) {
+                if (entry == null || entry.uuid == null) {
+                    continue;
+                }
+                boolean processed = Boolean.TRUE.equals(entry.processed)
+                    || "processed".equalsIgnoreCase(entry.status);
+                results.put(entry.uuid, processed);
+            }
+            return results;
+        }
     }
 
     // ========== Video Upload ==========
@@ -614,6 +855,14 @@ public class DropTrackerApi {
     public void getLatestWelcomeString(java.util.function.Consumer<String> callback) {
         String endpoint;
         if (config.useApi()) {
+            // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
+            // the periodic /panel_data refresh keeps it current.
+            PanelData panelData = getCachedPanelData();
+            if (panelData != null && panelData.welcome != null && !panelData.welcome.isEmpty()) {
+                final String welcome = panelData.welcome;
+                javax.swing.SwingUtilities.invokeLater(() -> callback.accept(welcome));
+                return;
+            }
             endpoint = getApiUrl() + "/latest_welcome";
         } else {
             endpoint = "https://droptracker-io.github.io/content/welcome.txt";
@@ -652,6 +901,14 @@ public class DropTrackerApi {
     public void getLatestUpdateString(java.util.function.Consumer<String> callback) {
         String endpoint;
         if (config.useApi()) {
+            // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
+            // the periodic /panel_data refresh keeps it current.
+            PanelData panelData = getCachedPanelData();
+            if (panelData != null && panelData.news != null && !panelData.news.isEmpty()) {
+                final String news = panelData.news;
+                javax.swing.SwingUtilities.invokeLater(() -> callback.accept(news));
+                return;
+            }
             endpoint = getApiUrl() + "/latest_news";
         } else {
             endpoint = "https://droptracker-io.github.io/content/news.txt";
