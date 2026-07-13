@@ -200,9 +200,10 @@ public class ExperienceHandler extends BaseEventHandler {
         // Check normal skill level up
         checkLevelUp(true, skillName, previousLevel, virtualLevel);
 
-        // Check if xp milestone reached
+        // Check if xp milestone reached (config-gated; the backend applies each
+        // group's own post99_xp_interval on top of this 1M reporting granularity)
         int xpInterval = XP_INTERVAL_MILLIONS * 1_000_000;
-        if (xpInterval > 0 && level >= MAX_REAL_LEVEL && xp > previousXp) {
+        if (config.xpMilestoneEmbeds() && xpInterval > 0 && level >= MAX_REAL_LEVEL && xp > previousXp) {
             int remainder = xp % xpInterval;
             if (remainder == 0 || xp - remainder > previousXp || xp >= Experience.MAX_SKILL_XP) {
                 log.debug("Observed XP milestone for {} to {}", skill, xp);
@@ -405,6 +406,11 @@ public class ExperienceHandler extends BaseEventHandler {
             Map<String, Object> skillData = new HashMap<>();
             skillData.put("xp_milestone", xp);
             skillData.put("xp_total", currentXp.get(skill));
+            // Virtual level for nicer embeds server-side (99+ skills only).
+            Integer level = currentLevels.get(skill.getName());
+            if (level != null) {
+                skillData.put("new_level", level);
+            }
             experienceData.put(skillName, skillData);
         }
         

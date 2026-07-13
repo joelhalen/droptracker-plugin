@@ -13,3 +13,4 @@ runelite-client
 runelite-client/*
 runelite
 runelite/*
+.claude/

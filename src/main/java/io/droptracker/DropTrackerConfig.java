@@ -235,6 +235,25 @@ public interface DropTrackerConfig extends Config {
     )
     default int minLevelToScreenshot() {return 1;}
 
+    @ConfigItem(
+            keyName = "xpMilestoneEmbeds",
+            name = "Enable XP Milestones",
+            description = "<html>Send a notification when a level-99 skill crosses an XP milestone.<br />" +
+                    "Your group's settings determine which milestones are announced (default: every 25M XP).",
+            position = 5,
+            section = XPSection
+    )
+    default boolean xpMilestoneEmbeds() { return true; }
+
+    @ConfigItem(
+            keyName = "screenshotXpMilestones",
+            name = "Screenshot XP Milestones",
+            description = "Do you want to send screenshots when you reach an XP milestone?",
+            position = 6,
+            section = XPSection
+    )
+    default boolean screenshotXpMilestones() { return false; }
+
     /* Quest related Tracking */
     @ConfigSection(
             name = "Quest Tracking",

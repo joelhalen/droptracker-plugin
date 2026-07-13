@@ -202,7 +202,12 @@ public class SubmissionManager {
                     debugLogEventFlow("skipped", type, "levelEmbed=false");
                     return;
                 }
-                if (config.screenshotLevel()) requiredScreenshot = true;
+                // Honor the "Minimum Level to Screenshot" option: only capture
+                // when at least one skill reached that level (default 1 = always).
+                if (config.screenshotLevel()
+                        && maxNewLevelIn(webhook) >= config.minLevelToScreenshot()) {
+                    requiredScreenshot = true;
+                }
                 break;
             case QUEST_COMPLETION:
                 if (!config.questsEmbed()) {
@@ -233,8 +238,14 @@ public class SubmissionManager {
                 if (config.screenshotDiaries()) requiredScreenshot = true;
                 break;
             case EXPERIENCE:
-            case EXPERIENCE_MILESTONE:
                 // No screenshots for experience events
+                break;
+            case EXPERIENCE_MILESTONE:
+                if (!config.xpMilestoneEmbeds()) {
+                    debugLogEventFlow("skipped", type, "xpMilestoneEmbeds=false");
+                    return;
+                }
+                if (config.screenshotXpMilestones()) requiredScreenshot = true;
                 break;
             case EXPERIENCE_UPDATE:
                 // Background XP snapshot for event tracking: no screenshot,
@@ -258,6 +269,31 @@ public class SubmissionManager {
             debugLogEventFlow("send", type, "sendWebhookDirect path selected");
             sendWebhookDirect(webhook, null, null, submission);
         }
+    }
+
+    /**
+     * Highest {@code *_new_level} field value across the webhook's embeds.
+     * Level-up embeds carry one such field per levelled skill; used to honor
+     * the "Minimum Level to Screenshot" config option. Returns 0 when no
+     * level fields are present.
+     */
+    private int maxNewLevelIn(CustomWebhookBody webhook) {
+        int max = 0;
+        if (webhook == null || webhook.getEmbeds() == null) {
+            return max;
+        }
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                if (field.getName() != null && field.getName().endsWith("_new_level")) {
+                    try {
+                        max = Math.max(max, Integer.parseInt(field.getValue().trim()));
+                    } catch (NumberFormatException ignored) {
+                        // non-numeric level field; skip
+                    }
+                }
+            }
+        }
+        return max;
     }
 
     /**
