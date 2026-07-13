@@ -14,7 +14,7 @@ import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.video.VideoQuality;
-import io.droptracker.video.VideoRecorder;
+import io.droptracker.video.VideoCaptureBridge;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +62,7 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-    private final VideoRecorder videoRecorder;
+    private final VideoCaptureBridge videoBridge;
     private final NearbyPlayerTracker nearbyPlayerTracker;
 
     /** Thread-safe list of submissions the player has received which qualified for notifications */
@@ -114,7 +114,7 @@ public class SubmissionManager {
         ClientThread clientThread,
         UrlManager urlManager,
         DrawManager drawManager,
-        VideoRecorder videoRecorder,
+        VideoCaptureBridge videoBridge,
         NearbyPlayerTracker nearbyPlayerTracker
     ) {
         this.config = config;
@@ -126,7 +126,7 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
-        this.videoRecorder = videoRecorder;
+        this.videoBridge = videoBridge;
         this.nearbyPlayerTracker = nearbyPlayerTracker;
     }
 
@@ -787,7 +787,7 @@ public class SubmissionManager {
             hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
         }
 
-        videoRecorder.captureEventVideo((screenshotBytes, videoFrames, fps) -> {
+        videoBridge.captureEventVideo((screenshotBytes, videoFrames, fps) -> {
             if (hideDMs) {
                 showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
             }

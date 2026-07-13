@@ -69,10 +69,13 @@ In **Miscellaneous** → **Capture Mode**, you can choose:
 
 ### Video requirements
 
-Video capture is designed to be lightweight, but it has two important dependencies:
+Video capture is designed to be lightweight, but it has three important dependencies:
 
+- **The free 'DropTracker Video Capture' companion plugin must be installed** (from the Plugin Hub) and enabled — it contains the GPU-frame readback engine, kept in a separate plugin so it stays small and auditable
 - **GPU plugin must be enabled** (video capture uses GPU-frame readback)
 - **Use API Connections must be enabled** (video upload requires a server-issued presigned upload URL)
+
+If the companion plugin is missing or disabled, submissions transparently fall back to screenshots and the plugin reminds you (in chat) where to get it.
 
 ### What actually gets sent
 

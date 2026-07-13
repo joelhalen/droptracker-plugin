@@ -62,7 +62,7 @@ import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.util.VersionUtil;
-import io.droptracker.video.VideoRecorder;
+import io.droptracker.video.VideoCaptureBridge;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
@@ -130,7 +130,7 @@ public class DropTrackerPlugin extends Plugin {
 	private NearbyPlayerTracker nearbyPlayerTracker;
 
 	@Inject
-	private VideoRecorder videoRecorder;
+	private VideoCaptureBridge videoBridge;
 
 	private AtomicBoolean justLoggedIn = new AtomicBoolean(false);
 
@@ -183,10 +183,9 @@ public class DropTrackerPlugin extends Plugin {
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
 
-		// Start video recording if capture mode is set to video
-		if (config.captureMode().requiresVideo()) {
-			videoRecorder.startRecording();
-		}
+		// Engage the video companion plugin if capture mode is set to video
+		// (falls back to screenshots, with an install nudge, when it's absent)
+		videoBridge.startUp();
 
 		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
 			+ ", sidePanelEnabled=" + config.showSidePanel()
@@ -248,8 +247,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void shutDown() {
 		gameState.lazySet(null);
-		// Stop video recording
-		videoRecorder.stopRecording();
+		// Stop video recording in the companion plugin and detach the bridge
+		videoBridge.shutDown();
 
 		if (navButton != null) {
 			clientToolbar.removeNavigation(navButton);
@@ -323,7 +322,7 @@ public class DropTrackerPlugin extends Plugin {
 				}
 			} else if (configChanged.getKey().equals("captureMode")) {
 				// Handle dynamic switching between screenshot-only and video mode
-				videoRecorder.updateCaptureRateIfNeeded();
+				videoBridge.onCaptureModeChanged();
 			}
 		}
 	}

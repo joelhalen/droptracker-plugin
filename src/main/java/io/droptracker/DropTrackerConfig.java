@@ -369,7 +369,8 @@ public interface DropTrackerConfig extends Config {
         keyName = "captureMode",
         name = "Capture Mode",
         description = "Choose whether to attach screenshots or short video clips to submissions.\n"
-            + "Video requires the GPU plugin to be enabled.",
+            + "Video requires the free 'DropTracker Video Capture' companion plugin (Plugin Hub)\n"
+            + "and the GPU plugin to be enabled.",
         position = 8,
         section = miscSettings
     )
