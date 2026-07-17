@@ -13,7 +13,6 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
-import net.runelite.client.util.ImageUtil;
 
 import javax.annotation.Nullable;
 import javax.swing.BorderFactory;
@@ -26,6 +25,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
@@ -41,6 +41,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -85,7 +86,7 @@ public class EventsPanel {
         root = new JPanel(new BorderLayout());
         root.setBackground(DropTrackerTheme.SURFACE_0);
 
-        listPanel = new JPanel();
+        listPanel = new ScrollableColumn();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.setBackground(DropTrackerTheme.SURFACE_0);
         listPanel.setBorder(new EmptyBorder(5, 0, 5, 0));
@@ -196,16 +197,16 @@ public class EventsPanel {
                 team != null ? ValueFormat.commas(team.getScore()) : "—"));
         }
         body.add(stats);
-        body.add(Box.createRigidArea(new Dimension(0, 8)));
+        body.add(vgap(8));
 
         // The task being worked toward (tracked pick or server focus).
         EventNotificationService.DisplayTask display = service.displayTask(entry);
         if ("awaiting_roll".equals(entry.getBoardStatus())) {
             body.add(rollBanner());
-            body.add(Box.createRigidArea(new Dimension(0, 8)));
+            body.add(vgap(8));
         } else if (display != null) {
             body.add(trackedTaskBox(entry, display));
-            body.add(Box.createRigidArea(new Dimension(0, 8)));
+            body.add(vgap(8));
         }
 
         List<EventState.TaskInfo> tasks = entry.getTasks();
@@ -214,7 +215,7 @@ public class EventsPanel {
             JPanel taskList = taskListPanel(entry, tasks, display, pickable);
             body.add(section("Tasks (" + tasks.size() + ")", taskList,
                 tasks.size() > 12));
-            body.add(Box.createRigidArea(new Dimension(0, 8)));
+            body.add(vgap(8));
         }
 
         List<EventState.Standing> standings = entry.getStandings();
@@ -223,7 +224,7 @@ public class EventsPanel {
             JPanel table = standingsTable(entry, standings,
                 team != null ? team.getId() : -1, boardAvailable);
             body.add(section("Standings", table, false));
-            body.add(Box.createRigidArea(new Dimension(0, 8)));
+            body.add(vgap(8));
         }
 
         List<EventState.Member> members = entry.getMembers();
@@ -305,6 +306,7 @@ public class EventsPanel {
         box.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel head = new JPanel(new BorderLayout());
+        head.setAlignmentX(Component.LEFT_ALIGNMENT);
         head.setBackground(DropTrackerTheme.SURFACE_2);
         JLabel caption = new JLabel(task.tracked ? "TRACKING (your pick)" : "TRACKING (auto)");
         caption.setFont(FontManager.getRunescapeSmallFont());
@@ -326,9 +328,15 @@ public class EventsPanel {
             head.add(reset, BorderLayout.EAST);
         }
         box.add(head);
-        box.add(Box.createRigidArea(new Dimension(0, 4)));
+        box.add(vgap(4));
 
-        JPanel row = new JPanel(new BorderLayout(6, 0));
+        JPanel row = new JPanel(new BorderLayout(6, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
         row.setBackground(DropTrackerTheme.SURFACE_2);
         JLabel icon = new JLabel();
         icon.setPreferredSize(new Dimension(24, 24));
@@ -342,7 +350,7 @@ public class EventsPanel {
         box.add(row);
 
         if (task.need > 1 || task.have > 0) {
-            box.add(Box.createRigidArea(new Dimension(0, 4)));
+            box.add(vgap(4));
             box.add(progressBar(task.have, task.need));
         }
         return box;
@@ -375,7 +383,7 @@ public class EventsPanel {
         boolean manual = display != null && display.tracked;
         for (EventState.TaskInfo task : tasks) {
             list.add(taskRow(entry, task, displayedId, manual, pickable));
-            list.add(Box.createRigidArea(new Dimension(0, 2)));
+            list.add(vgap(2));
         }
         if (pickable) {
             JLabel hint = new JLabel("Click a task to track it on the HUD.");
@@ -572,14 +580,6 @@ public class EventsPanel {
             c.gridy++;
         }
 
-        if (boardAvailable) {
-            JLabel hint = new JLabel("Click a board icon to view that team's board.");
-            hint.setFont(FontManager.getRunescapeSmallFont());
-            hint.setForeground(DropTrackerTheme.TEXT_MUTED);
-            hint.setBorder(new EmptyBorder(3, 2, 0, 0));
-            c.gridx = 0;
-            table.add(hint, c);
-        }
         return table;
     }
 
@@ -627,6 +627,18 @@ public class EventsPanel {
 
     /* ===================== shared bits ===================== */
 
+    /**
+     * Vertical spacer safe for BoxLayout columns. Every child of a vertical
+     * BoxLayout must share the same alignmentX — one centered (default 0.5)
+     * child shifts every left-aligned sibling right by half its width, which
+     * is exactly the "rows indented off the left edge" bug.
+     */
+    private static Component vgap(int height) {
+        Box.Filler gap = (Box.Filler) Box.createVerticalStrut(height);
+        gap.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return gap;
+    }
+
     /** Lightweight collapsible section: tiny header row + body. */
     private JPanel section(String title, JComponent body, boolean startCollapsed) {
         JPanel wrap = new JPanel();
@@ -640,8 +652,11 @@ public class EventsPanel {
                 return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
             }
         };
+        head.setAlignmentX(Component.LEFT_ALIGNMENT);
         head.setBackground(DropTrackerTheme.SURFACE_1);
-        head.setBorder(new EmptyBorder(0, 0, 3, 0));
+        head.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, DropTrackerTheme.SURFACE_3),
+            new EmptyBorder(0, 0, 3, 0)));
         head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
         JLabel titleLabel = new JLabel(title);
@@ -653,6 +668,7 @@ public class EventsPanel {
             ? PanelElements.getCollapsedIcon() : PanelElements.getExpandedIcon());
         head.add(chevron, BorderLayout.EAST);
 
+        body.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.setVisible(!startCollapsed);
         final boolean[] collapsed = {startCollapsed};
         head.addMouseListener(new MouseAdapter() {
@@ -668,6 +684,7 @@ public class EventsPanel {
         });
 
         wrap.add(head);
+        wrap.add(vgap(3));
         wrap.add(body);
         return wrap;
     }
@@ -721,19 +738,43 @@ public class EventsPanel {
         return bar;
     }
 
-    /** Item sprite (rendered locally) or allowlisted remote icon. */
+    /** Item sprite (rendered locally) or allowlisted remote icon, scaled to
+     *  fit the slot with its aspect ratio preserved (item sprites are 36x32 —
+     *  naive square scaling squishes them, raw addTo clips them). */
     private void applyTaskIcon(JLabel target, @Nullable Integer iconItemId,
                                @Nullable String iconUrl, int size) {
         if (iconItemId != null && iconItemId > 0) {
             AsyncBufferedImage itemImage = itemManager.getImage(iconItemId);
-            itemImage.addTo(target);
+            Runnable apply = () -> {
+                target.setIcon(fitIcon(itemImage, size));
+                target.revalidate();
+                target.repaint();
+            };
+            itemImage.onLoaded(apply);
+            apply.run();
         } else if (iconUrl != null) {
             BufferedImage remote = remoteImages.get(iconUrl,
                 () -> SwingUtilities.invokeLater(this::rebuild));
             if (remote != null) {
-                target.setIcon(new ImageIcon(ImageUtil.resizeImage(remote, size, size)));
+                target.setIcon(fitIcon(remote, size));
             }
         }
+    }
+
+    /** Scale into a size×size box, centered, aspect ratio preserved. */
+    private static ImageIcon fitIcon(BufferedImage source, int size) {
+        int w = Math.max(source.getWidth(), 1);
+        int h = Math.max(source.getHeight(), 1);
+        float scale = Math.min((float) size / w, (float) size / h);
+        int nw = Math.max(Math.round(w * scale), 1);
+        int nh = Math.max(Math.round(h * scale), 1);
+        BufferedImage out = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+            RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(source, (size - nw) / 2, (size - nh) / 2, nw, nh, null);
+        g.dispose();
+        return new ImageIcon(out);
     }
 
     private static String kindLabel(String kind) {
@@ -811,6 +852,39 @@ public class EventsPanel {
             case 2: return n + "nd";
             case 3: return n + "rd";
             default: return n + "th";
+        }
+    }
+
+    /**
+     * A vertical column that always matches the scroll viewport's width. A
+     * plain JPanel inside a JScrollPane is laid out at its preferred width —
+     * wider content silently overflows past the right edge (the horizontal
+     * scrollbar is disabled), narrower content leaves a gutter.
+     */
+    private static class ScrollableColumn extends JPanel implements Scrollable {
+        @Override
+        public Dimension getPreferredScrollableViewportSize() {
+            return getPreferredSize();
+        }
+
+        @Override
+        public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction) {
+            return 16;
+        }
+
+        @Override
+        public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction) {
+            return 64;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportHeight() {
+            return false;
         }
     }
 }

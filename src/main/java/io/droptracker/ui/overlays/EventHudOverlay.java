@@ -271,11 +271,18 @@ public class EventHudOverlay extends Overlay {
         if (source.getWidth() <= ICON_SIZE && source.getHeight() <= ICON_SIZE) {
             return source;
         }
+        // Fit within the slot, centered, aspect ratio preserved (item sprites
+        // are 36x32 — a straight square scale visibly squishes them).
+        int w = Math.max(source.getWidth(), 1);
+        int h = Math.max(source.getHeight(), 1);
+        float scale = Math.min((float) ICON_SIZE / w, (float) ICON_SIZE / h);
+        int nw = Math.max(Math.round(w * scale), 1);
+        int nh = Math.max(Math.round(h * scale), 1);
         BufferedImage out = new BufferedImage(ICON_SIZE, ICON_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = out.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
             RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(source, 0, 0, ICON_SIZE, ICON_SIZE, null);
+        g.drawImage(source, (ICON_SIZE - nw) / 2, (ICON_SIZE - nh) / 2, nw, nh, null);
         g.dispose();
         return out;
     }
