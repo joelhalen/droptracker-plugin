@@ -3,8 +3,6 @@ package io.droptracker.util;
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
-import io.droptracker.api.DropTrackerApi;
 import net.runelite.client.chat.ChatColorType;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.api.ChatMessageType;
@@ -22,13 +20,8 @@ import java.awt.*;
 
 public class ChatMessageUtil {
 
-    private boolean isMessageChecked = false;
     @Inject
     private DropTrackerConfig config;
-    @Inject
-    private DropTrackerApi api;
-    @Inject
-    private DropTrackerPlugin plugin;
 
     @Inject
     private ChatMessageManager chatMessageManager;
@@ -37,26 +30,6 @@ public class ChatMessageUtil {
     private Client client;
     @Inject
     private ClientThread clientThread;
-
-    public void checkForMessage() {
-        if (isMessageChecked) {
-            return;
-        }
-        // determine whether the player needs to be notified about a possible change to
-        // the plugin
-        // based on the last version they loaded, and the currently stored version
-        String currentVersion = config.lastVersionNotified();
-        if (currentVersion != null && !plugin.pluginVersion.equals(currentVersion + "1")) {
-            api.getLatestUpdateString(newNotificationData -> {
-                sendChatMessage(newNotificationData);
-                // Update the internal config value of this update message
-                config.setLastVersionNotified(currentVersion);
-                // Add a flag to prevent multiple checks in the same session
-            });
-            isMessageChecked = true;
-
-        }
-    }
 
     @Subscribe
     public void onCommandExecuted(CommandExecuted event)

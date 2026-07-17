@@ -13,7 +13,6 @@ import javax.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.KCService;
-import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
@@ -30,9 +29,6 @@ import net.runelite.http.api.loottracker.LootRecordType;
 public class DropHandler extends BaseEventHandler {
 
     @Inject
-    private ChatMessageUtil chatMessageUtil;
-
-    @Inject
     private KCService kcService;
 
     @Inject
@@ -45,7 +41,6 @@ public class DropHandler extends BaseEventHandler {
      * incremented twice per event.
      */
 	public void onNpcLootReceived(NpcLootReceived event) {
-		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
@@ -55,7 +50,6 @@ public class DropHandler extends BaseEventHandler {
 	}
 
 	public void onPlayerLootReceived(PlayerLootReceived playerLootReceived) {
-		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
@@ -64,7 +58,6 @@ public class DropHandler extends BaseEventHandler {
 	}
 
 	public void onServerNpcLoot(ServerNpcLoot event) {
-		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
@@ -74,7 +67,6 @@ public class DropHandler extends BaseEventHandler {
 	}
 
 	public void onLootReceived(LootReceived lootReceived) {
-		chatMessageUtil.checkForMessage();
 		if (!plugin.isTracking) {
 			return;
 		}
@@ -104,7 +96,6 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
-		chatMessageUtil.checkForMessage();
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			return;
