@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.util.Text;
 
 import javax.annotation.Nullable;
@@ -60,6 +61,7 @@ public class EventNotificationService {
     private final ChatMessageUtil chatMessageUtil;
     private final Client client;
     private final ScheduledExecutorService executor;
+    private final ConfigManager configManager;
 
     private ScheduledFuture<?> pollTask;
     private final AtomicBoolean polling = new AtomicBoolean(false);
@@ -92,12 +94,14 @@ public class EventNotificationService {
     @Inject
     public EventNotificationService(DropTrackerConfig config, DropTrackerApi api,
                                     ChatMessageUtil chatMessageUtil, Client client,
-                                    ScheduledExecutorService executor) {
+                                    ScheduledExecutorService executor,
+                                    ConfigManager configManager) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
         this.client = client;
         this.executor = executor;
+        this.configManager = configManager;
     }
 
     /* ===================== lifecycle ===================== */
@@ -237,6 +241,89 @@ public class EventNotificationService {
             }
         }
         return state.getEvents().get(0);
+    }
+
+    /* ===================== tracked-task override ===================== */
+
+    private String trackedTaskKey(int eventId) {
+        return "trackedTask_" + eventId;
+    }
+
+    /** The user's manually tracked task for an event, or 0 = server decides. */
+    public int trackedTaskId(int eventId) {
+        try {
+            Integer stored = configManager.getConfiguration(
+                DropTrackerConfig.GROUP, trackedTaskKey(eventId), Integer.class);
+            return stored != null ? stored : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /** Track a task on the HUD for this event; taskId <= 0 reverts to auto. */
+    public void setTrackedTask(int eventId, int taskId) {
+        if (taskId <= 0) {
+            configManager.unsetConfiguration(DropTrackerConfig.GROUP, trackedTaskKey(eventId));
+        } else {
+            configManager.setConfiguration(DropTrackerConfig.GROUP, trackedTaskKey(eventId), taskId);
+        }
+    }
+
+    /**
+     * The task the HUD and the Events tab headline for an entry: the user's
+     * tracked pick while it exists and is incomplete, else the server's focus
+     * task ("the server decides"). Null when neither applies.
+     */
+    @Nullable
+    public DisplayTask displayTask(EventState.Entry entry) {
+        if (entry == null || entry.getEvent() == null) {
+            return null;
+        }
+        int tracked = trackedTaskId(entry.getEvent().getId());
+        // Board games have no free task choice: the current tile is the task.
+        boolean pickable = !"board_game".equals(entry.getEvent().getKind());
+        if (tracked > 0 && pickable && entry.getTasks() != null) {
+            for (EventState.TaskInfo task : entry.getTasks()) {
+                if (task.getId() == tracked && !task.isCompleted()) {
+                    return new DisplayTask(task.getId(), task.getLabel(),
+                        task.getHave(), task.getNeed(),
+                        task.getIconItemId(), task.getIconUrl(), true);
+                }
+            }
+        }
+        EventState.FocusTask focus = entry.getFocusTask();
+        if (focus == null) {
+            return null;
+        }
+        return new DisplayTask(focus.getId(), focus.getLabel(),
+            focus.getHave(), focus.getNeed(),
+            focus.getIconItemId(), focus.getIconUrl(), false);
+    }
+
+    /** Unified view of the headlined task, from either source. */
+    public static class DisplayTask {
+        public final int id;
+        public final String label;
+        public final long have;
+        public final long need;
+        @Nullable
+        public final Integer iconItemId;
+        @Nullable
+        public final String iconUrl;
+        /** true = the user's manual pick; false = server-chosen focus. */
+        public final boolean tracked;
+
+        DisplayTask(int id, String label, long have, long need,
+                    @Nullable Integer iconItemId, @Nullable String iconUrl,
+                    boolean tracked) {
+            this.id = id;
+            this.label = label;
+            this.have = have;
+            this.need = need;
+            this.iconItemId = iconItemId;
+            this.iconUrl = iconUrl;
+            this.tracked = tracked;
+        }
     }
 
     /* ===================== batch rendering ===================== */

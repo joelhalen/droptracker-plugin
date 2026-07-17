@@ -79,7 +79,20 @@ public class EventNotificationParseTest {
             + "\"need\":1000000,\"icon_item_id\":null,"
             + "\"icon_url\":\"https://www.droptracker.io/img/metrics/magic.png\",\"source\":\"team_progress\"},"
             + "\"board_status\":null,\"tasks_completed\":5,\"tasks_total\":24,"
-            + "\"board\":{\"available\":true,\"team_id\":38},\"standings\":[]}]}";
+            + "\"board\":{\"available\":true,\"team_id\":38},\"standings\":[],"
+            + "\"tasks\":[{\"id\":127,\"label\":\"1,000,000 Magic XP\",\"type\":\"xp_target\","
+            + "\"points\":5,\"have\":297656,\"need\":1000000,\"completed\":false,"
+            + "\"icon_item_id\":null,\"icon_url\":\"https://www.droptracker.io/img/metrics/magic.png\","
+            + "\"badge\":\"XP TARGET\",\"value\":\"1.00M XP\","
+            + "\"description\":\"Gain 1.00M Magic XP as a team.\",\"requirements\":[]},"
+            + "{\"id\":128,\"label\":\"Point hunt\",\"type\":\"item_collection\",\"points\":10,"
+            + "\"have\":25,\"need\":50,\"completed\":false,\"icon_item_id\":20997,\"icon_url\":null,"
+            + "\"badge\":\"POINTS\",\"value\":\"50 pts\","
+            + "\"description\":\"Earn 50 points. Each listed item awards its own point value.\","
+            + "\"requirements\":[{\"name\":\"Twisted bow\",\"points\":25},"
+            + "{\"name\":\"Dragon claws\",\"quantity\":2,\"points\":10}]}],"
+            + "\"members\":[{\"player_id\":1,\"name\":\"joelhalen\"},"
+            + "{\"player_id\":3422,\"name\":\"Ra ine\"}],\"members_total\":69}]}";
         EventState state = gson.fromJson(json, EventState.class);
         assertEquals(2, state.getEvents().size());
 
@@ -97,6 +110,23 @@ public class EventNotificationParseTest {
         assertEquals("https://www.droptracker.io/img/metrics/magic.png",
             bingo.getFocusTask().getIconUrl());
         assertEquals("#cc4444", bingo.getTeam().getColor());
+
+        // P3 additions: full task list + roster (absent on older servers).
+        assertNull(board.getTasks());
+        assertNotNull(bingo.getTasks());
+        assertEquals(2, bingo.getTasks().size());
+        EventState.TaskInfo xp = bingo.getTasks().get(0);
+        assertEquals("XP TARGET", xp.getBadge());
+        assertEquals("Gain 1.00M Magic XP as a team.", xp.getDescription());
+        assertFalse(xp.isCompleted());
+        EventState.TaskInfo points = bingo.getTasks().get(1);
+        assertEquals(2, points.getRequirements().size());
+        assertEquals("Twisted bow", points.getRequirements().get(0).getName());
+        assertEquals(Integer.valueOf(25), points.getRequirements().get(0).getPoints());
+        assertEquals(Integer.valueOf(2), points.getRequirements().get(1).getQuantity());
+        assertEquals(2, bingo.getMembers().size());
+        assertEquals("Ra ine", bingo.getMembers().get(1).getName());
+        assertEquals(69, bingo.getMembersTotal());
     }
 
     @Test

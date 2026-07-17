@@ -37,6 +37,16 @@ public class EventState {
         private BoardInfo board;
         @SerializedName("standings")
         private List<Standing> standings;
+        /** Full team task list (picker + tooltips); null from older servers. */
+        @SerializedName("tasks")
+        @Nullable
+        private List<TaskInfo> tasks;
+        /** Own-team roster (capped server-side); null from older servers. */
+        @SerializedName("members")
+        @Nullable
+        private List<Member> members;
+        @SerializedName("members_total")
+        private int membersTotal;
     }
 
     @Getter
@@ -97,6 +107,68 @@ public class EventState {
         /** "board" | "inferred" | "team_progress" | "first_task" */
         @SerializedName("source")
         private String source;
+    }
+
+    /** One task on the team's board/list, with team progress and the
+     *  server-composed explanation shown in tooltips. */
+    @Getter
+    public static class TaskInfo {
+        @SerializedName("id")
+        private int id;
+        @SerializedName("label")
+        private String label;
+        @SerializedName("type")
+        private String type;
+        /** Points awarded on completion (0 = event doesn't use points). */
+        @SerializedName("points")
+        private int points;
+        @SerializedName("have")
+        private long have;
+        @SerializedName("need")
+        private long need;
+        @SerializedName("completed")
+        private boolean completed;
+        @SerializedName("icon_item_id")
+        @Nullable
+        private Integer iconItemId;
+        @SerializedName("icon_url")
+        @Nullable
+        private String iconUrl;
+        /** Tile badge in the legacy board style ("KC TARGET", "FULL SET"...). */
+        @SerializedName("badge")
+        @Nullable
+        private String badge;
+        /** Short value string ("100.00M GP", "sub 1:45"). */
+        @SerializedName("value")
+        @Nullable
+        private String value;
+        @SerializedName("description")
+        @Nullable
+        private String description;
+        @SerializedName("requirements")
+        @Nullable
+        private List<Requirement> requirements;
+    }
+
+    /** One item requirement of a task ({name, quantity?, points?}). */
+    @Getter
+    public static class Requirement {
+        @SerializedName("name")
+        private String name;
+        @SerializedName("quantity")
+        @Nullable
+        private Integer quantity;
+        @SerializedName("points")
+        @Nullable
+        private Integer points;
+    }
+
+    @Getter
+    public static class Member {
+        @SerializedName("player_id")
+        private int playerId;
+        @SerializedName("name")
+        private String name;
     }
 
     @Getter

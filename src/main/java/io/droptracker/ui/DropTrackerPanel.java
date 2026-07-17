@@ -249,9 +249,10 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			accountLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
 			accountLabel.setToolTipText("Currently tracked account");
 		} else {
-			accountLabel.setText("No account linked");
+			accountLabel.setText("You are not registered!");
 			accountLabel.setForeground(DropTrackerTheme.EMBER);
-			accountLabel.setToolTipText("Log in to begin tracking");
+			accountLabel.setToolTipText("<html>Claim your in-game name in our Discord to register.<br/>"
+				+ "Join via the <b>Join Discord</b> button on the Home tab.</html>");
 		}
 		statusRow.add(accountLabel, BorderLayout.WEST);
 
