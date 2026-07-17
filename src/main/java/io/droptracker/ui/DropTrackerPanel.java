@@ -8,10 +8,13 @@ import javax.inject.Inject;
 import javax.swing.*;
 
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.pages.ActivityPanel;
+import io.droptracker.ui.pages.EventsPanel;
 import io.droptracker.ui.pages.GroupPanel;
 import io.droptracker.ui.pages.HomePanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
+import io.droptracker.util.RemoteImageCache;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -69,11 +72,16 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private DropTrackerConfig config;
 	@Inject
 	private SubmissionManager submissionManager;
+	@Inject
+	private EventNotificationService eventNotificationService;
+	@Inject
+	private RemoteImageCache remoteImageCache;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
 	private ActivityPanel activityPanel;
 	private HomePanel homePanel;
+	private EventsPanel eventsPanel;
 	private JTabbedPane tabbedPane;
 
 	// The actual component instances added as tabs
@@ -81,6 +89,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JPanel activityComponent;
 	private JPanel playerComponent;
 	private JPanel groupComponent;
+	private JPanel eventsComponent;
 
 	private JLabel statusDotLabel;
 	private JLabel statusTextLabel;
@@ -125,15 +134,27 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			playerComponent = statsPanel.create();
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
 			groupComponent = groupPanel.create();
+			eventsPanel = new EventsPanel(config, api, eventNotificationService,
+				client, itemManager, remoteImageCache);
+			eventsComponent = eventsPanel.create();
+			eventNotificationService.setOnStateUpdated(() -> {
+				if (eventsPanel != null) {
+					eventsPanel.onUpdated();
+				}
+			});
 
 			tabbedPane.addTab("Home", homeComponent);
 			tabbedPane.addTab("Activity", activityComponent);
+			tabbedPane.addTab("Events", eventsComponent);
 			tabbedPane.addTab("Player", playerComponent);
 			tabbedPane.addTab("Group", groupComponent);
 		} else {
 			activityComponent = null;
 			playerComponent = null;
 			groupComponent = null;
+			eventsComponent = null;
+			eventsPanel = null;
+			eventNotificationService.setOnStateUpdated(null);
 			tabbedPane.addTab("Home", homeComponent);
 		}
 
@@ -254,6 +275,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		if (activityPanel != null) {
 			activityPanel.cleanup();
 		}
+		eventNotificationService.setOnStateUpdated(null);
+		eventsPanel = null;
 	}
 
 	public void selectPanel(String panelToSelect) {

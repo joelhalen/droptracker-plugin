@@ -238,6 +238,34 @@ public class PanelElements {
         imageDialog.setVisible(true);
     }
 
+    /**
+     * Generic remote-image pop-out (same machinery as the lootboard dialog):
+     * loading placeholder, async fetch via ImageIO (non-image bodies decode to
+     * null and show an error instead), click/Esc to close. Used by the Events
+     * tab for server-rendered board images.
+     */
+    public static void showRemoteImage(Client client, String title, String imageUrl) {
+        final JFrame parentFrame = getParentFrame(client);
+        JDialog imageDialog = new JDialog(parentFrame, title, false);
+        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JLabel loadingLabel = new JLabel("Loading " + title + "...");
+        loadingLabel.setForeground(DropTrackerTheme.TEXT);
+        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
+        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+        loadingLabel.setVerticalAlignment(JLabel.CENTER);
+        loadingLabel.setPreferredSize(new Dimension(400, 300));
+        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
+        loadingLabel.setOpaque(true);
+        addCloseListener(loadingLabel, imageDialog);
+
+        imageDialog.add(loadingLabel);
+        imageDialog.pack();
+        imageDialog.setLocationRelativeTo(parentFrame);
+        loadUrlImage(imageUrl, imageDialog, loadingLabel, parentFrame, title);
+        imageDialog.setVisible(true);
+    }
+
     // Method to show submission image popup
     public static void showSubmissionImage(Client client, String submissionType, String submissionImageUrl, String tooltip) {
         final JFrame parentFrame = getParentFrame(client);

@@ -55,10 +55,13 @@ import io.droptracker.events.QuestHandler;
 import io.droptracker.events.PetHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
+import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.ui.overlays.EventHudOverlay;
+import io.droptracker.ui.overlays.EventToastOverlay;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.util.VersionUtil;
@@ -78,6 +81,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 import net.runelite.client.util.ImageUtil;
 
@@ -127,6 +131,16 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private NearbyPlayerTracker nearbyPlayerTracker;
+
+	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
+	@Inject
+	private EventNotificationService eventNotificationService;
+	@Inject
+	private EventToastOverlay eventToastOverlay;
+	@Inject
+	private EventHudOverlay eventHudOverlay;
+	@Inject
+	private OverlayManager overlayManager;
 
 	private AtomicBoolean justLoggedIn = new AtomicBoolean(false);
 
@@ -178,6 +192,13 @@ public class DropTrackerPlugin extends Plugin {
 		executor.submit(() -> urlManager.loadEndpoints());
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
+
+		// In-game event notifications + HUD: the overlays render nothing on
+		// their own; the service's poll loop idles until the server reports a
+		// live event (active_event in the group configs).
+		overlayManager.add(eventToastOverlay);
+		overlayManager.add(eventHudOverlay);
+		eventNotificationService.start();
 
 		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
 			+ ", sidePanelEnabled=" + config.showSidePanel()
@@ -239,6 +260,10 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void shutDown() {
 		gameState.lazySet(null);
+
+		eventNotificationService.stop();
+		overlayManager.remove(eventToastOverlay);
+		overlayManager.remove(eventHudOverlay);
 
 		if (navButton != null) {
 			clientToolbar.removeNavigation(navButton);

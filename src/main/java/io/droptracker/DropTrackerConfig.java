@@ -1,5 +1,7 @@
 package io.droptracker;
 
+import io.droptracker.models.EventDisplayMode;
+import io.droptracker.models.EventHudDetail;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -376,6 +378,79 @@ public interface DropTrackerConfig extends Config {
     default int imageCompressionThresholdKb() {
         return 500;
     }
+
+    /* Event Notifications (docs/EVENT_PLUGIN_NOTIFICATIONS_PLAN.md — P2) */
+    @ConfigSection(
+        name = "Event Notifications",
+        description = "In-game notifications and HUD for DropTracker events (requires the API)",
+        position = 11,
+        closedByDefault = false
+    )
+    String eventSection = "Event Notifications";
+
+    @ConfigItem(
+        keyName = "eventNotifications",
+        name = "Event notifications",
+        description = "Show in-game notifications about your DropTracker events<br />"
+            + "(task completions, lead changes, board turns...).<br />"
+            + "Requires 'Use API Connections'. Fine-tune which types you receive on the website.",
+        position = 0,
+        section = eventSection
+    )
+    default boolean eventNotifications() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "eventDisplayMode",
+        name = "Display style",
+        description = "<html>How event notifications appear:<br />"
+            + "<b>Chat messages only</b> - lines in your chatbox.<br />"
+            + "<b>Chat + text pop-ups</b> - also shows brief on-screen pop-ups.<br />"
+            + "<b>Enhanced display (HUD)</b> - also shows a movable overlay with your<br />"
+            + "current task, progress and team standing (hold Alt to drag it).</html>",
+        position = 1,
+        section = eventSection
+    )
+    default EventDisplayMode eventDisplayMode() {
+        return EventDisplayMode.POPUP;
+    }
+
+    @ConfigItem(
+        keyName = "eventTaskProgressNotifications",
+        name = "Task progress notifications",
+        description = "Notify when teammates progress (not just complete) your team's tasks.<br />"
+            + "The chattiest type - this is the mute switch for it.",
+        position = 2,
+        section = eventSection
+    )
+    default boolean eventTaskProgressNotifications() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "eventHudDetail",
+        name = "HUD detail",
+        description = "<html>Enhanced display only:<br />"
+            + "<b>Compact</b> - task icon, name and progress.<br />"
+            + "<b>Detailed</b> - adds your team name, rank and score.</html>",
+        position = 3,
+        section = eventSection
+    )
+    default EventHudDetail eventHudDetail() {
+        return EventHudDetail.DETAILED;
+    }
+
+    @ConfigItem(
+        name = "pinnedEventId",
+        keyName = "pinnedEventId",
+        description = "pinnedEventId",
+        hidden = true
+    )
+    default int pinnedEventId() {
+        return 0;
+    }
+    void setPinnedEventId(int eventId);
 
     /* API Configuration */
     @ConfigSection(

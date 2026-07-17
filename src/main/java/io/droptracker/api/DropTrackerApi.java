@@ -17,6 +17,8 @@ import okhttp3.*;
 import net.runelite.api.Client;
 import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -892,5 +894,109 @@ public class DropTrackerApi {
 
     public interface PanelDataLoadedCallback {
         void onDataLoaded(Map<String, Object> data);
+    }
+
+    /* ============== Event notifications + HUD state (P2) ============== */
+
+    /** Response of GET /notifications. */
+    public static class NotificationsResponse {
+        @SerializedName("notifications")
+        public List<io.droptracker.models.api.EventNotification> notifications;
+        @SerializedName("active_event")
+        public Boolean activeEvent;
+    }
+
+    /**
+     * Drains the player's event-notification inbox. Returns null on any
+     * failure (network, non-200, malformed body). Blocking — never call on
+     * the EDT or the client thread.
+     */
+    @Nullable
+    public NotificationsResponse fetchNotifications(String playerName, long accountHash) {
+        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+            return null;
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/notifications");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .build();
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), NotificationsResponse.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("/notifications fetch failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Fetches the HUD / Events-tab state for every active event the player
+     * is in. Returns null on any failure. Blocking — off-EDT only.
+     */
+    @Nullable
+    public io.droptracker.models.api.EventState fetchEventState(String playerName, long accountHash) {
+        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+            return null;
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/event_state");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .build();
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), io.droptracker.models.api.EventState.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("/event_state fetch failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * URL of the server-rendered board image for an event (optionally one
+     * team's view). The identity params ride along because the endpoint is
+     * roster-gated (private events stay hidden without them).
+     */
+    public String eventBoardImageUrl(int eventId, Integer teamId, String playerName, long accountHash) {
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/events/" + eventId + "/board.png");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl.Builder builder = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash));
+        if (teamId != null) {
+            builder.addQueryParameter("team_id", String.valueOf(teamId));
+        }
+        return builder.build().toString();
+    }
+
+    /** True when any loaded group config reports a live event tracking this player. */
+    public boolean hasActiveEvent() {
+        List<GroupConfig> configs = groupConfigs;
+        if (configs == null) {
+            return false;
+        }
+        for (GroupConfig groupConfig : configs) {
+            if (groupConfig != null && groupConfig.isActiveEvent()) {
+                return true;
+            }
+        }
+        return false;
     }
 }

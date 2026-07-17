@@ -52,6 +52,10 @@ public class GroupConfig {
      * snapshots instead of only level-ups. */
     @SerializedName("track_xp_events")
     private boolean trackXpEvents;
+    /* True when ANY live event is tracking this player — the signal to poll
+     * GET /notifications for in-game event notifications. */
+    @SerializedName("active_event")
+    private boolean activeEvent;
 
     /* Variables that we'll modify after init */
     @Setter
