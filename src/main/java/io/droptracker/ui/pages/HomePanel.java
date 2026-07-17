@@ -49,25 +49,22 @@ public class HomePanel {
         }
 
         final JPanel welcomeMessagePanel = PanelElements.createCollapsiblePanel("Welcome to the DropTracker", PanelElements.getLatestWelcomeContent(api), true);
-        welcomeMessagePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
-        welcomeMessagePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         final JPanel patchNotesPanel = PanelElements.createCollapsiblePanel("News / Updates", PanelElements.getLatestUpdateContent(config, api), false);
-        patchNotesPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
-        patchNotesPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         homePanel.add(welcomeMessagePanel);
         homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
 
-        // Global lootboard button row
+        // Global lootboard button row — a 1-cell grid so the button fills the
+        // panel's full width instead of hugging its text.
         JButton viewGlobalButton = PanelElements.createLootboardButton("Global Lootboard", "Click to view the global lootboard", () -> PanelElements.showLootboardForGroup(client, 2));
         viewGlobalButton.setMargin(new Insets(3, 3, 3, 3));
-        viewGlobalButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        viewGlobalButton.setHorizontalAlignment(SwingConstants.CENTER);
 
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 1, 5, 0));
         buttonPanel.setBackground(DropTrackerTheme.SURFACE_0);
         buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        buttonPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
         buttonPanel.add(viewGlobalButton);
         homePanel.add(buttonPanel);
 
@@ -81,6 +78,8 @@ public class HomePanel {
         homePanel.add(patchNotesPanel);
         homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
         homePanel.add(createQuickLinks());
+        // Collect leftover vertical space here instead of stretching the cards.
+        homePanel.add(Box.createVerticalGlue());
 
         return homePanel;
     }

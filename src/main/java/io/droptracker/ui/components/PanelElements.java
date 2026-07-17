@@ -89,6 +89,11 @@ public class PanelElements {
         return EXPANDED_ICON;
     }
 
+    /** Small board icon (16x16) used by board pop-out buttons. */
+    public static ImageIcon getBoardIcon() {
+        return BOARD_ICON;
+    }
+
     // Method to load lootboard for a specific group ID
     public static void loadLootboardForGroup(int groupId) {
         // Check if we already have this group cached
@@ -235,6 +240,34 @@ public class PanelElements {
             }
         });
 
+        imageDialog.setVisible(true);
+    }
+
+    /**
+     * Generic remote-image pop-out (same machinery as the lootboard dialog):
+     * loading placeholder, async fetch via ImageIO (non-image bodies decode to
+     * null and show an error instead), click/Esc to close. Used by the Events
+     * tab for server-rendered board images.
+     */
+    public static void showRemoteImage(Client client, String title, String imageUrl) {
+        final JFrame parentFrame = getParentFrame(client);
+        JDialog imageDialog = new JDialog(parentFrame, title, false);
+        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        JLabel loadingLabel = new JLabel("Loading " + title + "...");
+        loadingLabel.setForeground(DropTrackerTheme.TEXT);
+        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
+        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+        loadingLabel.setVerticalAlignment(JLabel.CENTER);
+        loadingLabel.setPreferredSize(new Dimension(400, 300));
+        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
+        loadingLabel.setOpaque(true);
+        addCloseListener(loadingLabel, imageDialog);
+
+        imageDialog.add(loadingLabel);
+        imageDialog.pack();
+        imageDialog.setLocationRelativeTo(parentFrame);
+        loadUrlImage(imageUrl, imageDialog, loadingLabel, parentFrame, title);
         imageDialog.setVisible(true);
     }
 
@@ -405,71 +438,82 @@ public class PanelElements {
         return textArea;
     }
 
+    /**
+     * A panel that never grows past its preferred height. In a vertical
+     * BoxLayout a plain JPanel reports an unbounded maximum size and swallows
+     * every leftover pixel — the cause of cards (and their headers) stretching
+     * far below their content.
+     */
+    public static JPanel heightCappedPanel() {
+        return new JPanel() {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(PluginPanel.PANEL_WIDTH, getPreferredSize().height);
+            }
+        };
+    }
+
     public static JPanel createCollapsiblePanel(String title, JPanel content, boolean isUnderlined) {
-        JPanel panel = new JPanel();
+        JPanel panel = heightCappedPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBackground(DropTrackerTheme.SURFACE_1);
-        panel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
+        panel.setBorder(BorderFactory.createLineBorder(DropTrackerTheme.SURFACE_3, 1));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        // Header strip: darker bar with the title and chevron; the whole strip
+        // toggles, and its height is pinned to its content.
+        JPanel headerPanel = new JPanel(new BorderLayout()) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        headerPanel.setBackground(DropTrackerTheme.SURFACE_2);
+        headerPanel.setBorder(new EmptyBorder(6, 8, 6, 8));
+        headerPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        // Create title with optional underline
-        JLabel titleLabel;
-        if (isUnderlined) {
-            titleLabel = new JLabel("<html><u>" + title + "</u></html>");
-        } else {
-            titleLabel = new JLabel(title);
-        }
+        JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(DropTrackerTheme.TEXT);
+        titleLabel.setForeground(isUnderlined ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
 
         JLabel toggleIcon = new JLabel(EXPANDED_ICON);
 
         headerPanel.add(titleLabel, BorderLayout.WEST);
         headerPanel.add(toggleIcon, BorderLayout.EAST);
 
-        // Create a final reference to the content for use in the listener
-        final JPanel contentRef = content;
-        final boolean[] isCollapsed = {false};
+        JPanel contentWrapper = new JPanel(new BorderLayout());
+        contentWrapper.setBackground(DropTrackerTheme.SURFACE_1);
+        contentWrapper.setBorder(new EmptyBorder(4, 6, 6, 6));
+        contentWrapper.add(content, BorderLayout.CENTER);
 
-        // Add click listener for collapsing/expanding
+        final boolean[] isCollapsed = {false};
         headerPanel.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 isCollapsed[0] = !isCollapsed[0];
                 toggleIcon.setIcon(isCollapsed[0] ? COLLAPSED_ICON : EXPANDED_ICON);
-                contentRef.setVisible(!isCollapsed[0]);
+                // Height follows automatically: the panel's maximum size is
+                // derived from its preferred size, which excludes hidden content.
+                contentWrapper.setVisible(!isCollapsed[0]);
+                panel.revalidate();
+                panel.repaint();
+            }
 
-                // Force fixed height when collapsed
-                if (isCollapsed[0]) {
-                    panel.setPreferredSize(
-                            new Dimension(PluginPanel.PANEL_WIDTH, headerPanel.getPreferredSize().height + 20));
-                    panel.setMaximumSize(
-                            new Dimension(PluginPanel.PANEL_WIDTH, headerPanel.getPreferredSize().height + 20));
-                    panel.revalidate();
-                    panel.repaint();
-                } else {
-                    panel.setPreferredSize(null);
-                    panel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
-                    panel.revalidate();
-                    panel.repaint();
-                }
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                headerPanel.setBackground(DropTrackerTheme.SURFACE_3);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                headerPanel.setBackground(DropTrackerTheme.SURFACE_2);
             }
         });
 
         panel.add(headerPanel);
-        panel.add(getJSeparator(DropTrackerTheme.SURFACE_3));
-        panel.add(content);
+        panel.add(contentWrapper);
 
         return panel;
-    }
-
-    private static JSeparator getJSeparator(Color color) {
-        JSeparator sep = new JSeparator();
-        sep.setBackground(color);
-        sep.setForeground(color);
-        return sep;
     }
 
     public static JFrame getParentFrame(Client client) {

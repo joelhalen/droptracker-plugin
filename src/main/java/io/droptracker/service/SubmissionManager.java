@@ -13,8 +13,6 @@ import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
-import io.droptracker.video.VideoQuality;
-import io.droptracker.video.VideoRecorder;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -47,7 +45,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 
 @Slf4j
 @Singleton
@@ -62,7 +59,6 @@ public class SubmissionManager {
     private final ClientThread clientThread;
     private final UrlManager urlManager;
     private final DrawManager drawManager;
-    private final VideoRecorder videoRecorder;
     private final NearbyPlayerTracker nearbyPlayerTracker;
 
     /** Thread-safe list of submissions the player has received which qualified for notifications */
@@ -90,13 +86,6 @@ public class SubmissionManager {
     private static final String PERSISTENCE_FILE_PREFIX = "submissions_";
     private static final int MAX_PERSISTED_SUBMISSIONS = 50;
 
-    /**
-     * Storage backends occasionally return transient 5xx on presigned PUTs
-     * (documented-expected for B2); retry a few times before falling back
-     * to screenshot-only.
-     */
-    private static final int MAX_UPLOAD_ATTEMPTS = 3;
-
     /** Pending webhooks that arrived before group configs were loaded */
     private final List<PendingEvent> pendingEvents = new CopyOnWriteArrayList<>();
     private volatile boolean groupConfigsLoaded = false;
@@ -114,7 +103,6 @@ public class SubmissionManager {
         ClientThread clientThread,
         UrlManager urlManager,
         DrawManager drawManager,
-        VideoRecorder videoRecorder,
         NearbyPlayerTracker nearbyPlayerTracker
     ) {
         this.config = config;
@@ -126,7 +114,6 @@ public class SubmissionManager {
         this.clientThread = clientThread;
         this.urlManager = urlManager;
         this.drawManager = drawManager;
-        this.videoRecorder = videoRecorder;
         this.nearbyPlayerTracker = nearbyPlayerTracker;
     }
 
@@ -178,7 +165,7 @@ public class SubmissionManager {
                     if (requiredScreenshot) {
                         captureAndSend(webhook, null, shouldHideDm);
                     } else {
-                        sendWebhookDirect(webhook, null, null, null);
+                        sendWebhookDirect(webhook, null, null);
                     }
                     return;
                 }
@@ -251,7 +238,7 @@ public class SubmissionManager {
                 // Background XP snapshot for event tracking: no screenshot,
                 // no group qualification and no UI submission tracking
                 debugLogEventFlow("send", type, "experience snapshot; direct send");
-                sendWebhookDirect(webhook, null, null, null);
+                sendWebhookDirect(webhook, null, null);
                 return;
             case ADVENTURE_LOG:
                 // No extra processing needed
@@ -267,7 +254,7 @@ public class SubmissionManager {
             captureAndSend(webhook, submission, shouldHideDm);
         } else {
             debugLogEventFlow("send", type, "sendWebhookDirect path selected");
-            sendWebhookDirect(webhook, null, null, submission);
+            sendWebhookDirect(webhook, null, submission);
         }
     }
 
@@ -330,7 +317,7 @@ public class SubmissionManager {
             captureAndSend(customWebhookBody, submission, shouldHideDm);
         } else {
             debugLogEventFlow("send", SubmissionType.DROP, "sendWebhookDirect path selected");
-            sendWebhookDirect(customWebhookBody, null, null, submission);
+            sendWebhookDirect(customWebhookBody, null, submission);
         }
     }
 
@@ -503,19 +490,18 @@ public class SubmissionManager {
     // ========== Send Logic ==========
 
     /**
-     * Sends a webhook directly (with optional screenshot, video key, and ValidSubmission tracking).
+     * Sends a webhook directly (with optional screenshot and ValidSubmission tracking).
      * This is the single send method -- the ValidSubmission is passed through, not looked up.
      *
      * @param webhook The webhook body to send
      * @param screenshot Optional JPEG screenshot bytes
-     * @param videoKey Optional cloud storage key for an uploaded video, or null
      * @param submission Optional ValidSubmission for status tracking
      */
-    private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, String videoKey, ValidSubmission submission) {
+    private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission) {
         String worldTypeName = getWorldTypeName();
 
         debugLogEventFlow("send", submission != null ? submission.getType() : null,
-                "attempting direct send; world_type=" + worldTypeName + ", hasScreenshot=" + (screenshot != null) + ", hasVideoKey=" + (videoKey != null && !videoKey.isEmpty())
+                "attempting direct send; world_type=" + worldTypeName + ", hasScreenshot=" + (screenshot != null)
                         + ", " + summarizeSubmission(submission));
 
         if (submission != null) {
@@ -530,13 +516,6 @@ public class SubmissionManager {
         // Inject world_type into every embed so the server can distinguish main-game vs. temporary world submissions
         for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
             embed.addField("world_type", worldTypeName, true);
-        }
-
-        // If a video key is present, inject it into the webhook embeds so the API can reference it
-        if (videoKey != null && !videoKey.isEmpty()) {
-            for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
-                embed.addField("video_key", videoKey, true);
-            }
         }
 
         sendWebhookWithRetry(webhook, screenshot, 0, submission);
@@ -710,36 +689,19 @@ public class SubmissionManager {
         }
     }
 
-    // ========== Capture (Screenshot or Video) ==========
+    // ========== Capture (Screenshot) ==========
 
     /**
-     * Routes capture to either screenshot-only or video based on the configured capture mode.
+     * Captures a single screenshot and sends the webhook with it.
      *
      * @param webhook The webhook body to send after capture
      * @param submission Optional ValidSubmission for tracking
      * @param hideDMs Whether to hide PM chat during capture
      */
     private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
-        VideoQuality captureMode = config.captureMode();
         debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                "captureMode=" + captureMode + ", useApi=" + config.useApi() + ", hideDMs=" + hideDMs);
+                "capturing screenshot; hideDMs=" + hideDMs);
 
-        if (captureMode.requiresVideo() && config.useApi()) {
-            log.debug("Capture mode is VIDEO; capturing clip.");
-            debugLogEventFlow("capture", submission != null ? submission.getType() : null, "capturing video");
-            captureVideoAndSend(webhook, submission, hideDMs);
-        } else {
-            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                    captureMode.requiresVideo() ? "video requested but API disabled; screenshot fallback" : "capturing screenshot");
-            captureScreenshotAndSend(webhook, submission, hideDMs);
-        }
-    }
-
-    /**
-     * Captures a single screenshot and sends the webhook with it.
-     * This is the original screenshot-only path.
-     */
-    private void captureScreenshotAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
         if (hideDMs) {
             hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
         }
@@ -772,210 +734,9 @@ public class SubmissionManager {
 
                 debugLogEventFlow("capture", submission != null ? submission.getType() : null,
                         "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
-                sendWebhookDirect(webhook, imageBytes, null, submission);
+                sendWebhookDirect(webhook, imageBytes, submission);
             });
         });
-    }
-
-    /**
-     * Captures a video clip (pre-event buffer + post-event recording) and uploads it
-     * via a presigned URL, then sends the webhook with the screenshot and video key.
-     * Falls back to screenshot-only if video capture or upload fails.
-     */
-    private void captureVideoAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
-        if (hideDMs) {
-            hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-        }
-
-        videoRecorder.captureEventVideo((screenshotBytes, videoFrames, fps) -> {
-            if (hideDMs) {
-                showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-            }
-
-            // If no video frames were captured, fall back to screenshot-only
-            if (videoFrames == null || videoFrames.isEmpty()) {
-                log.warn("No video frames captured, falling back to screenshot-only");
-                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                        "no video frames captured; fallback to screenshot");
-                sendWebhookDirect(webhook, screenshotBytes, null, submission);
-                return;
-            }
-
-            log.debug("Captured video frames: frames={}, fps={}", videoFrames.size(), fps);
-
-            // Upload video frames via presigned URL on a background thread. Retries are
-            // scheduled on the executor rather than blocking, so the completion callback
-            // may run on either the initial submit thread or a later scheduled retry.
-            executor.submit(() -> uploadVideoFrames(videoFrames, fps, videoKey -> {
-                // If upload failed, fall back to screenshot-only (keeps existing behavior).
-                if (videoKey == null || videoKey.isEmpty()) {
-                    log.warn("Video upload failed; sending screenshot-only");
-                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                            "video upload failed; fallback to screenshot");
-                    sendWebhookDirect(webhook, screenshotBytes, null, submission);
-                    return;
-                }
-
-                // Video mode should replace screenshot attachments (do not send image.jpeg alongside).
-                log.debug("Video uploaded (key={}); sending webhook without screenshot attachment", videoKey);
-                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                        "video uploaded; sending with videoKey=" + videoKey);
-                sendWebhookDirect(webhook, null, videoKey, submission);
-            }));
-        });
-    }
-
-    /**
-     * Uploads MJPEG video frames to cloud storage via a presigned URL obtained from the API.
-     * Frames are streamed directly to the upload URL to minimize memory overhead.
-     *
-     * <p>Transient upload failures are retried with a backoff. Rather than blocking a thread
-     * between attempts, each retry is scheduled on the {@link ScheduledExecutorService}, so the
-     * {@code onComplete} callback may run on either the calling thread or a later scheduled thread.
-     *
-     * @param frames List of JPEG frame byte arrays
-     * @param fps The frames per second the video was recorded at
-     * @param onComplete Receives the video storage key if the upload succeeded, or {@code null} on failure
-     */
-    private void uploadVideoFrames(List<byte[]> frames, int fps, Consumer<String> onComplete) {
-        if (!config.useApi()) {
-            // Video uploads require the API (presigned upload URL + key).
-            // If the user has API disabled, we should be loud about why uploads never happen.
-            log.warn("Video upload skipped: API disabled (useApi=false). Falling back to screenshot-only.");
-            onComplete.accept(null);
-            return;
-        }
-
-        try {
-            if (frames == null || frames.isEmpty()) {
-                log.warn("Video upload skipped: no frames provided");
-                onComplete.accept(null);
-                return;
-            }
-
-            // Step 1: Get a presigned upload URL from the API
-            DropTrackerApi.PresignedUrlResponse presigned = api.getPresignedVideoUploadUrl(fps);
-
-            if (presigned == null) {
-                log.warn("Video upload failed: could not obtain presigned upload URL (null response)");
-                debugLogEventFlow("video-upload", null, "presigned URL request failed (null response)");
-                onComplete.accept(null);
-                return;
-            }
-            log.debug("Presigned upload URL obtained; key={}", presigned.key);
-
-            if (presigned.message != null && !presigned.message.isEmpty()) {
-                if (presigned.message.contains("missing upgrade")) {
-                    chatMessageUtil.sendChatMessage("Video capture requires you to be a member of a tier 3 group in the DropTracker. Consider subscribing to unlock this feature.");
-                    debugLogEventFlow("video-upload", null, "server denied: missing tier 3 upgrade");
-                    onComplete.accept(null);
-                    return;
-                }
-            }
-
-            if (presigned.quotaExceeded) {
-                log.warn("Video upload skipped: quota exceeded ({})", presigned.message);
-                debugLogEventFlow("video-upload", null, "quota exceeded: " + presigned.message);
-                onComplete.accept(null);
-                return;
-            }
-
-            // Step 2: Stream MJPEG frames to the presigned URL
-            long totalSize = 0;
-            for (byte[] frame : frames) {
-                totalSize += frame.length;
-            }
-
-            final long finalTotalSize = totalSize;
-            final List<byte[]> finalFrames = frames;
-
-            // Use streaming RequestBody to avoid buffering all frames in memory
-            RequestBody streamingBody = new RequestBody() {
-                @Override
-                public MediaType contentType() {
-                    return MediaType.parse("application/octet-stream");
-                }
-
-                @Override
-                public long contentLength() {
-                    return finalTotalSize;
-                }
-
-                @Override
-                public void writeTo(okio.BufferedSink sink) throws IOException {
-                    // MJPEG format: concatenated JPEG frames
-                    for (byte[] frame : finalFrames) {
-                        sink.write(frame);
-                    }
-                    sink.flush();
-                }
-            };
-
-            Request uploadRequest = new Request.Builder()
-                .url(presigned.uploadUrl)
-                .addHeader("Content-Type", "application/octet-stream")
-                .addHeader("Content-Length", String.valueOf(totalSize))
-                .put(streamingBody)
-                .build();
-
-            attemptVideoUpload(uploadRequest, presigned, frames.size(), totalSize, 1, onComplete);
-        } catch (Exception e) {
-            log.warn("Video upload failed with exception: {}", e.getMessage());
-            log.debug("Video upload exception details", e);
-            debugLogEventFlow("video-upload", null, "exception: " + e.getMessage());
-            onComplete.accept(null);
-        }
-    }
-
-    /**
-     * Performs a single video upload attempt against an already-obtained presigned URL.
-     *
-     * <p>Transient failures (5xx or I/O errors) with attempts remaining are re-scheduled on the
-     * {@link ScheduledExecutorService} with a linear backoff instead of blocking a thread. Retries
-     * reuse the same presigned URL: it stays valid for the full expiry window, and re-requesting one
-     * would both consume another slot of the daily video quota and orphan this ticket as a pending row.
-     */
-    private void attemptVideoUpload(Request uploadRequest, DropTrackerApi.PresignedUrlResponse presigned,
-            int frameCount, long totalSize, int attempt, Consumer<String> onComplete) {
-        String failureReason;
-        boolean retryable;
-        try (Response response = okHttpClient.newCall(uploadRequest).execute()) {
-            if (response.isSuccessful()) {
-                log.debug("Video uploaded successfully: key={}, size={}KB, frames={}, attempt={}",
-                    presigned.key, totalSize / 1024, frameCount, attempt);
-                onComplete.accept(presigned.key);
-                return;
-            }
-
-            failureReason = "HTTP " + response.code() + " " + response.message();
-            log.warn("Video upload failed: {} (frames={}, size={}KB, attempt={}/{})",
-                failureReason, frameCount, totalSize / 1024, attempt, MAX_UPLOAD_ATTEMPTS);
-            debugLogEventFlow("video-upload", null, "storage PUT failed; " + failureReason
-                    + " (frames=" + frameCount + ", size=" + (totalSize / 1024) + "KB"
-                    + ", attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
-
-            // 4xx (expired/rejected URL, bad request) won't improve on retry; 5xx might.
-            retryable = response.code() >= 500;
-        } catch (IOException e) {
-            failureReason = "I/O error: " + e.getMessage();
-            log.warn("Video upload failed: {} (attempt={}/{})", failureReason, attempt, MAX_UPLOAD_ATTEMPTS);
-            log.debug("Video upload exception details", e);
-            debugLogEventFlow("video-upload", null, "storage PUT exception: " + e.getMessage()
-                    + " (attempt=" + attempt + "/" + MAX_UPLOAD_ATTEMPTS + ")");
-            retryable = true;
-        }
-
-        if (retryable && attempt < MAX_UPLOAD_ATTEMPTS) {
-            long delay = 1000L * attempt;
-            executor.schedule(() -> attemptVideoUpload(uploadRequest, presigned, frameCount,
-                    totalSize, attempt + 1, onComplete), delay, TimeUnit.MILLISECONDS);
-            return;
-        }
-
-        // All attempts failed (or the failure is non-retryable). Tell the server so the ticket is
-        // marked failed with the real reason instead of aging out as "presigned URL expired".
-        api.reportVideoUploadFailure(presigned.key, failureReason);
-        onComplete.accept(null);
     }
 
     private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {

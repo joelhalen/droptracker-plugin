@@ -17,6 +17,8 @@ import okhttp3.*;
 import net.runelite.api.Client;
 import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -727,140 +729,6 @@ public class DropTrackerApi {
         }
     }
 
-    // ========== Video Upload ==========
-
-    /**
-     * Response from the presigned video upload URL endpoint.
-     */
-    public static class PresignedUrlResponse {
-        public String uploadUrl;
-        public String key;
-        public boolean quotaExceeded = false;
-        public String message;
-    }
-
-    /**
-     * Gets a presigned upload URL from the API for uploading video frames.
-     * The server returns an upload URL (e.g. to cloud storage) and a key
-     * that can later be included in the webhook to reference the video.
-     *
-     * @param fps The frames per second the video was recorded at
-     * @return The presigned URL response, or null on failure
-     */
-    public PresignedUrlResponse getPresignedVideoUploadUrl(int fps) {
-        if (!config.useApi()) {
-            log.warn("Skipping presigned video URL request: API disabled (useApi=false)");
-            return null;
-        }
-
-        String apiUrl = getApiUrl();
-        if (client == null || client.getAccountHash() == -1) {
-            log.warn("Cannot request presigned URL: missing acc_hash");
-            return null;
-        }
-
-        HttpUrl base = HttpUrl.parse(apiUrl + "/presigned_upload_url");
-        if (base == null) {
-            log.warn("Invalid presigned upload base URL: {}", apiUrl);
-            return null;
-        }
-
-        HttpUrl url = base.newBuilder()
-            .addQueryParameter("fps", String.valueOf(fps))
-            .addQueryParameter("acc_hash", String.valueOf(client.getAccountHash()))
-            .build();
-
-        log.debug("Requesting presigned video upload URL (fps={}, acc_hash={})", fps, client.getAccountHash());
-
-        Request request = new Request.Builder()
-            .url(url)
-            .get()
-            .build();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-            ResponseBody responseBody = response.body();
-            String body = responseBody != null ? responseBody.string() : "";
-
-            if (response.code() == 402) {
-                // Quota exceeded
-                PresignedUrlResponse result = new PresignedUrlResponse();
-                result.quotaExceeded = true;
-                try {
-                    @SuppressWarnings("unchecked")
-                    java.util.Map<String, Object> map = gson.fromJson(body, java.util.Map.class);
-                    result.message = map != null && map.get("message") != null
-                        ? String.valueOf(map.get("message"))
-                        : "Daily video limit reached";
-                } catch (Exception e) {
-                    result.message = "Daily video limit reached";
-                }
-                log.warn("Presigned video upload URL request quota exceeded: {}", result.message);
-                return result;
-            }
-
-            if (!response.isSuccessful()) {
-                log.error("Failed to get presigned URL: {} - {}. Body: {}", response.code(), response.message(), body);
-                return null;
-            }
-
-            @SuppressWarnings("unchecked")
-            java.util.Map<String, Object> map = gson.fromJson(body, java.util.Map.class);
-            if (map == null || !map.containsKey("upload_url") || !map.containsKey("key")) {
-                log.error("Presigned URL response missing required fields");
-                return null;
-            }
-
-            PresignedUrlResponse result = new PresignedUrlResponse();
-            result.uploadUrl = String.valueOf(map.get("upload_url"));
-            result.key = String.valueOf(map.get("key"));
-            return result;
-        } catch (IOException e) {
-            log.error("Error getting presigned video upload URL", e);
-            return null;
-        }
-    }
-
-    /**
-     * Reports a failed video upload so the server marks the pending upload
-     * ticket as failed with the real reason, instead of leaving it to age out
-     * as "presigned URL expired". Fire-and-forget: report failures are only
-     * logged, never surfaced to the user.
-     *
-     * @param key The video object key from the presigned upload response
-     * @param reason Short description of why the upload failed
-     */
-    public void reportVideoUploadFailure(String key, String reason) {
-        if (!config.useApi() || key == null || key.isEmpty()) {
-            return;
-        }
-        if (client == null || client.getAccountHash() == -1) {
-            return;
-        }
-
-        java.util.Map<String, String> payload = new java.util.HashMap<>();
-        payload.put("key", key);
-        payload.put("acc_hash", String.valueOf(client.getAccountHash()));
-        payload.put("reason", reason != null ? reason : "unknown");
-
-        Request request = new Request.Builder()
-            .url(getApiUrl() + "/video/upload-failed")
-            .post(RequestBody.create(MediaType.parse("application/json; charset=utf-8"), gson.toJson(payload)))
-            .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                log.debug("Failed to report video upload failure for key {}", key, e);
-            }
-
-            @Override
-            public void onResponse(@NotNull Call call, @NotNull Response response) {
-                response.close();
-            }
-        });
-    }
-
     private static final String WELCOME_FALLBACK = "Welcome to the DropTracker!";
     private static final String NEWS_FALLBACK =
         "News is temporarily unavailable. Use the refresh button to try again.";
@@ -1026,5 +894,109 @@ public class DropTrackerApi {
 
     public interface PanelDataLoadedCallback {
         void onDataLoaded(Map<String, Object> data);
+    }
+
+    /* ============== Event notifications + HUD state (P2) ============== */
+
+    /** Response of GET /notifications. */
+    public static class NotificationsResponse {
+        @SerializedName("notifications")
+        public List<io.droptracker.models.api.EventNotification> notifications;
+        @SerializedName("active_event")
+        public Boolean activeEvent;
+    }
+
+    /**
+     * Drains the player's event-notification inbox. Returns null on any
+     * failure (network, non-200, malformed body). Blocking — never call on
+     * the EDT or the client thread.
+     */
+    @Nullable
+    public NotificationsResponse fetchNotifications(String playerName, long accountHash) {
+        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+            return null;
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/notifications");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .build();
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), NotificationsResponse.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("/notifications fetch failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Fetches the HUD / Events-tab state for every active event the player
+     * is in. Returns null on any failure. Blocking — off-EDT only.
+     */
+    @Nullable
+    public io.droptracker.models.api.EventState fetchEventState(String playerName, long accountHash) {
+        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+            return null;
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/event_state");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .build();
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), io.droptracker.models.api.EventState.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("/event_state fetch failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * URL of the server-rendered board image for an event (optionally one
+     * team's view). The identity params ride along because the endpoint is
+     * roster-gated (private events stay hidden without them).
+     */
+    public String eventBoardImageUrl(int eventId, Integer teamId, String playerName, long accountHash) {
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/events/" + eventId + "/board.png");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl.Builder builder = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash));
+        if (teamId != null) {
+            builder.addQueryParameter("team_id", String.valueOf(teamId));
+        }
+        return builder.build().toString();
+    }
+
+    /** True when any loaded group config reports a live event tracking this player. */
+    public boolean hasActiveEvent() {
+        List<GroupConfig> configs = groupConfigs;
+        if (configs == null) {
+            return false;
+        }
+        for (GroupConfig groupConfig : configs) {
+            if (groupConfig != null && groupConfig.isActiveEvent()) {
+                return true;
+            }
+        }
+        return false;
     }
 }

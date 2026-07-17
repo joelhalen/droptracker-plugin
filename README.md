@@ -39,7 +39,7 @@ Search for **DropTracker** in the RuneLite Plugin Hub and install it.
 
 ### 1) Decide whether you want API features
 
-Many enhanced features require API connectivity (e.g., group config rules, side panel features, video capture).
+Many enhanced features require API connectivity (e.g., group config rules, side panel features).
 
 In RuneLite: **Configuration (wrench icon)** → search **DropTracker** → **API Configuration**:
 - Enable **Use API Connections**
@@ -60,34 +60,13 @@ The plugin can add a RuneLite side panel for DropTracker-related UI.
 
 ---
 
-## Proof capture (Screenshots vs Video)
-- **Note: You must be a member of a subscribing group (tier 3 or higher) to upload videos to our servers, otherwise your submissions will always result in screenshots instead.**
+## Proof capture (Screenshots)
 
-In **Miscellaneous** → **Capture Mode**, you can choose:
-- **Screenshot Only** (default)
-- **Video** (short clip)
-
-### Video requirements
-
-Video capture is designed to be lightweight, but it has two important dependencies:
-
-- **GPU plugin must be enabled** (video capture uses GPU-frame readback)
-- **Use API Connections must be enabled** (video upload requires a server-issued presigned upload URL)
+Submissions that qualify for proof capture attach a screenshot of your client.
 
 ### What actually gets sent
 
-- **Screenshot mode**: attaches a single `image.jpeg` with the submission.
-- **Video mode**:
-
-(Massive shout-out to [@dennisdevulder](https://github.com/dennisdevulder) for all of the heavy lifting here -- we ride on the shoulders of giants!)
-
-
-**PLEASE NOTE**: If you are not a member of a group that has subscribed at the necessary tier for video capture, enabling it will **still capture videos**, but they won't be uploaded!
-
-  - Captures a short clip from an in-memory rolling buffer (pre-event + post-event).
-  - Uploads the clip frames to cloud storage using a **presigned upload URL** from the API.
-  - Sends the submission with a **`video_key`** that the backend uses to associate the uploaded video.
-  - **Fallback behavior**: if video capture or upload fails, the plugin will **send a screenshot** instead (so you still get proof).
+- A single image file (`image.png` or `image.jpeg`, depending on your compression threshold) attached to the submission.
 
 ---
 
@@ -100,11 +79,10 @@ Video capture is designed to be lightweight, but it has two important dependenci
   - Locally: your config toggles decide whether the plugin should send a given event type
   - Via API (when enabled): the plugin fetches group configs and checks per-group rules (minimum value, screenshot-only groups, stacked item rules, etc.)
 - **Capture**
-  - If the event type/config exceeds your configured requirements for a screen capture, one takes place (screenshot or video depending on Capture Mode)
+  - If the event type/config exceeds your configured requirements for a screen capture, a screenshot is taken
 - **Submission**
   - A webhook payload is posted as multipart form-data (Discord-style `payload_json`, regardless of Webhook or API configuration the data is 1:1)
-  - If screenshot mode is used (or video fallback), an `image/jpeg` file is attached
-  - If video mode upload succeeds, a `video_key` field is included so the backend can link the clip to the submission for notifications on the backend.
+  - If a screenshot was captured, the image file is attached
 
 ---
 
@@ -133,7 +111,7 @@ These names match what you’ll see in RuneLite’s config UI.
   - **Track Quests** / **Screenshot Quests**
 - **Miscellaneous**
   - **Hide PMs**: hides private chat during proof capture
-  - **Capture Mode**: Screenshot Only vs Video
+  - **Image Compression Threshold (KB)**: screenshots under this size are sent as lossless PNG; larger ones are compressed to JPEG
 - **API Configuration**
   - **Use API Connections**: enables the DropTracker API integration
   - **Receive in-game messages**: shows confirmations/notices
@@ -142,19 +120,6 @@ These names match what you’ll see in RuneLite’s config UI.
 ---
 
 ## Troubleshooting
-
-### “I enabled Video, but I’m still seeing screenshots”
-
-That’s expected **only when video fails** (the plugin falls back to screenshot-only to preserve proof).
-
-Common causes:
-- **Non-subscriber**: Videos take up a lot of bandwidth and storage space. We only allow premium groups to leverage this feature, to cut back on our operating costs. Only **one member** of a group needs to subscribe in order to unlock video capture features for all of their members.
-- **API disabled**: Video upload requires **Use API Connections**
-- **GPU plugin disabled**: video frame capture requires the GPU plugin
-- **Quota exceeded** (if your backend enforces a daily cap)
-- **Upload HTTP failure**: presigned URL invalid/expired or storage-side rejected the upload
-
-Tip: RuneLite logs will explicitly say why video didn’t upload once debug messages are enabled.
 
 ### Collection log not detected
 
@@ -173,8 +138,7 @@ OSRS-side settings are required:
 
 ## Privacy & security notes
 
-- **Sensitive UI blur (video)**: the video recorder can blur sensitive screens (e.g., login/bank PIN flows) to reduce risk if a clip is uploaded.
-- **Hide PMs (proof capture)**: optional privacy toggle for screenshots/video capture (may not always hide messages from *prior* to the achievement...)
+- **Hide PMs (proof capture)**: optional privacy toggle for screenshot capture (may not always hide messages from *prior* to the achievement...)
 - **Network**: enabling API features allows outbound connections to DropTracker’s API (see the warning in RuneLite config).
 
 ---

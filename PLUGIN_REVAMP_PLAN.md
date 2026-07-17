@@ -18,7 +18,6 @@ tokens: dark parchment surfaces `#15110c → #3a2f20`, gold `#ffb83f`, muted tex
 | `GET /player_search?name=` | PlayerStatsPanel search, login lookup | N+1 per group; `best_pb_rank` hardcoded `42` |
 | `POST /check` | SubmissionManager status polling | one uuid per request |
 | `GET /plugin_version` | startup version gate | fine |
-| `GET /presigned_upload_url`, `POST /video/upload-failed` | video pipeline | recently hardened |
 | `GET /latest_welcome`, `/latest_news` | HomePanel (async) | falls back to GitHub Pages |
 | `POST /webhook` (multipart) | SubmissionManager | fast-accept queue mode is live (~3ms) |
 

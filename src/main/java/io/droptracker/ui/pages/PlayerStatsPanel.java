@@ -280,11 +280,15 @@ public class PlayerStatsPanel {
         playerNameLabel.setForeground(DropTrackerTheme.TEXT);
         playerNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        String statusText = playerResult.isRegistered() ? "Registered Player" : "Unregistered Player";
+        String statusText = playerResult.isRegistered() ? "Registered Player" : "Not registered!";
         JLabel playerDescLabel = new JLabel(statusText);
         playerDescLabel.setFont(FontManager.getRunescapeSmallFont());
         playerDescLabel.setForeground(playerResult.isRegistered() ? DropTrackerTheme.GREEN : DropTrackerTheme.EMBER);
         playerDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        if (!playerResult.isRegistered()) {
+            playerDescLabel.setToolTipText("<html>This account has not been claimed on DropTracker.<br/>"
+                + "Claim your in-game name in our Discord to register.</html>");
+        }
 
         playerNamePanel.add(playerNameLabel);
         playerNamePanel.add(Box.createRigidArea(new Dimension(0, 5)));
