@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.util.Text;
+import okhttp3.Call;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -33,12 +34,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * In-game event notifications + HUD state (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2).
  *
- * Polls GET /notifications every {@value #POLL_INTERVAL_SECONDS}s while the
- * server reports a live event tracking this player (the {@code active_event}
- * flag in the group configs / notifications response), dispatches each typed
- * envelope through a hardcoded renderer registry (unknown types are dropped
- * silently — the forward-compatibility contract), and keeps the
- * {@code /event_state} snapshot the HUD and Events tab render.
+ * Long-polls GET /notifications?wait={@value #LONG_POLL_WAIT_SECONDS} while
+ * the server reports a live event tracking this player (the
+ * {@code active_event} flag in the group configs / notifications response):
+ * the server holds an empty-inbox request open until a notification lands,
+ * so delivery is near-immediate, and each completed request immediately
+ * re-issues the next. Servers that predate the {@code wait} param (no
+ * {@code long_poll: true} in the response) fall back to a fixed
+ * {@value #POLL_INTERVAL_SECONDS}s poll. The held call runs on OkHttp's own
+ * dispatcher via enqueue — the shared client executor is only ever used to
+ * schedule the next cycle, never blocked through a hold. Each typed envelope
+ * dispatches through a hardcoded renderer registry (unknown types are
+ * dropped silently — the forward-compatibility contract), and the service
+ * keeps the {@code /event_state} snapshot the HUD and Events tab render.
  *
  * Stacking rules: envelopes are processed per poll as one batch, grouped by
  * event — at most one pop-up per event per batch, chat collapses beyond
@@ -48,7 +56,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 @Singleton
 public class EventNotificationService {
+    /** Fallback poll cadence for legacy servers that ignore the wait param. */
     static final int POLL_INTERVAL_SECONDS = 10;
+    /** Requested server-side hold per long-poll (the server clamps to its cap). */
+    static final int LONG_POLL_WAIT_SECONDS = 25;
+    /** Pause between held polls so a busy inbox can't turn into a hot loop. */
+    private static final long REISSUE_DELAY_MS = 250;
+    /**
+     * An allegedly-held poll that returns empty this fast wasn't actually
+     * held (misbehaving proxy/server); use the legacy cadence for that cycle.
+     */
+    private static final long SUSPICIOUS_FAST_EMPTY_MS = 1500;
+    private static final long MAX_FAILURE_BACKOFF_MS = 60_000L;
     private static final int SEEN_IDS_MAX = 200;
     private static final int MAX_CHAT_LINES_PER_EVENT = 3;
     private static final int MAX_TOASTS_QUEUED = 6;
@@ -63,9 +82,17 @@ public class EventNotificationService {
     private final ScheduledExecutorService executor;
     private final ConfigManager configManager;
 
+    /** Next scheduled poll cycle; guarded by {@code this}. */
     private ScheduledFuture<?> pollTask;
-    private final AtomicBoolean polling = new AtomicBoolean(false);
-    private int idleTicks = 0;
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    /** Set while a cycle (including its in-flight HTTP call) owns the chain. */
+    private final AtomicBoolean cycleInFlight = new AtomicBoolean(false);
+    @Nullable
+    private volatile Call inFlightCall;
+    /** Only mutated by the single in-flight cycle chain. */
+    private volatile int consecutiveFailures = 0;
+    /** Cleared when a wait-request comes back without long_poll=true. */
+    private volatile boolean serverSupportsLongPoll = true;
 
     /** LRU of processed envelope ids (replay guard). */
     private final Map<String, Boolean> seenIds =
@@ -107,17 +134,25 @@ public class EventNotificationService {
     /* ===================== lifecycle ===================== */
 
     public void start() {
-        if (pollTask != null) {
+        if (!running.compareAndSet(false, true)) {
             return;
         }
-        pollTask = executor.scheduleWithFixedDelay(
-            this::pollSafely, POLL_INTERVAL_SECONDS, POLL_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        serverSupportsLongPoll = true;
+        consecutiveFailures = 0;
+        scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
     }
 
     public void stop() {
-        if (pollTask != null) {
-            pollTask.cancel(false);
-            pollTask = null;
+        running.set(false);
+        synchronized (this) {
+            if (pollTask != null) {
+                pollTask.cancel(false);
+                pollTask = null;
+            }
+        }
+        Call call = inFlightCall;
+        if (call != null) {
+            call.cancel();
         }
         toasts.clear();
         eventState = null;
@@ -128,70 +163,177 @@ public class EventNotificationService {
         return config.useApi() && config.eventNotifications();
     }
 
-    private void pollSafely() {
-        try {
-            poll();
-        } catch (Exception e) {
-            log.debug("event notification poll failed: {}", e.getMessage());
+    private void scheduleNext(long delayMs) {
+        if (!running.get()) {
+            return;
+        }
+        synchronized (this) {
+            if (!running.get()) {
+                return;
+            }
+            pollTask = executor.schedule(this::runCycleSafely, delayMs, TimeUnit.MILLISECONDS);
         }
     }
 
-    private void poll() {
-        if (!enabled() || !polling.compareAndSet(false, true)) {
+    private void runCycleSafely() {
+        try {
+            runCycle();
+        } catch (Exception e) {
+            log.debug("event notification cycle failed: {}", e.getMessage());
+            cycleInFlight.set(false);
+            scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
+        }
+    }
+
+    /**
+     * One poll cycle. Runs briefly on the shared executor: it only picks the
+     * wait mode and enqueues the HTTP call; the OkHttp callback processes the
+     * response and schedules the next cycle. Exactly one cycle owns the chain
+     * at a time ({@link #cycleInFlight}); the flag is always cleared before
+     * the owner schedules its successor, so the chain cannot strand itself.
+     */
+    private void runCycle() {
+        if (!running.get() || !cycleInFlight.compareAndSet(false, true)) {
             return;
         }
+        boolean handedOff = false;
         try {
-            String playerName = client.getLocalPlayer() != null
+            if (!enabled()) {
+                scheduleNext(IDLE_RECHECK_SECONDS * 1000L);
+                return;
+            }
+            final String playerName = client.getLocalPlayer() != null
                 ? client.getLocalPlayer().getName() : null;
-            long accountHash = client.getAccountHash();
+            final long accountHash = client.getAccountHash();
             if (playerName == null || accountHash == -1L) {
+                scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
                 return;
             }
-            // Idle gate: without a live event there is nothing to poll — the
-            // group-config refresh (or a slow recheck here) flips us active.
-            if (!api.hasActiveEvent()) {
-                idleTicks++;
-                if (idleTicks * POLL_INTERVAL_SECONDS < IDLE_RECHECK_SECONDS) {
-                    return;
-                }
+            // Idle (no live event): a plain poll checks the authoritative
+            // active_event flag; long-holds are reserved for live events.
+            final int waitSeconds = (api.hasActiveEvent() && serverSupportsLongPoll)
+                ? LONG_POLL_WAIT_SECONDS : 0;
+            Call call = api.newNotificationsCall(playerName, accountHash, waitSeconds);
+            if (call == null) {
+                scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
+                return;
             }
-            idleTicks = 0;
+            inFlightCall = call;
+            final long startedAtMs = System.currentTimeMillis();
+            try {
+                call.enqueue(new okhttp3.Callback() {
+                    @Override
+                    public void onFailure(okhttp3.Call c, java.io.IOException e) {
+                        inFlightCall = null;
+                        cycleInFlight.set(false);
+                        if (!running.get() || c.isCanceled()) {
+                            return;
+                        }
+                        consecutiveFailures++;
+                        log.debug("/notifications poll failed: {}", e.getMessage());
+                        scheduleNext(failureBackoffMs());
+                    }
 
-            DropTrackerApi.NotificationsResponse response =
-                api.fetchNotifications(playerName, accountHash);
-            if (response == null) {
-                return;
-            }
-            List<EventNotification> fresh = new ArrayList<>();
-            if (response.notifications != null) {
-                for (EventNotification n : response.notifications) {
-                    if (n == null || n.getType() == null) {
-                        continue;
+                    @Override
+                    public void onResponse(okhttp3.Call c, okhttp3.Response response) {
+                        inFlightCall = null;
+                        long nextDelayMs;
+                        try {
+                            DropTrackerApi.NotificationsResponse parsed;
+                            try (okhttp3.Response r = response) {
+                                parsed = api.parseNotificationsResponse(r);
+                            }
+                            if (parsed == null) {
+                                consecutiveFailures++;
+                                nextDelayMs = failureBackoffMs();
+                            } else {
+                                consecutiveFailures = 0;
+                                handleResponse(parsed, playerName, accountHash);
+                                nextDelayMs = nextDelayMs(parsed, waitSeconds,
+                                    System.currentTimeMillis() - startedAtMs);
+                            }
+                        } catch (Exception e) {
+                            log.debug("/notifications processing failed: {}", e.getMessage());
+                            nextDelayMs = POLL_INTERVAL_SECONDS * 1000L;
+                        } finally {
+                            cycleInFlight.set(false);
+                        }
+                        scheduleNext(nextDelayMs);
                     }
-                    if (n.getId() != null && seenIds.put(n.getId(), Boolean.TRUE) != null) {
-                        continue; // replay
-                    }
-                    fresh.add(n);
-                }
-            }
-            if (!fresh.isEmpty()) {
-                DebugLogger.log("[EventNotifications] batch size=" + fresh.size());
-                processBatch(fresh);
-            }
-            boolean stateStale = (System.currentTimeMillis() - eventStateAtMs)
-                > TimeUnit.MINUTES.toMillis(3);
-            if ((!fresh.isEmpty() || (eventState == null || stateStale))
-                    && Boolean.TRUE.equals(response.activeEvent)) {
-                refreshEventState(playerName, accountHash);
-            }
-            if (Boolean.FALSE.equals(response.activeEvent) && eventState != null) {
-                // Event(s) ended: clear the HUD snapshot.
-                eventState = null;
-                notifyStateUpdated();
+                });
+                handedOff = true;
+            } catch (Exception e) {
+                inFlightCall = null;
+                log.debug("/notifications enqueue failed: {}", e.getMessage());
+                scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
             }
         } finally {
-            polling.set(false);
+            if (!handedOff) {
+                cycleInFlight.set(false);
+            }
         }
+    }
+
+    /** Runs on the OkHttp callback thread (off-EDT, off-client-thread). */
+    private void handleResponse(DropTrackerApi.NotificationsResponse response,
+                                String playerName, long accountHash) {
+        List<EventNotification> fresh = new ArrayList<>();
+        if (response.notifications != null) {
+            for (EventNotification n : response.notifications) {
+                if (n == null || n.getType() == null) {
+                    continue;
+                }
+                if (n.getId() != null && seenIds.put(n.getId(), Boolean.TRUE) != null) {
+                    continue; // replay
+                }
+                fresh.add(n);
+            }
+        }
+        if (!fresh.isEmpty()) {
+            DebugLogger.log("[EventNotifications] batch size=" + fresh.size());
+            processBatch(fresh);
+        }
+        boolean stateStale = (System.currentTimeMillis() - eventStateAtMs)
+            > TimeUnit.MINUTES.toMillis(3);
+        if ((!fresh.isEmpty() || (eventState == null || stateStale))
+                && Boolean.TRUE.equals(response.activeEvent)) {
+            refreshEventState(playerName, accountHash);
+        }
+        if (Boolean.FALSE.equals(response.activeEvent) && eventState != null) {
+            // Event(s) ended: clear the HUD snapshot.
+            eventState = null;
+            notifyStateUpdated();
+        }
+    }
+
+    /** Delay before the next cycle, from the just-finished poll's outcome. */
+    private long nextDelayMs(DropTrackerApi.NotificationsResponse response,
+                             int waitRequestedSeconds, long elapsedMs) {
+        boolean active = Boolean.TRUE.equals(response.activeEvent) || api.hasActiveEvent();
+        if (!active) {
+            return IDLE_RECHECK_SECONDS * 1000L;
+        }
+        if (waitRequestedSeconds > 0) {
+            if (!Boolean.TRUE.equals(response.longPoll)) {
+                // Legacy server: the wait param was ignored. Stop asking and
+                // poll on the fixed cadence for the rest of the session.
+                serverSupportsLongPoll = false;
+                DebugLogger.log("[EventNotifications] server lacks long-poll; using fixed cadence");
+                return POLL_INTERVAL_SECONDS * 1000L;
+            }
+            boolean empty = response.notifications == null || response.notifications.isEmpty();
+            if (empty && elapsedMs < SUSPICIOUS_FAST_EMPTY_MS) {
+                return POLL_INTERVAL_SECONDS * 1000L;
+            }
+            return REISSUE_DELAY_MS;
+        }
+        // Plain poll while an event is live (idle flip or legacy mode).
+        return serverSupportsLongPoll ? REISSUE_DELAY_MS : POLL_INTERVAL_SECONDS * 1000L;
+    }
+
+    private long failureBackoffMs() {
+        int failures = Math.max(1, Math.min(consecutiveFailures, 5));
+        return Math.min(MAX_FAILURE_BACKOFF_MS, 5000L * (1L << (failures - 1)));
     }
 
     /** Fetch the state snapshot now (panel open / manual refresh). Off-EDT. */

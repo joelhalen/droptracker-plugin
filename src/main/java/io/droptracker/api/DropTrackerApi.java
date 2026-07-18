@@ -41,6 +41,12 @@ public class DropTrackerApi {
     private static final int PANEL_DATA_FAILURE_BACKOFF_SECONDS = 300;
     /** Maximum number of uuids sent in one batch POST /check request. */
     private static final int CHECK_BATCH_LIMIT = 100;
+    /**
+     * Read timeout for long-poll GET /notifications calls. Must exceed the
+     * largest {@code wait} the service requests (the server holds the request
+     * open that long on an empty inbox) plus headroom for the response itself.
+     */
+    private static final int LONG_POLL_READ_TIMEOUT_SECONDS = 40;
 
     private final DropTrackerConfig config;
     @Inject
@@ -55,6 +61,14 @@ public class DropTrackerApi {
      * keep using the injected {@link #httpClient}, since those payloads can be large.
      */
     private OkHttpClient panelHttpClient;
+
+    /**
+     * Client for long-poll /notifications calls only: same pool as the
+     * injected client but with a read timeout that outlasts the server-held
+     * wait window, where {@link #panelHttpClient}'s tight 10s timeout would
+     * abort every hold.
+     */
+    private OkHttpClient longPollHttpClient;
     @Inject
     private DropTrackerPlugin plugin;
 
@@ -97,6 +111,10 @@ public class DropTrackerApi {
             this.panelHttpClient = httpClient.newBuilder()
                 .connectTimeout(5, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
+                .build();
+            this.longPollHttpClient = httpClient.newBuilder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(LONG_POLL_READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .build();
     }
 
@@ -904,15 +922,26 @@ public class DropTrackerApi {
         public List<io.droptracker.models.api.EventNotification> notifications;
         @SerializedName("active_event")
         public Boolean activeEvent;
+        /**
+         * Present (true) only when the server understood a {@code wait}
+         * request; its absence marks a legacy server that ignored the param,
+         * so the caller must fall back to fixed-interval polling.
+         */
+        @SerializedName("long_poll")
+        public Boolean longPoll;
     }
 
     /**
-     * Drains the player's event-notification inbox. Returns null on any
-     * failure (network, non-200, malformed body). Blocking — never call on
-     * the EDT or the client thread.
+     * Builds the GET /notifications call that drains the player's
+     * event-notification inbox. {@code waitSeconds > 0} long-polls: the
+     * server holds an empty-inbox request open up to that many seconds (it
+     * clamps to its own cap) and flags the response with long_poll=true.
+     * Returns null when the API is disabled or the identity/URL is unusable.
+     * Long-poll calls must go through {@link Call#enqueue} — never block a
+     * shared executor thread waiting out the hold.
      */
     @Nullable
-    public NotificationsResponse fetchNotifications(String playerName, long accountHash) {
+    public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds) {
         if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
             return null;
         }
@@ -920,18 +949,50 @@ public class DropTrackerApi {
         if (base == null) {
             return null;
         }
-        HttpUrl url = base.newBuilder()
+        HttpUrl.Builder url = base.newBuilder()
             .addQueryParameter("player_name", playerName)
-            .addQueryParameter("acc_hash", String.valueOf(accountHash))
-            .build();
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-            if (!response.isSuccessful() || response.body() == null) {
+            .addQueryParameter("acc_hash", String.valueOf(accountHash));
+        if (waitSeconds > 0) {
+            url.addQueryParameter("wait", String.valueOf(waitSeconds));
+        }
+        Request request = new Request.Builder().url(url.build()).build();
+        OkHttpClient callClient = waitSeconds > 0 ? longPollHttpClient : panelHttpClient;
+        return callClient.newCall(request);
+    }
+
+    /**
+     * Parses a successful /notifications response body. Returns null on an
+     * empty or malformed body. Closing the response stays with the caller.
+     */
+    @Nullable
+    public NotificationsResponse parseNotificationsResponse(Response response) {
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) {
                 return null;
             }
-            return gson.fromJson(response.body().string(), NotificationsResponse.class);
+            return gson.fromJson(body.string(), NotificationsResponse.class);
         } catch (IOException | JsonSyntaxException e) {
+            log.debug("/notifications parse failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Drains the player's event-notification inbox with a plain (non-held)
+     * request. Returns null on any failure (network, non-200, malformed
+     * body). Blocking — never call on the EDT or the client thread.
+     */
+    @Nullable
+    public NotificationsResponse fetchNotifications(String playerName, long accountHash) {
+        Call call = newNotificationsCall(playerName, accountHash, 0);
+        if (call == null) {
+            return null;
+        }
+        try (Response response = call.execute()) {
+            return parseNotificationsResponse(response);
+        } catch (IOException e) {
             log.debug("/notifications fetch failed: {}", e.getMessage());
             return null;
         }

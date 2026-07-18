@@ -150,7 +150,8 @@ public class EventState {
         private List<Requirement> requirements;
     }
 
-    /** One item requirement of a task ({name, quantity?, points?, obtained?}). */
+    /** One item requirement of a task
+     *  ({name, quantity?, points?, obtained?, icon_item_id?, icon_url?}). */
     @Getter
     public static class Requirement {
         @SerializedName("name")
@@ -167,6 +168,15 @@ public class EventState {
         @SerializedName("obtained")
         @Nullable
         private Boolean obtained;
+        /** Optional server-authoritative item sprite id for this requirement;
+         *  null on current servers (the panel then resolves it from the name). */
+        @SerializedName("icon_item_id")
+        @Nullable
+        private Integer iconItemId;
+        /** Optional allowlisted remote icon URL, used when there is no sprite. */
+        @SerializedName("icon_url")
+        @Nullable
+        private String iconUrl;
     }
 
     @Getter

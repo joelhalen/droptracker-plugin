@@ -45,6 +45,21 @@ public class EventNotificationParseTest {
     }
 
     @Test
+    public void parsesLongPollMarker() {
+        // Long-poll servers stamp long_poll=true on wait-requests; legacy
+        // servers omit it entirely, which must parse as null (not false).
+        DropTrackerApi.NotificationsResponse held = gson.fromJson(
+            "{\"notifications\":[],\"active_event\":true,\"long_poll\":true}",
+            DropTrackerApi.NotificationsResponse.class);
+        assertEquals(Boolean.TRUE, held.longPoll);
+
+        DropTrackerApi.NotificationsResponse legacy = gson.fromJson(
+            "{\"notifications\":[],\"active_event\":true}",
+            DropTrackerApi.NotificationsResponse.class);
+        assertNull(legacy.longPoll);
+    }
+
+    @Test
     public void unknownFieldsAndTypesParseWithoutError() {
         // Forward compatibility: a future type with unknown fields must still
         // deserialize (the service then drops it by type).

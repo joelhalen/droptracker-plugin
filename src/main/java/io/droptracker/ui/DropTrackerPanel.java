@@ -14,6 +14,7 @@ import io.droptracker.ui.pages.EventsPanel;
 import io.droptracker.ui.pages.GroupPanel;
 import io.droptracker.ui.pages.HomePanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
+import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.RemoteImageCache;
 
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +77,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private EventNotificationService eventNotificationService;
 	@Inject
 	private RemoteImageCache remoteImageCache;
+	@Inject
+	private ItemIDSearch itemIDSearch;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -135,7 +138,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			groupPanel = new GroupPanel(client, config, api, itemManager, this);
 			groupComponent = groupPanel.create();
 			eventsPanel = new EventsPanel(config, api, eventNotificationService,
-				client, itemManager, remoteImageCache);
+				client, itemManager, remoteImageCache, itemIDSearch);
 			eventsComponent = eventsPanel.create();
 			eventNotificationService.setOnStateUpdated(() -> {
 				if (eventsPanel != null) {

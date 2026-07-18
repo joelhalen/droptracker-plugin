@@ -6,6 +6,7 @@ import io.droptracker.models.api.EventState;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.components.PanelElements;
+import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
 import net.runelite.api.Client;
@@ -13,6 +14,7 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
+import net.runelite.client.util.ImageUtil;
 
 import javax.annotation.Nullable;
 import javax.swing.BorderFactory;
@@ -67,19 +69,28 @@ public class EventsPanel {
     private final Client client;
     private final ItemManager itemManager;
     private final RemoteImageCache remoteImages;
+    private final ItemIDSearch itemIds;
+
+    /* Tracked-task required-item strip: small wrapping grid of item sprites. */
+    private static final int REQ_ICONS_PER_ROW = 5;
+    private static final int MAX_REQ_ICONS = 10;
+    private static final int REQ_ICON_SLOT = 28;
+    private static final int REQ_ICON_SIZE = 26;
 
     private JPanel root;
     private JPanel listPanel;
 
     public EventsPanel(DropTrackerConfig config, DropTrackerApi api,
                        EventNotificationService service, Client client,
-                       ItemManager itemManager, RemoteImageCache remoteImages) {
+                       ItemManager itemManager, RemoteImageCache remoteImages,
+                       ItemIDSearch itemIds) {
         this.config = config;
         this.api = api;
         this.service = service;
         this.client = client;
         this.itemManager = itemManager;
         this.remoteImages = remoteImages;
+        this.itemIds = itemIds;
     }
 
     public JPanel create() {
@@ -369,7 +380,201 @@ public class EventsPanel {
             box.add(vgap(4));
             box.add(progressBar(task.have, task.need));
         }
+
+        // Self-describing detail: the description and requirement completion the
+        // list-row tooltip shows, surfaced here so a tracked task explains itself
+        // without re-finding and hovering it. Only bingo/list events carry the
+        // full task record (board games send no task list — displayed as before).
+        EventState.TaskInfo info = taskInfoById(entry, task.id);
+        if (info != null) {
+            String description = info.getDescription();
+            if (description != null && !description.isEmpty()) {
+                box.add(vgap(5));
+                box.add(taskDescription(description));
+            }
+            List<EventState.Requirement> requirements = info.getRequirements();
+            if (requirements != null && !requirements.isEmpty()) {
+                box.add(vgap(5));
+                box.add(requirementStrip(requirements));
+            }
+        }
         return box;
+    }
+
+    /** The full task record behind the headlined task (description +
+     *  requirements), or null when the server sent no task list (board games,
+     *  older servers) — the box then shows only the label and progress. */
+    @Nullable
+    private static EventState.TaskInfo taskInfoById(EventState.Entry entry, int id) {
+        List<EventState.TaskInfo> tasks = entry.getTasks();
+        if (tasks == null) {
+            return null;
+        }
+        for (EventState.TaskInfo task : tasks) {
+            if (task.getId() == id) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+    /** Wrapped, muted description line for the tracked task box. */
+    private JComponent taskDescription(String description) {
+        int width = PluginPanel.PANEL_WIDTH - 55;
+        JLabel label = new JLabel("<html><div style='width:" + width + "px;'>"
+            + escape(description) + "</div></html>");
+        label.setFont(FontManager.getRunescapeSmallFont());
+        label.setForeground(DropTrackerTheme.TEXT_MUTED);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+
+    /** "Required items" caption above a wrapping grid of item sprites, each
+     *  full-colour with a green tick when the team has banked it or dimmed
+     *  when still needed (the same obtained flag the tooltip strikes through). */
+    private JComponent requirementStrip(List<EventState.Requirement> requirements) {
+        JPanel wrap = new JPanel();
+        wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
+        wrap.setBackground(DropTrackerTheme.SURFACE_2);
+        wrap.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel caption = new JLabel("Required items");
+        caption.setFont(FontManager.getRunescapeSmallFont());
+        caption.setForeground(DropTrackerTheme.TEXT_MUTED);
+        caption.setAlignmentX(Component.LEFT_ALIGNMENT);
+        wrap.add(caption);
+        wrap.add(vgap(3));
+
+        JPanel grid = new JPanel(new GridBagLayout()) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        grid.setBackground(DropTrackerTheme.SURFACE_2);
+        grid.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        GridBagConstraints c = new GridBagConstraints();
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(1, 0, 1, 3);
+        c.gridx = 0;
+        c.gridy = 0;
+
+        int shown = Math.min(requirements.size(), MAX_REQ_ICONS);
+        for (int i = 0; i < shown; i++) {
+            grid.add(requirementSlot(requirements.get(i)), c);
+            if (++c.gridx >= REQ_ICONS_PER_ROW) {
+                c.gridx = 0;
+                c.gridy++;
+            }
+        }
+        if (requirements.size() > shown) {
+            JLabel more = new JLabel("+" + (requirements.size() - shown));
+            more.setFont(FontManager.getRunescapeSmallFont());
+            more.setForeground(DropTrackerTheme.TEXT_MUTED);
+            grid.add(more, c);
+        }
+        wrap.add(grid);
+        return wrap;
+    }
+
+    /** One requirement cell: its item sprite (resolved from the name when the
+     *  server sends no id), or a short name token when no icon resolves. */
+    private JComponent requirementSlot(EventState.Requirement req) {
+        boolean obtained = Boolean.TRUE.equals(req.getObtained());
+        JLabel slot = new JLabel();
+        slot.setHorizontalAlignment(SwingConstants.CENTER);
+        slot.setVerticalAlignment(SwingConstants.CENTER);
+        slot.setPreferredSize(new Dimension(REQ_ICON_SLOT, REQ_ICON_SLOT));
+        slot.setToolTipText(requirementTooltip(req, obtained));
+
+        Integer itemId = req.getIconItemId() != null && req.getIconItemId() > 0
+            ? req.getIconItemId()
+            : (req.getIconUrl() == null && req.getName() != null
+                ? itemIds.findItemId(req.getName()) : null);
+        if (itemId != null || req.getIconUrl() != null) {
+            applyRequirementIcon(slot, itemId, req.getIconUrl(), REQ_ICON_SIZE, obtained);
+        } else {
+            // No resolvable sprite (name miss / cache not yet loaded): a short
+            // token still shows the requirement and its obtained/needed state.
+            slot.setText(abbrevName(req.getName()));
+            slot.setFont(FontManager.getRunescapeSmallFont());
+            slot.setForeground(obtained ? DropTrackerTheme.GREEN : DropTrackerTheme.TEXT_MUTED);
+        }
+        return slot;
+    }
+
+    /** Same struck-through obtained styling as the row tooltip, per item. */
+    private static String requirementTooltip(EventState.Requirement req, boolean obtained) {
+        StringBuilder html = new StringBuilder("<html>");
+        if (obtained) {
+            html.append("<strike><font color='#8a7c5e'>");
+        }
+        html.append(escape(req.getName()));
+        if (req.getQuantity() != null && req.getQuantity() > 1) {
+            html.append(" ×").append(req.getQuantity());
+        }
+        if (req.getPoints() != null) {
+            html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
+        }
+        if (obtained) {
+            html.append("</font></strike> ✓");
+        }
+        html.append("</html>");
+        return html.toString();
+    }
+
+    /** Item sprite or allowlisted remote icon into a requirement slot, marked
+     *  obtained (full colour + green tick) or still needed (dimmed). */
+    private void applyRequirementIcon(JLabel target, @Nullable Integer itemId,
+                                      @Nullable String iconUrl, int size, boolean obtained) {
+        if (itemId != null && itemId > 0) {
+            AsyncBufferedImage itemImage = itemManager.getImage(itemId);
+            Runnable apply = () -> {
+                target.setIcon(new ImageIcon(styleRequirementImage(itemImage, size, obtained)));
+                target.revalidate();
+                target.repaint();
+            };
+            itemImage.onLoaded(apply);
+            apply.run();
+        } else if (iconUrl != null) {
+            BufferedImage remote = remoteImages.get(iconUrl,
+                () -> SwingUtilities.invokeLater(this::rebuild));
+            if (remote != null) {
+                target.setIcon(new ImageIcon(styleRequirementImage(remote, size, obtained)));
+            }
+        }
+    }
+
+    /** Fit into the slot, then either dim (still needed) or stamp a corner
+     *  tick (banked) so obtained state reads at a glance on a small sprite. */
+    private static BufferedImage styleRequirementImage(BufferedImage source, int size, boolean obtained) {
+        BufferedImage fitted = fitImage(source, size);
+        if (!obtained) {
+            return ImageUtil.alphaOffset(fitted, 0.35f);
+        }
+        Graphics2D g = fitted.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+            RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setFont(FontManager.getRunescapeSmallFont());
+        String tick = "✓";
+        java.awt.FontMetrics fm = g.getFontMetrics();
+        int tx = size - fm.stringWidth(tick);
+        int ty = size - fm.getDescent();
+        g.setColor(Color.BLACK);
+        g.drawString(tick, tx + 1, ty + 1);
+        g.setColor(DropTrackerTheme.GREEN);
+        g.drawString(tick, tx, ty);
+        g.dispose();
+        return fitted;
+    }
+
+    /** First few letters of a name, for the no-sprite fallback token. */
+    private static String abbrevName(String name) {
+        if (name == null || name.isEmpty()) {
+            return "?";
+        }
+        return name.length() <= 3 ? name : name.substring(0, 3);
     }
 
     private JPanel rollBanner() {
@@ -796,6 +1001,11 @@ public class EventsPanel {
 
     /** Scale into a size×size box, centered, aspect ratio preserved. */
     private static ImageIcon fitIcon(BufferedImage source, int size) {
+        return new ImageIcon(fitImage(source, size));
+    }
+
+    /** {@link #fitIcon} as a raw image, for callers that post-process it. */
+    private static BufferedImage fitImage(BufferedImage source, int size) {
         int w = Math.max(source.getWidth(), 1);
         int h = Math.max(source.getHeight(), 1);
         float scale = Math.min((float) size / w, (float) size / h);
@@ -807,7 +1017,7 @@ public class EventsPanel {
             RenderingHints.VALUE_INTERPOLATION_BILINEAR);
         g.drawImage(source, (size - nw) / 2, (size - nh) / 2, nw, nh, null);
         g.dispose();
-        return new ImageIcon(out);
+        return out;
     }
 
     private static String kindLabel(String kind) {
