@@ -109,7 +109,8 @@ public class EventToastOverlay extends Overlay {
             }
         }
         int textWidth = WIDTH - textLeft - PADDING;
-        List<String> bodyLines = wrap(toast.getBody(), bodyFm, textWidth, 3);
+        // Unbounded: wrap the whole body rather than ellipsizing the detail.
+        List<String> bodyLines = wrap(toast.getBody(), bodyFm, textWidth, Integer.MAX_VALUE);
         int height = PADDING + titleFm.getHeight()
             + bodyLines.size() * bodyFm.getHeight() + PADDING;
         height = Math.max(height, icon != null ? ICON_SIZE + 2 * PADDING : 0);

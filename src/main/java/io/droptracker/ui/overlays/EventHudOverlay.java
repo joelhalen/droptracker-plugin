@@ -284,7 +284,9 @@ public class EventHudOverlay extends Overlay {
             }
         }
         int textWidth = WIDTH - textLeft - PAD;
-        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, 2);
+        // Full body, never "…" — the card grows a line instead of cutting
+        // off exactly the detail (item, task, progress) the nudge exists for.
+        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, Integer.MAX_VALUE);
         int height = 6 + titleFm.getHeight() + bodyLines.size() * smallFm.getHeight() + 6;
         if (icon != null) {
             height = Math.max(height, NUDGE_ICON + 12);
