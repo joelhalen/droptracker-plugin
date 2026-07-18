@@ -142,8 +142,14 @@ public class EventsPanel {
             listPanel.add(emptyLabel("No active events right now."));
         } else {
             boolean multiple = entries.size() > 1;
+            // The event the HUD is actually rendering right now (explicit pin,
+            // else the first event) — cards mark it so "which event has the
+            // HUD" is always visible when the player is in several.
+            EventState.Entry hudEntry = service.hudEntry();
+            int hudEventId = hudEntry != null && hudEntry.getEvent() != null
+                ? hudEntry.getEvent().getId() : -1;
             for (EventState.Entry entry : entries) {
-                listPanel.add(eventCard(entry, multiple));
+                listPanel.add(eventCard(entry, multiple, hudEventId));
                 listPanel.add(Box.createRigidArea(new Dimension(0, 8)));
             }
         }
@@ -163,19 +169,23 @@ public class EventsPanel {
 
     /* ===================== event card ===================== */
 
-    private JPanel eventCard(EventState.Entry entry, boolean showHudPick) {
+    private JPanel eventCard(EventState.Entry entry, boolean showHudPick, int hudEventId) {
         EventState.EventInfo event = entry.getEvent();
         EventState.TeamInfo team = entry.getTeam();
         Color teamColor = team != null
             ? parseColor(team.getColor(), DropTrackerTheme.GOLD) : DropTrackerTheme.GOLD;
+        boolean onHud = event.getId() == hudEventId;
 
         JPanel card = PanelElements.heightCappedPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(DropTrackerTheme.SURFACE_1);
-        card.setBorder(BorderFactory.createLineBorder(DropTrackerTheme.BRONZE, 1));
+        // With several events running, the card owning the HUD gets the gold
+        // edge so the player can tell which event is in focus at a glance.
+        card.setBorder(BorderFactory.createLineBorder(
+            showHudPick && onHud ? DropTrackerTheme.GOLD : DropTrackerTheme.BRONZE, 1));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        card.add(cardHeader(entry, showHudPick));
+        card.add(cardHeader(entry, showHudPick, onHud));
 
         JPanel body = new JPanel();
         body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
@@ -238,7 +248,7 @@ public class EventsPanel {
     }
 
     /** Header strip: event name + kind/countdown, HUD pick on the right. */
-    private JPanel cardHeader(EventState.Entry entry, boolean showHudPick) {
+    private JPanel cardHeader(EventState.Entry entry, boolean showHudPick, boolean onHud) {
         EventState.EventInfo event = entry.getEvent();
 
         JPanel header = new JPanel(new BorderLayout(6, 0)) {
@@ -277,18 +287,24 @@ public class EventsPanel {
         header.add(titleCol, BorderLayout.CENTER);
 
         if (showHudPick) {
-            boolean pinned = config.pinnedEventId() == event.getId();
-            JButton pin = new JButton(pinned ? "On HUD ✓" : "Show on HUD");
-            DropTrackerTheme.styleButton(pin);
-            pin.setToolTipText("Which event the Enhanced Display HUD shows");
-            pin.setEnabled(!pinned);
-            pin.addActionListener(e -> {
-                config.setPinnedEventId(event.getId());
-                onUpdated();
-            });
             JPanel east = new JPanel(new BorderLayout());
             east.setBackground(DropTrackerTheme.SURFACE_2);
-            east.add(pin, BorderLayout.NORTH);
+            if (onHud) {
+                // The event the HUD is currently rendering (explicit pin or
+                // the default) — a chip, not a dead button.
+                JLabel chip = DropTrackerTheme.chip("ON HUD", DropTrackerTheme.GOLD);
+                chip.setToolTipText("The Enhanced Display HUD is showing this event");
+                east.add(chip, BorderLayout.NORTH);
+            } else {
+                JButton pin = new JButton("Show on HUD");
+                DropTrackerTheme.styleButton(pin);
+                pin.setToolTipText("Switch the Enhanced Display HUD to this event");
+                pin.addActionListener(e -> {
+                    config.setPinnedEventId(event.getId());
+                    onUpdated();
+                });
+                east.add(pin, BorderLayout.NORTH);
+            }
             header.add(east, BorderLayout.EAST);
         }
         return header;
@@ -446,11 +462,17 @@ public class EventsPanel {
             row.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
+                    int eventId = entry.getEvent().getId();
                     // Clicking the manually tracked task reverts to auto.
                     if (isDisplayed && displayedIsManual) {
-                        service.setTrackedTask(entry.getEvent().getId(), 0);
+                        service.setTrackedTask(eventId, 0);
                     } else {
-                        service.setTrackedTask(entry.getEvent().getId(), task.getId());
+                        service.setTrackedTask(eventId, task.getId());
+                        // Tracking a task is an act of focus: point the HUD at
+                        // this event too, otherwise picks made in a second
+                        // event never show anywhere (the HUD keeps rendering
+                        // the pinned/first event).
+                        config.setPinnedEventId(eventId);
                     }
                     rebuild();
                 }
