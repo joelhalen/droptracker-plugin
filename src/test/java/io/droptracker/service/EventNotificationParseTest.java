@@ -90,7 +90,7 @@ public class EventNotificationParseTest {
             + "\"badge\":\"POINTS\",\"value\":\"50 pts\","
             + "\"description\":\"Earn 50 points. Each listed item awards its own point value.\","
             + "\"requirements\":[{\"name\":\"Twisted bow\",\"points\":25},"
-            + "{\"name\":\"Dragon claws\",\"quantity\":2,\"points\":10}]}],"
+            + "{\"name\":\"Dragon claws\",\"quantity\":2,\"points\":10,\"obtained\":true}]}],"
             + "\"members\":[{\"player_id\":1,\"name\":\"joelhalen\"},"
             + "{\"player_id\":3422,\"name\":\"Ra ine\"}],\"members_total\":69}]}";
         EventState state = gson.fromJson(json, EventState.class);
@@ -124,6 +124,8 @@ public class EventNotificationParseTest {
         assertEquals("Twisted bow", points.getRequirements().get(0).getName());
         assertEquals(Integer.valueOf(25), points.getRequirements().get(0).getPoints());
         assertEquals(Integer.valueOf(2), points.getRequirements().get(1).getQuantity());
+        assertNull(points.getRequirements().get(0).getObtained());
+        assertEquals(Boolean.TRUE, points.getRequirements().get(1).getObtained());
         assertEquals(2, bingo.getMembers().size());
         assertEquals("Ra ine", bingo.getMembers().get(1).getName());
         assertEquals(69, bingo.getMembersTotal());

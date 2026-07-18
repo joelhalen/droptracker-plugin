@@ -510,12 +510,23 @@ public class EventsPanel {
         if (requirements != null && !requirements.isEmpty()) {
             html.append("<br/>");
             for (EventState.Requirement req : requirements) {
-                html.append("<br/>• ").append(escape(req.getName()));
+                // Struck through = the team already banked this item and
+                // re-receiving it can't advance the task (server-decided;
+                // never set on point/any-of tasks where re-receives count).
+                boolean obtained = Boolean.TRUE.equals(req.getObtained());
+                html.append("<br/>• ");
+                if (obtained) {
+                    html.append("<strike><font color='#8a7c5e'>");
+                }
+                html.append(escape(req.getName()));
                 if (req.getQuantity() != null && req.getQuantity() > 1) {
                     html.append(" ×").append(req.getQuantity());
                 }
                 if (req.getPoints() != null) {
                     html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
+                }
+                if (obtained) {
+                    html.append("</font></strike> ✓");
                 }
             }
         }

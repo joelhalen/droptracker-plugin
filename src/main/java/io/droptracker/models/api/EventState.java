@@ -150,7 +150,7 @@ public class EventState {
         private List<Requirement> requirements;
     }
 
-    /** One item requirement of a task ({name, quantity?, points?}). */
+    /** One item requirement of a task ({name, quantity?, points?, obtained?}). */
     @Getter
     public static class Requirement {
         @SerializedName("name")
@@ -161,6 +161,12 @@ public class EventState {
         @SerializedName("points")
         @Nullable
         private Integer points;
+        /** True when the team has banked this item and re-receiving it can
+         *  no longer advance the task (all_of/assembly) — rendered struck
+         *  through. Absent on point/any_of tasks where re-receives count. */
+        @SerializedName("obtained")
+        @Nullable
+        private Boolean obtained;
     }
 
     @Getter
