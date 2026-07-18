@@ -45,6 +45,21 @@ public class EventNotificationParseTest {
     }
 
     @Test
+    public void parsesReceivedItemDetail() {
+        // Completion detail fields (received_item/received_qty/points_based)
+        // drive the "received X, completing Y" phrasing; points_based must
+        // suppress quantity rendering (credits, not item counts).
+        EventNotification n = gson.fromJson(
+            "{\"id\":\"x\",\"type\":\"event_completion\",\"ts\":1,"
+                + "\"data\":{\"received_item\":\"Dragon bones\",\"received_qty\":3,"
+                + "\"points_based\":true}}",
+            EventNotification.class);
+        assertEquals("Dragon bones", n.getData().getReceivedItem());
+        assertEquals(Integer.valueOf(3), n.getData().getReceivedQty());
+        assertEquals(Boolean.TRUE, n.getData().getPointsBased());
+    }
+
+    @Test
     public void catchUpGateNeedsBothSizeAndStaleness() {
         long now = System.currentTimeMillis() / 1000L;
         // Big AND stale -> digest.

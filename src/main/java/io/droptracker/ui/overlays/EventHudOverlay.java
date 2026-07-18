@@ -25,6 +25,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -36,6 +37,11 @@ import java.util.List;
  * which event shows is the "Show on HUD" pick in the Events tab, and which
  * task shows honors the user's tracked-task pick (Events tab) before the
  * server's focus choice.
+ *
+ * While this HUD paints, incoming event pop-ups render as compact nudges
+ * anchored directly beneath the card (following wherever the user dragged
+ * it), and the stand-alone {@link EventToastOverlay} stands down — the user
+ * positions one object, never two.
  */
 @Singleton
 public class EventHudOverlay extends Overlay {
@@ -220,7 +226,98 @@ public class EventHudOverlay extends Overlay {
                 y + smallFm.getAscent(), DropTrackerTheme.TEXT);
         }
 
-        return new Dimension(WIDTH, height);
+        // This frame painted: own the pop-up queue (EventToastOverlay stands
+        // down) and render it as nudges hanging off the card's bottom edge.
+        service.markHudRendered();
+        int totalHeight = height;
+        if (config.eventDisplayMode().popupsEnabled()) {
+            totalHeight = renderNudges(graphics, height);
+        }
+        return new Dimension(WIDTH, totalHeight);
+    }
+
+    /* ===================== pop-up nudges ===================== */
+
+    private static final int MAX_NUDGES = 3;
+    private static final int NUDGE_GAP = 4;
+    private static final int NUDGE_ICON = 20;
+    private static final long NUDGE_FADE_MS = 1000;
+
+    /** Draws the pending toasts as compact HUD-styled cards below the HUD
+     *  (starting at {@code hudHeight}); returns the new total height. */
+    private int renderNudges(Graphics2D g, int hudHeight) {
+        long now = System.currentTimeMillis();
+        List<EventNotificationService.Toast> visible = new ArrayList<>(MAX_NUDGES);
+        Iterator<EventNotificationService.Toast> iterator = service.getToasts().iterator();
+        while (iterator.hasNext()) {
+            EventNotificationService.Toast toast = iterator.next();
+            if (toast.expired(now)) {
+                iterator.remove();
+            } else if (visible.size() < MAX_NUDGES) {
+                visible.add(toast);
+            }
+        }
+        int y = hudHeight;
+        for (EventNotificationService.Toast toast : visible) {
+            y += NUDGE_GAP;
+            y += drawNudge(g, toast, y, now);
+        }
+        return y;
+    }
+
+    private int drawNudge(Graphics2D g, EventNotificationService.Toast toast, int top, long now) {
+        long remaining = EventNotificationService.Toast.LIFETIME_MS - (now - toast.getCreatedAt());
+        float alpha = remaining < NUDGE_FADE_MS
+            ? Math.max(remaining / (float) NUDGE_FADE_MS, 0f) : 1f;
+
+        Font titleFont = FontManager.getRunescapeBoldFont();
+        Font smallFont = FontManager.getRunescapeSmallFont();
+        FontMetrics titleFm = g.getFontMetrics(titleFont);
+        FontMetrics smallFm = g.getFontMetrics(smallFont);
+
+        int textLeft = PAD;
+        BufferedImage icon = null;
+        if (toast.getIconItemId() != null && toast.getIconItemId() > 0) {
+            icon = itemManager.getImage(toast.getIconItemId());
+            if (icon != null) {
+                textLeft += NUDGE_ICON + 6;
+            }
+        }
+        int textWidth = WIDTH - textLeft - PAD;
+        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, 2);
+        int height = 6 + titleFm.getHeight() + bodyLines.size() * smallFm.getHeight() + 6;
+        if (icon != null) {
+            height = Math.max(height, NUDGE_ICON + 12);
+        }
+
+        java.awt.Composite previous = g.getComposite();
+        g.setComposite(java.awt.AlphaComposite.getInstance(
+            java.awt.AlphaComposite.SRC_OVER, alpha));
+
+        g.setColor(BG_BOTTOM);
+        g.fillRect(1, top + 1, WIDTH - 2, height - 2);
+        g.setColor(EDGE_DARK);
+        g.drawRect(0, top, WIDTH - 1, height - 1);
+        g.setColor(FRAME_BRONZE);
+        g.drawRect(1, top + 1, WIDTH - 3, height - 3);
+
+        if (icon != null) {
+            g.drawImage(icon, PAD, top + (height - NUDGE_ICON) / 2,
+                NUDGE_ICON, NUDGE_ICON, null);
+        }
+        g.setFont(titleFont);
+        int titleY = top + 6 + titleFm.getAscent();
+        shadowed(g, truncateToWidth(toast.getTitle(), titleFm, textWidth),
+            textLeft, titleY, DropTrackerTheme.GOLD);
+        g.setFont(smallFont);
+        int lineY = titleY + smallFm.getHeight();
+        for (String line : bodyLines) {
+            shadowed(g, line, textLeft, lineY, DropTrackerTheme.TEXT);
+            lineY += smallFm.getHeight();
+        }
+
+        g.setComposite(previous);
+        return height;
     }
 
     /* ===================== painting helpers ===================== */

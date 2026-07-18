@@ -64,6 +64,12 @@ public class EventNotification {
         private Integer iconItemId;
         @SerializedName("received_item")
         private String receivedItem;
+        @SerializedName("received_qty")
+        private Integer receivedQty;
+        /** True on point_collection tasks: ledger quantities are point
+         *  credits, never render them as "×N of the item". */
+        @SerializedName("points_based")
+        private Boolean pointsBased;
         @SerializedName("bonus_points")
         private Integer bonusPoints;
         @SerializedName("line")

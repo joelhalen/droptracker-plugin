@@ -26,6 +26,10 @@ import java.util.List;
  * Transient event pop-ups ("Chat + text pop-ups" / "Enhanced display"):
  * up to {@value #MAX_VISIBLE} small cards stacked top-center, fading out over
  * the last second of their {@link Toast#LIFETIME_MS} lifetime.
+ *
+ * Stands down while the Enhanced Display HUD is painting: the HUD then draws
+ * the same queue as nudges anchored beneath itself (one movable object for
+ * the user, not two), and this overlay resumes the moment the HUD stops.
  */
 @Singleton
 public class EventToastOverlay extends Overlay {
@@ -60,6 +64,9 @@ public class EventToastOverlay extends Overlay {
         if (!config.eventNotifications() || !config.eventDisplayMode().popupsEnabled()) {
             service.getToasts().clear();
             return null;
+        }
+        if (service.hudOwnsToasts()) {
+            return null; // the HUD is rendering the queue as nudges beneath itself
         }
         long now = System.currentTimeMillis();
         List<Toast> visible = new ArrayList<>(MAX_VISIBLE);

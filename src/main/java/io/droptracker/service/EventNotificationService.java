@@ -129,6 +129,23 @@ public class EventNotificationService {
     @Nullable
     private Runnable onStateUpdated;
 
+    /**
+     * Stamped by EventHudOverlay each frame it paints. While fresh, the HUD
+     * renders pop-ups as nudges anchored beneath itself and the stand-alone
+     * toast overlay stays quiet — exactly one owner draws the queue, and the
+     * user only ever positions the HUD.
+     */
+    private volatile long hudRenderedAtMs = 0;
+
+    public void markHudRendered() {
+        hudRenderedAtMs = System.currentTimeMillis();
+    }
+
+    /** True while the HUD painted within the last second. */
+    public boolean hudOwnsToasts() {
+        return System.currentTimeMillis() - hudRenderedAtMs < 1000;
+    }
+
     @Inject
     public EventNotificationService(DropTrackerConfig config, DropTrackerApi api,
                                     ChatMessageUtil chatMessageUtil, Client client,
@@ -813,7 +830,15 @@ public class EventNotificationService {
         switch (type) {
             case "event_completion": {
                 String who = player != null ? player : (team != null ? team : "Your team");
-                StringBuilder text = new StringBuilder(who + " completed: " + orUnknown(task));
+                String item = clean(data.getReceivedItem());
+                StringBuilder text = new StringBuilder(who);
+                if (item != null) {
+                    // "K0eppy received Bandos hilt, completing: Bandos set"
+                    text.append(" received ").append(item).append(qtySuffix(data))
+                        .append(", completing: ").append(orUnknown(task));
+                } else {
+                    text.append(" completed: ").append(orUnknown(task));
+                }
                 if (data.getPoints() != null && data.getPoints() > 0) {
                     text.append(" (+").append(ValueFormat.abbrev(data.getPoints())).append(" pts)");
                 }
@@ -824,11 +849,18 @@ public class EventNotificationService {
                     return null; // the client-side mute switch for the chattiest type
                 }
                 String who = player != null ? player : "A teammate";
+                String item = clean(data.getReceivedItem());
                 String progress = data.getProgress() != null && data.getTarget() != null
                     ? " (" + ValueFormat.abbrev(data.getProgress())
                         + "/" + ValueFormat.abbrev(data.getTarget()) + ")" : "";
-                return new Rendered("Task progress",
-                    who + " progressed " + orUnknown(task) + progress,
+                // With the driving drop named: "K0eppy received Bandos hilt,
+                // progressing Bandos set (2/5)"; without (XP/GP/KC ticks),
+                // the compact form.
+                String text = item != null
+                    ? who + " received " + item + qtySuffix(data)
+                        + ", progressing " + orUnknown(task) + progress
+                    : who + " progressed " + orUnknown(task) + progress;
+                return new Rendered("Task progress", text,
                     data.getIconItemId(), true, true);
             }
             case "event_lead_change": {
@@ -898,6 +930,16 @@ public class EventNotificationService {
 
     private static String orUnknown(String value) {
         return value != null ? value : "a task";
+    }
+
+    /** " ×3" when a real item stack drove the update; never for point
+     *  credits (points_based), whose quantities are not item counts. */
+    private static String qtySuffix(EventNotification.Data data) {
+        if (Boolean.TRUE.equals(data.getPointsBased())) {
+            return "";
+        }
+        Integer qty = data.getReceivedQty();
+        return qty != null && qty > 1 ? " ×" + qty : "";
     }
 
     /** Tag-strip + length-cap every server-supplied string before rendering. */
