@@ -78,6 +78,13 @@ public class EventsPanel {
 
     private JPanel root;
     private JPanel listPanel;
+    private JScrollPane scrollPane;
+    /**
+     * Expand/collapse choices per card section (key: eventId + section),
+     * surviving rebuilds — clicking a task to track it re-renders the card
+     * and must not fold the task list back to its size-based default.
+     */
+    private final java.util.Map<String, Boolean> sectionCollapsed = new java.util.HashMap<>();
 
     public EventsPanel(DropTrackerConfig config, DropTrackerApi api,
                        EventNotificationService service, Client client,
@@ -113,15 +120,15 @@ public class EventsPanel {
         header.add(refresh, BorderLayout.EAST);
         header.setBorder(new EmptyBorder(4, 6, 4, 6));
 
-        JScrollPane scroll = new JScrollPane(listPanel,
+        scrollPane = new JScrollPane(listPanel,
             JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
             JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setBorder(null);
-        scroll.getViewport().setBackground(DropTrackerTheme.SURFACE_0);
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(DropTrackerTheme.SURFACE_0);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
 
         root.add(header, BorderLayout.NORTH);
-        root.add(scroll, BorderLayout.CENTER);
+        root.add(scrollPane, BorderLayout.CENTER);
 
         rebuild();
         refreshAsync();
@@ -142,6 +149,11 @@ public class EventsPanel {
         if (listPanel == null) {
             return;
         }
+        // Keep the viewport where the user left it: a rebuild triggered by
+        // clicking a task (or a background state refresh) must not jump the
+        // panel back to the top.
+        final int scrollValue = scrollPane != null
+            ? scrollPane.getVerticalScrollBar().getValue() : 0;
         listPanel.removeAll();
 
         EventState state = service.getEventState();
@@ -166,6 +178,11 @@ public class EventsPanel {
         listPanel.add(Box.createVerticalGlue());
         listPanel.revalidate();
         listPanel.repaint();
+        if (scrollPane != null && scrollValue > 0) {
+            // After the new layout pass — setValue clamps to the new extent.
+            SwingUtilities.invokeLater(() ->
+                scrollPane.getVerticalScrollBar().setValue(scrollValue));
+        }
     }
 
     private JLabel emptyLabel(String text) {
@@ -233,8 +250,8 @@ public class EventsPanel {
         if (tasks != null && !tasks.isEmpty()) {
             boolean pickable = !"board_game".equals(event.getKind());
             JPanel taskList = taskListPanel(entry, tasks, display, pickable);
-            body.add(section("Tasks (" + tasks.size() + ")", taskList,
-                tasks.size() > 12));
+            body.add(section(event.getId() + ":tasks", "Tasks (" + tasks.size() + ")",
+                taskList, tasks.size() > 12));
             body.add(vgap(8));
         }
 
@@ -243,14 +260,15 @@ public class EventsPanel {
             boolean boardAvailable = entry.getBoard() != null && entry.getBoard().isAvailable();
             JPanel table = standingsTable(entry, standings,
                 team != null ? team.getId() : -1, boardAvailable);
-            body.add(section("Standings", table, false));
+            body.add(section(event.getId() + ":standings", "Standings", table, false));
             body.add(vgap(8));
         }
 
         List<EventState.Member> members = entry.getMembers();
         if (members != null && !members.isEmpty()) {
             String title = "Your team (" + Math.max(entry.getMembersTotal(), members.size()) + ")";
-            body.add(section(title, membersBox(entry, members, teamColor), true));
+            body.add(section(event.getId() + ":team", title,
+                membersBox(entry, members, teamColor), true));
         }
 
         card.add(body);
@@ -895,8 +913,14 @@ public class EventsPanel {
         return gap;
     }
 
-    /** Lightweight collapsible section: tiny header row + body. */
-    private JPanel section(String title, JComponent body, boolean startCollapsed) {
+    /**
+     * Lightweight collapsible section: tiny header row + body. The user's
+     * toggle is remembered under {@code key} so rebuilds (task tracked,
+     * state refreshed) restore it; {@code defaultCollapsed} only applies the
+     * first time a section is seen.
+     */
+    private JPanel section(String key, String title, JComponent body, boolean defaultCollapsed) {
+        boolean startCollapsed = sectionCollapsed.getOrDefault(key, defaultCollapsed);
         JPanel wrap = new JPanel();
         wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
         wrap.setBackground(DropTrackerTheme.SURFACE_1);
@@ -931,6 +955,7 @@ public class EventsPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 collapsed[0] = !collapsed[0];
+                sectionCollapsed.put(key, collapsed[0]);
                 chevron.setIcon(collapsed[0]
                     ? PanelElements.getCollapsedIcon() : PanelElements.getExpandedIcon());
                 body.setVisible(!collapsed[0]);
