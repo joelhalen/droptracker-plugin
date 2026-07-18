@@ -45,6 +45,32 @@ public class EventNotificationParseTest {
     }
 
     @Test
+    public void catchUpGateNeedsBothSizeAndStaleness() {
+        long now = System.currentTimeMillis() / 1000L;
+        // Big AND stale -> digest.
+        assertTrue(EventNotificationService.isCatchUpBatch(batchWithTs(
+            now - 7200, now - 7200, now - 3600, now - 60)));
+        // Big but all fresh (live burst, e.g. a teammate spamming tasks) -> normal render.
+        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(
+            now - 5, now - 5, now - 5, now - 5)));
+        // Stale but tiny -> normal render (three old lines don't need a digest).
+        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(
+            now - 7200, now - 7200, now - 7200)));
+        // Missing ts (0) never counts as stale.
+        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(0, 0, 0, 0)));
+    }
+
+    private java.util.List<EventNotification> batchWithTs(long... timestamps) {
+        java.util.List<EventNotification> batch = new java.util.ArrayList<>();
+        for (long ts : timestamps) {
+            batch.add(gson.fromJson(
+                "{\"id\":\"x" + ts + "\",\"type\":\"event_completion\",\"ts\":" + ts + "}",
+                EventNotification.class));
+        }
+        return batch;
+    }
+
+    @Test
     public void parsesLongPollMarker() {
         // Long-poll servers stamp long_poll=true on wait-requests; legacy
         // servers omit it entirely, which must parse as null (not false).

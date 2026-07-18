@@ -7,6 +7,7 @@ import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventState;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.util.ValueFormat;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,14 @@ public class EventNotificationService {
     private static final long SUSPICIOUS_FAST_EMPTY_MS = 1500;
     private static final long MAX_FAILURE_BACKOFF_MS = 60_000L;
     private static final int SEEN_IDS_MAX = 200;
+    /**
+     * Catch-up digest gate: the session's first non-empty batch collapses
+     * into a "while you were away" summary instead of a message flood, when
+     * it is at least this big and provably stale (an envelope older than
+     * {@link #CATCHUP_MIN_AGE_SECONDS} — inbox entries survive 24h offline).
+     */
+    private static final int CATCHUP_MIN_ENVELOPES = 4;
+    private static final long CATCHUP_MIN_AGE_SECONDS = 600;
     private static final int MAX_CHAT_LINES_PER_EVENT = 3;
     private static final int MAX_TOASTS_QUEUED = 6;
     /** Re-check the active_event flag this often when idle (no live event). */
@@ -93,6 +102,8 @@ public class EventNotificationService {
     private volatile int consecutiveFailures = 0;
     /** Cleared when a wait-request comes back without long_poll=true. */
     private volatile boolean serverSupportsLongPoll = true;
+    /** True until the session's first non-empty batch (catch-up candidate). */
+    private volatile boolean firstBatchOfSession = true;
 
     /** LRU of processed envelope ids (replay guard). */
     private final Map<String, Boolean> seenIds =
@@ -139,6 +150,7 @@ public class EventNotificationService {
         }
         serverSupportsLongPoll = true;
         consecutiveFailures = 0;
+        firstBatchOfSession = true;
         scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
     }
 
@@ -291,7 +303,13 @@ public class EventNotificationService {
         }
         if (!fresh.isEmpty()) {
             DebugLogger.log("[EventNotifications] batch size=" + fresh.size());
-            processBatch(fresh);
+            boolean catchUp = firstBatchOfSession && isCatchUpBatch(fresh);
+            firstBatchOfSession = false;
+            if (catchUp) {
+                processCatchUpBatch(fresh);
+            } else {
+                processBatch(fresh);
+            }
         }
         boolean stateStale = (System.currentTimeMillis() - eventStateAtMs)
             > TimeUnit.MINUTES.toMillis(3);
@@ -488,6 +506,8 @@ public class EventNotificationService {
         List<String> chatLines = new ArrayList<>();
         List<Toast> groupToasts = new ArrayList<>();
         Set<String> dedupe = new LinkedHashSet<>();
+        String eventName = groupEventName(group);
+        String teamName = teamNameFor(groupEventId(group));
 
         for (EventNotification n : group) {
             Rendered rendered = render(n);
@@ -507,11 +527,11 @@ public class EventNotificationService {
         int lines = 0;
         for (String line : chatLines) {
             if (lines == MAX_CHAT_LINES_PER_EVENT && chatLines.size() > MAX_CHAT_LINES_PER_EVENT + 1) {
-                chatMessageUtil.sendChatMessage(
+                sendLine(eventName, teamName,
                     "... and " + (chatLines.size() - MAX_CHAT_LINES_PER_EVENT) + " more event updates.");
                 break;
             }
-            chatMessageUtil.sendChatMessage(line);
+            sendLine(eventName, teamName, line);
             lines++;
         }
 
@@ -532,6 +552,230 @@ public class EventNotificationService {
                 toasts.pollFirst();
             }
         }
+    }
+
+    /** First event name carried by the group's envelopes, cleaned; null for
+     *  event-less groups (submission notices), which keep the default tag. */
+    @Nullable
+    private static String groupEventName(List<EventNotification> group) {
+        for (EventNotification n : group) {
+            if (n.getEvent() != null && n.getEvent().getName() != null) {
+                return clean(n.getEvent().getName());
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static Integer groupEventId(List<EventNotification> group) {
+        for (EventNotification n : group) {
+            if (n.getEvent() != null && n.getEvent().getId() != null) {
+                return n.getEvent().getId();
+            }
+        }
+        return null;
+    }
+
+    /** The player's own team in this event, from the last state snapshot
+     *  (null before the first snapshot — the prefix then omits the team). */
+    @Nullable
+    private String teamNameFor(@Nullable Integer eventId) {
+        if (eventId == null) {
+            return null;
+        }
+        EventState state = eventState;
+        if (state == null || state.getEvents() == null) {
+            return null;
+        }
+        for (EventState.Entry entry : state.getEvents()) {
+            if (entry.getEvent() != null && entry.getEvent().getId() == eventId
+                    && entry.getTeam() != null) {
+                return clean(entry.getTeam().getName());
+            }
+        }
+        return null;
+    }
+
+    /** "[Event Name] (Team name): line" when the event is known, else the
+     *  default [DropTracker] tag (submission notices, event-less groups). */
+    private void sendLine(@Nullable String eventName, @Nullable String teamName, String line) {
+        if (eventName != null) {
+            chatMessageUtil.sendEventChatMessage(eventName, teamName, line);
+        } else {
+            chatMessageUtil.sendChatMessage(line);
+        }
+    }
+
+    /* ===================== login catch-up digest ===================== */
+
+    /**
+     * A first batch big and stale enough that the player was clearly away:
+     * summarize instead of replaying each envelope ("and 30 more..." spam).
+     */
+    static boolean isCatchUpBatch(List<EventNotification> batch) {
+        if (batch.size() < CATCHUP_MIN_ENVELOPES) {
+            return false;
+        }
+        long staleBefore = System.currentTimeMillis() / 1000L - CATCHUP_MIN_AGE_SECONDS;
+        for (EventNotification n : batch) {
+            if (n.getTs() > 0 && n.getTs() < staleBefore) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Digest the backlog per event; event-less notices render normally. */
+    private void processCatchUpBatch(List<EventNotification> batch) {
+        Map<Integer, List<EventNotification>> byEvent = new LinkedHashMap<>();
+        for (EventNotification n : batch) {
+            int eventId = n.getEvent() != null && n.getEvent().getId() != null
+                ? n.getEvent().getId() : 0;
+            byEvent.computeIfAbsent(eventId, k -> new ArrayList<>()).add(n);
+        }
+        for (Map.Entry<Integer, List<EventNotification>> group : byEvent.entrySet()) {
+            if (group.getKey() == 0) {
+                renderEventGroup(group.getValue());
+            } else {
+                summarizeEventGroup(group.getValue());
+            }
+        }
+    }
+
+    /**
+     * One event's backlog as a short digest: a tally line ("While you were
+     * away: 4 tasks completed (+23 pts), 2 bingo lines..."), the still-true
+     * facts (event started/ended, current leader), and the one actionable
+     * item (a pending dice roll). At most four lines and one pop-up,
+     * regardless of backlog size.
+     */
+    private void summarizeEventGroup(List<EventNotification> group) {
+        String eventName = groupEventName(group);
+        String teamName = teamNameFor(groupEventId(group));
+
+        int completions = 0;
+        long completionPts = 0;
+        int bingoLines = 0;
+        long bonusPts = 0;
+        boolean blackout = false;
+        int boardTurns = 0;
+        Set<String> progressedTasks = new LinkedHashSet<>();
+        String leadTeam = null;
+        Integer leadScore = null;
+        long leadTs = Long.MIN_VALUE;
+        boolean started = false;
+        boolean ended = false;
+        boolean rollPrompt = false;
+        Integer toastIcon = null;
+
+        for (EventNotification n : group) {
+            EventNotification.Data data = n.getData() != null ? n.getData() : new EventNotification.Data();
+            switch (n.getType()) {
+                case "event_completion":
+                    completions++;
+                    if (data.getPoints() != null) {
+                        completionPts += data.getPoints();
+                    }
+                    if (toastIcon == null) {
+                        toastIcon = data.getIconItemId();
+                    }
+                    break;
+                case "event_task_progress":
+                    progressedTasks.add(data.getTaskLabel() != null ? data.getTaskLabel() : "?");
+                    break;
+                case "event_line":
+                    bingoLines++;
+                    if (data.getBonusPoints() != null) {
+                        bonusPts += data.getBonusPoints();
+                    }
+                    break;
+                case "event_blackout":
+                    blackout = true;
+                    if (data.getBonusPoints() != null) {
+                        bonusPts += data.getBonusPoints();
+                    }
+                    break;
+                case "event_lead_change":
+                    if (n.getTs() >= leadTs) {
+                        leadTs = n.getTs();
+                        leadTeam = clean(data.getTeamName());
+                        leadScore = data.getTeamScore();
+                    }
+                    break;
+                case "event_board_turn":
+                    boardTurns++;
+                    break;
+                case "event_board_roll_prompt":
+                    rollPrompt = true;
+                    break;
+                case "event_started":
+                    started = true;
+                    break;
+                case "event_ended":
+                    ended = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        List<String> parts = new ArrayList<>();
+        if (completions > 0) {
+            parts.add(plural(completions, "task") + " completed"
+                + (completionPts > 0 ? " (+" + ValueFormat.abbrev(completionPts) + " pts)" : ""));
+        }
+        if (bingoLines > 0) {
+            parts.add(plural(bingoLines, "bingo line")
+                + (bonusPts > 0 && !blackout ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""));
+        }
+        if (blackout) {
+            parts.add("a board blackout"
+                + (bonusPts > 0 ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""));
+        }
+        if (boardTurns > 0) {
+            parts.add(plural(boardTurns, "dice roll"));
+        }
+        if (!progressedTasks.isEmpty() && config.eventTaskProgressNotifications()) {
+            parts.add("progress on " + plural(progressedTasks.size(), "task"));
+        }
+
+        List<String> lines = new ArrayList<>();
+        if (started) {
+            lines.add("The event started while you were away!");
+        }
+        if (!parts.isEmpty()) {
+            lines.add("While you were away: " + String.join(", ", parts) + ".");
+        }
+        if (leadTeam != null) {
+            lines.add(leadTeam + " now leads"
+                + (leadScore != null ? " (" + ValueFormat.abbrev(leadScore) + " pts)" : "") + ".");
+        }
+        if (ended) {
+            lines.add("The event has ended.");
+        } else if (rollPrompt) {
+            lines.add("Task complete — your team can roll the dice!");
+        }
+        if (lines.isEmpty()) {
+            return;
+        }
+        for (String line : lines) {
+            sendLine(eventName, teamName, line);
+        }
+
+        if (config.eventDisplayMode().popupsEnabled()) {
+            String body = !parts.isEmpty()
+                ? "While you were away: " + String.join(", ", parts) + "."
+                : lines.get(0);
+            toasts.addLast(new Toast("While you were away", body, toastIcon,
+                System.currentTimeMillis()));
+            while (toasts.size() > MAX_TOASTS_QUEUED) {
+                toasts.pollFirst();
+            }
+        }
+    }
+
+    private static String plural(int count, String noun) {
+        return count + " " + noun + (count == 1 ? "" : "s");
     }
 
     /* ===================== per-type renderers ===================== */
@@ -571,7 +815,7 @@ public class EventNotificationService {
                 String who = player != null ? player : (team != null ? team : "Your team");
                 StringBuilder text = new StringBuilder(who + " completed: " + orUnknown(task));
                 if (data.getPoints() != null && data.getPoints() > 0) {
-                    text.append(" (+").append(data.getPoints()).append(" pts)");
+                    text.append(" (+").append(ValueFormat.abbrev(data.getPoints())).append(" pts)");
                 }
                 return new Rendered("Task complete!", text.toString(), data.getIconItemId(), true, true);
             }
@@ -581,7 +825,8 @@ public class EventNotificationService {
                 }
                 String who = player != null ? player : "A teammate";
                 String progress = data.getProgress() != null && data.getTarget() != null
-                    ? " (" + data.getProgress() + "/" + data.getTarget() + ")" : "";
+                    ? " (" + ValueFormat.abbrev(data.getProgress())
+                        + "/" + ValueFormat.abbrev(data.getTarget()) + ")" : "";
                 return new Rendered("Task progress",
                     who + " progressed " + orUnknown(task) + progress,
                     data.getIconItemId(), true, true);
@@ -589,7 +834,7 @@ public class EventNotificationService {
             case "event_lead_change": {
                 String leader = team != null ? team : "A team";
                 String score = data.getTeamScore() != null
-                    ? " (" + data.getTeamScore() + " pts)" : "";
+                    ? " (" + ValueFormat.abbrev(data.getTeamScore()) + " pts)" : "";
                 return new Rendered("Lead change!",
                     leader + " took the lead" + score
                         + (eventName != null ? " in " + eventName : "") + "!",
@@ -606,14 +851,14 @@ public class EventNotificationService {
             case "event_line": {
                 String who = team != null ? team : "Your team";
                 String bonus = data.getBonusPoints() != null
-                    ? " (+" + data.getBonusPoints() + " pts)" : "";
+                    ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
                 return new Rendered("Bingo line!", who + " completed a line" + bonus + "!",
                     null, true, true);
             }
             case "event_blackout": {
                 String who = team != null ? team : "Your team";
                 String bonus = data.getBonusPoints() != null
-                    ? " (+" + data.getBonusPoints() + " pts)" : "";
+                    ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
                 return new Rendered("Blackout!", who + " blacked out the board" + bonus + "!",
                     null, true, true);
             }
@@ -635,7 +880,7 @@ public class EventNotificationService {
                 return new Rendered("Roll the dice!",
                     "Task complete — your team can roll the dice!"
                         + (data.getCoinsAwarded() != null && data.getCoinsAwarded() > 0
-                            ? " (+" + data.getCoinsAwarded() + " coins)" : ""),
+                            ? " (+" + ValueFormat.abbrev(data.getCoinsAwarded()) + " coins)" : ""),
                     null, true, true);
             case "submission_notice": {
                 // Legacy server-text channel: sanitized plain chat only, gated

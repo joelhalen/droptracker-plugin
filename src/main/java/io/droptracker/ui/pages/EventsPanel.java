@@ -73,7 +73,6 @@ public class EventsPanel {
 
     /* Tracked-task required-item strip: small wrapping grid of item sprites. */
     private static final int REQ_ICONS_PER_ROW = 5;
-    private static final int MAX_REQ_ICONS = 10;
     private static final int REQ_ICON_SLOT = 28;
     private static final int REQ_ICON_SIZE = 26;
 
@@ -460,19 +459,14 @@ public class EventsPanel {
         c.gridx = 0;
         c.gridy = 0;
 
-        int shown = Math.min(requirements.size(), MAX_REQ_ICONS);
-        for (int i = 0; i < shown; i++) {
-            grid.add(requirementSlot(requirements.get(i)), c);
+        // Every requirement gets a slot — a "+N more" would hide exactly the
+        // items the player came here to check off.
+        for (EventState.Requirement requirement : requirements) {
+            grid.add(requirementSlot(requirement), c);
             if (++c.gridx >= REQ_ICONS_PER_ROW) {
                 c.gridx = 0;
                 c.gridy++;
             }
-        }
-        if (requirements.size() > shown) {
-            JLabel more = new JLabel("+" + (requirements.size() - shown));
-            more.setFont(FontManager.getRunescapeSmallFont());
-            more.setForeground(DropTrackerTheme.TEXT_MUTED);
-            grid.add(more, c);
         }
         wrap.add(grid);
         return wrap;
@@ -493,7 +487,8 @@ public class EventsPanel {
             : (req.getIconUrl() == null && req.getName() != null
                 ? itemIds.findItemId(req.getName()) : null);
         if (itemId != null || req.getIconUrl() != null) {
-            applyRequirementIcon(slot, itemId, req.getIconUrl(), REQ_ICON_SIZE, obtained);
+            applyRequirementIcon(slot, itemId, req.getIconUrl(), REQ_ICON_SIZE, obtained,
+                req.getPoints());
         } else {
             // No resolvable sprite (name miss / cache not yet loaded): a short
             // token still shows the requirement and its obtained/needed state.
@@ -525,13 +520,15 @@ public class EventsPanel {
     }
 
     /** Item sprite or allowlisted remote icon into a requirement slot, marked
-     *  obtained (full colour + green tick) or still needed (dimmed). */
+     *  obtained (full colour + green tick) or still needed (dimmed), with the
+     *  item's point award stamped in the corner on point-based tasks. */
     private void applyRequirementIcon(JLabel target, @Nullable Integer itemId,
-                                      @Nullable String iconUrl, int size, boolean obtained) {
+                                      @Nullable String iconUrl, int size, boolean obtained,
+                                      @Nullable Integer points) {
         if (itemId != null && itemId > 0) {
             AsyncBufferedImage itemImage = itemManager.getImage(itemId);
             Runnable apply = () -> {
-                target.setIcon(new ImageIcon(styleRequirementImage(itemImage, size, obtained)));
+                target.setIcon(new ImageIcon(styleRequirementImage(itemImage, size, obtained, points)));
                 target.revalidate();
                 target.repaint();
             };
@@ -541,33 +538,54 @@ public class EventsPanel {
             BufferedImage remote = remoteImages.get(iconUrl,
                 () -> SwingUtilities.invokeLater(this::rebuild));
             if (remote != null) {
-                target.setIcon(new ImageIcon(styleRequirementImage(remote, size, obtained)));
+                target.setIcon(new ImageIcon(styleRequirementImage(remote, size, obtained, points)));
             }
         }
     }
 
-    /** Fit into the slot, then either dim (still needed) or stamp a corner
-     *  tick (banked) so obtained state reads at a glance on a small sprite. */
-    private static BufferedImage styleRequirementImage(BufferedImage source, int size, boolean obtained) {
+    /**
+     * Fit into the slot, then mark state so it reads at a glance on a small
+     * sprite: dimmed = still needed, green tick (top-right) = banked, and on
+     * point-based tasks the item's point award bottom-right in the in-game
+     * quantity style — the corner opposite to where players read quantities,
+     * so the two never get confused.
+     */
+    private static BufferedImage styleRequirementImage(BufferedImage source, int size,
+                                                       boolean obtained, @Nullable Integer points) {
         BufferedImage fitted = fitImage(source, size);
         if (!obtained) {
-            return ImageUtil.alphaOffset(fitted, 0.35f);
+            fitted = ImageUtil.alphaOffset(fitted, 0.35f);
         }
         Graphics2D g = fitted.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
             RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setFont(FontManager.getRunescapeSmallFont());
-        String tick = "✓";
         java.awt.FontMetrics fm = g.getFontMetrics();
-        int tx = size - fm.stringWidth(tick);
-        int ty = size - fm.getDescent();
-        g.setColor(Color.BLACK);
-        g.drawString(tick, tx + 1, ty + 1);
-        g.setColor(DropTrackerTheme.GREEN);
-        g.drawString(tick, tx, ty);
+        if (obtained) {
+            String tick = "✓";
+            int tx = size - fm.stringWidth(tick);
+            int ty = fm.getAscent() - 1;
+            g.setColor(Color.BLACK);
+            g.drawString(tick, tx + 1, ty + 1);
+            g.setColor(DropTrackerTheme.GREEN);
+            g.drawString(tick, tx, ty);
+        }
+        if (points != null && points > 0) {
+            // Full-alpha even on dimmed sprites: the award must stay readable.
+            String pts = points < 1000 ? String.valueOf(points) : ValueFormat.abbrev(points);
+            int px = size - fm.stringWidth(pts);
+            int py = size - fm.getDescent();
+            g.setColor(Color.BLACK);
+            g.drawString(pts, px + 1, py + 1);
+            g.setColor(OSRS_QUANTITY_YELLOW);
+            g.drawString(pts, px, py);
+        }
         g.dispose();
         return fitted;
     }
+
+    /** The yellow OSRS renders item quantities in. */
+    private static final Color OSRS_QUANTITY_YELLOW = new Color(0xFFFF00);
 
     /** First few letters of a name, for the no-sprite fallback token. */
     private static String abbrevName(String name) {

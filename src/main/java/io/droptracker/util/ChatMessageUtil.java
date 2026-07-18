@@ -97,4 +97,34 @@ public class ChatMessageUtil {
                         .build()
         );
     }
+
+    /**
+     * Event-notification line: prefixed "[Event Name] (Team name):" instead
+     * of the generic [DropTracker] tag so lines read as the event talking.
+     * Both names must already be sanitized/capped by the caller; teamName is
+     * optional (omitted before the first /event_state snapshot lands).
+     */
+    public void sendEventChatMessage(String eventName, String teamName, String messageContent) {
+        ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
+        messageBuilder.append(ChatColorType.HIGHLIGHT)
+                .append("[")
+                .append(ChatColorType.NORMAL)
+                .append(eventName)
+                .append(ChatColorType.HIGHLIGHT)
+                .append("] ");
+        if (teamName != null && !teamName.isEmpty()) {
+            messageBuilder.append("(")
+                    .append(ChatColorType.NORMAL)
+                    .append(teamName)
+                    .append(ChatColorType.HIGHLIGHT)
+                    .append("): ");
+        }
+        messageBuilder.append(ChatColorType.NORMAL).append(messageContent);
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(messageBuilder.build())
+                        .build()
+        );
+    }
 }
