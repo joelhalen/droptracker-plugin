@@ -450,6 +450,16 @@ public interface DropTrackerConfig extends Config {
     default int pinnedEventId() {
         return 0;
     }
+
+    // NOTE: config setters MUST carry their own @ConfigItem — RuneLite's
+    // ConfigInvocationHandler reads the key name from the setter's annotation
+    // and silently ignores the call (WARN "has no @ConfigItem!") without it.
+    @ConfigItem(
+        name = "pinnedEventId",
+        keyName = "pinnedEventId",
+        description = "pinnedEventId",
+        hidden = true
+    )
     void setPinnedEventId(int eventId);
 
     /* API Configuration */
@@ -556,6 +566,13 @@ public interface DropTrackerConfig extends Config {
     default String lastVersionNotified() {
         return "0";
     }
+
+    @ConfigItem(
+        name = "lastVersionNotified",
+        keyName = "lastVersionNotified",
+        description = "lastVersionNotified",
+        hidden = true
+    )
     public void setLastVersionNotified(String versionNotified);
 
     @ConfigItem(
@@ -567,6 +584,13 @@ public interface DropTrackerConfig extends Config {
     default String lastAccountName() {
         return null;
     }
+
+    @ConfigItem(
+        name = "lastAccountName",
+        keyName = "lastAccountName",
+        description = "lastAccountName",
+        hidden = true
+    )
     void setLastAccountName(String accountName);
 
     @ConfigItem(
@@ -576,6 +600,13 @@ public interface DropTrackerConfig extends Config {
             hidden = true
     )
     default String customApiEndpoint() {return "";}
+
+    @ConfigItem(
+            name = "customApiEndpoint",
+            keyName = "customApiEndpoint",
+            description = "customApiEndpoint",
+            hidden = true
+    )
     void setCustomApiEndpoint(String customApiEndpoint);
 
     @ConfigItem(
@@ -587,5 +618,12 @@ public interface DropTrackerConfig extends Config {
     default String lastAccountHash() {
         return null;
     }
+
+    @ConfigItem(
+        name = "lastAccountHash",
+        keyName = "lastAccountHash",
+        description = "lastAccountHash",
+        hidden = true
+    )
     void setLastAccountHash(String accountHash);
 }
