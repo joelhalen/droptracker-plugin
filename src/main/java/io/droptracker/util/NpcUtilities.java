@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
+import net.runelite.api.gameval.NpcID;
 import org.apache.commons.lang3.tuple.Pair;
 
 import io.droptracker.DropTrackerPlugin;
@@ -27,6 +28,35 @@ public class NpcUtilities {
     public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor", "Branda the Fire Queen",
             "Eldric the Ice King", "Dusk", "Corrupted Hunllef", "Crystalline Hunllef","Maggot King");
     public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians", "Yama");
+
+    /* Use a list for all special npc names, since Sailing added a number of them */
+    public static final Set<Integer> SERVER_LOOT_NPC_IDS = Set.of(
+                NpcID.YAMA,
+                NpcID.HESPORI,
+                NpcID.SAILING_BULL_SHARK_DEAD,
+                NpcID.SAILING_HAMMERHEAD_SHARK_DEAD,
+                NpcID.SAILING_TIGER_SHARK_DEAD,
+                NpcID.SAILING_GREAT_WHITE_SHARK_DEAD,
+                NpcID.SAILING_NARWHAL_DEAD,
+                NpcID.SAILING_ORCA_DEAD,
+                NpcID.SAILING_PYGMY_KRAKEN_DEAD,
+                NpcID.SAILING_SPINED_KRAKEN_DEAD,
+                NpcID.SAILING_ARMOURED_KRAKEN_DEAD,
+                NpcID.SAILING_VAMPYRE_KRAKEN_DEAD,
+                NpcID.SAILING_EAGLE_RAY_DEAD,
+                NpcID.SAILING_BUTTERFLY_RAY_DEAD,
+                NpcID.SAILING_STINGRAY_DEAD,
+                NpcID.SAILING_MANTA_RAY_DEAD,
+                NpcID.SAILING_OSPREY_DEAD,
+                NpcID.SAILING_ALBATROSS_DEAD,
+                NpcID.SAILING_FRIGATEBIRD_DEAD,
+                NpcID.SAILING_TERN_DEAD,
+                NpcID.SAILING_SEA_MOGRE_DEAD,
+                NpcID.SAILING_DOLPHIN_DEAD,
+                NpcID.SAILING_VEILED_KRAKEN_DEAD,
+                NpcID.MAGGOT_KING,
+                NpcID.MAGGOT_KING_CORPSE
+        );
 
     public static final Pattern PRIMARY_REGEX = Pattern.compile(
             "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)");
@@ -74,7 +104,7 @@ public class NpcUtilities {
                     mostRecentNpcData = Pair.of(boss, killCount);
                     plugin.ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException ignored) {
                 }
             }
         } else if (secondary.find()) {
@@ -86,7 +116,7 @@ public class NpcUtilities {
                     mostRecentNpcData = Pair.of(key, killCount);
                     plugin.ticksSinceNpcDataUpdate = 0;
                     return Optional.of(mostRecentNpcData);
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException ignored) {
                 }
             }
         }

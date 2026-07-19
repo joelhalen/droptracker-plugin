@@ -85,6 +85,8 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 import net.runelite.client.util.ImageUtil;
 
+import static io.droptracker.util.NpcUtilities.SERVER_LOOT_NPC_IDS;
+
 @Slf4j
 @PluginDescriptor(
 		name = "DropTracker",
@@ -361,10 +363,14 @@ public class DropTrackerPlugin extends Plugin {
 	/** Add support for Yama's special drop mechanics */
 	@Subscribe(priority = 1)
     public void onServerNpcLoot(ServerNpcLoot event) {
-        if (event.getComposition().getId() != NpcID.YAMA) {
+		NPCComposition eventComp = event.getComposition();
+        if (!SERVER_LOOT_NPC_IDS.contains(eventComp.getId())) {
             return;
         }
-        kcService.onServerNpcLoot(event);
+        if (eventComp.getName().equalsIgnoreCase("Yama")) {
+			kcService.onServerNpcLoot(event);
+		}
+
         dropHandler.onServerNpcLoot(event);
     }
 
