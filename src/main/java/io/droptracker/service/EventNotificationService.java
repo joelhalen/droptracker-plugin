@@ -82,6 +82,9 @@ public class EventNotificationService {
     private static final int MAX_TOASTS_QUEUED = 6;
     /** Re-check the active_event flag this often when idle (no live event). */
     private static final int IDLE_RECHECK_SECONDS = 60;
+    /** Recheck cadence for a 404 (identity not registered) — terminal-ish. */
+    private static final long NOT_REGISTERED_RECHECK_MS =
+        TimeUnit.MINUTES.toMillis(10);
     private static final int MAX_TEXT_LENGTH = 120;
 
     private final DropTrackerConfig config;
@@ -102,6 +105,15 @@ public class EventNotificationService {
     private volatile int consecutiveFailures = 0;
     /** Cleared when a wait-request comes back without long_poll=true. */
     private volatile boolean serverSupportsLongPoll = true;
+    /**
+     * Last server-reported active_event. Authoritative over the cached group
+     * config for choosing the wait mode: the config cache refreshes on
+     * login/XP/submission (all throttled) and NEVER for an idle player, so
+     * when an event went live the plugin used to keep sending plain polls —
+     * which reissued at {@link #REISSUE_DELAY_MS} — a permanent ~4 req/s hot
+     * loop exactly at event start (audit P0-2).
+     */
+    private volatile boolean serverReportedActiveEvent = false;
     /** True until the session's first non-empty batch (catch-up candidate). */
     private volatile boolean firstBatchOfSession = true;
 
@@ -166,6 +178,7 @@ public class EventNotificationService {
             return;
         }
         serverSupportsLongPoll = true;
+        serverReportedActiveEvent = false;
         consecutiveFailures = 0;
         firstBatchOfSession = true;
         scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
@@ -240,7 +253,12 @@ public class EventNotificationService {
             }
             // Idle (no live event): a plain poll checks the authoritative
             // active_event flag; long-holds are reserved for live events.
-            final int waitSeconds = (api.hasActiveEvent() && serverSupportsLongPoll)
+            // The server's own last report ORs in so a just-started event
+            // flips us to held long-polls immediately instead of waiting for
+            // the (throttled, maybe-never) config cache refresh (P0-2).
+            final int waitSeconds =
+                ((api.hasActiveEvent() || serverReportedActiveEvent)
+                    && serverSupportsLongPoll)
                 ? LONG_POLL_WAIT_SECONDS : 0;
             Call call = api.newNotificationsCall(playerName, accountHash, waitSeconds);
             if (call == null) {
@@ -268,13 +286,23 @@ public class EventNotificationService {
                         inFlightCall = null;
                         long nextDelayMs;
                         try {
+                            final int httpCode = response.code();
                             DropTrackerApi.NotificationsResponse parsed;
                             try (okhttp3.Response r = response) {
                                 parsed = api.parseNotificationsResponse(r);
                             }
                             if (parsed == null) {
-                                consecutiveFailures++;
-                                nextDelayMs = failureBackoffMs();
+                                if (httpCode == 404) {
+                                    // Not a registered player: terminal for
+                                    // this identity, not a server fault —
+                                    // recheck rarely instead of retrying the
+                                    // failure backoff forever (audit).
+                                    consecutiveFailures = 0;
+                                    nextDelayMs = NOT_REGISTERED_RECHECK_MS;
+                                } else {
+                                    consecutiveFailures++;
+                                    nextDelayMs = failureBackoffMs();
+                                }
                             } else {
                                 consecutiveFailures = 0;
                                 handleResponse(parsed, playerName, accountHash);
@@ -328,9 +356,20 @@ public class EventNotificationService {
                 processBatch(fresh);
             }
         }
-        boolean stateStale = (System.currentTimeMillis() - eventStateAtMs)
-            > TimeUnit.MINUTES.toMillis(3);
-        if ((!fresh.isEmpty() || (eventState == null || stateStale))
+        if (Boolean.TRUE.equals(response.activeEvent)) {
+            serverReportedActiveEvent = true;
+        } else if (Boolean.FALSE.equals(response.activeEvent)) {
+            serverReportedActiveEvent = false;
+        }
+        long sinceStateMs = System.currentTimeMillis() - eventStateAtMs;
+        boolean stateStale = sinceStateMs > TimeUnit.MINUTES.toMillis(3);
+        // Fresh-batch refreshes are coalesced (audit P0-14): notifications
+        // fan out to whole teams, and every teammate re-fetching the heavy
+        // /event_state on every batch turned one completion into N
+        // compositions at once. The batch itself already carries the
+        // headline info; the full snapshot follows within the cooldown.
+        boolean cooledDown = sinceStateMs > TimeUnit.SECONDS.toMillis(20);
+        if ((eventState == null || stateStale || (!fresh.isEmpty() && cooledDown))
                 && Boolean.TRUE.equals(response.activeEvent)) {
             refreshEventState(playerName, accountHash);
         }
@@ -362,8 +401,14 @@ public class EventNotificationService {
             }
             return REISSUE_DELAY_MS;
         }
-        // Plain poll while an event is live (idle flip or legacy mode).
-        return serverSupportsLongPoll ? REISSUE_DELAY_MS : POLL_INTERVAL_SECONDS * 1000L;
+        // Plain poll while an event is live (idle flip or legacy mode). Only
+        // fast-reissue when the server itself confirmed the event — the next
+        // cycle then upgrades to a HELD long-poll (serverReportedActiveEvent
+        // is set). Any other plain-poll outcome paces at the fixed cadence:
+        // a cache-only "active" must never spin at REISSUE_DELAY_MS (P0-2).
+        boolean nextCycleWillHold =
+            serverSupportsLongPoll && Boolean.TRUE.equals(response.activeEvent);
+        return nextCycleWillHold ? REISSUE_DELAY_MS : POLL_INTERVAL_SECONDS * 1000L;
     }
 
     private long failureBackoffMs() {
