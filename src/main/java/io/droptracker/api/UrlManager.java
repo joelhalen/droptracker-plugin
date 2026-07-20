@@ -1,9 +1,6 @@
 package io.droptracker.api;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -16,9 +13,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.inject.Inject;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.annotations.Component;
@@ -28,6 +25,10 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.LinkBrowser;
 import io.droptracker.util.ChatMessageUtil;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
@@ -50,6 +51,14 @@ public class UrlManager {
 
     @Inject
     private ScheduledExecutorService executor;
+
+    @Inject
+    private OkHttpClient httpClient;
+
+    @Inject
+    private Gson gson;
+
+    private static final Random RANDOM = new Random();
 
     /** How many times the initial endpoint load has failed; retried with backoff. */
     private final AtomicInteger loadAttempts = new AtomicInteger(0);
@@ -88,8 +97,7 @@ public class UrlManager {
 		if (endpointUrls.isEmpty()) {
 			throw new IllegalStateException("No valid URLs were loaded - check logs for loading errors");
 		}
-		Random randomP = new Random();
-		String randomUrl = endpointUrls.get(randomP.nextInt(endpointUrls.size()));
+		String randomUrl = endpointUrls.get(RANDOM.nextInt(endpointUrls.size()));
 		log.debug("Selected webhook URL: {}", randomUrl.substring(0, Math.min(50, randomUrl.length())) + "...");
 		return randomUrl;
 	}   
@@ -131,22 +139,11 @@ public class UrlManager {
 
 			 // Format the date as YYYYMMDD string
 			String dateString = currentDate.format(formatter);
-			URL url = null;
-			 // Print the result
-			 if (usingBackups) {
-				 url = new URL("https://droptracker-io.github.io/content/" + dateString + ".json");
-			 } else {
-				 url = new URL("https://droptracker-io.github.io/content/" + dateString + "-1.json");
-			 }
-			BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-			StringBuilder response = new StringBuilder();
-			String inputLine;
-			while ((inputLine = in.readLine()) != null) {
-				response.append(inputLine);
-			}
-			in.close();
+			String urlString = usingBackups
+					? "https://droptracker-io.github.io/content/" + dateString + ".json"
+					: "https://droptracker-io.github.io/content/" + dateString + "-1.json";
 
-			JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
+			JsonArray jsonArray = gson.fromJson(httpGetString(urlString), JsonArray.class);
 
 			for (JsonElement element : jsonArray) {
 				try {
@@ -217,28 +214,19 @@ public class UrlManager {
    
 				// Format the date as YYYYMMDD string
 			    String dateString = currentDate.format(formatter);
-				URL url = new URL("https://droptracker-io.github.io/content/" + dateString + ".json");
-				BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
-				// Get the encryption key first from github
-				URL keyUrl = new URL("https://droptracker-io.github.io/content/" + dateString + "-k.txt");
-				BufferedReader keyIn = new BufferedReader(new InputStreamReader(keyUrl.openStream()));	
-				String loaded_key = keyIn.readLine();
-				keyIn.close();
-				if (loaded_key != null) {
-					FernetDecrypt.ENCRYPTION_KEY = loaded_key;
+				// Get the encryption key first from github (first line only, matching the prior readLine())
+				String keyBody = httpGetString("https://droptracker-io.github.io/content/" + dateString + "-k.txt");
+				String loadedKey = keyBody.split("\\R", 2)[0].trim();
+				if (!loadedKey.isEmpty()) {
+					FernetDecrypt.ENCRYPTION_KEY = loadedKey;
 				} else {
 					// Treat a missing key like any other load failure so the retry
 					// logic below runs instead of leaving the future forever pending.
 					throw new IOException("Encryption key endpoint returned no content");
 				}
-				StringBuilder response = new StringBuilder();
-				String inputLine;
-				while ((inputLine = in.readLine()) != null) {
-					response.append(inputLine);
-				}
-				in.close();
 
-				JsonArray jsonArray = new JsonParser().parse(response.toString()).getAsJsonArray();
+				String responseBody = httpGetString("https://droptracker-io.github.io/content/" + dateString + ".json");
+				JsonArray jsonArray = gson.fromJson(responseBody, JsonArray.class);
 
 				for (JsonElement element : jsonArray) {
 					try {
@@ -279,5 +267,18 @@ public class UrlManager {
 		}
 	}
 
-
+	/** Blocking GET returning the response body as a String, via the injected shared OkHttpClient. */
+	private String httpGetString(String url) throws IOException {
+		Request request = new Request.Builder().url(url).build();
+		try (Response response = httpClient.newCall(request).execute()) {
+			if (!response.isSuccessful()) {
+				throw new IOException("Request to " + url + " failed: HTTP " + response.code());
+			}
+			ResponseBody body = response.body();
+			if (body == null) {
+				throw new IOException("Empty response body from " + url);
+			}
+			return body.string();
+		}
+	}
 }

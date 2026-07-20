@@ -72,7 +72,6 @@ public class ValidSubmission {
         this.retryAttempts = 0;
     }
 
-    // Constructor that takes a webhook and extracts relevant data
     public ValidSubmission(CustomWebhookBody webhook, String groupId, SubmissionType type) {
         this();
         this.originalWebhook = webhook;

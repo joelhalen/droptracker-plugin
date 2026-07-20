@@ -15,6 +15,10 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -23,8 +27,6 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -34,6 +36,7 @@ public class GroupPanel {
     private final DropTrackerPanel panel;
     private final DropTrackerApi api;
     private final ItemManager itemManager;
+    private final OkHttpClient httpClient;
 
     private int currentGroupId = 2; // Track group ID instead of URL
 
@@ -50,12 +53,13 @@ public class GroupPanel {
      */
     private String activeDetailGroupName;
 
-    public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanel panel) {
+    public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanel panel, OkHttpClient httpClient) {
         this.client = client;
         this.config = config;
         this.api = api;
         this.itemManager = itemManager;
         this.panel = panel;
+        this.httpClient = httpClient;
     }
 
     public JPanel create() {
@@ -506,43 +510,36 @@ public class GroupPanel {
         // we can't load gifs in swing panels natively, so we swap for a png alternative hoping it exists
         String urlString = inputString.replace(".gif", ".png");
 
-        // Validate URL format
-        try {
-            new URL(urlString); // This will throw if URL is malformed
-        } catch (Exception e) {
-            return;
-        }
-
         CompletableFuture.supplyAsync(() -> {
-            try {
-                BufferedImage img = ImageIO.read(new URL(urlString));
-                if (img == null) {
-                    return null;
-                }
-                Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-                return new ImageIcon(scaled);
-            } catch (IOException e) {
-                // Try the original URL if the .png replacement failed
-                if (urlString.endsWith(".png") && !inputString.endsWith(".png")) {
-                    try {
-                        BufferedImage img = ImageIO.read(new URL(inputString));
-                        if (img != null) {
-                            Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
-                            return new ImageIcon(scaled);
-                        }
-                    } catch (IOException ex) {
-                        return null;
-                    }
-                }
-                return null;
-            } catch (Exception e) {
-                return null;
+            ImageIcon icon = fetchScaledIcon(urlString);
+            if (icon == null && urlString.endsWith(".png") && !inputString.endsWith(".png")) {
+                // Fall back to the original URL if the .png swap didn't exist.
+                icon = fetchScaledIcon(inputString);
             }
+            return icon;
         }).thenAccept(icon -> {
             if (icon != null) {
                 SwingUtilities.invokeLater(() -> iconLabel.setIcon(icon));
             }
         });
+    }
+
+    private ImageIcon fetchScaledIcon(String urlString) {
+        Request request = new Request.Builder().url(urlString).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) {
+                return null;
+            }
+            BufferedImage img = ImageIO.read(body.byteStream());
+            if (img == null) {
+                return null;
+            }
+            Image scaled = img.getScaledInstance(50, 50, Image.SCALE_SMOOTH);
+            return new ImageIcon(scaled);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
 }

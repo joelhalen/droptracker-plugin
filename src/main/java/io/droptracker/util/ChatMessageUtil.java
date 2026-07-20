@@ -46,21 +46,13 @@ public class ChatMessageUtil {
         }
     }
     public void warnApiSetting() {
-        String message = "It is strongly recommended that you enable our API connections in the DropTracker plugin configuration. To learn more, type ::droptracker";
-        Color color = ColorUtil.fromHex("#ff0000");
-        String formatted = String.format("[%s] %s: %s",
-                ColorUtil.wrapWithColorTag("DropTracker.io", color),
-                "Warning",
-                ColorUtil.wrapWithColorTag(message, color));
-        chatMessageManager.queue(
-                QueuedMessage.builder()
-                        .type(ChatMessageType.CONSOLE)
-                        .runeLiteFormattedMessage(formatted)
-                        .build()
-        );
+        queueWarning("It is strongly recommended that you enable our API connections in the DropTracker plugin configuration. To learn more, type ::droptracker");
     }
     public void warnClogSetting() {
-        String message = "Your collection log slots will not be tracked unless you enabled the game setting: Collection log - New addition notification";
+        queueWarning("Your collection log slots will not be tracked unless you enabled the game setting: Collection log - New addition notification");
+    }
+
+    private void queueWarning(String message) {
         Color color = ColorUtil.fromHex("#ff0000");
         String formatted = String.format("[%s] %s: %s",
                 ColorUtil.wrapWithColorTag("DropTracker.io", color),
@@ -85,11 +77,6 @@ public class ChatMessageUtil {
                 .append(ChatColorType.NORMAL);
         messageBuilder.append(messageContent);
         final String finalMessage = messageBuilder.build();
-        Color color = ColorUtil.fromHex("#ff0000");
-        String formatted = String.format("[%s] %s: %s",
-                ColorUtil.wrapWithColorTag("DropTracker.io", color),
-                "Warning",
-                ColorUtil.wrapWithColorTag(finalMessage, Color.black));
         chatMessageManager.queue(
                 QueuedMessage.builder()
                         .type(ChatMessageType.CONSOLE)

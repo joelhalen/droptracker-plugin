@@ -184,11 +184,9 @@ public class PetHandler extends BaseEventHandler {
             gameMessage = "has a funny feeling like they're being followed";
         }
 
-        // Create webhook body
         CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " received a pet!");
         CustomWebhookBody.Embed embed = createEmbed("Pet Drop!", "pet");
         
-        // Add fields
         Map<String, Object> fieldData = new HashMap<>();
         fieldData.put("pet_name", petName != null && !petName.isEmpty() ? ucFirst(petName) : "Unknown Pet");
         fieldData.put("game_message", gameMessage);
@@ -216,7 +214,6 @@ public class PetHandler extends BaseEventHandler {
             }
         }
         
-        // Add timestamp
         fieldData.put("timestamp", System.currentTimeMillis() / 1000);
         
         addFields(embed, fieldData);
@@ -231,7 +228,6 @@ public class PetHandler extends BaseEventHandler {
         
         webhook.getEmbeds().add(embed);
         
-        // Send the data
         sendData(webhook, SubmissionType.PET); 
     }
 

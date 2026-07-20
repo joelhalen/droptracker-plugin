@@ -1,5 +1,7 @@
 package io.droptracker.ui.components;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.BasicStroke;
@@ -26,6 +28,7 @@ import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 
+@Slf4j
 public class LeaderboardComponents {
 
     /**
@@ -40,7 +43,6 @@ public class LeaderboardComponents {
         headerPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
         headerPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
         
-        // Create a vertical panel for title and search
         JPanel titleAndSearchPanel = new JPanel();
         titleAndSearchPanel.setLayout(new BoxLayout(titleAndSearchPanel, BoxLayout.Y_AXIS));
         titleAndSearchPanel.setBackground(DropTrackerTheme.SURFACE_1);
@@ -112,7 +114,6 @@ public class LeaderboardComponents {
         leaderboardTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         leaderboardTitle.setHorizontalAlignment(JLabel.CENTER);
         
-        // Create table container
         JPanel tableContainer = new JPanel();
         tableContainer.setLayout(new BoxLayout(tableContainer, BoxLayout.Y_AXIS));
         tableContainer.setBackground(DropTrackerTheme.SURFACE_1);
@@ -120,10 +121,8 @@ public class LeaderboardComponents {
         tableContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
         tableContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 200));
         
-        // Create table header
         JPanel headerRow = createTableHeader(nameColumnHeader);
         
-        // Create data rows
         JPanel dataContainer = new JPanel();
         dataContainer.setLayout(new BoxLayout(dataContainer, BoxLayout.Y_AXIS));
         dataContainer.setBackground(DropTrackerTheme.SURFACE_1);
@@ -157,7 +156,6 @@ public class LeaderboardComponents {
         tableContainer.add(Box.createRigidArea(new Dimension(0, 5)));
         tableContainer.add(dataContainer);
         
-        // Add to main panel
         leaderboardPanel.add(leaderboardTitle);
         leaderboardPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         leaderboardPanel.add(tableContainer);
@@ -329,6 +327,7 @@ public class LeaderboardComponents {
                     return panelCreator.apply(data);
                 }
             } catch (Exception e) {
+                log.debug("Async leaderboard load failed: {}", e.getMessage());
             }
             return null;
         }).thenAccept(leaderboardPanel -> {

@@ -9,6 +9,7 @@ import javax.swing.*;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.service.EventNotificationService;
+import io.droptracker.ui.components.PanelElements;
 import io.droptracker.ui.pages.ActivityPanel;
 import io.droptracker.ui.pages.EventsPanel;
 import io.droptracker.ui.pages.GroupPanel;
@@ -24,6 +25,7 @@ import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
+import okhttp3.OkHttpClient;
 
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
@@ -63,6 +65,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 
 	private final DropTrackerPlugin plugin;
 	private final DropTrackerApi api;
+	private final OkHttpClient httpClient;
 	private JPanel headerPanel;
 
 	@Inject
@@ -98,11 +101,14 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private JLabel statusTextLabel;
 
 	@Inject
-	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client) {
+	public DropTrackerPanel(DropTrackerConfig config, DropTrackerApi api, DropTrackerPlugin plugin, Client client, OkHttpClient httpClient) {
 		this.config = config;
 		this.api = api;
 		this.plugin = plugin;
 		this.client = client;
+		this.httpClient = httpClient;
+		// Static UI helpers fetch images through the shared client; hand it over once here.
+		PanelElements.setHttpClient(httpClient);
 
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(6, 6, 6, 6));
@@ -135,7 +141,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			activityComponent = activityPanel.create();
 			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			playerComponent = statsPanel.create();
-			groupPanel = new GroupPanel(client, config, api, itemManager, this);
+			groupPanel = new GroupPanel(client, config, api, itemManager, this, httpClient);
 			groupComponent = groupPanel.create();
 			eventsPanel = new EventsPanel(config, api, eventNotificationService,
 				client, itemManager, remoteImageCache, itemIDSearch);

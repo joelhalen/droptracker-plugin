@@ -10,6 +10,7 @@ import javax.annotation.Nullable;
 
 import net.runelite.api.gameval.NpcID;
 import org.apache.commons.lang3.tuple.Pair;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import io.droptracker.DropTrackerPlugin;
 
@@ -124,7 +125,8 @@ public class NpcUtilities {
     }
 
     @Nullable
-    private static String parsePrimaryBoss(String boss, String type) {
+    @VisibleForTesting
+    static String parsePrimaryBoss(String boss, String type) {
         switch (type.toLowerCase()) {
             case "chest":
                 if ("Barrows".equalsIgnoreCase(boss))
@@ -151,7 +153,8 @@ public class NpcUtilities {
         }
     }
 
-    private static String parseSecondary(String boss) {
+    @VisibleForTesting
+    static String parseSecondary(String boss) {
         if (boss == null || "Wintertodt".equalsIgnoreCase(boss))
             return boss;
 

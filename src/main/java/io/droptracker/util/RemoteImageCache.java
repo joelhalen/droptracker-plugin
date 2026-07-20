@@ -2,19 +2,23 @@ package io.droptracker.util;
 
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.HttpUrl;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.awt.image.BufferedImage;
-import java.net.URL;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Tiny async cache for server-hosted icons (team pieces, NPC/skill task
@@ -41,8 +45,13 @@ public class RemoteImageCache {
         });
     private final Map<String, Boolean> inFlight = new ConcurrentHashMap<>();
 
+    private final OkHttpClient httpClient;
+    private final ScheduledExecutorService executor;
+
     @Inject
-    public RemoteImageCache() {
+    public RemoteImageCache(OkHttpClient httpClient, ScheduledExecutorService executor) {
+        this.httpClient = httpClient;
+        this.executor = executor;
     }
 
     public static boolean isAllowedUrl(@Nullable String url) {
@@ -72,7 +81,7 @@ public class RemoteImageCache {
         if (inFlight.putIfAbsent(url, Boolean.TRUE) == null) {
             CompletableFuture.runAsync(() -> {
                 try {
-                    BufferedImage image = ImageIO.read(new URL(url));
+                    BufferedImage image = fetch(url);
                     if (image != null
                             && image.getWidth() <= MAX_DIMENSION
                             && image.getHeight() <= MAX_DIMENSION) {
@@ -86,8 +95,21 @@ public class RemoteImageCache {
                 } finally {
                     inFlight.remove(url);
                 }
-            });
+            }, executor);
         }
         return null;
+    }
+
+    @Nullable
+    private BufferedImage fetch(String url) throws Exception {
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) {
+                return null;
+            }
+            // A non-image body (HTML error page, redirect target) decodes to null and renders nothing.
+            return ImageIO.read(body.byteStream());
+        }
     }
 }

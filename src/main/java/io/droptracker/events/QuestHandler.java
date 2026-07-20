@@ -74,11 +74,9 @@ public class QuestHandler extends BaseEventHandler {
             return;
         }
 
-        // Create webhook body
         CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " completed a quest!");
         CustomWebhookBody.Embed embed = createEmbed("Quest Completed!", "quest");
         
-        // Add fields
         Map<String, Object> fieldData = new HashMap<>();
         fieldData.put("quest_name", parsedQuestName);
         
@@ -94,13 +92,11 @@ public class QuestHandler extends BaseEventHandler {
             fieldData.put("qp_percentage", String.format("%.1f%%", (questPoints * 100.0) / totalQuestPoints));
         }
         
-        // Add timestamp
         fieldData.put("timestamp", System.currentTimeMillis() / 1000);
         
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
         
-        // Send the data
         sendData(webhook, SubmissionType.QUEST_COMPLETION);
     }
 
