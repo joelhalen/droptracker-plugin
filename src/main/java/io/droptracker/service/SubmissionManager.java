@@ -155,6 +155,14 @@ public class SubmissionManager {
                     debugLogEventFlow("skipped", type, "pbEmbeds=false");
                     return;
                 }
+                // Raid completion times are raid data: attach the
+                // authoritative raid roster. Non-raid kill times are left
+                // untouched.
+                if (NearbyPlayerTracker.raidTypeForSource(extractSourceName(webhook)) != null) {
+                    NearbyPlayerTracker.NearbyPlayerTrace killTrace = addParticipantsField(webhook);
+                    debugLogEventFlow("nearby-trace", type,
+                        killTrace != null ? killTrace.toDebugSummary() : "trace unavailable");
+                }
                 boolean isPb = isFieldTrue(webhook, "is_pb");
                 if (config.screenshotPBs() && isPb) {
                     requiredScreenshot = true;
@@ -321,12 +329,39 @@ public class SubmissionManager {
         }
     }
 
+    /**
+     * The submission's source name from its embed fields: {@code source} on
+     * drop embeds, {@code boss_name} on kill-time embeds. Null when absent.
+     */
+    private String extractSourceName(CustomWebhookBody webhook) {
+        if (webhook == null || webhook.getEmbeds() == null) {
+            return null;
+        }
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            if (embed == null) {
+                continue;
+            }
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                if (field == null || field.getName() == null) {
+                    continue;
+                }
+                if ("source".equalsIgnoreCase(field.getName()) || "boss_name".equalsIgnoreCase(field.getName())) {
+                    return field.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
     private NearbyPlayerTracker.NearbyPlayerTrace addParticipantsField(CustomWebhookBody webhook) {
         if (webhook == null || webhook.getEmbeds() == null) {
             return NearbyPlayerTracker.NearbyPlayerTrace.empty(20, "webhook/embeds missing");
         }
 
-        NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getNearbyPlayerTrace(20);
+        // Raid-sourced submissions get the authoritative raid roster; anything
+        // else gets a plain proximity scan (see NearbyPlayerTracker).
+        String sourceName = extractSourceName(webhook);
+        NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getParticipantsTrace(sourceName, 20);
         List<String> members = trace.getNearbyPlayers();
         String membersValue = String.join(",", members);
         int embedsTouched = 0;
