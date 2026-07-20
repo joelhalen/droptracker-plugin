@@ -520,7 +520,6 @@ public interface DropTrackerConfig extends Config {
         return false;
     }
 
-    // Removed retry queue and maxRetryAttempts settings in favor of simplified per-call retry
 
     /* Side panel settings */
     @ConfigSection(

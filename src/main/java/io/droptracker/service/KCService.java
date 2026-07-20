@@ -12,6 +12,7 @@ import io.droptracker.models.submissions.Drop;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.VisibleForTesting;
 import net.runelite.api.NPC;
 import net.runelite.api.NpcID;
 import net.runelite.client.config.ConfigManager;
@@ -256,7 +257,8 @@ public class KCService {
      * @param boss {@link LootReceived#getName()}
      * @return lowercase boss name that {@link ChatCommandsPlugin} uses during serialization
      */
-    private static String cleanBossName(String boss) {
+    @VisibleForTesting
+    static String cleanBossName(String boss) {
         if ("The Gauntlet".equalsIgnoreCase(boss)) return "gauntlet";
         if ("The Leviathan".equalsIgnoreCase(boss)) return "leviathan";
         if ("The Whisperer".equalsIgnoreCase(boss)) return "whisperer";
@@ -267,7 +269,8 @@ public class KCService {
         return StringUtils.remove(boss.toLowerCase(), ':');
     }
 
-    private static String getCacheKey(@NotNull LootRecordType type, @NotNull String sourceName) {
+    @VisibleForTesting
+    static String getCacheKey(@NotNull LootRecordType type, @NotNull String sourceName) {
         switch (type) {
             case PICKPOCKET:
                 return "pickpocket_" + sourceName;

@@ -142,13 +142,17 @@ public class ItemIDSearch {
 
             @Override
             public void onResponse(@NotNull Call call, @NotNull Response response) {
-                assert response.body() != null;
-                try (Reader reader = response.body().charStream()) {
-                    future.complete(transformer.apply(reader));
+                try (Response autoClose = response) {
+                    ResponseBody body = response.body();
+                    if (body == null) {
+                        future.completeExceptionally(new IOException("Empty response body from " + url));
+                        return;
+                    }
+                    try (Reader reader = body.charStream()) {
+                        future.complete(transformer.apply(reader));
+                    }
                 } catch (Exception e) {
                     future.completeExceptionally(e);
-                } finally {
-                    response.close();
                 }
             }
         });

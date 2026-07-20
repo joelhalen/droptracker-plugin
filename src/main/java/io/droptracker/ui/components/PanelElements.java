@@ -12,6 +12,10 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
@@ -22,8 +26,6 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,6 +42,42 @@ public class PanelElements {
     private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     private static long cachedLootboardAtMs = 0;
+
+    /**
+     * Shared RuneLite OkHttpClient, set once at panel construction. These UI
+     * helpers are static, so the client is injected via {@link #setHttpClient}
+     * rather than a constructor.
+     */
+    private static OkHttpClient httpClient;
+
+    public static void setHttpClient(OkHttpClient client) {
+        httpClient = client;
+        // Preload the default global group (2) lootboard now that a client exists.
+        // The static initializer can't do this because it runs before the client is set.
+        loadLootboardForGroup(2);
+    }
+
+    /**
+     * Fetches a remote image through the shared OkHttpClient. A non-image body
+     * (HTML error page, redirect) decodes to null; any failure returns null.
+     */
+    @Nullable
+    private static BufferedImage fetchImage(String imageUrl) {
+        if (httpClient == null || imageUrl == null || imageUrl.isEmpty()) {
+            return null;
+        }
+        Request request = new Request.Builder().url(imageUrl).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) {
+                return null;
+            }
+            return ImageIO.read(body.byteStream());
+        } catch (Exception e) {
+            log.debug("Image fetch failed for {}: {}", imageUrl, e.getMessage());
+            return null;
+        }
+    }
 
     /** Lootboards regenerate server-side; refetch after this long instead of caching forever. */
     private static final long LOOTBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -66,9 +104,6 @@ public class PanelElements {
         EXPANDED_ICON = new ImageIcon(expandedRecolored);
         BOARD_ICON = new ImageIcon(boardResized);
         EXTERNAL_LINK_ICON = new ImageIcon(extLinkResized);
-
-        // Initialize with default global group lootboard (group 2)
-        loadLootboardForGroup(2);
     }
 
     /**
@@ -103,14 +138,7 @@ public class PanelElements {
 
         String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
 
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                URL url = new URL(imageUrl);
-                return ImageIO.read(url);
-            } catch (IOException e) {
-                return null;
-            }
-        }).thenAccept(image -> {
+        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
@@ -132,14 +160,7 @@ public class PanelElements {
 
         String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
 
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                URL url = new URL(imageUrl);
-                return ImageIO.read(url);
-            } catch (IOException e) {
-                return null;
-            }
-        }).thenAccept(image -> {
+        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
@@ -323,14 +344,7 @@ public class PanelElements {
             return;
         }
 
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                URL url = new URL(imageUrl);
-                return ImageIO.read(url);
-            } catch (IOException e) {
-                return null;
-            }
-        }).thenAccept(image -> {
+        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 if (image != null) {
                     imageDialog.getContentPane().removeAll();
@@ -663,7 +677,6 @@ public class PanelElements {
     private static JPanel updateValidSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
         panel.removeAll();
 
-        // Debug logging
 
         GridBagConstraints c = new GridBagConstraints();
         c.fill = GridBagConstraints.NONE;
@@ -764,13 +777,10 @@ public class PanelElements {
 
                         // Load image asynchronously
                         CompletableFuture.supplyAsync(() -> {
-                            try {
-                                BufferedImage image = ImageIO.read(new URL(imageUrl));
-                                if (image != null) {
-                                    Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-                                    return new ImageIcon(scaled);
-                                }
-                            } catch (IOException ignored) {
+                            BufferedImage image = fetchImage(imageUrl);
+                            if (image != null) {
+                                Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+                                return new ImageIcon(scaled);
                             }
                             return null;
                         }).thenAccept(imageIcon -> {

@@ -51,7 +51,6 @@ public class RecentSubmission {
     @Getter @Setter
     private String submissionImageUrl;
 
-    // Getters and setters
     public String timeSinceReceived() {
         if (dateReceived == null) {
             return "Unknown";

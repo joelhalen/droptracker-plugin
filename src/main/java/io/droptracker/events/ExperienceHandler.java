@@ -395,7 +395,6 @@ public class ExperienceHandler extends BaseEventHandler {
                        .append(" XP");
         }
         
-        // Create experience data for milestone skills
         Map<String, Object> experienceData = new HashMap<>();
         experienceData.put("xp_milestone_interval", interval);
         
@@ -414,21 +413,17 @@ public class ExperienceHandler extends BaseEventHandler {
             experienceData.put(skillName, skillData);
         }
         
-        // Create standardized field data
         List<String> skillsLeveled = new ArrayList<>(); // No level ups for XP milestones
         Map<String, Object> fieldData = createLevelUpFieldData(milestones, skillsLeveled, experienceData);
         
-        // Create webhook body
         CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " reached an XP milestone!");
         CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "experience_milestone");
         
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
         
-        // Clear the reached skills set
         xpReached.clear();
         
-        // Send the data
         sendData(webhook, SubmissionType.EXPERIENCE_MILESTONE);
     }
 
@@ -527,7 +522,6 @@ public class ExperienceHandler extends BaseEventHandler {
             experienceData.put("combat", combatData);
         }
         
-        // Create level-up field data
         Map<String, Object> fieldData = createLevelUpFieldData(skillsTrainedList, skillsLeveledList, experienceData);
         
         // Update combat level if it leveled up
@@ -535,14 +529,12 @@ public class ExperienceHandler extends BaseEventHandler {
             fieldData.put("combat_level", combatLevel);
         }
         
-        // Create webhook body
         CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " leveled up!");
         CustomWebhookBody.Embed embed = createEmbed("Level Up!", "level_up");
         
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
         
-        // Send the data
         sendData(webhook, SubmissionType.LEVEL_UP);
     }
 

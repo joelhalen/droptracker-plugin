@@ -49,10 +49,8 @@ public class DropTrackerApi {
     private static final int LONG_POLL_READ_TIMEOUT_SECONDS = 40;
 
     private final DropTrackerConfig config;
-    @Inject
-    private Gson gson;
-    @Inject
-    private OkHttpClient httpClient;
+    private final Gson gson;
+    private final OkHttpClient httpClient;
 
     /**
      * Client used for lightweight panel-data GETs (searches, top lists, configs, news).
@@ -69,11 +67,9 @@ public class DropTrackerApi {
      * abort every hold.
      */
     private OkHttpClient longPollHttpClient;
-    @Inject
-    private DropTrackerPlugin plugin;
+    private final DropTrackerPlugin plugin;
 
-    @Inject
-    private Client client;
+    private final Client client;
 
     public List<GroupConfig> groupConfigs = new ArrayList<>();
 
@@ -322,7 +318,6 @@ public class DropTrackerApi {
                     
                     responseData = response.body().string();
                     
-                    // Parse the response
                     GroupConfig[] configArray = gson.fromJson(responseData, GroupConfig[].class);
                     List<GroupConfig> parsedConfigs = new ArrayList<>(Arrays.asList(configArray));
                     
@@ -395,7 +390,32 @@ public class DropTrackerApi {
     
 
 
-    @SuppressWarnings("null")
+    /**
+     * Blocking GET + JSON parse via {@link #panelHttpClient}. Records the
+     * communication time on a completed round-trip and throws IOException on an
+     * unsuccessful status, empty body, or malformed JSON. Callers that want a
+     * silent fallback catch IOException and return null. Performs blocking I/O -
+     * never call on the EDT.
+     */
+    private <T> T getJson(HttpUrl url, Class<T> type) throws IOException {
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                throw new IOException("API request to " + url + " failed with status: " + response.code());
+            }
+            ResponseBody body = response.body();
+            if (body == null) {
+                throw new IOException("Empty response body from " + url);
+            }
+            try {
+                return gson.fromJson(body.string(), type);
+            } catch (JsonSyntaxException e) {
+                throw new IOException("Malformed response from " + url, e);
+            }
+        }
+    }
+
     public TopGroupResult getTopGroups() {
         if (!config.useApi()) {
             return null;
@@ -405,29 +425,14 @@ public class DropTrackerApi {
         if (panelData != null && panelData.topGroups != null && panelData.topGroups.getGroups() != null) {
             return panelData.topGroups;
         }
-        String apiUrl = getApiUrl();
         try {
-            HttpUrl url = HttpUrl.parse(apiUrl + "/top_groups");
-            Request request = new Request.Builder().url(url).build();
-            try (Response response = panelHttpClient.newCall(request).execute()) {
-                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-                if (!response.isSuccessful()) {
-                    throw new IOException("API request failed with status: " + response.code());
-                }
-                if (response.body() == null) {
-                    throw new IOException("Empty response body");
-                } else {
-                    String responseData = response.body().string();
-                    return this.gson.fromJson(responseData, TopGroupResult.class);
-                }
-            }
+            return getJson(HttpUrl.parse(getApiUrl() + "/top_groups"), TopGroupResult.class);
         } catch (IOException e) {
             log.debug("Couldn't get top groups (IOException) " + e);
             return null;
         }
     }
 
-    @SuppressWarnings("null")
     public TopPlayersResult getTopPlayers() {
         if (!config.useApi()) {
             return null;
@@ -437,22 +442,8 @@ public class DropTrackerApi {
         if (panelData != null && panelData.topPlayers != null && panelData.topPlayers.getPlayers() != null) {
             return panelData.topPlayers;
         }
-        String apiUrl = getApiUrl();
         try {
-            HttpUrl url = HttpUrl.parse(apiUrl + "/top_players");
-            Request request = new Request.Builder().url(url).build();
-            try (Response response = panelHttpClient.newCall(request).execute()) {
-                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-                if (!response.isSuccessful()) {
-                    throw new IOException("API request failed with status: " + response.code());
-                }
-                if (response.body() == null) {
-                    throw new IOException("Empty response body");
-                } else {
-                    String responseData = response.body().string();
-                    return gson.fromJson(responseData, TopPlayersResult.class);
-                }
-            }
+            return getJson(HttpUrl.parse(getApiUrl() + "/top_players"), TopPlayersResult.class);
         } catch (IOException e) {
             log.debug("Couldn't get top players (IOException) " + e);
             return null;
@@ -462,15 +453,12 @@ public class DropTrackerApi {
     /**
      * Sends a request to the API to search for a group and returns the GroupSearchResult.
      */
-    @SuppressWarnings("null")
     public GroupSearchResult searchGroup(String groupName) throws IOException {
         if (!config.useApi()) {
             return null;
         }
 
-        String apiUrl = getApiUrl();
-        HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/group_search");
-
+        HttpUrl baseUrl = HttpUrl.parse(getApiUrl() + "/group_search");
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
@@ -478,39 +466,18 @@ public class DropTrackerApi {
             .addQueryParameter("name", groupName)
             .build();
 
-        Request request = new Request.Builder().url(url).build();
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("API request failed with status: " + response.code());
-            }
-
-            if (response.body() == null) {
-                throw new IOException("Empty response body");
-            }
-
-            String responseData = response.body().string();
-            try {
-                return gson.fromJson(responseData, GroupSearchResult.class);
-            } catch (JsonSyntaxException e) {
-                throw new IOException("Malformed /group_search response", e);
-            }
-        }
+        return getJson(url, GroupSearchResult.class);
     }
 
     /**
      * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
      */
-    @SuppressWarnings("null")
     public PlayerSearchResult lookupPlayer(String playerName) throws IOException {
         if (!config.useApi()) {
             return null;
         }
 
-        String apiUrl = getApiUrl();
-        HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/player_search");
-
+        HttpUrl baseUrl = HttpUrl.parse(getApiUrl() + "/player_search");
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
@@ -518,24 +485,7 @@ public class DropTrackerApi {
             .addQueryParameter("name", playerName)
             .build();
 
-        Request request = new Request.Builder().url(url).build();
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("API request failed with status: " + response.code());
-            }
-
-            if (response.body() == null) {
-                throw new IOException("Empty response body");
-            }
-
-            String responseData = response.body().string();
-            try {
-                return gson.fromJson(responseData, PlayerSearchResult.class);
-            } catch (JsonSyntaxException e) {
-                throw new IOException("Malformed /player_search response", e);
-            }
-        }
+        return getJson(url, PlayerSearchResult.class);
     }
 
     public String getApiUrl() {
@@ -621,7 +571,6 @@ public class DropTrackerApi {
             throw new IllegalArgumentException("Invalid URL");
         }
 
-        // Build JSON body
         String jsonBody = gson.toJson(java.util.Collections.singletonMap("uuid", uuid));
         RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonBody);
 
