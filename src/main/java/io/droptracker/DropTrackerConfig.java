@@ -60,6 +60,20 @@ public interface DropTrackerConfig extends Config {
         return 250000;
     }
 
+    @ConfigItem(
+        keyName = "screenshotUntradeables",
+        name = "Screenshot untradeables",
+        description = "Take screenshots of notable untradeable drops (champion scrolls, boss heads,<br />"
+            + "raid kits, etc.) even though they arrive with no GE value.<br />"
+            + "Note: with the API enabled, an item required by one of your active events<br />"
+            + "is always screenshotted for proof, regardless of this setting.",
+        position = 3,
+        section = LootSection
+    )
+    default boolean screenshotUntradeables() {
+        return true;
+    }
+
     /* Personal Best related Tracking */
     @ConfigSection(
         name = "Personal Bests",

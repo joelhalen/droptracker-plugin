@@ -183,6 +183,9 @@ public class DropTrackerPlugin extends Plugin {
 	private final AtomicReference<GameState> gameState = new AtomicReference<>();
 
 	public ArrayList<Integer> valuedItemIds;
+	/** Curated notable untradeables (champion scrolls, boss heads, raid kits, ...);
+	 * screenshotted when the "Screenshot untradeables" config is on. */
+	public ArrayList<Integer> untradeableItemIds;
 
 	@Override
 	protected void startUp() {
@@ -210,6 +213,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	private void loadUntradeables() {
 		this.valuedItemIds = api.getValuedUntradeables();
+		this.untradeableItemIds = api.getNotableUntradeables();
 	}
 
 

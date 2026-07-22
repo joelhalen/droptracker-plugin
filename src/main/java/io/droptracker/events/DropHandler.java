@@ -2,9 +2,11 @@ package io.droptracker.events;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -12,6 +14,7 @@ import javax.inject.Inject;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
+import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +36,9 @@ public class DropHandler extends BaseEventHandler {
 
     @Inject
     private ItemManager itemManager;
+
+    @Inject
+    private EventNotificationService eventNotificationService;
 
     /*
      * NOTE: These handlers are NOT registered on the RuneLite event bus — they are
@@ -110,6 +116,17 @@ public class DropHandler extends BaseEventHandler {
 			 */
 			plugin.valuedItemIds = api.getValuedUntradeables();
 		}
+		if (plugin.untradeableItemIds == null) {
+			plugin.untradeableItemIds = api.getNotableUntradeables();
+		}
+		/* Items required by one of the player's active events (from the last
+		/event_state snapshot) are always screenshotted for proof — this
+		overrides the "Screenshot untradeables" toggle. API users only:
+		webhook-only clients never poll event state, so their coverage is
+		whatever the toggle + notable-untradeables list provide. */
+		final Set<Integer> eventItemIds = config.useApi()
+			? eventNotificationService.getEventScreenshotItemIds()
+			: Collections.emptySet();
 		final AtomicReference<Boolean> untradeableScreenshot = new AtomicReference<>(false);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
@@ -123,6 +140,13 @@ public class DropHandler extends BaseEventHandler {
 				int itemId = item.getId();
 				/* Check if the itemId exists in the valued list we obtained */
 				if (plugin.valuedItemIds != null && plugin.valuedItemIds.contains(itemId)) {
+					untradeableScreenshot.set(true);
+				} else if (config.screenshotUntradeables() && plugin.untradeableItemIds != null
+						&& plugin.untradeableItemIds.contains(itemId)) {
+					/* Notable untradeable (0gp) drop — toggle-gated screenshot */
+					untradeableScreenshot.set(true);
+				} else if (eventItemIds.contains(itemId)) {
+					/* Event-required item — forced for proof, regardless of toggles */
 					untradeableScreenshot.set(true);
 				}
 				int qty = item.getQuantity();

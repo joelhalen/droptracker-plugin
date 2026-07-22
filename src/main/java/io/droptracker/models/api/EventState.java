@@ -16,6 +16,15 @@ public class EventState {
     @SerializedName("events")
     private List<Entry> events;
 
+    /**
+     * Item ids the server wants force-screenshotted for event proof: everything
+     * an incomplete task of the player's active events can still be credited
+     * by. Null from older servers.
+     */
+    @SerializedName("screenshot_item_ids")
+    @Nullable
+    private List<Integer> screenshotItemIds;
+
     @Getter
     public static class Entry {
         @SerializedName("event")

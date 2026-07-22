@@ -436,6 +436,20 @@ public class EventNotificationService {
         }
     }
 
+    /**
+     * Item ids the server wants force-screenshotted for event proof, from the
+     * latest /event_state snapshot. Empty when no event is live, the API is
+     * disabled (the service never polls), or the server predates the field.
+     */
+    public Set<Integer> getEventScreenshotItemIds() {
+        EventState state = eventState;
+        List<Integer> ids = state != null ? state.getScreenshotItemIds() : null;
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return new LinkedHashSet<>(ids);
+    }
+
     private void notifyStateUpdated() {
         Runnable callback = onStateUpdated;
         if (callback != null) {

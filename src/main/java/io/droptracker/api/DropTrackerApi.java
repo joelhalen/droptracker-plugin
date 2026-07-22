@@ -820,10 +820,22 @@ public class DropTrackerApi {
      * Since this list should be updated infrequently, we can simply load only if not present.
      */
     public ArrayList<Integer> getValuedUntradeables() {
+        return fetchItemIdList("https://droptracker-io.github.io/content/valued_items.txt", "untradeables");
+    }
+
+    /**
+     * The curated notable-untradeables list (champion scrolls, boss heads, raid
+     * kits, ...): 0gp drops the client screenshots when the player's
+     * "Screenshot untradeables" config is enabled. Unlike the valued list these
+     * carry no server-side value override — the screenshot is the point.
+     */
+    public ArrayList<Integer> getNotableUntradeables() {
+        return fetchItemIdList("https://droptracker-io.github.io/content/untradeable_items.txt", "notable-untradeables");
+    }
+
+    private ArrayList<Integer> fetchItemIdList(String url, String tag) {
         String valued;
         /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */
-
-        String url = "https://droptracker-io.github.io/content/valued_items.txt";
         try {
             Request request = new Request.Builder().url(url).build();
             try (Response response = panelHttpClient.newCall(request).execute()) {
@@ -845,16 +857,15 @@ public class DropTrackerApi {
                             itemIdList.add(itemId);
                         } catch (NumberFormatException e) {
                             // Handle cases where a part of the string isn't a valid integer
-                            DebugLogger.log("[DropTrackerApi][untradeables] skipped invalid itemId token=" + itemIdString);
+                            DebugLogger.log("[DropTrackerApi][" + tag + "] skipped invalid itemId token=" + itemIdString);
                         }
                     }
-                    DebugLogger.log("[DropTrackerApi][untradeables] loaded itemId count=" + itemIdList.size());
+                    DebugLogger.log("[DropTrackerApi][" + tag + "] loaded itemId count=" + itemIdList.size());
                     return itemIdList;
                 }
             }
         } catch (IOException e) {
-            DebugLogger.log("[DropTrackerApi][untradeables] failed to load from "
-                + (config.useApi() ? "API" : "GitHub") + "; reason=" + e.getMessage());
+            DebugLogger.log("[DropTrackerApi][" + tag + "] failed to load from GitHub; reason=" + e.getMessage());
             return null;
         }
     }
