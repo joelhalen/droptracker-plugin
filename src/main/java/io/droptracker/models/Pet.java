@@ -87,7 +87,7 @@ public enum Pet
     private final String name;
     private final Integer iconID;
 
-    static Pet findPet(String petName)
+    public static Pet findPet(String petName)
     {
         for (Pet pet : values())
         {

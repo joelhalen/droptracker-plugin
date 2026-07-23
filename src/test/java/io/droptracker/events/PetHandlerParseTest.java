@@ -47,4 +47,24 @@ public class PetHandlerParseTest {
         assertEquals("Baby mole", m.group("pet"));
         assertEquals("200 kills.", m.group("milestone"));
     }
+
+    // Regression: skilling pets have no boss source and are absent from PET_TO_SOURCE,
+    // but must still be recognised via the Pet enum, else their name is dropped.
+    @Test
+    public void isPetNameRecognisesSkillingPets() {
+        for (String skillingPet : new String[]{
+                "Beaver", "Heron", "Rock golem", "Rocky", "Giant squirrel",
+                "Tangleroot", "Rift guardian", "Baby chinchompa"}) {
+            assertTrue(skillingPet + " should be recognised", PetHandler.isPetName(skillingPet));
+        }
+    }
+
+    @Test
+    public void isPetNameRecognisesBossPetsAndRejectsNonPets() {
+        // Newer boss pets live only in PET_TO_SOURCE, not the Pet enum.
+        assertTrue(PetHandler.isPetName("Yami"));
+        assertTrue(PetHandler.isPetName("Dom"));
+        assertTrue(PetHandler.isPetName("Baby mole"));
+        assertFalse(PetHandler.isPetName("Dragon warhammer"));
+    }
 }

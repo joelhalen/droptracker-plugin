@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.Pet;
 import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 
@@ -267,11 +268,19 @@ public class PetHandler extends BaseEventHandler {
         return Character.toUpperCase(text.charAt(0)) + text.substring(1).toLowerCase();
     }
 
-    private static boolean isPetName(String itemName) {
-        return PET_TO_SOURCE.containsKey(ucFirst(itemName));
+    // Skilling pets (Beaver, Heron, Rocky, ...) have no boss source, so PET_TO_SOURCE
+    // alone isn't a complete pet list; the Pet enum carries them, PET_TO_SOURCE the newer
+    // boss pets it lacks. Accept a name present in either.
+    @VisibleForTesting
+    static boolean isPetName(String itemName) {
+        if (itemName == null) return false;
+        String name = ucFirst(itemName);
+        return Pet.findPet(name) != null || PET_TO_SOURCE.containsKey(name);
     }
 
-    // Simplified pet to source mapping - just for basic KC tracking
+    // Boss pet to source mapping - used for KC lookup. Skilling pets have no boss
+    // source; their source (the skill) is attributed server-side to avoid a plugin
+    // release per new pet and to keep skill names out of NPC resolution.
     private static final Map<String, String> PET_TO_SOURCE = Map.ofEntries(
         Map.entry("Abyssal orphan", "Abyssal Sire"),
         Map.entry("Baby mole", "Giant Mole"),
