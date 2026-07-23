@@ -7,10 +7,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
@@ -39,6 +44,22 @@ public class DropHandler extends BaseEventHandler {
 
     @Inject
     private EventNotificationService eventNotificationService;
+
+    /**
+     * Short-lived record of boss loot already submitted, keyed by
+     * accountHash|canonicalSource|itemSignature. RuneLite fires more than one
+     * loot event for multi-part / server-loot bosses (e.g. a granular
+     * NpcLootReceived AND a generic LootReceived for Grotesque Guardians), so
+     * the same kill reaches processDropEvent twice with identical items. We
+     * submit the first and drop the rest within the window. The window is far
+     * shorter than the minimum time to re-kill any of these bosses, and this is
+     * scoped to boss sources only (isMultiPathLootSource), so ordinary NPCs that
+     * are legitimately multi-killed in one tick are never de-duplicated.
+     */
+    private static final Cache<String, Boolean> recentBossLoot = CacheBuilder.newBuilder()
+            .expireAfterWrite(5, TimeUnit.SECONDS)
+            .maximumSize(256L)
+            .build();
 
     /*
      * NOTE: These handlers are NOT registered on the RuneLite event bus — they are
@@ -79,18 +100,10 @@ public class DropHandler extends BaseEventHandler {
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
 		String npcName = NpcUtilities.getStandardizedSource(lootReceived, plugin);
 		if (lootReceived.getType() == LootRecordType.NPC && NpcUtilities.SPECIAL_NPC_NAMES.contains(npcName)) {
-			if(npcName.equals("Branda the Fire Queen")|| npcName.equals("Eldric the Ice King")) {
-				npcName = "Royal Titans";
-			}
-			if(npcName.equals("Dusk")){
-				npcName = "Grotesque Guardians";
-			}
-			if(npcName.equals("Corrupted Hunllef")) {
-				npcName = "The Corrupted Gauntlet";
-			}
-			if(npcName.equals("Crystalline Hunllef")) {
-				npcName = "The Gauntlet";
-			}
+			// Remap sub-NPC names to the canonical encounter name. processDropEvent
+			// also canonicalises, but doing it here keeps the pre-canonical name
+			// out of downstream logic and mirrors the historical behaviour.
+			npcName = NpcUtilities.canonicalizeSpecialSource(npcName);
 
 			processDropEvent(npcName, "npc", LootRecordType.NPC, lootReceived.getItems());
 			return;
@@ -101,11 +114,27 @@ public class DropHandler extends BaseEventHandler {
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 	}
 
-    private void processDropEvent(String npcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
+    private void processDropEvent(String rawNpcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			return;
-		} 
+		}
+		// Collapse every loot path to one canonical boss name (e.g. "Dusk" ->
+		// "Grotesque Guardians") so the record, the KC lookup and the dedup key
+		// all agree regardless of which RuneLite event delivered the kill.
+		final String npcName = NpcUtilities.canonicalizeSpecialSource(rawNpcName);
+		// Cross-handler de-duplication: a multi-part / server-loot boss fires
+		// more than one loot event per kill, so the same items reach here twice.
+		// Submit the first, drop identical repeats within the window. Scoped to
+		// boss sources only, so normal per-death AoE multi-kills are unaffected.
+		if (NpcUtilities.isMultiPathLootSource(npcName)) {
+			String dedupKey = getAccountHash() + "|" + npcName + "|" + lootSignature(finalItems);
+			if (recentBossLoot.getIfPresent(dedupKey) != null) {
+				log.debug("Suppressing duplicate loot submission for {} (already submitted this kill)", npcName);
+				return;
+			}
+			recentBossLoot.put(dedupKey, Boolean.TRUE);
+		}
 		if (NpcUtilities.LONG_TICK_NPC_NAMES.contains(npcName)){
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
@@ -212,6 +241,17 @@ public class DropHandler extends BaseEventHandler {
 		}
 
 		return list;
+	}
+
+	/**
+	 * Order-independent signature of a loot bundle (consolidated id:qty pairs),
+	 * used to recognise the same kill arriving via two different loot events.
+	 */
+	private static String lootSignature(Collection<ItemStack> items) {
+		return stack(items).stream()
+				.map(i -> i.getId() + ":" + i.getQuantity())
+				.sorted()
+				.collect(Collectors.joining(","));
 	}
 
 	

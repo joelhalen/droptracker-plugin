@@ -59,6 +59,53 @@ public class NpcUtilities {
                 NpcID.MAGGOT_KING_CORPSE
         );
 
+    /* Canonical encounter names that a multi-part boss's sub-NPCs are remapped
+     * to (see canonicalizeSpecialSource). Loot for these can arrive via more
+     * than one RuneLite loot event, so they need cross-handler de-duplication. */
+    public static final Set<String> REMAP_TARGET_NAMES = Set.of(
+            "Royal Titans", "Grotesque Guardians", "The Corrupted Gauntlet", "The Gauntlet");
+
+    /**
+     * Collapse the raw sub-NPC name of a multi-part boss to its canonical
+     * encounter name (e.g. "Dusk" -> "Grotesque Guardians"). Names without a
+     * remapping are returned unchanged. Centralises the remapping that used to
+     * live inline in {@code DropHandler.onLootReceived} so every loot path
+     * (NpcLootReceived / ServerNpcLoot / LootReceived) agrees on one name — a
+     * prerequisite for reliably de-duplicating the same kill across handlers.
+     */
+    public static String canonicalizeSpecialSource(String name) {
+        if (name == null) {
+            return null;
+        }
+        switch (name) {
+            case "Branda the Fire Queen":
+            case "Eldric the Ice King":
+                return "Royal Titans";
+            case "Dusk":
+                return "Grotesque Guardians";
+            case "Corrupted Hunllef":
+                return "The Corrupted Gauntlet";
+            case "Crystalline Hunllef":
+                return "The Gauntlet";
+            default:
+                return name;
+        }
+    }
+
+    /**
+     * Whether loot from this (already canonicalised) source can be delivered by
+     * more than one RuneLite loot event for a single kill — the bosses in
+     * {@link #SPECIAL_NPC_NAMES} (Whisperer/Araxxor/Maggot King and the raw
+     * sub-NPC names) plus the {@link #REMAP_TARGET_NAMES} they collapse to.
+     * These are the only sources that need duplicate submissions suppressed;
+     * ordinary NPCs (which can legitimately be multi-killed in one tick with
+     * identical loot) are intentionally excluded.
+     */
+    public static boolean isMultiPathLootSource(String canonicalName) {
+        return canonicalName != null
+                && (SPECIAL_NPC_NAMES.contains(canonicalName) || REMAP_TARGET_NAMES.contains(canonicalName));
+    }
+
     public static final Pattern PRIMARY_REGEX = Pattern.compile(
             "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)");
     public static final Pattern SECONDARY_REGEX = Pattern

@@ -380,11 +380,18 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority=1)
 	public void onNpcLootReceived(NpcLootReceived npcLootReceived) {
-		if (npcLootReceived.getNpc().getId() == NpcID.YAMA) {
-			/* Handled by onServerNpcLoot */
+		int npcId = npcLootReceived.getNpc().getId();
+		if (npcId == NpcID.YAMA) {
+			/* Yama's drop AND kill count are handled entirely by onServerNpcLoot. */
             return;
         }
-		dropHandler.onNpcLootReceived(npcLootReceived);
+		// Server-loot NPCs (Maggot King, Hespori, Sailing, ...) are submitted
+		// authoritatively by onServerNpcLoot; the client-side NpcLootReceived for
+		// them is a redundant duplicate, so skip its drop submission here. Kill
+		// count bookkeeping stays on this path unchanged.
+		if (!SERVER_LOOT_NPC_IDS.contains(npcId)) {
+			dropHandler.onNpcLootReceived(npcLootReceived);
+		}
 		kcService.onNpcKill(npcLootReceived);
 	}
 
