@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
@@ -21,6 +20,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
+import io.droptracker.util.ItemStacks;
 import io.droptracker.util.NpcUtilities;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
@@ -128,7 +128,7 @@ public class DropHandler extends BaseEventHandler {
 		// Submit the first, drop identical repeats within the window. Scoped to
 		// boss sources only, so normal per-death AoE multi-kills are unaffected.
 		if (NpcUtilities.isMultiPathLootSource(npcName)) {
-			String dedupKey = getAccountHash() + "|" + npcName + "|" + lootSignature(finalItems);
+			String dedupKey = getAccountHash() + "|" + npcName + "|" + ItemStacks.signature(finalItems);
 			if (recentBossLoot.getIfPresent(dedupKey) != null) {
 				log.debug("Suppressing duplicate loot submission for {} (already submitted this kill)", npcName);
 				return;
@@ -159,7 +159,7 @@ public class DropHandler extends BaseEventHandler {
 		final AtomicReference<Boolean> untradeableScreenshot = new AtomicReference<>(false);
 		clientThread.invokeLater(() -> {
 			// Gather all game state info needed
-			List<ItemStack> stackedItems = new ArrayList<>(stack(finalItems));
+			List<ItemStack> stackedItems = new ArrayList<>(ItemStacks.stack(finalItems));
 			String localPlayerName = getPlayerName();
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
@@ -219,41 +219,5 @@ public class DropHandler extends BaseEventHandler {
 			});
 		});
 	}
-
-    @SuppressWarnings("deprecation")
-	private static Collection<ItemStack> stack(Collection<ItemStack> items) {
-		final List<ItemStack> list = new ArrayList<>();
-
-		for (final ItemStack item : items) {
-			int quantity = 0;
-			for (final ItemStack i : list) {
-				if (i.getId() == item.getId()) {
-					quantity = i.getQuantity();
-					list.remove(i);
-					break;
-				}
-			}
-			if (quantity > 0) {
-				list.add(new ItemStack(item.getId(), item.getQuantity() + quantity, item.getLocation()));
-			} else {
-				list.add(item);
-			}
-		}
-
-		return list;
-	}
-
-	/**
-	 * Order-independent signature of a loot bundle (consolidated id:qty pairs),
-	 * used to recognise the same kill arriving via two different loot events.
-	 */
-	private static String lootSignature(Collection<ItemStack> items) {
-		return stack(items).stream()
-				.map(i -> i.getId() + ":" + i.getQuantity())
-				.sorted()
-				.collect(Collectors.joining(","));
-	}
-
-	
 
 }

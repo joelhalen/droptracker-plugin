@@ -58,6 +58,7 @@ import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.NearbyPlayerTracker;
+import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.overlays.EventHudOverlay;
@@ -105,6 +106,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private KCService kcService;
+
+	@Inject
+	private RaidLootDeduplicator raidLootDeduplicator;
 
 	/* Event Handlers */
 	@Inject
@@ -403,6 +407,14 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority=1)
 	public void onLootReceived(LootReceived lootReceived) {
+		// A raid reward chest fires LootReceived once when opened in the loot
+		// room and again if the unclaimed loot is taken from the collection
+		// chest at the bank. Suppress the repeat BEFORE the fan-out: it must
+		// reach neither DropHandler (duplicate drop submission) nor KCService
+		// (phantom kill count increment).
+		if (raidLootDeduplicator.isDuplicateRaidLoot(lootReceived)) {
+			return;
+		}
 		dropHandler.onLootReceived(lootReceived);
 		kcService.onLoot(lootReceived);
 	}

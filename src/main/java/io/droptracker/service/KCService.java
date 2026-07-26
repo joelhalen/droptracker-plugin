@@ -60,6 +60,11 @@ public class KCService {
     @Inject
     private DropTrackerPlugin plugin;
 
+    /* Field-injected (nullable in tests): re-armed on completion messages so
+     * the raid chest re-loot dedup never spans two completions. */
+    @Inject
+    private RaidLootDeduplicator raidLootDeduplicator;
+
     private List<Integer> whispererIds = Arrays.asList(12204, 12205, 12206, 12207);
 
 
@@ -147,6 +152,12 @@ public class KCService {
         NpcUtilities.parseBoss(message, plugin).ifPresent(pair -> {
             String boss = pair.getKey();
             Integer kc = pair.getValue();
+
+            // A raid completion message means the next reward chest opened is
+            // NEW loot — re-arm the chest re-loot dedup for that raid.
+            if (raidLootDeduplicator != null) {
+                raidLootDeduplicator.onRaidCompletion(boss);
+            }
 
             // Update cache. We store kc - 1 since onNpcLootReceived will increment; kc - 1 + 1 == kc
             String cacheKey = getCacheKey(LootRecordType.UNKNOWN, boss);
