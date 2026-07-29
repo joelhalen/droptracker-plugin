@@ -86,7 +86,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 
 import net.runelite.client.util.ImageUtil;
 
-import static io.droptracker.util.NpcUtilities.SERVER_LOOT_NPC_IDS;
+import io.droptracker.util.NpcUtilities;
 
 @Slf4j
 @PluginDescriptor(
@@ -218,6 +218,11 @@ public class DropTrackerPlugin extends Plugin {
 	private void loadUntradeables() {
 		this.valuedItemIds = api.getValuedUntradeables();
 		this.untradeableItemIds = api.getNotableUntradeables();
+		// Published server-loot npc ids. Must be loaded before the first kill of
+		// the session, not lazily on first drop like the item lists: this list
+		// gates whether a drop is submitted at all, so a late load would lose
+		// the very drops it exists to capture.
+		NpcUtilities.setRemoteServerLootNpcIds(api.getServerLootNpcIds());
 	}
 
 
@@ -372,7 +377,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe(priority = 1)
     public void onServerNpcLoot(ServerNpcLoot event) {
 		NPCComposition eventComp = event.getComposition();
-        if (!SERVER_LOOT_NPC_IDS.contains(eventComp.getId())) {
+        if (!NpcUtilities.isServerLootNpc(eventComp.getId())) {
             return;
         }
         if (eventComp.getName().equalsIgnoreCase("Yama")) {
@@ -393,7 +398,7 @@ public class DropTrackerPlugin extends Plugin {
 		// authoritatively by onServerNpcLoot; the client-side NpcLootReceived for
 		// them is a redundant duplicate, so skip its drop submission here. Kill
 		// count bookkeeping stays on this path unchanged.
-		if (!SERVER_LOOT_NPC_IDS.contains(npcId)) {
+		if (!NpcUtilities.isServerLootNpc(npcId)) {
 			dropHandler.onNpcLootReceived(npcLootReceived);
 		}
 		kcService.onNpcKill(npcLootReceived);

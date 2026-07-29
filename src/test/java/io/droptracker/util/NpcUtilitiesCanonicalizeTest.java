@@ -1,5 +1,8 @@
 package io.droptracker.util;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -70,6 +73,40 @@ public class NpcUtilitiesCanonicalizeTest {
     @Test
     public void madAngelIsNotMultiPath() {
         assertFalse(NpcUtilities.isMultiPathLootSource("Mad Angel"));
+    }
+
+    /**
+     * The published list layers over the compiled-in one; it never replaces it.
+     * A backend that drops an id (or serves an older list than the build) must
+     * not be able to switch off loot tracking for a boss this build already
+     * knows about.
+     */
+    @Test
+    public void publishedListAddsToCompiledInList() {
+        NpcUtilities.setRemoteServerLootNpcIds(Arrays.asList(999001, 999002));
+        assertTrue(NpcUtilities.isServerLootNpc(999001));
+        assertTrue(NpcUtilities.isServerLootNpc(999002));
+        // ...and everything compiled in still qualifies.
+        assertTrue(NpcUtilities.isServerLootNpc(NpcUtilities.MAD_ANGEL_QUEST_B));
+        assertFalse(NpcUtilities.isServerLootNpc(999003));
+    }
+
+    /**
+     * A failed fetch returns null and an empty/garbage file parses to an empty
+     * list. Either must leave the previous state untouched rather than wiping
+     * it — otherwise an unreachable GitHub Pages would silently stop loot
+     * tracking for every server-loot boss, which is the exact outage this
+     * mechanism exists to prevent.
+     */
+    @Test
+    public void failedOrEmptyFetchLeavesCompiledInListIntact() {
+        NpcUtilities.setRemoteServerLootNpcIds(Collections.singletonList(999004));
+        NpcUtilities.setRemoteServerLootNpcIds(null);
+        assertTrue("null fetch must not clear the overlay", NpcUtilities.isServerLootNpc(999004));
+        NpcUtilities.setRemoteServerLootNpcIds(Collections.emptyList());
+        assertTrue("empty fetch must not clear the overlay", NpcUtilities.isServerLootNpc(999004));
+        // The compiled-in ids survive regardless of what the backend serves.
+        assertTrue(NpcUtilities.isServerLootNpc(NpcUtilities.MAD_ANGEL_POST_QUEST_A));
     }
 
     @Test
