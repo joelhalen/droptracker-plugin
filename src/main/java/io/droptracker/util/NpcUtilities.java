@@ -30,6 +30,15 @@ public class NpcUtilities {
             "Eldric the Ice King", "Dusk", "Corrupted Hunllef", "Crystalline Hunllef","Maggot King");
     public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians", "Yama");
 
+    /* Mad Angel npc ids (Wyrmscraig, released 2026-07-29) — raw literals because
+     * RuneLite 1.12.33 (latest release) has no NpcID constant for this NPC yet.
+     * Two in-game variants exist, each with two ids: the version fought during
+     * Fallen From Grace and the repeatable post-quest encounter. */
+    public static final int MAD_ANGEL_QUEST_A = 16309;
+    public static final int MAD_ANGEL_QUEST_B = 16315;
+    public static final int MAD_ANGEL_POST_QUEST_A = 16305;
+    public static final int MAD_ANGEL_POST_QUEST_B = 16314;
+
     /* Use a list for all special npc names, since Sailing added a number of them */
     public static final Set<Integer> SERVER_LOOT_NPC_IDS = Set.of(
                 NpcID.YAMA,
@@ -56,7 +65,16 @@ public class NpcUtilities {
                 NpcID.SAILING_DOLPHIN_DEAD,
                 NpcID.SAILING_VEILED_KRAKEN_DEAD,
                 NpcID.MAGGOT_KING,
-                NpcID.MAGGOT_KING_CORPSE
+                NpcID.MAGGOT_KING_CORPSE,
+                // Mad Angel awards loot server-side, so nothing spawns on the
+                // death tile for LootManager to scrape and NpcLootReceived
+                // never fires — kills were tracked (166 PBs landed on release
+                // day) while every drop was silently discarded by the
+                // onServerNpcLoot gate below.
+                MAD_ANGEL_QUEST_A,
+                MAD_ANGEL_QUEST_B,
+                MAD_ANGEL_POST_QUEST_A,
+                MAD_ANGEL_POST_QUEST_B
         );
 
     /* Canonical encounter names that a multi-part boss's sub-NPCs are remapped

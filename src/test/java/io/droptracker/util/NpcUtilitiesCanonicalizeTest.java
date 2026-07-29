@@ -46,6 +46,32 @@ public class NpcUtilitiesCanonicalizeTest {
         assertTrue(NpcUtilities.isMultiPathLootSource("The Whisperer"));
     }
 
+    /**
+     * Mad Angel (Wyrmscraig, 2026-07-29) awards loot server-side. Until its ids
+     * were listed here, {@code DropTrackerPlugin.onServerNpcLoot} returned early
+     * and every drop was discarded — kills still registered (PBs landed) so the
+     * gap was invisible from the outside. Every in-game variant must be covered,
+     * or the quest kill (or the repeatable one) silently stops tracking loot.
+     */
+    @Test
+    public void madAngelVariantsAreServerLootSources() {
+        assertTrue(NpcUtilities.SERVER_LOOT_NPC_IDS.contains(NpcUtilities.MAD_ANGEL_QUEST_A));
+        assertTrue(NpcUtilities.SERVER_LOOT_NPC_IDS.contains(NpcUtilities.MAD_ANGEL_QUEST_B));
+        assertTrue(NpcUtilities.SERVER_LOOT_NPC_IDS.contains(NpcUtilities.MAD_ANGEL_POST_QUEST_A));
+        assertTrue(NpcUtilities.SERVER_LOOT_NPC_IDS.contains(NpcUtilities.MAD_ANGEL_POST_QUEST_B));
+    }
+
+    /**
+     * Mad Angel loot arrives on exactly one path (ServerNpcLoot), so it must not
+     * be treated as multi-path: that dedup key is item-signature based, and a
+     * boss with a 100% common drop would have back-to-back identical kills
+     * suppressed as "duplicates".
+     */
+    @Test
+    public void madAngelIsNotMultiPath() {
+        assertFalse(NpcUtilities.isMultiPathLootSource("Mad Angel"));
+    }
+
     @Test
     public void ordinaryNpcsAreNotMultiPath() {
         // These fire one NpcLootReceived per death and are legitimately
