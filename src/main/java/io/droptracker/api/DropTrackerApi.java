@@ -833,6 +833,21 @@ public class DropTrackerApi {
         return fetchItemIdList("https://droptracker-io.github.io/content/untradeable_items.txt", "notable-untradeables");
     }
 
+    /**
+     * Npc ids whose loot RuneLite only reports via {@code ServerNpcLoot} (Jagex
+     * awards it server-side, so nothing spawns on the death tile for the
+     * client-side scrape to find). Published by the backend rather than baked
+     * into the plugin so a newly released boss starts tracking without a Plugin
+     * Hub round-trip — see {@code NpcUtilities.setRemoteServerLootNpcIds}.
+     * <p>
+     * Deliberately NOT gated on {@link DropTrackerConfig#useApi()}: it is a
+     * static file on GitHub Pages, so webhook-only clients get it too.
+     * Returns null on any failure, which leaves the compiled-in list in force.
+     */
+    public ArrayList<Integer> getServerLootNpcIds() {
+        return fetchItemIdList("https://droptracker-io.github.io/content/server_loot_npc_ids.txt", "server-loot-npcs");
+    }
+
     private ArrayList<Integer> fetchItemIdList(String url, String tag) {
         String valued;
         /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */

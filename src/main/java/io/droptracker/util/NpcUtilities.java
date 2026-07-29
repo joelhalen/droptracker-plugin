@@ -1,5 +1,8 @@
 package io.droptracker.util;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -76,6 +79,41 @@ public class NpcUtilities {
                 MAD_ANGEL_POST_QUEST_A,
                 MAD_ANGEL_POST_QUEST_B
         );
+
+    /**
+     * Server-loot npc ids published by the backend at
+     * {@code content/server_loot_npc_ids.txt}, layered over the compiled-in
+     * {@link #SERVER_LOOT_NPC_IDS} above. This is what stops a newly released
+     * boss (Mad Angel, 2026-07-29) needing a plugin release before its drops
+     * track at all.
+     * <p>
+     * Volatile immutable snapshot: written by the executor thread that fetches
+     * the list, read by the loot handlers on the client thread.
+     */
+    private static volatile Set<Integer> remoteServerLootNpcIds = Collections.emptySet();
+
+    /**
+     * Install the published server-loot id list. A null/empty argument (fetch
+     * failed, file unreachable, garbage body) is ignored rather than applied,
+     * so a bad publish or an offline client degrades to the compiled-in list
+     * instead of losing loot tracking for every server-loot boss.
+     */
+    public static void setRemoteServerLootNpcIds(Collection<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        remoteServerLootNpcIds = Collections.unmodifiableSet(new HashSet<>(ids));
+    }
+
+    /**
+     * Whether this npc's loot is awarded server-side, i.e. arrives via
+     * {@code ServerNpcLoot} and must not also be submitted from the
+     * client-side {@code NpcLootReceived} path. The union of the compiled-in
+     * list and the published one — never fewer ids than the build shipped with.
+     */
+    public static boolean isServerLootNpc(int npcId) {
+        return SERVER_LOOT_NPC_IDS.contains(npcId) || remoteServerLootNpcIds.contains(npcId);
+    }
 
     /* Canonical encounter names that a multi-part boss's sub-NPCs are remapped
      * to (see canonicalizeSpecialSource). Loot for these can arrive via more
