@@ -163,8 +163,15 @@ public class UrlManager {
 				}
 			}
 			if (!backupUrls.isEmpty()) {
-				// swap the sets out and clear the back-up set
-				endpointUrls = backupUrls;
+				// COPY the freshly fetched list, then clear the backing one.
+				// Assigning the reference made both fields the same ArrayList,
+				// so the clear() below emptied the list we had just installed:
+				// every webhook submission after the first refresh threw
+				// IllegalStateException ("no urls") and was silently dropped,
+				// and the recovery path could never repopulate because
+				// backupUrls was permanently the same (empty) object. Ten
+				// rounds of that flipped isTracking off entirely.
+				endpointUrls = new ArrayList<>(backupUrls);
 				backupUrls.clear();
 				clientThread.invokeLater(() -> {
 					chatMessageUtil.sendChatMessage("We are currently having some trouble transmitting your drops to our server...");
