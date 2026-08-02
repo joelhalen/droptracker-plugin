@@ -1,8 +1,10 @@
 package io.droptracker.util;
 
 
+import io.droptracker.api.DropTrackerUrls;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.HttpUrl;
 import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -27,7 +29,6 @@ import java.util.function.Function;
 @Slf4j
 @Singleton
 public class ItemIDSearch {
-    final String ITEM_CACHE_BASE_URL = "https://static.runelite.net/cache/item/";
     private final Map<String, Integer> itemIdByName = Collections.synchronizedMap(new HashMap<>(16384));
     private @Inject OkHttpClient httpClient;
     private @Inject Gson gson;
@@ -124,14 +125,14 @@ public class ItemIDSearch {
      * @return the transformed cache response, wrapped in a future
      */
     private <T> CompletableFuture<T> queryCache(@NotNull String fileName, @NotNull Class<T> clazz) {
-        return readJson(httpClient, gson, ITEM_CACHE_BASE_URL + fileName, clazz);
+        return readJson(httpClient, gson, DropTrackerUrls.itemCache(fileName), clazz);
     }
 
-    public <T> CompletableFuture<T> readJson(@NotNull OkHttpClient httpClient, @NotNull Gson gson, @NotNull String url, @NotNull Class<T> clazz) {
+    public <T> CompletableFuture<T> readJson(@NotNull OkHttpClient httpClient, @NotNull Gson gson, @NotNull HttpUrl url, @NotNull Class<T> clazz) {
         return readUrl(httpClient, url, reader -> gson.fromJson(reader, clazz));
     }
 
-    public <T> CompletableFuture<T> readUrl(@NotNull OkHttpClient httpClient, @NotNull String url, @NotNull Function<Reader, T> transformer) {
+    public <T> CompletableFuture<T> readUrl(@NotNull OkHttpClient httpClient, @NotNull HttpUrl url, @NotNull Function<Reader, T> transformer) {
         CompletableFuture<T> future = new CompletableFuture<>();
         Request request = new Request.Builder().url(url).build();
         httpClient.newCall(request).enqueue(new Callback() {

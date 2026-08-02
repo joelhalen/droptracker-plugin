@@ -15,6 +15,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
+import okhttp3.HttpUrl;
 
 import javax.annotation.Nullable;
 import javax.swing.BorderFactory;
@@ -384,7 +385,7 @@ public class EventsPanel {
         row.setBackground(DropTrackerTheme.SURFACE_2);
         JLabel icon = new JLabel();
         icon.setPreferredSize(new Dimension(24, 24));
-        applyTaskIcon(icon, task.iconItemId, task.iconUrl, 24);
+        applyTaskIcon(icon, task.iconItemId, task.iconPath, 24);
         row.add(icon, BorderLayout.WEST);
 
         JLabel label = new JLabel("<html>" + escape(task.label) + "</html>");
@@ -502,10 +503,10 @@ public class EventsPanel {
 
         Integer itemId = req.getIconItemId() != null && req.getIconItemId() > 0
             ? req.getIconItemId()
-            : (req.getIconUrl() == null && req.getName() != null
+            : (req.getIconPath() == null && req.getName() != null
                 ? itemIds.findItemId(req.getName()) : null);
-        if (itemId != null || req.getIconUrl() != null) {
-            applyRequirementIcon(slot, itemId, req.getIconUrl(), REQ_ICON_SIZE, obtained,
+        if (itemId != null || req.getIconPath() != null) {
+            applyRequirementIcon(slot, itemId, req.getIconPath(), REQ_ICON_SIZE, obtained,
                 req.getPoints());
         } else {
             // No resolvable sprite (name miss / cache not yet loaded): a short
@@ -541,7 +542,7 @@ public class EventsPanel {
      *  obtained (full colour + green tick) or still needed (dimmed), with the
      *  item's point award stamped in the corner on point-based tasks. */
     private void applyRequirementIcon(JLabel target, @Nullable Integer itemId,
-                                      @Nullable String iconUrl, int size, boolean obtained,
+                                      @Nullable String iconPath, int size, boolean obtained,
                                       @Nullable Integer points) {
         if (itemId != null && itemId > 0) {
             AsyncBufferedImage itemImage = itemManager.getImage(itemId);
@@ -552,8 +553,8 @@ public class EventsPanel {
             };
             itemImage.onLoaded(apply);
             apply.run();
-        } else if (iconUrl != null) {
-            BufferedImage remote = remoteImages.get(iconUrl,
+        } else if (iconPath != null) {
+            BufferedImage remote = remoteImages.get(iconPath,
                 () -> SwingUtilities.invokeLater(this::rebuild));
             if (remote != null) {
                 target.setIcon(new ImageIcon(styleRequirementImage(remote, size, obtained, points)));
@@ -673,7 +674,7 @@ public class EventsPanel {
 
         JLabel icon = new JLabel();
         icon.setPreferredSize(new Dimension(20, 20));
-        applyTaskIcon(icon, task.getIconItemId(), task.getIconUrl(), 20);
+        applyTaskIcon(icon, task.getIconItemId(), task.getIconPath(), 20);
         row.add(icon, BorderLayout.WEST);
 
         JLabel label = new JLabel(truncate(task.getLabel(), 30));
@@ -863,7 +864,7 @@ public class EventsPanel {
         if (playerName == null) {
             return;
         }
-        String url = api.eventBoardImageUrl(entry.getEvent().getId(), teamId,
+        HttpUrl url = api.eventBoardImageUrl(entry.getEvent().getId(), teamId,
             playerName, client.getAccountHash());
         PanelElements.showRemoteImage(client,
             entry.getEvent().getName() + " — " + teamName, url);
@@ -1023,7 +1024,7 @@ public class EventsPanel {
      *  fit the slot with its aspect ratio preserved (item sprites are 36x32 —
      *  naive square scaling squishes them, raw addTo clips them). */
     private void applyTaskIcon(JLabel target, @Nullable Integer iconItemId,
-                               @Nullable String iconUrl, int size) {
+                               @Nullable String iconPath, int size) {
         if (iconItemId != null && iconItemId > 0) {
             AsyncBufferedImage itemImage = itemManager.getImage(iconItemId);
             Runnable apply = () -> {
@@ -1033,8 +1034,8 @@ public class EventsPanel {
             };
             itemImage.onLoaded(apply);
             apply.run();
-        } else if (iconUrl != null) {
-            BufferedImage remote = remoteImages.get(iconUrl,
+        } else if (iconPath != null) {
+            BufferedImage remote = remoteImages.get(iconPath,
                 () -> SwingUtilities.invokeLater(this::rebuild));
             if (remote != null) {
                 target.setIcon(fitIcon(remote, size));
@@ -1114,8 +1115,7 @@ public class EventsPanel {
     }
 
     private static String escape(String value) {
-        return value == null ? "" : value
-            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return PanelElements.escapeHtml(value);
     }
 
     private static Color parseColor(String hex, Color fallback) {

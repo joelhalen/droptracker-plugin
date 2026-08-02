@@ -1,5 +1,6 @@
 package io.droptracker.ui.pages;
 
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.ui.DropTrackerPanel;
@@ -122,7 +123,7 @@ public class HomePanel {
         DropTrackerTheme.styleButton(learnMore);
         learnMore.setToolTipText("Read about the DropTracker API on the wiki");
         learnMore.setAlignmentX(Component.LEFT_ALIGNMENT);
-        learnMore.addActionListener(e -> LinkBrowser.browse("https://www.droptracker.io/wiki"));
+        learnMore.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("wiki").toString()));
 
         card.add(title);
         card.add(body);
@@ -144,10 +145,10 @@ public class HomePanel {
         JPanel bottomButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
         bottomButtonRow.setBackground(DropTrackerTheme.SURFACE_0);
 
-        topButtonRow.add(linkButton("Read the Wiki", "https://www.droptracker.io/wiki"));
-        topButtonRow.add(linkButton("Join Discord", "https://www.droptracker.io/discord"));
-        bottomButtonRow.add(linkButton("Suggest Features", "https://www.droptracker.io/forums/suggestions"));
-        bottomButtonRow.add(linkButton("Report a Bug", "https://www.droptracker.io/forums/bug-reports"));
+        topButtonRow.add(linkButton("Read the Wiki", DropTrackerUrls.web("wiki").toString()));
+        topButtonRow.add(linkButton("Join Discord", DropTrackerUrls.web("discord").toString()));
+        bottomButtonRow.add(linkButton("Suggest Features", DropTrackerUrls.web("forums", "suggestions").toString()));
+        bottomButtonRow.add(linkButton("Report a Bug", DropTrackerUrls.web("forums", "bug-reports").toString()));
 
         quickAccessPanel.add(topButtonRow);
         quickAccessPanel.add(Box.createRigidArea(new Dimension(0, 8)));

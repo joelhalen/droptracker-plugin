@@ -3,6 +3,7 @@ package io.droptracker.ui.components;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.DropTrackerTheme;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -39,7 +41,6 @@ public class PanelElements {
     private static final ImageIcon EXTERNAL_LINK_ICON;
     public static @Nullable BufferedImage cachedLootboardImage;
     public static String cachedGroupName = "All Players";
-    private static String currentImageUrl = "https://www.droptracker.io/img/clans/2/lb/lootboard.png";
     private static Integer cachedGroupId = null; // Track which group's lootboard is currently cached
     private static long cachedLootboardAtMs = 0;
 
@@ -47,23 +48,32 @@ public class PanelElements {
      * Shared RuneLite OkHttpClient, set once at panel construction. These UI
      * helpers are static, so the client is injected via {@link #setHttpClient}
      * rather than a constructor.
+     *
+     * <p>Redirects are disabled: every URL we fetch is built from a hardcoded base
+     * in {@link DropTrackerUrls}, and following a redirect would hand that decision
+     * back to the server.
      */
     private static OkHttpClient httpClient;
 
     public static void setHttpClient(OkHttpClient client) {
-        httpClient = client;
+        httpClient = client == null ? null : client.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build();
         // Preload the default global group (2) lootboard now that a client exists.
         // The static initializer can't do this because it runs before the client is set.
         loadLootboardForGroup(2);
     }
 
     /**
-     * Fetches a remote image through the shared OkHttpClient. A non-image body
-     * (HTML error page, redirect) decodes to null; any failure returns null.
+     * Fetches an image through the shared OkHttpClient. Takes an {@link HttpUrl}
+     * rather than a String so that a raw value from an API response cannot reach
+     * here — callers must go through {@link DropTrackerUrls} to get one.
+     * A non-image body decodes to null; any failure returns null.
      */
     @Nullable
-    private static BufferedImage fetchImage(String imageUrl) {
-        if (httpClient == null || imageUrl == null || imageUrl.isEmpty()) {
+    private static BufferedImage fetchImage(@Nullable HttpUrl imageUrl) {
+        if (httpClient == null || imageUrl == null) {
             return null;
         }
         Request request = new Request.Builder().url(imageUrl).build();
@@ -136,16 +146,21 @@ public class PanelElements {
             return;
         }
 
-        String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
+        HttpUrl imageUrl = lootboardUrl(groupId);
 
         CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
-                currentImageUrl = imageUrl;
                 cachedLootboardAtMs = System.currentTimeMillis();
             });
         });
+    }
+
+    /** {@code /img/clans/<groupId>/lb/lootboard.png} on the hardcoded website host. */
+    @Nullable
+    private static HttpUrl lootboardUrl(int groupId) {
+        return DropTrackerUrls.image("clans/" + groupId + "/lb/lootboard.png");
     }
 
     // Method to load lootboard for a specific group ID with callback
@@ -158,13 +173,12 @@ public class PanelElements {
             return;
         }
 
-        String imageUrl = "https://www.droptracker.io/img/clans/" + groupId + "/lb/lootboard.png";
+        HttpUrl imageUrl = lootboardUrl(groupId);
 
         CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
                 cachedLootboardImage = image;
                 cachedGroupId = groupId;
-                currentImageUrl = imageUrl;
                 cachedLootboardAtMs = System.currentTimeMillis();
                 // Call the completion callback
                 if (onComplete != null) {
@@ -270,7 +284,7 @@ public class PanelElements {
      * null and show an error instead), click/Esc to close. Used by the Events
      * tab for server-rendered board images.
      */
-    public static void showRemoteImage(Client client, String title, String imageUrl) {
+    public static void showRemoteImage(Client client, String title, @Nullable HttpUrl imageUrl) {
         final JFrame parentFrame = getParentFrame(client);
         JDialog imageDialog = new JDialog(parentFrame, title, false);
         imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -293,7 +307,7 @@ public class PanelElements {
     }
 
     // Method to show submission image popup
-    public static void showSubmissionImage(Client client, String submissionType, String submissionImageUrl, String tooltip) {
+    public static void showSubmissionImage(Client client, String submissionType, @Nullable HttpUrl submissionImageUrl, String tooltip) {
         final JFrame parentFrame = getParentFrame(client);
         String dialogTitle = getSubmissionDialogTitle(submissionType);
         JDialog imageDialog = new JDialog(parentFrame, dialogTitle, false);
@@ -337,8 +351,8 @@ public class PanelElements {
     }
 
 
-    private static void loadUrlImage(String imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame, String tooltip) {
-        if (imageUrl == null || imageUrl.isEmpty()) {
+    private static void loadUrlImage(@Nullable HttpUrl imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame, String tooltip) {
+        if (imageUrl == null) {
             loadingLabel.setText("No image URL available");
             loadingLabel.setForeground(DropTrackerTheme.RED);
             return;
@@ -695,7 +709,7 @@ public class PanelElements {
         for (int i = 0; i < Math.min(recentSubmissions.size(), MAX_ITEMS); i++) {
             RecentSubmission submission = recentSubmissions.get(i);
             boolean effects = false;
-            if (submission.getSubmissionImageUrl() != null && !submission.getSubmissionImageUrl().isEmpty()) {
+            if (submission.submissionImageUrl() != null) {
                 effects = true;
             }
             try {
@@ -765,9 +779,9 @@ public class PanelElements {
                     }
                 } else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
                     // Handle personal best submissions with image URL
-                    String imageUrl = submission.getImageUrl();
+                    HttpUrl imageUrl = submission.imageUrl();
 
-                    if (imageUrl != null && !imageUrl.isEmpty()) {
+                    if (imageUrl != null) {
                         final JLabel pbContainer = PanelElements.createStyledIconContainer(effects);
                         pbContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                         pbContainer.setText("PB");
@@ -799,10 +813,10 @@ public class PanelElements {
 
                 // Add the icon container if it was created successfully
                 if (iconContainer != null) {
-                    if (submission.getSubmissionImageUrl() != null && !submission.getSubmissionImageUrl().isEmpty()) {
+                    if (submission.submissionImageUrl() != null) {
                         // Capture submission data for the click listener
                         final String submissionTypeForListener = submission.getSubmissionType();
-                        final String submissionImageUrlForListener = submission.getSubmissionImageUrl();
+                        final HttpUrl submissionImageUrlForListener = submission.submissionImageUrl();
                         final String tooltipForListener = buildSubmissionTooltip(submission, forGroup);
                         // Add hover effect and click listener
                         iconContainer.addMouseListener(new MouseAdapter() {
@@ -896,7 +910,19 @@ public class PanelElements {
     }
 
     private static String sanitizeTxt(String tooltip) {
-        return tooltip.replaceAll("\\<.*?\\>", "");
+        return escapeHtml(tooltip);
+    }
+
+    /**
+     * Escapes text that is about to be interpolated into a Swing {@code <html>}
+     * string. Swing's HTML renderer resolves {@code <img src>} over the network, so
+     * any server-supplied string reaching a JLabel or tooltip must come through
+     * here — otherwise the API could make the client fetch an arbitrary URL without
+     * a single line of request code being involved.
+     */
+    public static String escapeHtml(String value) {
+        return value == null ? "" : value
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static void displayImageInDialog(JDialog imageDialog, BufferedImage originalImage, JFrame parentFrame) {

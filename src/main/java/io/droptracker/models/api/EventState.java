@@ -85,9 +85,9 @@ public class EventState {
         @SerializedName("icon_item_id")
         @Nullable
         private Integer iconItemId;
-        @SerializedName("icon_url")
+        @SerializedName("icon_path")
         @Nullable
-        private String iconUrl;
+        private String iconPath;
         @SerializedName("score")
         private int score;
         @SerializedName("rank")
@@ -110,9 +110,9 @@ public class EventState {
         @SerializedName("icon_item_id")
         @Nullable
         private Integer iconItemId;
-        @SerializedName("icon_url")
+        @SerializedName("icon_path")
         @Nullable
-        private String iconUrl;
+        private String iconPath;
         /** "board" | "inferred" | "team_progress" | "first_task" */
         @SerializedName("source")
         private String source;
@@ -140,9 +140,9 @@ public class EventState {
         @SerializedName("icon_item_id")
         @Nullable
         private Integer iconItemId;
-        @SerializedName("icon_url")
+        @SerializedName("icon_path")
         @Nullable
-        private String iconUrl;
+        private String iconPath;
         /** Tile badge in the legacy board style ("KC TARGET", "FULL SET"...). */
         @SerializedName("badge")
         @Nullable
@@ -160,7 +160,7 @@ public class EventState {
     }
 
     /** One item requirement of a task
-     *  ({name, quantity?, points?, obtained?, icon_item_id?, icon_url?}). */
+     *  ({name, quantity?, points?, obtained?, icon_item_id?, icon_path?}). */
     @Getter
     public static class Requirement {
         @SerializedName("name")
@@ -183,9 +183,9 @@ public class EventState {
         @Nullable
         private Integer iconItemId;
         /** Optional allowlisted remote icon URL, used when there is no sprite. */
-        @SerializedName("icon_url")
+        @SerializedName("icon_path")
         @Nullable
-        private String iconUrl;
+        private String iconPath;
     }
 
     @Getter

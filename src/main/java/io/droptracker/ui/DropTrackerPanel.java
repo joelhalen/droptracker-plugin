@@ -1,5 +1,6 @@
 package io.droptracker.ui;
 
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.service.SubmissionManager;
@@ -227,7 +228,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		docsButton.setToolTipText("Open the DropTracker documentation");
 		docsButton.setPreferredSize(new Dimension(26, 26));
 		docsButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		docsButton.addActionListener(e -> LinkBrowser.browse("https://www.droptracker.io/docs"));
+		docsButton.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("docs").toString()));
 
 		JButton refreshButton = new JButton("↻");
 		DropTrackerTheme.styleButton(refreshButton);

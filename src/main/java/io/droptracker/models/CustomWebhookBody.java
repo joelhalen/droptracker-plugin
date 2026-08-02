@@ -2,6 +2,8 @@ package io.droptracker.models;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import io.droptracker.api.DropTrackerUrls;
 import lombok.Data;
 
 @Data
@@ -9,9 +11,10 @@ public class CustomWebhookBody
 {
 	private String content;
 	private List<Embed> embeds = new ArrayList<>();
-	private static Author DropTracker = new Author("https://www.droptracker.io/",
+	// Outbound payload only — Discord renders these, the plugin never fetches them.
+	private static Author DropTracker = new Author(DropTrackerUrls.WEB.toString(),
 			"DropTracker",
-			"https://www.droptracker.io/img/droptracker-small.gif");
+			DropTrackerUrls.image("droptracker-small.gif").toString());
 
 	@Data
 	public static class Embed

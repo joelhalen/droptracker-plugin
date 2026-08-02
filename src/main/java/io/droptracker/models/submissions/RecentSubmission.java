@@ -6,11 +6,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import lombok.Getter;
 import lombok.Setter;
 
 import com.google.gson.annotations.SerializedName;
 import lombok.ToString;
+
+import io.droptracker.api.DropTrackerUrls;
+import okhttp3.HttpUrl;
 
 /// Nested classes for complex JSON structures
 @ToString
@@ -43,13 +48,31 @@ public class RecentSubmission {
     @Getter @Setter
     private List<Map<String, Object>> data;
 
-    @SerializedName("image_url")
+    /**
+     * Path under {@code /img/} of the icon for this submission, e.g.
+     * {@code "itemdb/4151.png"}. The API deliberately sends a path rather than a
+     * URL — see {@link io.droptracker.api.DropTrackerUrls}.
+     */
+    @SerializedName("image_path")
     @Getter @Setter
-    private String imageUrl;
+    private String imagePath;
 
-    @SerializedName("submission_image_url")
+    /** Path under {@code /img/} of the full submission screenshot. */
+    @SerializedName("submission_image_path")
     @Getter @Setter
-    private String submissionImageUrl;
+    private String submissionImagePath;
+
+    /** Absolute URL for {@link #imagePath}, or null if absent or malformed. */
+    @Nullable
+    public HttpUrl imageUrl() {
+        return DropTrackerUrls.image(imagePath);
+    }
+
+    /** Absolute URL for {@link #submissionImagePath}, or null if absent or malformed. */
+    @Nullable
+    public HttpUrl submissionImageUrl() {
+        return DropTrackerUrls.image(submissionImagePath);
+    }
 
     public String timeSinceReceived() {
         if (dateReceived == null) {

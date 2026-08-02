@@ -29,6 +29,7 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
+import io.droptracker.api.DropTrackerUrls;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -268,8 +269,9 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 
+	/** Outbound payload only — embedded in webhook bodies for Discord to render. */
 	public String itemImageUrl(int itemId) {
-		return "https://static.runelite.net/cache/item/icon/" + itemId + ".png";
+		return DropTrackerUrls.itemCache("icon/" + itemId + ".png").toString();
 	}
 
 	@Override

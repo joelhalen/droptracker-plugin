@@ -1,5 +1,6 @@
 package io.droptracker.ui.pages;
 
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
@@ -333,7 +334,7 @@ public class PlayerStatsPanel {
         playerPointsBox.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
-                LinkBrowser.browse("https://www.droptracker.io/wiki/points");
+                LinkBrowser.browse(DropTrackerUrls.web("wiki", "points").toString());
             }
 
             @Override
@@ -370,9 +371,9 @@ public class PlayerStatsPanel {
         viewProfileButton.setMargin(new Insets(0, 5, 0, 5));
         viewProfileButton.addActionListener(e -> {
             if (playerResult.getDropTrackerPlayerId() != null) {
-                LinkBrowser.browse("https://www.droptracker.io/players/" + playerResult.getDropTrackerPlayerId() + "/view");
+                LinkBrowser.browse(DropTrackerUrls.web("players", String.valueOf(playerResult.getDropTrackerPlayerId()), "view").toString());
             } else {
-                LinkBrowser.browse("https://www.droptracker.io/players/" + playerResult.getPlayerName() + "/view");
+                LinkBrowser.browse(DropTrackerUrls.web("players", playerResult.getPlayerName(), "view").toString());
             }
         });
 
