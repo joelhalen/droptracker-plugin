@@ -491,7 +491,7 @@ public class DropTrackerApi {
     public String getApiUrl() {
         String custom = config.customApiEndpoint();
         if (custom == null || custom.trim().isEmpty()) {
-            return config.useApi() ? "https://api.droptracker.io" : "";
+            return config.useApi() ? DropTrackerUrls.DEFAULT_API : "";
         }
         String normalized = custom.trim();
         if (!normalized.startsWith("http")) {
@@ -506,7 +506,7 @@ public class DropTrackerApi {
             String host = parsed.host().toLowerCase();
             if (host.equals("droptracker.io") || host.equals("www.droptracker.io")) {
                 log.warn("customApiEndpoint points at the website ({}); using https://api.droptracker.io instead", custom);
-                return "https://api.droptracker.io";
+                return DropTrackerUrls.DEFAULT_API;
             }
         }
         return normalized;
@@ -523,10 +523,12 @@ public class DropTrackerApi {
     }
 
     /**
-     * Fetches the latest/minimum plugin version from the API. The endpoint
-     * requires no auth, so this works even with the API integration disabled
-     * (falls back to the default API host in that case). Returns null on any
-     * failure — the version check is best-effort and must never break startup.
+     * Fetches the latest/minimum plugin version from the API. Gated on
+     * {@link DropTrackerConfig#useApi()} like every other call to our hosts: the
+     * endpoint needs no auth, but a user who has not enabled the API integration
+     * must not have their client contact us at all, so the check is skipped rather
+     * than falling back to the default host. Returns null on any failure — the
+     * version check is best-effort and must never break startup.
      */
     public VersionInfo fetchVersionInfo() {
         // Prefer version info already delivered by the aggregate /panel_data snapshot.
@@ -534,9 +536,10 @@ public class DropTrackerApi {
         if (panelData != null && panelData.version != null && panelData.version.latestVersion != null) {
             return panelData.version;
         }
+        // Empty means "API off and no user-supplied endpoint" — make no request.
         String apiUrl = getApiUrl();
         if (apiUrl == null || apiUrl.isEmpty()) {
-            apiUrl = "https://api.droptracker.io";
+            return null;
         }
         HttpUrl url = HttpUrl.parse(apiUrl + "/plugin_version");
         if (url == null) {
@@ -719,7 +722,7 @@ public class DropTrackerApi {
      * @param callback Function to call with the result when ready
      */
     public void getLatestWelcomeString(java.util.function.Consumer<String> callback) {
-        String endpoint;
+        HttpUrl endpoint;
         if (config.useApi()) {
             // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
             // the periodic /panel_data refresh keeps it current.
@@ -729,9 +732,13 @@ public class DropTrackerApi {
                 javax.swing.SwingUtilities.invokeLater(() -> callback.accept(welcome));
                 return;
             }
-            endpoint = getApiUrl() + "/latest_welcome";
+            endpoint = HttpUrl.parse(getApiUrl() + "/latest_welcome");
         } else {
-            endpoint = "https://droptracker-io.github.io/content/welcome.txt";
+            endpoint = DropTrackerUrls.content("welcome.txt");
+        }
+        if (endpoint == null) {
+            javax.swing.SwingUtilities.invokeLater(() -> callback.accept(WELCOME_FALLBACK));
+            return;
         }
 
         Request request = new Request.Builder().url(endpoint).build();
@@ -767,7 +774,7 @@ public class DropTrackerApi {
      * @param callback Function to call with the result when ready
      */
     public void getLatestUpdateString(java.util.function.Consumer<String> callback) {
-        String endpoint;
+        HttpUrl endpoint;
         if (config.useApi()) {
             // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
             // the periodic /panel_data refresh keeps it current.
@@ -777,9 +784,13 @@ public class DropTrackerApi {
                 javax.swing.SwingUtilities.invokeLater(() -> callback.accept(news));
                 return;
             }
-            endpoint = getApiUrl() + "/latest_news";
+            endpoint = HttpUrl.parse(getApiUrl() + "/latest_news");
         } else {
-            endpoint = "https://droptracker-io.github.io/content/news.txt";
+            endpoint = DropTrackerUrls.content("news.txt");
+        }
+        if (endpoint == null) {
+            javax.swing.SwingUtilities.invokeLater(() -> callback.accept(NEWS_FALLBACK));
+            return;
         }
 
         Request request = new Request.Builder().url(endpoint).build();
@@ -820,7 +831,7 @@ public class DropTrackerApi {
      * Since this list should be updated infrequently, we can simply load only if not present.
      */
     public ArrayList<Integer> getValuedUntradeables() {
-        return fetchItemIdList("https://droptracker-io.github.io/content/valued_items.txt", "untradeables");
+        return fetchItemIdList(DropTrackerUrls.content("valued_items.txt"), "untradeables");
     }
 
     /**
@@ -830,7 +841,7 @@ public class DropTrackerApi {
      * carry no server-side value override — the screenshot is the point.
      */
     public ArrayList<Integer> getNotableUntradeables() {
-        return fetchItemIdList("https://droptracker-io.github.io/content/untradeable_items.txt", "notable-untradeables");
+        return fetchItemIdList(DropTrackerUrls.content("untradeable_items.txt"), "notable-untradeables");
     }
 
     /**
@@ -845,10 +856,10 @@ public class DropTrackerApi {
      * Returns null on any failure, which leaves the compiled-in list in force.
      */
     public ArrayList<Integer> getServerLootNpcIds() {
-        return fetchItemIdList("https://droptracker-io.github.io/content/server_loot_npc_ids.txt", "server-loot-npcs");
+        return fetchItemIdList(DropTrackerUrls.content("server_loot_npc_ids.txt"), "server-loot-npcs");
     }
 
-    private ArrayList<Integer> fetchItemIdList(String url, String tag) {
+    private ArrayList<Integer> fetchItemIdList(HttpUrl url, String tag) {
         String valued;
         /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */
         try {
@@ -1008,7 +1019,7 @@ public class DropTrackerApi {
      * team's view). The identity params ride along because the endpoint is
      * roster-gated (private events stay hidden without them).
      */
-    public String eventBoardImageUrl(int eventId, Integer teamId, String playerName, long accountHash) {
+    public HttpUrl eventBoardImageUrl(int eventId, Integer teamId, String playerName, long accountHash) {
         HttpUrl base = HttpUrl.parse(getApiUrl() + "/events/" + eventId + "/board.png");
         if (base == null) {
             return null;
@@ -1019,7 +1030,7 @@ public class DropTrackerApi {
         if (teamId != null) {
             builder.addQueryParameter("team_id", String.valueOf(teamId));
         }
-        return builder.build().toString();
+        return builder.build();
     }
 
     /** True when any loaded group config reports a live event tracking this player. */

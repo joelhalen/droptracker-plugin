@@ -1,5 +1,6 @@
 package io.droptracker.util;
 
+import io.droptracker.api.DropTrackerUrls;
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
@@ -36,7 +37,7 @@ public class ChatMessageUtil {
     {
         if (event.getCommand().equals("droptracker"))
         {
-            LinkBrowser.browse("https://www.droptracker.io/wiki/why-api/");
+            LinkBrowser.browse(DropTrackerUrls.web("wiki", "why-api").toString());
         }
         if (event.getCommand().equals("debugurl"))
         {

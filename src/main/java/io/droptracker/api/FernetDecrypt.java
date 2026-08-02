@@ -73,9 +73,9 @@ public class FernetDecrypt {
             String result = new String(decryptedBytes, StandardCharsets.UTF_8);
             
             // Post-process the result to fix common issues
-            result = postProcessDecryptedUrl(result);
-            
-            return result; 
+            result = postProcessDecrypted(result);
+
+            return result;
         } catch (Exception e) {
             log.error("Decryption failed for webhook hash: {}", webhookHash.substring(0, Math.min(20, webhookHash.length())) + "...", e);
             throw e;
@@ -83,35 +83,18 @@ public class FernetDecrypt {
     }
     
     /**
-     * Post-process decrypted URL to fix common corruption issues
+     * Strips the leading non-printable bytes that occasionally survive decryption.
+     *
+     * <p>This used to also synthesise {@code "https://discord.com" + path} when the
+     * plaintext looked like a webhook. It no longer does: the plaintext is a
+     * credential, not an address, and the host is decided by
+     * {@link DropTrackerUrls#DISCORD_WEBHOOK}. See
+     * {@link UrlManager#parseEndpoint(String)}.
      */
-    private static String postProcessDecryptedUrl(String decrypted) {
+    private static String postProcessDecrypted(String decrypted) {
         if (decrypted == null || decrypted.isEmpty()) {
             return decrypted;
         }
-        
-        // Remove non-printable characters from the beginning
-        String cleaned = decrypted.replaceAll("^[\\p{Cntrl}\\p{So}\\p{Cn}]+", "");
-        
-        // Look for the webhook path pattern
-        int webhookIndex = cleaned.indexOf("/api/webhooks/");
-        if (webhookIndex > 0) {
-            // Extract just the webhook path part
-            cleaned = cleaned.substring(webhookIndex);
-        }
-        
-        // If it starts with /api/webhooks/, prepend the Discord domain
-        if (cleaned.startsWith("/api/webhooks/")) {
-            cleaned = "https://discord.com" + cleaned;
-        }
-        
-        // If it contains .com/api/webhooks but doesn't start with https://, try to fix it
-        if (cleaned.contains("com/api/webhooks/") && !cleaned.startsWith("https://")) {
-            int comIndex = cleaned.indexOf("com/api/webhooks/");
-            if (comIndex >= 0) {
-                cleaned = "https://discord." + cleaned.substring(comIndex);
-            }
-        }
-        return cleaned;
+        return decrypted.replaceAll("^[\\p{Cntrl}\\p{So}\\p{Cn}]+", "");
     }
 }

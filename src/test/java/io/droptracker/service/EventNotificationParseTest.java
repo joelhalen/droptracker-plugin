@@ -1,5 +1,7 @@
 package io.droptracker.service;
 
+import io.droptracker.api.DropTrackerUrls;
+import okhttp3.HttpUrl;
 import com.google.gson.Gson;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.EventNotification;
@@ -121,28 +123,28 @@ public class EventNotificationParseTest {
             + "\"event\":{\"id\":18,\"name\":\"Droptracker Board\",\"kind\":\"board_game\","
             + "\"has_bingo\":false,\"ends_at\":\"2026-07-30T13:07:00\"},"
             + "\"team\":{\"id\":36,\"name\":\"Jimmy Baller\",\"color\":null,"
-            + "\"icon_item_id\":null,\"icon_url\":null,\"score\":0,\"rank\":1,\"team_count\":2},"
+            + "\"icon_item_id\":null,\"icon_path\":null,\"score\":0,\"rank\":1,\"team_count\":2},"
             + "\"focus_task\":{\"id\":218,\"label\":\"Bandos Chestplate\",\"have\":0,\"need\":1,"
-            + "\"icon_item_id\":11832,\"icon_url\":null,\"source\":\"board\"},"
+            + "\"icon_item_id\":11832,\"icon_path\":null,\"source\":\"board\"},"
             + "\"board_status\":\"active\",\"tasks_completed\":1,\"tasks_total\":83,"
             + "\"board\":{\"available\":true,\"team_id\":36},"
             + "\"standings\":[{\"team_id\":36,\"name\":\"Jimmy Baller\",\"score\":0,\"rank\":1,\"color\":null},"
             + "{\"team_id\":37,\"name\":\"Steve-O sickos\",\"score\":0,\"rank\":2,\"color\":null}]},"
             + "{\"event\":{\"id\":19,\"name\":\"Bingo\",\"kind\":\"bingo\",\"has_bingo\":true,\"ends_at\":null},"
             + "\"team\":{\"id\":38,\"name\":\"T\",\"color\":\"#cc4444\",\"icon_item_id\":null,"
-            + "\"icon_url\":null,\"score\":5,\"rank\":2,\"team_count\":2},"
+            + "\"icon_path\":null,\"score\":5,\"rank\":2,\"team_count\":2},"
             + "\"focus_task\":{\"id\":127,\"label\":\"1,000,000 Magic XP\",\"have\":297656,"
             + "\"need\":1000000,\"icon_item_id\":null,"
-            + "\"icon_url\":\"https://www.droptracker.io/img/metrics/magic.png\",\"source\":\"team_progress\"},"
+            + "\"icon_path\":\"metrics/magic.png\",\"source\":\"team_progress\"},"
             + "\"board_status\":null,\"tasks_completed\":5,\"tasks_total\":24,"
             + "\"board\":{\"available\":true,\"team_id\":38},\"standings\":[],"
             + "\"tasks\":[{\"id\":127,\"label\":\"1,000,000 Magic XP\",\"type\":\"xp_target\","
             + "\"points\":5,\"have\":297656,\"need\":1000000,\"completed\":false,"
-            + "\"icon_item_id\":null,\"icon_url\":\"https://www.droptracker.io/img/metrics/magic.png\","
+            + "\"icon_item_id\":null,\"icon_path\":\"metrics/magic.png\","
             + "\"badge\":\"XP TARGET\",\"value\":\"1.00M XP\","
             + "\"description\":\"Gain 1.00M Magic XP as a team.\",\"requirements\":[]},"
             + "{\"id\":128,\"label\":\"Point hunt\",\"type\":\"item_collection\",\"points\":10,"
-            + "\"have\":25,\"need\":50,\"completed\":false,\"icon_item_id\":20997,\"icon_url\":null,"
+            + "\"have\":25,\"need\":50,\"completed\":false,\"icon_item_id\":20997,\"icon_path\":null,"
             + "\"badge\":\"POINTS\",\"value\":\"50 pts\","
             + "\"description\":\"Earn 50 points. Each listed item awards its own point value.\","
             + "\"requirements\":[{\"name\":\"Twisted bow\",\"points\":25},"
@@ -163,8 +165,7 @@ public class EventNotificationParseTest {
         EventState.Entry bingo = state.getEvents().get(1);
         assertNull(bingo.getBoardStatus());
         assertEquals(297656L, bingo.getFocusTask().getHave());
-        assertEquals("https://www.droptracker.io/img/metrics/magic.png",
-            bingo.getFocusTask().getIconUrl());
+        assertEquals("metrics/magic.png", bingo.getFocusTask().getIconPath());
         assertEquals("#cc4444", bingo.getTeam().getColor());
 
         // P3 additions: full task list + roster (absent on older servers).
@@ -201,17 +202,14 @@ public class EventNotificationParseTest {
     }
 
     @Test
-    public void remoteImageUrlAllowlist() {
-        assertTrue(io.droptracker.util.RemoteImageCache.isAllowedUrl(
-            "https://www.droptracker.io/img/metrics/magic.png"));
-        assertTrue(io.droptracker.util.RemoteImageCache.isAllowedUrl(
-            "https://api.droptracker.io/events/19/board.png?team_id=38"));
-        assertFalse(io.droptracker.util.RemoteImageCache.isAllowedUrl(
-            "https://evil.example.com/x.png"));
-        assertFalse(io.droptracker.util.RemoteImageCache.isAllowedUrl(
-            "http://www.droptracker.io/img/x.png")); // https only
-        assertFalse(io.droptracker.util.RemoteImageCache.isAllowedUrl(
-            "https://droptracker.io.evil.com/x.png"));
-        assertFalse(io.droptracker.util.RemoteImageCache.isAllowedUrl(null));
+    public void iconPathsAnchorOnTheHardcodedImageHost() {
+        // The API sends /img/-relative paths; the plugin owns the host. Anything
+        // that looks like a URL is refused outright rather than fetched.
+        assertEquals(HttpUrl.get("https://www.droptracker.io/img/metrics/magic.png"),
+            DropTrackerUrls.image("metrics/magic.png"));
+        assertNull(DropTrackerUrls.image("https://evil.example.com/x.png"));
+        assertNull(DropTrackerUrls.image("http://www.droptracker.io/img/x.png"));
+        assertNull(DropTrackerUrls.image("../../evil"));
+        assertNull(DropTrackerUrls.image(null));
     }
 }

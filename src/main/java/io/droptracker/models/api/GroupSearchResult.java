@@ -16,9 +16,14 @@ public class GroupSearchResult {
     @SerializedName("group_description")
     private String groupDescription;
     
-    @SerializedName("group_image_url")
-    private String groupImageUrl;
-    
+    /**
+     * Path under {@code /img/} of the group's icon, e.g. {@code "clans/2/icon.png"}.
+     * A path rather than a URL so the plugin, not the API, decides the host — see
+     * {@link io.droptracker.api.DropTrackerUrls}.
+     */
+    @SerializedName("group_image_path")
+    private String groupImagePath;
+
     @SerializedName("group_droptracker_id")
     private Integer groupDropTrackerId;
     
@@ -40,8 +45,9 @@ public class GroupSearchResult {
     @SerializedName("group_stats")
     private GroupStats groupStats;
 
-    @SerializedName("public_discord_link")
-    private String publicDiscordLink;
+    /** Invite code only, e.g. {@code "droptracker"}; the plugin builds the discord.gg link. */
+    @SerializedName("discord_invite_code")
+    private String discordInviteCode;
     
     // Raw JSON data for any additional fields not explicitly mapped
     private transient Map<String, Object> additionalData;

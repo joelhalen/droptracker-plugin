@@ -1,5 +1,6 @@
 package io.droptracker.ui;
 
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.service.SubmissionManager;
@@ -108,7 +109,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		this.client = client;
 		this.httpClient = httpClient;
 		// Static UI helpers fetch images through the shared client; hand it over once here.
-		PanelElements.setHttpClient(httpClient);
+		// They also need to know whether the API is on: lootboards come from our own
+		// host, so they must not be fetched unless the user has enabled connections.
+		PanelElements.setHttpClient(httpClient, config.useApi());
 
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(6, 6, 6, 6));
@@ -227,7 +230,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		docsButton.setToolTipText("Open the DropTracker documentation");
 		docsButton.setPreferredSize(new Dimension(26, 26));
 		docsButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		docsButton.addActionListener(e -> LinkBrowser.browse("https://www.droptracker.io/docs"));
+		docsButton.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("docs").toString()));
 
 		JButton refreshButton = new JButton("↻");
 		DropTrackerTheme.styleButton(refreshButton);

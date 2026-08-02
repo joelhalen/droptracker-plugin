@@ -2,6 +2,7 @@ package io.droptracker.ui.pages;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.submissions.RecentSubmission;
@@ -15,6 +16,9 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
+import javax.annotation.Nullable;
+
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -59,7 +63,12 @@ public class GroupPanel {
         this.api = api;
         this.itemManager = itemManager;
         this.panel = panel;
-        this.httpClient = httpClient;
+        // Redirects off: group icons load from a hardcoded base, and following a
+        // redirect would let the response choose the host instead.
+        this.httpClient = httpClient.newBuilder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build();
     }
 
     public JPanel create() {
@@ -366,7 +375,7 @@ public class GroupPanel {
         groupIcon.setPreferredSize(new Dimension(50, 50));
         groupIcon.setMaximumSize(new Dimension(50, 50));
         groupIcon.setMinimumSize(new Dimension(50, 50));
-        loadGroupIcon(groupIcon, groupResult.getGroupImageUrl());
+        loadGroupIcon(groupIcon, groupResult.getGroupImagePath());
 
         // Group name and description
         JPanel groupNamePanel = new JPanel();
@@ -381,7 +390,9 @@ public class GroupPanel {
         String description = groupResult.getGroupDescription() != null
             ? groupResult.getGroupDescription()
             : (partial ? "Loading details…" : "");
-        JLabel groupDescLabel = new JLabel("<html>" + description + "</html>");
+        // Escaped: Swing resolves <img src> in HTML labels, so an unescaped server
+        // description is an outbound request to a host of the server's choosing.
+        JLabel groupDescLabel = new JLabel("<html>" + PanelElements.escapeHtml(description) + "</html>");
         groupDescLabel.setFont(FontManager.getRunescapeSmallFont());
         groupDescLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         groupDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -441,11 +452,13 @@ public class GroupPanel {
         actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
         actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        if (groupResult.getPublicDiscordLink() != null && !groupResult.getPublicDiscordLink().isEmpty()) {
+        // The API sends an invite code, not a link: the discord.gg host is ours to decide.
+        final HttpUrl inviteUrl = DropTrackerUrls.discordInvite(groupResult.getDiscordInviteCode());
+        if (inviteUrl != null) {
             JButton joinButton = new JButton("Discord");
             DropTrackerTheme.styleButton(joinButton);
             joinButton.setMargin(new Insets(0, 5, 0, 5));
-            joinButton.addActionListener(e -> LinkBrowser.browse(groupResult.getPublicDiscordLink()));
+            joinButton.addActionListener(e -> LinkBrowser.browse(inviteUrl.toString()));
             actionPanel.add(joinButton);
         }
 
@@ -476,7 +489,7 @@ public class GroupPanel {
 
     private void openGroupPage() {
         try {
-            LinkBrowser.browse("https://www.droptracker.io/groups");
+            LinkBrowser.browse(DropTrackerUrls.web("groups").toString());
         } catch (Exception e) {
             // Fallback: copy URL to clipboard or show message
             JOptionPane.showMessageDialog(contentPanel,
@@ -488,7 +501,7 @@ public class GroupPanel {
 
     private void openCreateGroupPage() {
         try {
-            LinkBrowser.browse("https://www.droptracker.io/wiki/create-group");
+            LinkBrowser.browse(DropTrackerUrls.web("wiki", "create-group").toString());
         } catch (Exception e) {
             // Fallback: copy URL to clipboard or show message
             JOptionPane.showMessageDialog(contentPanel,
@@ -499,22 +512,28 @@ public class GroupPanel {
     }
 
     /**
-     * Downloads the group icon from the provided URL, scales it to 50×50, then swaps it into the given label.
+     * Downloads the group icon, scales it to 50×50, then swaps it into the given label.
      * This runs off the EDT to avoid blocking the UI.
+     *
+     * @param imagePath path under {@code /img/} supplied by the API, e.g.
+     *                  {@code "clans/2/icon.png"}. Not a URL — the host is decided
+     *                  by {@link DropTrackerUrls#image}.
      */
-    private void loadGroupIcon(JLabel iconLabel, String inputString) {
-        if (inputString == null || inputString.trim().isEmpty()) {
+    private void loadGroupIcon(JLabel iconLabel, String imagePath) {
+        if (imagePath == null || imagePath.trim().isEmpty()) {
             return; // nothing to load
         }
 
         // we can't load gifs in swing panels natively, so we swap for a png alternative hoping it exists
-        String urlString = inputString.replace(".gif", ".png");
+        String pngPath = imagePath.replace(".gif", ".png");
+        HttpUrl pngUrl = DropTrackerUrls.image(pngPath);
+        HttpUrl originalUrl = DropTrackerUrls.image(imagePath);
 
         CompletableFuture.supplyAsync(() -> {
-            ImageIcon icon = fetchScaledIcon(urlString);
-            if (icon == null && urlString.endsWith(".png") && !inputString.endsWith(".png")) {
-                // Fall back to the original URL if the .png swap didn't exist.
-                icon = fetchScaledIcon(inputString);
+            ImageIcon icon = fetchScaledIcon(pngUrl);
+            if (icon == null && !pngPath.equals(imagePath)) {
+                // Fall back to the original path if the .png swap didn't exist.
+                icon = fetchScaledIcon(originalUrl);
             }
             return icon;
         }).thenAccept(icon -> {
@@ -524,8 +543,11 @@ public class GroupPanel {
         });
     }
 
-    private ImageIcon fetchScaledIcon(String urlString) {
-        Request request = new Request.Builder().url(urlString).build();
+    private ImageIcon fetchScaledIcon(@Nullable HttpUrl url) {
+        if (url == null) {
+            return null;
+        }
+        Request request = new Request.Builder().url(url).build();
         try (Response response = httpClient.newCall(request).execute()) {
             ResponseBody body = response.body();
             if (!response.isSuccessful() || body == null) {

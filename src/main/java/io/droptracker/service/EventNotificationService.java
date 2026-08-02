@@ -523,7 +523,7 @@ public class EventNotificationService {
                 if (task.getId() == tracked && !task.isCompleted()) {
                     return new DisplayTask(task.getId(), task.getLabel(),
                         task.getHave(), task.getNeed(),
-                        task.getIconItemId(), task.getIconUrl(), true);
+                        task.getIconItemId(), task.getIconPath(), true);
                 }
             }
         }
@@ -533,7 +533,7 @@ public class EventNotificationService {
         }
         return new DisplayTask(focus.getId(), focus.getLabel(),
             focus.getHave(), focus.getNeed(),
-            focus.getIconItemId(), focus.getIconUrl(), false);
+            focus.getIconItemId(), focus.getIconPath(), false);
     }
 
     /** Unified view of the headlined task, from either source. */
@@ -545,19 +545,19 @@ public class EventNotificationService {
         @Nullable
         public final Integer iconItemId;
         @Nullable
-        public final String iconUrl;
+        public final String iconPath;
         /** true = the user's manual pick; false = server-chosen focus. */
         public final boolean tracked;
 
         DisplayTask(int id, String label, long have, long need,
-                    @Nullable Integer iconItemId, @Nullable String iconUrl,
+                    @Nullable Integer iconItemId, @Nullable String iconPath,
                     boolean tracked) {
             this.id = id;
             this.label = label;
             this.have = have;
             this.need = need;
             this.iconItemId = iconItemId;
-            this.iconUrl = iconUrl;
+            this.iconPath = iconPath;
             this.tracked = tracked;
         }
     }

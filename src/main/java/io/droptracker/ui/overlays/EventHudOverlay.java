@@ -363,7 +363,7 @@ public class EventHudOverlay extends Overlay {
         if (task.iconItemId != null && task.iconItemId > 0) {
             return itemManager.getImage(task.iconItemId);
         }
-        return remoteImages.get(task.iconUrl, null);
+        return remoteImages.get(task.iconPath, null);
     }
 
     private static BufferedImage scaled(BufferedImage source) {

@@ -571,10 +571,10 @@ public class SubmissionManager {
 
         MultipartBody requestBody = requestBodyBuilder.build();
 
-        String url;
+        HttpUrl url;
         if (!config.useApi()) {
             try {
-                url = UrlManager.getRandomUrl();
+                url = UrlManager.getRandomEndpoint();
                 debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
                         "using random webhook endpoint (API disabled); attempt=" + attempt);
             } catch (Exception e) {
@@ -583,14 +583,17 @@ public class SubmissionManager {
                 return;
             }
         } else {
-            url = api.getApiUrl() + "/webhook";
+            url = HttpUrl.parse(api.getApiUrl() + "/webhook");
             debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
                     "using API webhook endpoint; attempt=" + attempt + ", url=" + url);
         }
-        HttpUrl u = HttpUrl.parse(url);
-        if (u == null || !urlManager.isValidDiscordWebhookUrl(u)) {
-            log.debug("Invalid or malformed webhook URL: {}", url);
-            debugLogEventFlow("failed", submission != null ? submission.getType() : null, "invalid webhook URL: " + url);
+        // Both branches build on a hardcoded base, so this is defence in depth rather
+        // than a real gate. Log only the host: a webhook URL's path is a credential.
+        if (url == null || !urlManager.isValidDiscordWebhookUrl(url)) {
+            String host = url == null ? "(unparseable)" : url.host();
+            log.debug("Invalid or malformed webhook URL for host: {}", host);
+            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                    "invalid webhook host: " + host);
             return;
         }
 

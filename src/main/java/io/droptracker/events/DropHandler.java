@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,6 +45,10 @@ public class DropHandler extends BaseEventHandler {
 
     @Inject
     private EventNotificationService eventNotificationService;
+
+    /** One in-flight untradeable-list reload at a time: a busy player killing
+     *  through an outage would otherwise queue a fetch per drop. */
+    private final AtomicBoolean untradeableReloadInFlight = new AtomicBoolean(false);
 
     /**
      * Short-lived record of boss loot already submitted, keyed by
@@ -139,14 +144,32 @@ public class DropHandler extends BaseEventHandler {
 			plugin.ticksSinceNpcDataUpdate -= 30;
 		}
         plugin.lastDrop = new Drop(npcName, lootRecordType, finalItems);
-		if (plugin.valuedItemIds == null) {
-			/* Load target 'valued item ids' if they are not present
-			To help properly screenshot un-tradeables that are later given values
-			 */
-			plugin.valuedItemIds = api.getValuedUntradeables();
-		}
-		if (plugin.untradeableItemIds == null) {
-			plugin.untradeableItemIds = api.getNotableUntradeables();
+		/* These lists are normally loaded off-thread at startup. When that
+		   failed, this used to fetch them INLINE — but processDropEvent runs
+		   on the game client thread (straight off @Subscribe), and the fetch is
+		   a synchronous OkHttp call with a 5s connect / 10s read timeout. So
+		   the one situation where the list is missing (the server was
+		   unreachable at startup, and probably still is) froze the client for
+		   up to 15 seconds on EVERY drop — and since a failed fetch returns
+		   null, the guard never cleared and it happened again on the next one.
+		   Kick a reload off-thread instead; the consumer loop below already
+		   null-guards both lists, so this drop simply goes un-flagged. */
+		if ((plugin.valuedItemIds == null || plugin.untradeableItemIds == null)
+				&& executor != null && untradeableReloadInFlight.compareAndSet(false, true)) {
+			executor.submit(() -> {
+				try {
+					if (plugin.valuedItemIds == null) {
+						plugin.valuedItemIds = api.getValuedUntradeables();
+					}
+					if (plugin.untradeableItemIds == null) {
+						plugin.untradeableItemIds = api.getNotableUntradeables();
+					}
+				} catch (Exception e) {
+					log.debug("Untradeable list reload failed: {}", e.getMessage());
+				} finally {
+					untradeableReloadInFlight.set(false);
+				}
+			});
 		}
 		/* Items required by one of the player's active events (from the last
 		/event_state snapshot) are always screenshotted for proof — this
