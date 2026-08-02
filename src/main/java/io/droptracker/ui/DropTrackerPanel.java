@@ -109,7 +109,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		this.client = client;
 		this.httpClient = httpClient;
 		// Static UI helpers fetch images through the shared client; hand it over once here.
-		PanelElements.setHttpClient(httpClient);
+		// They also need to know whether the API is on: lootboards come from our own
+		// host, so they must not be fetched unless the user has enabled connections.
+		PanelElements.setHttpClient(httpClient, config.useApi());
 
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(6, 6, 6, 6));

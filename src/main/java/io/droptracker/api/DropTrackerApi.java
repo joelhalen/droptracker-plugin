@@ -523,10 +523,12 @@ public class DropTrackerApi {
     }
 
     /**
-     * Fetches the latest/minimum plugin version from the API. The endpoint
-     * requires no auth, so this works even with the API integration disabled
-     * (falls back to the default API host in that case). Returns null on any
-     * failure — the version check is best-effort and must never break startup.
+     * Fetches the latest/minimum plugin version from the API. Gated on
+     * {@link DropTrackerConfig#useApi()} like every other call to our hosts: the
+     * endpoint needs no auth, but a user who has not enabled the API integration
+     * must not have their client contact us at all, so the check is skipped rather
+     * than falling back to the default host. Returns null on any failure — the
+     * version check is best-effort and must never break startup.
      */
     public VersionInfo fetchVersionInfo() {
         // Prefer version info already delivered by the aggregate /panel_data snapshot.
@@ -534,9 +536,10 @@ public class DropTrackerApi {
         if (panelData != null && panelData.version != null && panelData.version.latestVersion != null) {
             return panelData.version;
         }
+        // Empty means "API off and no user-supplied endpoint" — make no request.
         String apiUrl = getApiUrl();
         if (apiUrl == null || apiUrl.isEmpty()) {
-            apiUrl = DropTrackerUrls.DEFAULT_API;
+            return null;
         }
         HttpUrl url = HttpUrl.parse(apiUrl + "/plugin_version");
         if (url == null) {

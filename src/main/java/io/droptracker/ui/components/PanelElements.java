@@ -55,11 +55,22 @@ public class PanelElements {
      */
     private static OkHttpClient httpClient;
 
-    public static void setHttpClient(OkHttpClient client) {
+    /**
+     * Whether the user has switched on API connections. Lootboards are served from
+     * our own host, so every fetch below is gated on this: with the API integration
+     * disabled the plugin makes no request to a droptracker.io host at all.
+     *
+     * <p>Kept in sync by the panel being rebuilt whenever {@code useApi} changes,
+     * which calls {@link #setHttpClient} again.
+     */
+    private static boolean apiEnabled;
+
+    public static void setHttpClient(OkHttpClient client, boolean apiEnabled) {
         httpClient = client == null ? null : client.newBuilder()
             .followRedirects(false)
             .followSslRedirects(false)
             .build();
+        PanelElements.apiEnabled = apiEnabled;
         // Preload the default global group (2) lootboard now that a client exists.
         // The static initializer can't do this because it runs before the client is set.
         loadLootboardForGroup(2);
@@ -147,6 +158,9 @@ public class PanelElements {
         }
 
         HttpUrl imageUrl = lootboardUrl(groupId);
+        if (imageUrl == null) {
+            return;
+        }
 
         CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {
@@ -157,9 +171,16 @@ public class PanelElements {
         });
     }
 
-    /** {@code /img/clans/<groupId>/lb/lootboard.png} on the hardcoded website host. */
+    /**
+     * {@code /img/clans/<groupId>/lb/lootboard.png} on the hardcoded website host,
+     * or null when the API integration is switched off — the single choke point
+     * that keeps a disabled plugin from touching our host.
+     */
     @Nullable
     private static HttpUrl lootboardUrl(int groupId) {
+        if (!apiEnabled) {
+            return null;
+        }
         return DropTrackerUrls.image("clans/" + groupId + "/lb/lootboard.png");
     }
 
@@ -174,6 +195,12 @@ public class PanelElements {
         }
 
         HttpUrl imageUrl = lootboardUrl(groupId);
+        if (imageUrl == null) {
+            if (onComplete != null) {
+                SwingUtilities.invokeLater(onComplete);
+            }
+            return;
+        }
 
         CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
             SwingUtilities.invokeLater(() -> {

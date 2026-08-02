@@ -526,7 +526,11 @@ public class DropTrackerPlugin extends Plugin {
 				if (!config.useApi() && config.customApiEndpoint().equalsIgnoreCase("")) {
 					chatMessageUtil.warnApiSetting();
 				}
-				executor.submit(this::checkForPluginUpdates);
+				// The update check talks to our API, so it only runs once the user
+				// has enabled the integration (or pointed us at their own endpoint).
+				if (config.useApi() || !config.customApiEndpoint().equalsIgnoreCase("")) {
+					executor.submit(this::checkForPluginUpdates);
+				}
 			}
 
 			SwingUtilities.invokeLater(() -> {
