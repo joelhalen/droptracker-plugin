@@ -3,7 +3,7 @@
 Track your drops, compete in leaderboards, and share achievements with your clan.
 
 - **Website**: [droptracker.io](https://www.droptracker.io/)
-- **Discord**: [Join the DropTracker Discord](https://www.droptracker.io/discord)
+- **Discord**: [Join the DropTracker Discord](https://discord.gg/droptracker)
 - **Docs/Wiki** (WIP): [droptracker.io/wiki](https://www.droptracker.io/wiki)
 
 ![image](https://www.droptracker.io/img/clans/2/lb/lootboard.png)
@@ -132,7 +132,7 @@ OSRS-side settings are required:
 - Confirm the category is enabled (Loot/PBs/CAs/etc.)
 - If using API features, ensure **Use API Connections** is enabled
 - Check your RuneLite logs folder: **Help → Open Logs Folder**
-- Reach out to us in our [Discord server](https://www.droptracker.io/discord)
+- Reach out to us in our [Discord server](https://discord.gg/droptracker)
 
 ---
 
@@ -146,7 +146,7 @@ OSRS-side settings are required:
 ## Support
 
 - **Docs/Wiki**: [droptracker.io/wiki](https://www.droptracker.io/wiki)
-- **Discord**: [Join the DropTracker Discord](https://www.droptracker.io/discord)
+- **Discord**: [Join the DropTracker Discord](https://discord.gg/droptracker)
 
 ---
 
