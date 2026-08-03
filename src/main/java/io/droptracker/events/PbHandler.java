@@ -78,7 +78,8 @@ public class PbHandler extends BaseEventHandler {
     private long lastProcessedTime = 0;
     private long lastKillDataUpdate = 0L;
 
-    private static class KillData {
+    @VisibleForTesting
+    static class KillData {
         final String boss;
         final Integer count;
         final Duration time;
@@ -155,7 +156,8 @@ public class PbHandler extends BaseEventHandler {
         }
     }
 
-    private Optional<KillData> parseMessage(String message) {
+    @VisibleForTesting
+    Optional<KillData> parseMessage(String message) {
         if (message.startsWith("Preparation")) {
             return Optional.empty();
         }

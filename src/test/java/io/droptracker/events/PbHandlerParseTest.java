@@ -1,7 +1,11 @@
 package io.droptracker.events;
 
+import net.runelite.api.Client;
 import org.junit.Test;
 
+import java.lang.reflect.Proxy;
+import java.time.Duration;
+import java.util.Optional;
 import java.util.regex.Matcher;
 
 import static org.junit.Assert.assertEquals;
@@ -10,8 +14,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Tests for the chat-message regex patterns in {@link PbHandler}, exposed via
- * package-private {@code @VisibleForTesting} accessors.
+ * Tests for the chat-message regex patterns and {@link PbHandler#parseMessage}
+ * filtering, exposed via package-private {@code @VisibleForTesting} accessors.
  */
 public class PbHandlerParseTest {
 
@@ -140,5 +144,58 @@ public class PbHandlerParseTest {
         assertEquals("2:15", m.group("duration"));
         assertNull(m.group("pbtime"));
         assertNull(m.group("pbIndicator"));
+    }
+
+    // --- parseMessage: raid target-time announcements (issue #35) ---
+
+    /**
+     * parseMessage resolves raid team sizes through {@link Client} varbits, so give
+     * the handler a stub client whose getters all return zero/null defaults.
+     */
+    private static PbHandler newHandler() {
+        PbHandler handler = new PbHandler();
+        handler.client = (Client) Proxy.newProxyInstance(
+                Client.class.getClassLoader(),
+                new Class<?>[]{Client.class},
+                (proxy, method, args) -> {
+                    Class<?> returnType = method.getReturnType();
+                    if (returnType == int.class) return 0;
+                    if (returnType == long.class) return 0L;
+                    if (returnType == boolean.class) return false;
+                    return null;
+                });
+        return handler;
+    }
+
+    @Test
+    public void parseMessageIgnoresFailedTargetTimeAnnouncement() {
+        PbHandler handler = newHandler();
+
+        // In-game the target-time announcement arrives after the completion line.
+        assertTrue(handler.parseMessage(
+                "Tombs of Amascut total completion time: 41:37.20 (new personal best)").isPresent());
+
+        // The announcement contains a parseable time (40:00) that is unrelated to the
+        // player's PB; it must yield no KillData that could overwrite the 41:37.20.
+        assertFalse(handler.parseMessage(
+                "Your party failed to beat the overall target time of 40:00.").isPresent());
+    }
+
+    @Test
+    public void parseMessageIgnoresBeatenTargetTimeAnnouncement() {
+        PbHandler handler = newHandler();
+        assertFalse(handler.parseMessage(
+                "Your party beat the overall target time of 25:00!").isPresent());
+    }
+
+    @Test
+    public void parseMessageStillParsesToaCompletionTime() {
+        PbHandler handler = newHandler();
+        Optional<PbHandler.KillData> result = handler.parseMessage(
+                "Tombs of Amascut total completion time: 41:37.20 (new personal best)");
+        assertTrue(result.isPresent());
+        assertEquals("Tombs of Amascut", result.get().boss);
+        assertEquals(Duration.ofMinutes(41).plusSeconds(37).plusMillis(200), result.get().time);
+        assertTrue(result.get().isPersonalBest);
     }
 }
