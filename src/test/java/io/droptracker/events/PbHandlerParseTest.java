@@ -1,11 +1,14 @@
 package io.droptracker.events;
 
+import net.runelite.client.util.Text;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.regex.Matcher;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -140,5 +143,128 @@ public class PbHandlerParseTest {
         assertEquals("2:15", m.group("duration"));
         assertNull(m.group("pbtime"));
         assertNull(m.group("pbIndicator"));
+    }
+
+    // --- selectTimeLine (ticket #361) ---
+    //
+    // The raid messages below are the literal ones RuneLite asserts against in
+    // ChatCommandsPluginTest, put through the same sanitising the plugin applies
+    // before a handler ever sees them (<br> to newline, colour tags stripped).
+
+    /** Mirrors {@code SubmissionManager.sanitize}. */
+    private static String sanitize(String message) {
+        return Text.removeTags(message.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
+    }
+
+    private static Matcher timeMatcherFor(String message) {
+        String line = PbHandler.selectTimeLine(sanitize(message));
+        assertNotNull("expected a usable time line in: " + message, line);
+        Matcher m = PbHandler.timeWithPbPattern().matcher(line);
+        assertTrue(m.find());
+        return m;
+    }
+
+    private static final String TOB_PB_MESSAGE =
+        "Wave 'The Final Challenge' (Normal Mode) complete!<br>" +
+            "Duration: <col=ff0000>2:42.0</col><br>" +
+            "Theatre of Blood completion time: <col=ff0000>17:00.20</col> (new personal best)";
+
+    private static final String TOB_NO_PB_MESSAGE =
+        "Wave 'The Final Challenge' (Normal Mode) complete!<br>" +
+            "Duration: <col=ff0000>2:42</col><br>" +
+            "Theatre of Blood completion time: <col=ff0000>17:00</col>. Personal best: 13:52.80";
+
+    private static final String TOB_TOTAL_MESSAGE =
+        "Theatre of Blood total completion time: <col=ff0000>24:40.20</col>. Personal best: 20:45.00";
+
+    private static final String TOA_PB_MESSAGE =
+        "Challenge complete: The Wardens. Duration: <col=ef1020>8:30</col><br>" +
+            "Tombs of Amascut challenge completion time: <col=ef1020>8:31</col> (new personal best)";
+
+    private static final String TOA_TOTAL_MESSAGE =
+        "Tombs of Amascut total completion time: <col=ef1020>0:01</col> (new personal best)";
+
+    @Test
+    public void tobTakesRaidCompletionTimeOverTheFinalWaveDuration() {
+        Matcher m = timeMatcherFor(TOB_PB_MESSAGE);
+        // Not 2:42.0, the Verzik room duration that shares this message.
+        assertEquals("17:00.20", m.group("duration"));
+        assertEquals("(new personal best)", m.group("pbIndicator"));
+        assertNull(m.group("pbtime"));
+    }
+
+    @Test
+    public void tobKeepsTheNewPersonalBestSuffixThatSitsLinesAwayFromTheFirstTime() {
+        Matcher m = timeMatcherFor(TOB_PB_MESSAGE);
+        assertNotNull("a genuine PB must not be reported as a non-PB", m.group("pbIndicator"));
+        assertEquals(Duration.ofMinutes(17).plusMillis(200), PbHandler.parseTime(m.group("duration")));
+    }
+
+    @Test
+    public void tobNonPbKillReportsCompletionTimeAndStandingBest() {
+        Matcher m = timeMatcherFor(TOB_NO_PB_MESSAGE);
+        assertEquals("17:00", m.group("duration"));
+        assertEquals("13:52.80", m.group("pbtime"));
+        assertNull(m.group("pbIndicator"));
+    }
+
+    @Test
+    public void tobWallClockTotalIsNotAKillTimeAtAll() {
+        // Returning null here is what stops the merge in updateKillData from
+        // overwriting the raid time this message arrives after.
+        assertNull(PbHandler.selectTimeLine(sanitize(TOB_TOTAL_MESSAGE)));
+    }
+
+    @Test
+    public void toaTakesChallengeCompletionTimeOverTheWardensDuration() {
+        Matcher m = timeMatcherFor(TOA_PB_MESSAGE);
+        assertEquals("8:31", m.group("duration"));
+        assertEquals("(new personal best)", m.group("pbIndicator"));
+    }
+
+    @Test
+    public void toaWallClockTotalIsNotAKillTimeAtAll() {
+        assertNull(PbHandler.selectTimeLine(sanitize(TOA_TOTAL_MESSAGE)));
+    }
+
+    @Test
+    public void coxRaidCompletionIsUnaffected() {
+        Matcher m = timeMatcherFor(
+            "<col=ef20ff>Congratulations - your raid is complete!</col><br>" +
+                "Team size: <col=ff0000>4 players</col> Duration:</col> <col=ff0000>37:04.20</col> " +
+                "Personal best: </col><col=ff0000>32:26.40</col>");
+        assertEquals("37:04.20", m.group("duration"));
+        assertEquals("32:26.40", m.group("pbtime"));
+    }
+
+    @Test
+    public void singleLineKillTimesAreUnaffected() {
+        Matcher pb = timeMatcherFor("Fight duration: <col=ff0000>1:23.40</col> (new personal best)");
+        assertEquals("1:23.40", pb.group("duration"));
+        assertEquals("(new personal best)", pb.group("pbIndicator"));
+
+        Matcher standing = timeMatcherFor(
+            "Fight duration: <col=ff0000>2:30</col>. Personal best: 2:15.60");
+        assertEquals("2:30", standing.group("duration"));
+        assertEquals("2:15.60", standing.group("pbtime"));
+
+        Matcher gauntlet = timeMatcherFor(
+            "Challenge duration: <col=ff0000>10:30</col>. Personal best: 9:45");
+        assertEquals("10:30", gauntlet.group("duration"));
+    }
+
+    @Test
+    public void withoutAnyPbInfoTheFirstTimedLineStillWins() {
+        // Unchanged fallback: what a single scan of the whole message returned.
+        Matcher m = timeMatcherFor("Wave 'The Final Challenge' complete!<br>" +
+            "Duration: <col=ff0000>2:42.0</col><br>Something else: <col=ff0000>9:99</col>");
+        assertEquals("2:42.0", m.group("duration"));
+    }
+
+    @Test
+    public void messagesWithNoTimeYieldNothing() {
+        assertNull(PbHandler.selectTimeLine("Your completed Theatre of Blood count is: 73."));
+        assertNull(PbHandler.selectTimeLine(""));
+        assertNull(PbHandler.selectTimeLine(null));
     }
 }

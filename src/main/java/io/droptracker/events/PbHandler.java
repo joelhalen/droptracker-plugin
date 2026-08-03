@@ -52,6 +52,19 @@ public class PbHandler extends BaseEventHandler {
         Pattern.CASE_INSENSITIVE
     );
 
+    /**
+     * ToB and ToA quote a wall-clock "total completion time" on a line of its own,
+     * on top of the in-raid time. The game tracks no personal best on that metric --
+     * the adventure log, the hiscores and the speed combat achievements all count the
+     * in-raid time -- so reading it produces a time nothing can be compared against.
+     * RuneLite drops the same line with a {@code (?<!total )completion time:}
+     * lookbehind in its own PB patterns.
+     */
+    private static final Pattern TOTAL_COMPLETION_PATTERN = Pattern.compile(
+        "total completion time",
+        Pattern.CASE_INSENSITIVE
+    );
+
     @VisibleForTesting
     static Pattern bossCountPattern() {
         return BOSS_COUNT_PATTERN;
@@ -207,8 +220,55 @@ public class PbHandler extends BaseEventHandler {
         return Optional.empty();
     }
 
+    /**
+     * Pick the line a kill time should be read from, or null when the message
+     * carries none we can use.
+     *
+     * A single chat message can quote several times. ToB's final-wave message bundles
+     * the Verzik room duration with the raid's completion time and its
+     * "(new personal best)" suffix; ToA's bundles the Wardens' duration with the
+     * challenge completion time. Scanning the whole message at once took the leftmost
+     * time -- the room duration -- and, because the PB suffix sat lines away from it,
+     * reported the raid as a non-PB. The wall-clock "total completion time" then
+     * arrived as its own message and overwrote that with a third, untrackable time.
+     * Between them, no ToB personal best could ever be recognised (ticket #361).
+     *
+     * Lines quoting a total completion time are dropped. Of what remains, a line the
+     * game attached personal-best information to wins; otherwise the first timed line,
+     * which is what a single scan of the whole message used to return.
+     */
+    @VisibleForTesting
+    static String selectTimeLine(String message) {
+        if (message == null) {
+            return null;
+        }
+        String firstTimed = null;
+        for (String line : message.split("\n")) {
+            if (TOTAL_COMPLETION_PATTERN.matcher(line).find()) {
+                continue;
+            }
+            Matcher matcher = TIME_WITH_PB_PATTERN.matcher(line);
+            if (!matcher.find()) {
+                continue;
+            }
+            if (matcher.group("pbIndicator") != null || matcher.group("pbtime") != null) {
+                return line;
+            }
+            if (firstTimed == null) {
+                firstTimed = line;
+            }
+        }
+        return firstTimed;
+    }
+
     private Optional<KillData> parseTimeData(String message) {
-        Matcher matcher = TIME_WITH_PB_PATTERN.matcher(message);
+        // Boss name and team size still come from the whole message -- only the time
+        // itself is read off the selected line.
+        String timeLine = selectTimeLine(message);
+        if (timeLine == null) {
+            return Optional.empty();
+        }
+        Matcher matcher = TIME_WITH_PB_PATTERN.matcher(timeLine);
         if (!matcher.find()) {
             return Optional.empty();
         }
@@ -396,7 +456,8 @@ public class PbHandler extends BaseEventHandler {
         badTicks.set(0);
     }
 
-    private Duration parseTime(String timeStr) {
+    @VisibleForTesting
+    static Duration parseTime(String timeStr) {
         if (timeStr == null || timeStr.trim().isEmpty()) {
             return Duration.ZERO;
         }
