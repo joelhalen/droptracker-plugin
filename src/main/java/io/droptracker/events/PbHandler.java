@@ -1,7 +1,9 @@
 package io.droptracker.events;
 
+import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
@@ -84,6 +86,9 @@ public class PbHandler extends BaseEventHandler {
     static Pattern teamSizePattern() {
         return TEAM_SIZE_PATTERN;
     }
+
+    @Inject
+    protected NearbyPlayerTracker nearbyPlayerTracker;
 
     private final AtomicInteger badTicks = new AtomicInteger();
     private final AtomicReference<KillData> killData = new AtomicReference<>();
@@ -549,17 +554,19 @@ public class PbHandler extends BaseEventHandler {
     // === TEAM SIZE METHODS ===
     @SuppressWarnings("deprecation")
     private String getTobTeamSize() {
-        Integer teamSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
+        int varbitSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB4), 1) +
                 Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
-        return teamSize == 1 ? "Solo" : teamSize.toString();
+        return formatRaidTeamSize(
+            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOB) : 0,
+            varbitSize);
     }
 
     @SuppressWarnings("deprecation")
     private String getToaTeamSize() {
-        Integer teamSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
+        int varbitSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_2_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_3_HEALTH), 1) +
@@ -567,7 +574,27 @@ public class PbHandler extends BaseEventHandler {
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
                 Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
-        return teamSize == 1 ? "Solo" : teamSize.toString();
+        return formatRaidTeamSize(
+            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOA) : 0,
+            varbitSize);
+    }
+
+    /**
+     * Brackets a raid PB by team size, preferring the accumulated raid roster
+     * over the point-in-time health-orb varbits. The orbs clear as the raid
+     * ends — teammates' slots can already read 0 while the completion messages
+     * carrying the kill time are being parsed — so a varbit-only read
+     * bracketed group ToA raids as "Solo" and compared them against the real
+     * solo row (ticket #361, follow-up). The roster is captured while the
+     * raid is live and retained past the reset (see NearbyPlayerTracker), so
+     * the max of the two sources is the raid's real size; the varbit read
+     * stays as the fallback for clients enabled after the roster stopped
+     * accumulating.
+     */
+    @VisibleForTesting
+    static String formatRaidTeamSize(int rosterSize, int varbitSize) {
+        int teamSize = Math.max(rosterSize, varbitSize);
+        return teamSize == 1 ? "Solo" : Integer.toString(teamSize);
     }
 
     @SuppressWarnings("deprecation")

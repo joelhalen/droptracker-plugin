@@ -267,4 +267,42 @@ public class PbHandlerParseTest {
         assertNull(PbHandler.selectTimeLine(""));
         assertNull(PbHandler.selectTimeLine(null));
     }
+
+    // === raid team-size bracketing ===
+
+    @Test
+    public void rosterSizeBeatsDecayedCompletionVarbits() {
+        // The mis-bracket: teammates' health orbs already read 0 at loot-chest
+        // time, so the varbits said "just me" for a 5-man raid (observed live:
+        // a team-size-5 ToA Expert submitted and stored as Solo).
+        assertEquals("5", PbHandler.formatRaidTeamSize(5, 1));
+    }
+
+    @Test
+    public void varbitsRemainTheFallbackWithoutARoster() {
+        // Plugin enabled mid-raid after roster accumulation missed the party:
+        // the live varbit read still brackets correctly.
+        assertEquals("4", PbHandler.formatRaidTeamSize(0, 4));
+        assertEquals("Solo", PbHandler.formatRaidTeamSize(0, 1));
+    }
+
+    @Test
+    public void agreeingSourcesKeepTheirBracket() {
+        assertEquals("Solo", PbHandler.formatRaidTeamSize(1, 1));
+        assertEquals("2", PbHandler.formatRaidTeamSize(2, 2));
+    }
+
+    @Test
+    public void liveVarbitsCanExceedAStaleRoster() {
+        // Mid-raid reads (orbs intact) may know more than a roster that has
+        // not scanned yet; the max wins in both directions.
+        assertEquals("5", PbHandler.formatRaidTeamSize(3, 5));
+    }
+
+    @Test
+    public void noSourcesPreservesTheLegacyZeroBracket() {
+        // Outside any raid both sources read 0 — keep the historical "0"
+        // rather than inventing a Solo bracket.
+        assertEquals("0", PbHandler.formatRaidTeamSize(0, 0));
+    }
 }
