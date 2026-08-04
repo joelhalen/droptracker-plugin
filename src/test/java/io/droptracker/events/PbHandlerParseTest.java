@@ -145,11 +145,10 @@ public class PbHandlerParseTest {
         assertNull(m.group("pbIndicator"));
     }
 
-    // --- selectTimeLine (ticket #361) ---
+    // --- selectTimeLine ---
     //
-    // The raid messages below are the literal ones RuneLite asserts against in
-    // ChatCommandsPluginTest, put through the same sanitising the plugin applies
-    // before a handler ever sees them (<br> to newline, colour tags stripped).
+    // Raid messages taken verbatim from RuneLite's ChatCommandsPluginTest,
+    // run through the plugin's own sanitising.
 
     /** Mirrors {@code SubmissionManager.sanitize}. */
     private static String sanitize(String message) {
@@ -210,8 +209,7 @@ public class PbHandlerParseTest {
 
     @Test
     public void tobWallClockTotalIsNotAKillTimeAtAll() {
-        // Returning null here is what stops the merge in updateKillData from
-        // overwriting the raid time this message arrives after.
+        // Null keeps updateKillData from overwriting the raid time.
         assertNull(PbHandler.selectTimeLine(sanitize(TOB_TOTAL_MESSAGE)));
     }
 
@@ -272,16 +270,13 @@ public class PbHandlerParseTest {
 
     @Test
     public void rosterSizeBeatsDecayedCompletionVarbits() {
-        // The mis-bracket: teammates' health orbs already read 0 at loot-chest
-        // time, so the varbits said "just me" for a 5-man raid (observed live:
-        // a team-size-5 ToA Expert submitted and stored as Solo).
+        // Orbs already read "just me" at loot-chest time; the roster still
+        // knows the party.
         assertEquals("5", PbHandler.formatRaidTeamSize(5, 1));
     }
 
     @Test
     public void varbitsRemainTheFallbackWithoutARoster() {
-        // Plugin enabled mid-raid after roster accumulation missed the party:
-        // the live varbit read still brackets correctly.
         assertEquals("4", PbHandler.formatRaidTeamSize(0, 4));
         assertEquals("Solo", PbHandler.formatRaidTeamSize(0, 1));
     }
@@ -294,15 +289,12 @@ public class PbHandlerParseTest {
 
     @Test
     public void liveVarbitsCanExceedAStaleRoster() {
-        // Mid-raid reads (orbs intact) may know more than a roster that has
-        // not scanned yet; the max wins in both directions.
+        // The max wins in both directions.
         assertEquals("5", PbHandler.formatRaidTeamSize(3, 5));
     }
 
     @Test
     public void noSourcesPreservesTheLegacyZeroBracket() {
-        // Outside any raid both sources read 0 — keep the historical "0"
-        // rather than inventing a Solo bracket.
         assertEquals("0", PbHandler.formatRaidTeamSize(0, 0));
     }
 }

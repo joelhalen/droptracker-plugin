@@ -132,16 +132,9 @@ public class NearbyPlayerTracker
     }
 
     /**
-     * Team size of the given raid ({@code "tob"|"toa"|"cox"}) as the
-     * authoritative roster knows it: the accumulated roster — which survives
-     * the end-of-raid varbit reset (see {@link #RAID_ROSTER_EXPIRY_MS}) —
-     * merged with a live read of the roster source. Returns 0 when nothing is
-     * known, and callers fall back to their point-in-time varbit read.
-     *
-     * <p>This exists for PB team-size brackets: the member health orbs read
-     * as "just me" by loot-chest time, when the completion messages carrying
-     * the kill time arrive, so a varbit-only read bracketed group ToA raids
-     * as Solo and compared them against the real solo row.
+     * Team size of the given raid ({@code "tob"|"toa"|"cox"}) from the
+     * accumulated authoritative roster, merged with a live read. Returns 0
+     * when nothing is known; callers fall back to their varbit read.
      */
     public int raidRosterSize(String raidType)
     {

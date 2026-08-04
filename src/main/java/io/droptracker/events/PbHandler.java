@@ -55,12 +55,8 @@ public class PbHandler extends BaseEventHandler {
     );
 
     /**
-     * ToB and ToA quote a wall-clock "total completion time" on a line of its own,
-     * on top of the in-raid time. The game tracks no personal best on that metric --
-     * the adventure log, the hiscores and the speed combat achievements all count the
-     * in-raid time -- so reading it produces a time nothing can be compared against.
-     * RuneLite drops the same line with a {@code (?<!total )completion time:}
-     * lookbehind in its own PB patterns.
+     * The wall-clock total is not the tracked PB metric; RuneLite excludes the
+     * same line with a {@code (?<!total )completion time:} lookbehind.
      */
     private static final Pattern TOTAL_COMPLETION_PATTERN = Pattern.compile(
         "total completion time",
@@ -226,21 +222,9 @@ public class PbHandler extends BaseEventHandler {
     }
 
     /**
-     * Pick the line a kill time should be read from, or null when the message
-     * carries none we can use.
-     *
-     * A single chat message can quote several times. ToB's final-wave message bundles
-     * the Verzik room duration with the raid's completion time and its
-     * "(new personal best)" suffix; ToA's bundles the Wardens' duration with the
-     * challenge completion time. Scanning the whole message at once took the leftmost
-     * time -- the room duration -- and, because the PB suffix sat lines away from it,
-     * reported the raid as a non-PB. The wall-clock "total completion time" then
-     * arrived as its own message and overwrote that with a third, untrackable time.
-     * Between them, no ToB personal best could ever be recognised (ticket #361).
-     *
-     * Lines quoting a total completion time are dropped. Of what remains, a line the
-     * game attached personal-best information to wins; otherwise the first timed line,
-     * which is what a single scan of the whole message used to return.
+     * Picks the line to read a kill time from: drops "total completion time"
+     * lines, prefers a line carrying personal-best info, else the first timed
+     * line. Null when the message has no usable time.
      */
     @VisibleForTesting
     static String selectTimeLine(String message) {
@@ -267,8 +251,8 @@ public class PbHandler extends BaseEventHandler {
     }
 
     private Optional<KillData> parseTimeData(String message) {
-        // Boss name and team size still come from the whole message -- only the time
-        // itself is read off the selected line.
+        // Only the time is read off the selected line; boss and team size
+        // still come from the whole message.
         String timeLine = selectTimeLine(message);
         if (timeLine == null) {
             return Optional.empty();
@@ -580,16 +564,9 @@ public class PbHandler extends BaseEventHandler {
     }
 
     /**
-     * Brackets a raid PB by team size, preferring the accumulated raid roster
-     * over the point-in-time health-orb varbits. The orbs clear as the raid
-     * ends — teammates' slots can already read 0 while the completion messages
-     * carrying the kill time are being parsed — so a varbit-only read
-     * bracketed group ToA raids as "Solo" and compared them against the real
-     * solo row (ticket #361, follow-up). The roster is captured while the
-     * raid is live and retained past the reset (see NearbyPlayerTracker), so
-     * the max of the two sources is the raid's real size; the varbit read
-     * stays as the fallback for clients enabled after the roster stopped
-     * accumulating.
+     * Prefers the accumulated raid roster over the health-orb varbits — the
+     * orbs clear at completion, collapsing group raids to "Solo". The varbit
+     * read remains the fallback when no roster was accumulated.
      */
     @VisibleForTesting
     static String formatRaidTeamSize(int rosterSize, int varbitSize) {
