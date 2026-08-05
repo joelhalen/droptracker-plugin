@@ -248,6 +248,20 @@ public class SubmissionManager {
                 debugLogEventFlow("send", type, "experience snapshot; direct send");
                 sendWebhookDirect(webhook, null, null);
                 return;
+            case CLAN_BROADCAST:
+            case CLAN_CHAT:
+                // Clan relay payloads are raw chat text: API-only by contract.
+                // They must NEVER ride the Discord-webhook fallback transport,
+                // so hard-stop here even though ClanRelayService already gates
+                // on useApi. No screenshot, no group qualification, no UI
+                // submission tracking — the server owns everything downstream.
+                if (!config.useApi()) {
+                    debugLogEventFlow("skipped", type, "useApi=false; clan relay is API-only");
+                    return;
+                }
+                debugLogEventFlow("send", type, "clan relay; direct send");
+                sendWebhookDirect(webhook, null, null);
+                return;
             case ADVENTURE_LOG:
                 // No extra processing needed
                 break;

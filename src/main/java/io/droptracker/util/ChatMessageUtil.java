@@ -92,6 +92,26 @@ public class ChatMessageUtil {
      * Both names must already be sanitized/capped by the caller; teamName is
      * optional (omitted before the first /event_state snapshot lands).
      */
+    /**
+     * Discord→game bridge line, rendered to look like clan chat (visible only
+     * to this client — nothing is sent to the game server). The sender is
+     * suffixed so a Discord user can never be mistaken for an in-game
+     * clanmate; both strings must already be sanitized/capped by the caller.
+     */
+    public void sendDiscordClanMessage(String sender, String messageContent) {
+        String clanName = client.getClanChannel() != null
+                ? net.runelite.client.util.Text.removeTags(client.getClanChannel().getName())
+                : "Discord";
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CLAN_CHAT)
+                        .name(sender + " (Discord)")
+                        .sender(clanName)
+                        .value(messageContent)
+                        .build()
+        );
+    }
+
     public void sendEventChatMessage(String eventName, String teamName, String messageContent) {
         ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
         messageBuilder.append(ChatColorType.HIGHLIGHT)

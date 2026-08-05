@@ -87,5 +87,8 @@ public class EventNotification {
         /** submission_notice only: server-supplied plain text. */
         @SerializedName("message")
         private String message;
+        // clan_chat_message (Discord→game bridge): who spoke in Discord.
+        @SerializedName("sender")
+        private String sender;
     }
 }

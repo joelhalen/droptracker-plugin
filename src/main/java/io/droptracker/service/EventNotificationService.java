@@ -93,6 +93,7 @@ public class EventNotificationService {
     private final Client client;
     private final ScheduledExecutorService executor;
     private final ConfigManager configManager;
+    private final ClanRelayService clanRelayService;
 
     /** Next scheduled poll cycle; guarded by {@code this}. */
     private ScheduledFuture<?> pollTask;
@@ -162,13 +163,15 @@ public class EventNotificationService {
     public EventNotificationService(DropTrackerConfig config, DropTrackerApi api,
                                     ChatMessageUtil chatMessageUtil, Client client,
                                     ScheduledExecutorService executor,
-                                    ConfigManager configManager) {
+                                    ConfigManager configManager,
+                                    ClanRelayService clanRelayService) {
         this.config = config;
         this.api = api;
         this.chatMessageUtil = chatMessageUtil;
         this.client = client;
         this.executor = executor;
         this.configManager = configManager;
+        this.clanRelayService = clanRelayService;
     }
 
     /* ===================== lifecycle ===================== */
@@ -202,7 +205,10 @@ public class EventNotificationService {
     }
 
     private boolean enabled() {
-        return config.useApi() && config.eventNotifications();
+        // The poll loop serves two consumers: event notifications and the
+        // Discord→game chat bridge. Either keeps it alive.
+        return config.useApi()
+            && (config.eventNotifications() || clanRelayService.discordChatActive());
     }
 
     private void scheduleNext(long delayMs) {
@@ -255,12 +261,19 @@ public class EventNotificationService {
             // active_event flag; long-holds are reserved for live events.
             // The server's own last report ORs in so a just-started event
             // flips us to held long-polls immediately instead of waiting for
-            // the (throttled, maybe-never) config cache refresh (P0-2).
+            // the (throttled, maybe-never) config cache refresh (P0-2). The
+            // chat bridge holds too — Discord lines should land in seconds.
+            final boolean bridgeActive = clanRelayService.discordChatActive();
             final int waitSeconds =
-                ((api.hasActiveEvent() || serverReportedActiveEvent)
+                ((api.hasActiveEvent() || serverReportedActiveEvent || bridgeActive)
                     && serverSupportsLongPoll)
                 ? LONG_POLL_WAIT_SECONDS : 0;
-            Call call = api.newNotificationsCall(playerName, accountHash, waitSeconds);
+            // The clan param doubles as the bridge presence heartbeat: the
+            // server fans Discord lines out only to players it has seen
+            // polling with this clan recently.
+            final String bridgeClan = bridgeActive
+                ? clanRelayService.getCurrentClanName() : null;
+            Call call = api.newNotificationsCall(playerName, accountHash, waitSeconds, bridgeClan);
             if (call == null) {
                 scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
                 return;
@@ -346,6 +359,9 @@ public class EventNotificationService {
                 fresh.add(n);
             }
         }
+        // Bridge lines are chat, not event state: render them immediately and
+        // keep them out of the event grouping/catch-up machinery entirely.
+        fresh = renderAndStripClanChat(fresh);
         if (!fresh.isEmpty()) {
             DebugLogger.log("[EventNotifications] batch size=" + fresh.size());
             boolean catchUp = firstBatchOfSession && isCatchUpBatch(fresh);
@@ -380,10 +396,49 @@ public class EventNotificationService {
         }
     }
 
+    /** Age past which a bridge chat line is history, not conversation. */
+    private static final long BRIDGE_LINE_MAX_AGE_SECONDS = 120;
+
+    /**
+     * Renders {@code clan_chat_message} envelopes (Discord→game bridge) as
+     * clan-styled chat lines and returns the batch without them. Stale lines
+     * — an offline backlog draining on login — are silently dropped: chat
+     * from twenty minutes ago is noise, exactly like real clan chat you
+     * weren't online for.
+     */
+    private List<EventNotification> renderAndStripClanChat(List<EventNotification> batch) {
+        if (batch.isEmpty()) {
+            return batch;
+        }
+        List<EventNotification> remainder = new ArrayList<>(batch.size());
+        long nowSeconds = System.currentTimeMillis() / 1000L;
+        for (EventNotification n : batch) {
+            if (!"clan_chat_message".equals(n.getType())) {
+                remainder.add(n);
+                continue;
+            }
+            if (!config.receiveDiscordChat()) {
+                continue;
+            }
+            EventNotification.Data data = n.getData();
+            String sender = data != null ? clean(data.getSender()) : null;
+            String message = data != null ? clean(data.getMessage()) : null;
+            if (sender == null || message == null) {
+                continue;
+            }
+            if (n.getTs() > 0 && nowSeconds - n.getTs() > BRIDGE_LINE_MAX_AGE_SECONDS) {
+                continue;
+            }
+            chatMessageUtil.sendDiscordClanMessage(sender, message);
+        }
+        return remainder;
+    }
+
     /** Delay before the next cycle, from the just-finished poll's outcome. */
     private long nextDelayMs(DropTrackerApi.NotificationsResponse response,
                              int waitRequestedSeconds, long elapsedMs) {
-        boolean active = Boolean.TRUE.equals(response.activeEvent) || api.hasActiveEvent();
+        boolean active = Boolean.TRUE.equals(response.activeEvent) || api.hasActiveEvent()
+            || clanRelayService.discordChatActive();
         if (!active) {
             return IDLE_RECHECK_SECONDS * 1000L;
         }

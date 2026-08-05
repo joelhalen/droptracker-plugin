@@ -928,6 +928,15 @@ public class DropTrackerApi {
      */
     @Nullable
     public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds) {
+        return newNotificationsCall(playerName, accountHash, waitSeconds, null);
+    }
+
+    /**
+     * ``clanName`` (optional) is the chat-bridge presence heartbeat: polling
+     * with it tells the server this plugin is online in that clan, which is
+     * what Discord→game fan-out delivers against.
+     */
+    public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds, String clanName) {
         if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
             return null;
         }
@@ -940,6 +949,9 @@ public class DropTrackerApi {
             .addQueryParameter("acc_hash", String.valueOf(accountHash));
         if (waitSeconds > 0) {
             url.addQueryParameter("wait", String.valueOf(waitSeconds));
+        }
+        if (clanName != null && !clanName.isEmpty()) {
+            url.addQueryParameter("clan", clanName);
         }
         Request request = new Request.Builder().url(url.build()).build();
         OkHttpClient callClient = waitSeconds > 0 ? longPollHttpClient : panelHttpClient;

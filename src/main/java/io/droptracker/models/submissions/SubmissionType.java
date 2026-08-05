@@ -13,5 +13,7 @@ public enum SubmissionType {
     ADVENTURE_LOG,
     PET,
     DEATH,
-    DIARY
+    DIARY,
+    CLAN_BROADCAST,
+    CLAN_CHAT
 }

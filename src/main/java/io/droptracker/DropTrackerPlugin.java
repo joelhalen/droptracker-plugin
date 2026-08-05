@@ -56,6 +56,7 @@ import io.droptracker.events.QuestHandler;
 import io.droptracker.events.PetHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
+import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.NearbyPlayerTracker;
@@ -138,6 +139,10 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private NearbyPlayerTracker nearbyPlayerTracker;
+
+	/* Clan broadcast relay + Discord chat bridge */
+	@Inject
+	private ClanRelayService clanRelayService;
 
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
@@ -485,11 +490,28 @@ public class DropTrackerPlugin extends Plugin {
 			case CLAN_MESSAGE:
 			case CLAN_GIM_MESSAGE:
                 petHandler.onClanChatNotification(chatMessage);
+                // Clan-broadcast relay (group feature): CLAN_MESSAGE only —
+                // GIM broadcasts are a different channel and stay local.
+                if (message.getType() == ChatMessageType.CLAN_MESSAGE) {
+                    clanRelayService.onClanBroadcast(chatMessage);
+                }
                 break;
+			case CLAN_CHAT:
+				// Player lines feed only the Discord chat bridge (opt-in);
+				// nothing else in the plugin reads clanmates' chatter.
+				clanRelayService.onClanChat(message.getName(), chatMessage);
+				break;
 			default:
 				break;
 		}
 		kcService.onGameMessage(chatMessage);
+	}
+
+	@Subscribe
+	public void onClanChannelChanged(ClanChannelChanged event) {
+		// Keep the relay's clan binding current even while chat is quiet —
+		// presence heartbeats and relayed lines both attach this name.
+		clanRelayService.updateClanChannel(client.getClanChannel());
 	}
 
 	@Subscribe

@@ -360,6 +360,53 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    /* Clan chat relay + two-way Discord bridge (requires API + group config) */
+    @ConfigSection(
+            name = "Clan Chat",
+            description = "Relay your clan's broadcasts and chat to your group's DropTracker features.<br />"
+                + "Requires the API connection, and your group must configure its clan name on droptracker.io.",
+            position = 12,
+            closedByDefault = true
+    )
+    String ClanSection = "Clan Chat";
+
+    @ConfigItem(
+            keyName = "relayClanBroadcasts",
+            name = "Relay clan broadcasts",
+            description = "Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
+                + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
+                + "One relaying member covers the whole clan; duplicates are handled server-side.",
+            position = 1,
+            section = ClanSection
+    )
+    default boolean relayClanBroadcasts() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "relayClanChat",
+            name = "Relay clan chat to Discord",
+            description = "Mirror your clan chat into your group's configured Discord bridge channel.<br />"
+                + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.",
+            position = 2,
+            section = ClanSection
+    )
+    default boolean relayClanChat() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "receiveDiscordChat",
+            name = "Show Discord messages in game",
+            description = "Display messages sent in your group's Discord bridge channel inside your<br />"
+                + "clan chat box (visible only to you; nothing is sent to the game server).",
+            position = 3,
+            section = ClanSection
+    )
+    default boolean receiveDiscordChat() {
+        return true;
+    }
+
     /* Settings for Hiding Split Chat, Side Panel and API connections */
     @ConfigSection(
         name = "Miscellaneous",
