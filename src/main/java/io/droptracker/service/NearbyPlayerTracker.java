@@ -10,7 +10,6 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.party.PartyMember;
 import net.runelite.client.party.PartyService;
 import net.runelite.client.util.Text;
 import io.droptracker.util.DebugLogger;
@@ -40,6 +39,11 @@ import java.util.concurrent.TimeUnit;
  * These are server-pushed and independent of render distance, so the roster is
  * exactly the raid party — not whoever happened to be standing nearby.
  *
+ * <p>A solo raid yields an empty roster, which is the correct participant list
+ * and is deliberately kept — it is not treated as a failed capture, and nothing
+ * is guessed to fill it. Guessing only happens when the game's own team size
+ * says the raid had company that the authoritative source never returned.
+ *
  * <p>Non-raid submissions fall back to a plain proximity scan, and the raid
  * roster is never merged into them, so a retained ToB roster can no longer be
  * attached to an unrelated kill minutes after the raid ended.
@@ -64,16 +68,30 @@ public class NearbyPlayerTracker
     private final Set<String> authoritativeRoster = new LinkedHashSet<>();
 
     /**
-     * Last-resort roster accumulated from proximity scans and PartyService
-     * while inside a raid. Only consulted when the authoritative source
-     * yielded nothing (e.g. plugin enabled mid-raid after the widgets/varcs
-     * stopped updating), so drops never regress to an empty participant list
-     * (issue #43).
+     * Last-resort roster accumulated from proximity scans inside the raid
+     * instance. Only consulted when the authoritative source yielded nothing
+     * (e.g. plugin enabled mid-raid after the widgets/varcs stopped updating),
+     * so drops never regress to an empty participant list (issue #43).
      */
     private final Set<String> fallbackRoster = new LinkedHashSet<>();
 
     /** Raid the rosters above belong to: {@code "tob"|"toa"|"cox"}, or null. */
     private String activeRaidType = null;
+
+    /**
+     * Largest team size the game itself reported during the active raid; 0
+     * when it was never sampled. This is what tells a solo raid apart from a
+     * failed capture — both leave the roster empty, but only the second one
+     * may fall back to guessing.
+     */
+    private int raidTeamSizeMax = 0;
+
+    /**
+     * Whether the authoritative source ever returned a name this raid (the
+     * local player counts). Proves the source is live, so an empty roster
+     * after the local player is removed means "alone", not "capture broken".
+     */
+    private boolean authoritativeCaptureWorked = false;
 
     /** Last time (ms) the raid context was observed active. */
     private long rosterLastActiveMs = 0;
@@ -198,6 +216,10 @@ public class NearbyPlayerTracker
         ticksSinceRosterScan = 0;
 
         captureAuthoritativeRoster(raidType, authoritativeRoster);
+        authoritativeCaptureWorked |= !authoritativeRoster.isEmpty();
+        // Sampled throughout the raid because the raid varbits reset before the
+        // loot chest opens: by submission time there is nothing left to read.
+        raidTeamSizeMax = Math.max(raidTeamSizeMax, gameReportedTeamSize(raidType));
         captureFallbackRoster();
     }
 
@@ -206,6 +228,91 @@ public class NearbyPlayerTracker
         authoritativeRoster.clear();
         fallbackRoster.clear();
         activeRaidType = null;
+        raidTeamSizeMax = 0;
+        authoritativeCaptureWorked = false;
+    }
+
+    /** The game's own party size for the given raid; 0 when unreadable. */
+    private int gameReportedTeamSize(String raidType)
+    {
+        if (raidType == null)
+        {
+            return 0;
+        }
+        switch (raidType)
+        {
+            case RAID_TOB:
+                return getTobTeamCount();
+            case RAID_TOA:
+                return getToaTeamCount();
+            case RAID_COX:
+                return getCoxTeamCount();
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Whether an empty roster means "nobody else was in the raid" rather than
+     * "the roster capture failed". A solo raid produces an empty roster by
+     * definition, so reading emptiness alone as a failure — and guessing from
+     * there — is what credited people who were never in the raid.
+     *
+     * <p>Requires positive evidence either way: a team size the game itself
+     * reported as 1, or a live authoritative source that returned the local
+     * player and nobody else. Without either, the caller keeps guessing.
+     */
+    private boolean isSoloRaid(String submissionRaidType, boolean localPlayerInRoster)
+    {
+        return isSoloRaid(
+            gameReportedTeamSize(submissionRaidType),
+            submissionRaidType.equals(activeRaidType),
+            raidTeamSizeMax,
+            authoritativeCaptureWorked,
+            localPlayerInRoster);
+    }
+
+    /**
+     * The decision above, as a pure function of the evidence, so it can be
+     * tested without a game client.
+     *
+     * @param liveTeamSize      team size read right now; 0 when unreadable
+     *                          (normal at loot-chest time — the raid varbits
+     *                          have already reset)
+     * @param rosterIsThisRaid  whether the accumulated roster state belongs to
+     *                          the raid this submission came from
+     * @param teamSizeMax       largest team size seen during that raid; 0 when
+     *                          never sampled
+     * @param captureWorked     whether the authoritative source ever returned a
+     *                          name during that raid
+     * @param localPlayerInRoster whether the live read just returned the local
+     *                          player, which proves the source is working
+     */
+    static boolean isSoloRaid(
+        int liveTeamSize,
+        boolean rosterIsThisRaid,
+        int teamSizeMax,
+        boolean captureWorked,
+        boolean localPlayerInRoster
+    )
+    {
+        if (liveTeamSize > 1)
+        {
+            return false;
+        }
+        if (rosterIsThisRaid)
+        {
+            if (teamSizeMax > 1)
+            {
+                return false;
+            }
+            if (teamSizeMax == 1)
+            {
+                return true;
+            }
+            return captureWorked || localPlayerInRoster;
+        }
+        return localPlayerInRoster;
     }
 
     /**
@@ -302,15 +409,20 @@ public class NearbyPlayerTracker
     }
 
     /**
-     * Accumulates the proximity/PartyService fallback roster while inside a
-     * raid. Inside an instanced raid the only nearby players are the team, so
-     * this is a reasonable stand-in when the authoritative source is
-     * unavailable — but it is never preferred over it.
+     * Accumulates the proximity fallback roster while inside a raid. Inside an
+     * instanced raid the only nearby players are the team, so this is a
+     * reasonable stand-in when the authoritative source is unavailable — but it
+     * is never preferred over it.
+     *
+     * <p>RuneLite's PartyService used to be merged in here as well. It is not
+     * evidence of raid participation: party membership survives a member
+     * logging out of the game entirely and spans unrelated activities, so on a
+     * solo raid it attached whoever was still in the party from an earlier
+     * session. Anyone genuinely in the instance is picked up by the scan below.
      */
     private void captureFallbackRoster()
     {
         Player localPlayer = client.getLocalPlayer();
-        String localName = localPlayer != null ? normalizePlayerName(localPlayer.getName()) : null;
 
         if (localPlayer != null && localPlayer.getWorldLocation() != null)
         {
@@ -323,20 +435,6 @@ public class NearbyPlayerTracker
                 for (WorldView subWorldView : topLevel.worldViews())
                 {
                     collectNamesFromWorldView(subWorldView, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, fallbackRoster, ignored);
-                }
-            }
-        }
-
-        // RuneLite party members often mirror the raid team, but the party is
-        // opt-in and can include non-raiders — fallback only, never authoritative.
-        if (partyService.isInParty())
-        {
-            for (PartyMember member : partyService.getMembers())
-            {
-                String memberName = normalizePlayerName(member.getDisplayName());
-                if (memberName != null && !memberName.equals(localName))
-                {
-                    fallbackRoster.add(memberName);
                 }
             }
         }
@@ -441,11 +539,20 @@ public class NearbyPlayerTracker
                 names.addAll(roster);
                 rosterSource = "authoritative";
             }
+            else if (isSoloRaid(submissionRaidType, localPlayerInRoster))
+            {
+                // Alone in the raid: an empty participant list is the correct
+                // answer, and the only correct one. Guessing from here is what
+                // credited RuneLite party members who never entered the raid,
+                // and — for a submission made back in the lobby — would scan in
+                // whichever strangers happened to be standing around.
+                rosterSource = "solo";
+            }
             else
             {
-                // Authoritative source yielded nothing (solo raid, or capture
-                // never ran this raid): fall back to the accumulated proximity
-                // roster plus a live scan so the participant list isn't empty.
+                // Capture never ran this raid (e.g. plugin enabled mid-raid):
+                // fall back to the accumulated proximity roster plus a live
+                // scan so the participant list isn't empty (issue #43).
                 if (submissionRaidType.equals(activeRaidType))
                 {
                     names.addAll(fallbackRoster);
