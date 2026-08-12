@@ -119,6 +119,19 @@ public class DropHandler extends BaseEventHandler {
 		processDropEvent(npcName, "other", lootReceived.getType(), lootReceived.getItems());
 	}
 
+	/**
+	 * Entry point for activity loot that never fires a RuneLite loot event
+	 * (MTA reward purchases, Agility Pyramid tops, deep sea trawling catches).
+	 * The source name must exist in the server's npc_list, or the submission
+	 * is rejected server-side.
+	 */
+	public void onActivityLoot(String sourceName, Collection<ItemStack> items) {
+		if (!plugin.isTracking || items.isEmpty()) {
+			return;
+		}
+		processDropEvent(sourceName, "other", LootRecordType.EVENT, items);
+	}
+
     private void processDropEvent(String rawNpcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {

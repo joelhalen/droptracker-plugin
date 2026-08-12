@@ -360,6 +360,49 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    /* Activities RuneLite's loot tracker misses (no loot event fires for these) */
+    @ConfigSection(
+            name = "Activity Tracking",
+            description = "Track items from activities that never appear in RuneLite's loot tracker.",
+            position = 13,
+            closedByDefault = true
+    )
+    String ActivitySection = "Activity Tracking";
+
+    @ConfigItem(
+            keyName = "trackMta",
+            name = "Mage Training Arena",
+            description = "Track reward shop purchases (and the Bones to Peaches unlock) at the Mage Training Arena.",
+            position = 1,
+            section = ActivitySection
+    )
+    default boolean trackMta() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "trackAgilityPyramid",
+            name = "Agility Pyramid",
+            description = "Track pyramid tops obtained at the Agility Pyramid.",
+            position = 2,
+            section = ActivitySection
+    )
+    default boolean trackAgilityPyramid() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "trackTrawling",
+            name = "Deep Sea Trawling",
+            description = "Track fish you catch while deep sea trawling. Counts catches as they land in<br />"
+                + "your net, not what you later collect from it.",
+            position = 3,
+            section = ActivitySection
+    )
+    default boolean trackTrawling() {
+        return true;
+    }
+
     /* Clan chat relay + two-way Discord bridge (requires API + group config) */
     @ConfigSection(
             name = "Clan Chat",

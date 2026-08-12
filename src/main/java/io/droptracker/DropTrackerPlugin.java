@@ -45,15 +45,18 @@ import javax.swing.SwingUtilities;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
+import io.droptracker.events.AgilityPyramidHandler;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
 import io.droptracker.events.DeathHandler;
 import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
+import io.droptracker.events.MtaHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.QuestHandler;
 import io.droptracker.events.PetHandler;
+import io.droptracker.events.TrawlingHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.ClanRelayService;
@@ -131,6 +134,12 @@ public class DropTrackerPlugin extends Plugin {
 	public DeathHandler deathHandler;
 	@Inject
 	public DiaryHandler diaryHandler;
+	@Inject
+	public MtaHandler mtaHandler;
+	@Inject
+	public AgilityPyramidHandler agilityPyramidHandler;
+	@Inject
+	public TrawlingHandler trawlingHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
@@ -186,7 +195,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private Client client;
 
-	public String pluginVersion = "5.4.3";
+	public String pluginVersion = "5.5.0";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -378,6 +387,49 @@ public class DropTrackerPlugin extends Plugin {
 		widgetEventHandler.onWidgetLoaded(widget);
 		// Also check for quest completion widgets
 		questHandler.onWidgetLoaded(widget);
+		if (mtaHandler.isEnabled()) {
+			mtaHandler.onWidgetLoaded(widget);
+		}
+	}
+
+	@Subscribe
+	public void onWidgetClosed(WidgetClosed widget) {
+		if (mtaHandler.isEnabled()) {
+			mtaHandler.onWidgetClosed(widget);
+		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged event) {
+		if (!isTracking) {
+			return;
+		}
+		if (mtaHandler.isEnabled()) {
+			mtaHandler.onVarbitChanged(event);
+		}
+	}
+
+	@Subscribe
+	public void onItemContainerChanged(ItemContainerChanged event) {
+		if (!isTracking) {
+			return;
+		}
+		if (mtaHandler.isEnabled()) {
+			mtaHandler.onItemContainerChanged(event);
+		}
+		if (agilityPyramidHandler.isEnabled()) {
+			agilityPyramidHandler.onItemContainerChanged(event);
+		}
+	}
+
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked event) {
+		if (!isTracking) {
+			return;
+		}
+		if (agilityPyramidHandler.isEnabled()) {
+			agilityPyramidHandler.onMenuOptionClicked(event);
+		}
 	}
 
 	/** Add support for Yama's special drop mechanics */
@@ -483,6 +535,15 @@ public class DropTrackerPlugin extends Plugin {
 				if(diaryHandler.isEnabled()) {
 					diaryHandler.onGameMessage(chatMessage);
 				}
+				if(trawlingHandler.isEnabled()) {
+					trawlingHandler.onGameMessage(chatMessage);
+				}
+				break;
+			case SPAM:
+				// Trawling catch messages arrive as SPAM when game filtering is on
+				if(trawlingHandler.isEnabled()) {
+					trawlingHandler.onGameMessage(chatMessage);
+				}
 				break;
 			case FRIENDSCHATNOTIFICATION:
 				pbHandler.onFriendsChatNotification(chatMessage);
@@ -575,6 +636,8 @@ public class DropTrackerPlugin extends Plugin {
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
 		petHandler.onTick();
+		mtaHandler.onTick();
+		agilityPyramidHandler.onTick();
 
 		if (config.trackExperience()) {
 			experienceHandler.onTick();
@@ -614,6 +677,8 @@ public class DropTrackerPlugin extends Plugin {
 			pbHandler.reset();
 			petHandler.reset();
 			clogHandler.reset();
+			mtaHandler.reset();
+			agilityPyramidHandler.reset();
 		}
 
 		justLoggedIn.set(newState == GameState.LOGGED_IN);
