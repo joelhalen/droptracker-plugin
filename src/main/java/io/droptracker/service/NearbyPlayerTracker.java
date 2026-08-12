@@ -273,6 +273,32 @@ public class NearbyPlayerTracker
     }
 
     /**
+     * Best-evidence raid party size (receiver included) for a raid-sourced
+     * submission, as a pure function so it can be tested without a client.
+     *
+     * <p>Takes the max of three independently derived signals because each one
+     * can be absent: the live varbit read is usually 0 by loot-chest time (the
+     * raid varbits reset at completion), the accumulated max only exists if
+     * the plugin was on during the raid, and the participant count is what the
+     * payload is about to claim anyway — a submission naming k others asserts
+     * a party of at least k+1, so the reported size can never contradict the
+     * roster it travels with (the same consistency rule the server applies to
+     * {@code split_size}).
+     *
+     * @param liveTeamSize      team size read right now; 0 when unreadable
+     * @param accumulatedMax    largest team size sampled during the raid; 0
+     *                          when never sampled or the roster is not this
+     *                          raid's
+     * @param otherParticipants names attached to the submission (local player
+     *                          excluded)
+     * @return party size ≥ 1
+     */
+    static int computeRaidPartySize(int liveTeamSize, int accumulatedMax, int otherParticipants)
+    {
+        return Math.max(Math.max(liveTeamSize, accumulatedMax), otherParticipants + 1);
+    }
+
+    /**
      * The decision above, as a pure function of the evidence, so it can be
      * tested without a game client.
      *
@@ -574,6 +600,16 @@ public class NearbyPlayerTracker
             ? submissionRaidType
             : (activeRaidType != null ? activeRaidType : "none");
 
+        // Evidence for the server: how big this raid's party actually was.
+        // 0 for non-raid submissions (the field is then omitted from payloads).
+        int raidPartySize = 0;
+        if (submissionRaidType != null)
+        {
+            int accumulated = submissionRaidType.equals(activeRaidType) ? raidTeamSizeMax : 0;
+            raidPartySize = computeRaidPartySize(
+                gameReportedTeamSize(submissionRaidType), accumulated, names.size());
+        }
+
         NearbyPlayerTrace trace = new NearbyPlayerTrace(
             new ArrayList<>(names),
             effectiveRadius,
@@ -584,6 +620,7 @@ public class NearbyPlayerTracker
             sourceName,
             rosterSource,
             localPlayerInRoster,
+            raidPartySize,
             toaTeamCount,
             tobTeamCount,
             coxTeamCount,
@@ -730,6 +767,7 @@ public class NearbyPlayerTracker
         private final String sourceName;
         private final String rosterSource;
         private final boolean localPlayerInRoster;
+        private final int raidPartySize;
         private final int toaTeamCount;
         private final int tobTeamCount;
         private final int coxTeamCount;
@@ -754,6 +792,7 @@ public class NearbyPlayerTracker
             String sourceName,
             String rosterSource,
             boolean localPlayerInRoster,
+            int raidPartySize,
             int toaTeamCount,
             int tobTeamCount,
             int coxTeamCount,
@@ -778,6 +817,7 @@ public class NearbyPlayerTracker
             this.sourceName = sourceName;
             this.rosterSource = rosterSource;
             this.localPlayerInRoster = localPlayerInRoster;
+            this.raidPartySize = raidPartySize;
             this.toaTeamCount = toaTeamCount;
             this.tobTeamCount = tobTeamCount;
             this.coxTeamCount = coxTeamCount;
@@ -808,6 +848,7 @@ public class NearbyPlayerTracker
                 0,
                 0,
                 0,
+                0,
                 false,
                 0,
                 0,
@@ -826,6 +867,18 @@ public class NearbyPlayerTracker
             return nearbyPlayers;
         }
 
+        /** Where the participant list came from: {@code authoritative | solo | proximity-fallback | proximity | none}. */
+        public String getRosterSource()
+        {
+            return rosterSource;
+        }
+
+        /** Best-evidence raid party size (receiver included); 0 for non-raid submissions. */
+        public int getRaidPartySize()
+        {
+            return raidPartySize;
+        }
+
         public String toDebugSummary()
         {
             String localPointSummary = localWorldPoint == null
@@ -839,6 +892,7 @@ public class NearbyPlayerTracker
                 + ", sourceName=" + (sourceName != null ? sourceName : "none")
                 + ", rosterSource=" + rosterSource
                 + ", localPlayerInRoster=" + localPlayerInRoster
+                + ", raidPartySize=" + raidPartySize
                 + ", toaTeamCount=" + toaTeamCount
                 + ", tobTeamCount=" + tobTeamCount
                 + ", coxTeamCount=" + coxTeamCount

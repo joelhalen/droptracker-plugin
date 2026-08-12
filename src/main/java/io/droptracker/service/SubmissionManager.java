@@ -375,6 +375,7 @@ public class SubmissionManager {
         // Raid-sourced submissions get the authoritative raid roster; anything
         // else gets a plain proximity scan (see NearbyPlayerTracker).
         String sourceName = extractSourceName(webhook);
+        boolean raidSourced = NearbyPlayerTracker.raidTypeForSource(sourceName) != null;
         NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getParticipantsTrace(sourceName, 20);
         List<String> members = trace.getNearbyPlayers();
         String membersValue = String.join(",", members);
@@ -389,11 +390,17 @@ public class SubmissionManager {
             embedsTouched++;
 
             boolean hasMembersField = false;
+            boolean hasPartySizeField = false;
             for (CustomWebhookBody.Field field : embed.getFields()) {
-                if (field != null && ("nearby_players".equalsIgnoreCase(field.getName())
-                        || "members".equalsIgnoreCase(field.getName()))) {
+                if (field == null || field.getName() == null) {
+                    continue;
+                }
+                if ("nearby_players".equalsIgnoreCase(field.getName())
+                        || "members".equalsIgnoreCase(field.getName())) {
                     hasMembersField = true;
-                    break;
+                }
+                if ("raid_party_size".equalsIgnoreCase(field.getName())) {
+                    hasPartySizeField = true;
                 }
             }
 
@@ -405,13 +412,31 @@ public class SubmissionManager {
             } else if (hasMembersField) {
                 embedsWithExistingMembersField++;
             }
+
+            // Raid submissions carry the evidence behind the participant list,
+            // not just the list: the party size the game itself reported and
+            // which source produced the roster. The server cross-checks the
+            // list against these, so a roster bug (or a stale client) can no
+            // longer credit people who were never in the raid — a proven solo
+            // (raid_party_size=1, roster_source=solo) is never split.
+            if (raidSourced && !hasPartySizeField) {
+                if (trace.getRaidPartySize() > 0) {
+                    embed.addField("raid_party_size", String.valueOf(trace.getRaidPartySize()), false);
+                }
+                if (trace.getRosterSource() != null && !trace.getRosterSource().isEmpty()) {
+                    embed.addField("roster_source", trace.getRosterSource(), false);
+                }
+            }
         }
 
         debugLogEventFlow("nearby-trace", SubmissionType.DROP,
             "nearby_players field enrichment: embedsTouched=" + embedsTouched
                 + ", existingMembersField=" + embedsWithExistingMembersField
                 + ", membersFieldsAdded=" + membersFieldsAdded
-                + ", membersValueLength=" + membersValue.length());
+                + ", membersValueLength=" + membersValue.length()
+                + ", raidSourced=" + raidSourced
+                + ", raidPartySize=" + trace.getRaidPartySize()
+                + ", rosterSource=" + trace.getRosterSource());
         return trace;
     }
 
