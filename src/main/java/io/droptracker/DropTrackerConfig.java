@@ -641,6 +641,19 @@ public interface DropTrackerConfig extends Config {
     default boolean sendLoadoutWithPbs() {
         return true;
     }
+
+    @ConfigItem(
+        name = "Upload character model",
+        keyName = "uploadCharacterModel",
+        description = "<html>Send a 3D model of your character (and pet) so your profile page<br>"
+            + "can show it, and so your gear can be pictured alongside your personal bests.<br>"
+            + "Sent once per outfit, while you are standing still - never during combat.</html>",
+        position = 7,
+        section = apiSection
+    )
+    default boolean uploadCharacterModel() {
+        return false;
+    }
     /*
     @ConfigItem(
         name = "[ADVANCED] Custom API Endpoint",

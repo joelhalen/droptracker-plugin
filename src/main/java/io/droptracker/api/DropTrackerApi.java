@@ -498,6 +498,49 @@ public class DropTrackerApi {
         }
     }
 
+    /**
+     * Uploads the player's character model as binary glTF. Blocking; call off
+     * the client thread.
+     *
+     * <p>Keyed by an outfit fingerprint so the server can skip work it has
+     * already done: the same character in the same gear renders identically, so
+     * one upload per distinct outfit is enough.
+     *
+     * @return true when the server accepted (or already had) the model.
+     */
+    public boolean uploadPlayerModel(String fingerprint, byte[] model, @Nullable byte[] petModel) {
+        if (!config.useApi() || model == null || model.length == 0) {
+            return false;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/player/model");
+        if (url == null) {
+            return false;
+        }
+
+        MediaType glb = MediaType.parse("model/gltf-binary");
+        MultipartBody.Builder body = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("acc_hash", String.valueOf(client.getAccountHash()))
+                .addFormDataPart("fingerprint", fingerprint)
+                .addFormDataPart("model", "model.glb", RequestBody.create(glb, model));
+        if (petModel != null && petModel.length > 0) {
+            body.addFormDataPart("pet_model", "pet.glb", RequestBody.create(glb, petModel));
+        }
+
+        Request request = new Request.Builder().url(url).post(body.build()).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                log.debug("Model upload rejected with status {}", response.code());
+                return false;
+            }
+            return true;
+        } catch (IOException e) {
+            log.debug("Model upload failed: {}", e.toString());
+            return false;
+        }
+    }
+
     public TopGroupResult getTopGroups() {
         if (!config.useApi()) {
             return null;

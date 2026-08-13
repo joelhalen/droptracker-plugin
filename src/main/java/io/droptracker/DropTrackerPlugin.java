@@ -64,6 +64,7 @@ import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.ManifestService;
 import io.droptracker.service.CollectionLogScraper;
+import io.droptracker.service.PlayerModelService;
 import io.droptracker.service.StateSyncScheduler;
 import io.droptracker.service.StateSyncService;
 import io.droptracker.service.NearbyPlayerTracker;
@@ -170,6 +171,10 @@ public class DropTrackerPlugin extends Plugin {
 	private StateSyncScheduler stateSyncScheduler;
 	@Inject
 	private CollectionLogScraper collectionLogScraper;
+
+	/* 3D character export; off unless the user opts in. */
+	@Inject
+	private PlayerModelService playerModelService;
 
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
@@ -323,6 +328,7 @@ public class DropTrackerPlugin extends Plugin {
 		collectionLogScraper.shutDown();
 		stateSyncScheduler.shutDown();
 		stateSyncService.reset();
+		playerModelService.reset();
 		manifestService.shutDown();
 		eventNotificationService.stop();
 		overlayManager.remove(eventToastOverlay);
@@ -612,6 +618,9 @@ public class DropTrackerPlugin extends Plugin {
 		// Keep the raid roster warm even while tracking is paused so that
 		// re-enabling mid-raid still produces complete participant lists.
 		nearbyPlayerTracker.onGameTick();
+		// Character model export: cheap no-op unless the outfit changed and the
+		// player has been standing still.
+		playerModelService.onTick();
 
 		if (!isTracking) {
 			return;
