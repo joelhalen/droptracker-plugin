@@ -7,12 +7,14 @@ import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.api.Manifest;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GameState;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 
 /**
  * Decides <em>when</em> a state snapshot is sent.
@@ -66,6 +68,12 @@ public class StateSyncScheduler {
 
 	public void startUp() {
 		eventBus.register(this);
+		// Schedule immediately, not just on the next login. The plugin usually
+		// starts while the player is already logged in, so waiting for a
+		// GameStateChanged means the first sync never happens at all.
+		if (stateSyncService.isEnabled()) {
+			scheduleRapid("startup");
+		}
 	}
 
 	public void shutDown() {
@@ -73,6 +81,32 @@ public class StateSyncScheduler {
 		synchronized (lock) {
 			cancel();
 			remainingOnPause = 0;
+		}
+	}
+
+	/**
+	 * Reacts to the sync toggle being flipped while the client is running.
+	 *
+	 * <p>Without this, enabling "Sync account progress" does nothing until the
+	 * player next logs in — which reads as the feature being broken, because
+	 * nothing happens and there is no error to see.
+	 */
+	@Subscribe
+	public void onConfigChanged(ConfigChanged event) {
+		if (!DropTrackerConfig.GROUP.equals(event.getGroup())) {
+			return;
+		}
+		if (stateSyncService.isEnabled()) {
+			// The manifest may never have loaded (it is skipped entirely while
+			// the API is disabled), and without it no combat achievement varps
+			// are read at all.
+			manifestService.refresh();
+			scheduleRapid("config-changed");
+		} else {
+			synchronized (lock) {
+				cancel();
+				remainingOnPause = 0;
+			}
 		}
 	}
 

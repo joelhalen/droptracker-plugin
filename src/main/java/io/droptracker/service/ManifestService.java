@@ -74,6 +74,10 @@ public class ManifestService {
 		if (manifest != null || !fetching.compareAndSet(false, true)) {
 			return;
 		}
+		// A failed fetch leaves manifest null, so a later caller may retry. That
+		// matters because the API can be disabled (or the endpoint wrong) when
+		// the plugin starts, and without a manifest no combat achievement varps
+		// are read at all — the sync silently omits them.
 		executor.execute(() -> {
 			try {
 				Manifest fetched = api.getManifest();

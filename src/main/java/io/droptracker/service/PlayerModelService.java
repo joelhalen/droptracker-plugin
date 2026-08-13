@@ -60,6 +60,19 @@ public class PlayerModelService {
 
 	private int idleTicks;
 
+	/**
+	 * When the next upload attempt is allowed, as a monotonic timestamp.
+	 *
+	 * <p>Without this a failing upload retries every tick: the fingerprint never
+	 * gets recorded, the player is still idle, so the next tick exports and
+	 * uploads again. A single 401 produced 258 requests in three minutes during
+	 * testing, each one re-exporting the whole model.
+	 */
+	private long nextAttemptAtMs;
+
+	/** How long to wait after a failed upload before trying that outfit again. */
+	private static final long FAILURE_BACKOFF_MS = 5 * 60 * 1000L;
+
 	@Inject
 	public PlayerModelService(Client client,
 	                          ClientThread clientThread,
@@ -80,6 +93,7 @@ public class PlayerModelService {
 	public void reset() {
 		uploadedFingerprint = null;
 		idleTicks = 0;
+		nextAttemptAtMs = 0;
 		exporting.set(false);
 	}
 
@@ -112,6 +126,9 @@ public class PlayerModelService {
 		if (fingerprint == null || fingerprint.equals(uploadedFingerprint)) {
 			return;
 		}
+		if (System.currentTimeMillis() < nextAttemptAtMs) {
+			return;
+		}
 		if (!exporting.compareAndSet(false, true)) {
 			return;
 		}
@@ -138,7 +155,13 @@ public class PlayerModelService {
 			try {
 				if (api.uploadPlayerModel(fingerprint, modelBytes, petBytes)) {
 					uploadedFingerprint = fingerprint;
+					nextAttemptAtMs = 0;
 					log.debug("Uploaded character model for outfit {}", fingerprint);
+				} else {
+					// Back off rather than re-exporting on the very next tick.
+					nextAttemptAtMs = System.currentTimeMillis() + FAILURE_BACKOFF_MS;
+					log.debug("Model upload failed; not retrying for {} minutes",
+							FAILURE_BACKOFF_MS / 60000);
 				}
 			} finally {
 				exporting.set(false);
