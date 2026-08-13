@@ -614,6 +614,33 @@ public interface DropTrackerConfig extends Config {
     default boolean receiveInGameMessages() {
         return true;
     }
+
+    @ConfigItem(
+        name = "Sync account progress",
+        keyName = "syncAccountState",
+        description = "<html>Periodically send your skills, quests, achievement diaries,<br>"
+            + "combat achievements and collection log to DropTracker, so your<br>"
+            + "profile page can show your current progress.<br>"
+            + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
+        position = 5,
+        section = apiSection
+    )
+    default boolean syncAccountState() {
+        return false;
+    }
+
+    @ConfigItem(
+        name = "Send gear with personal bests",
+        keyName = "sendLoadoutWithPbs",
+        description = "<html>Include the gear you were wearing and the inventory you were<br>"
+            + "carrying when you set a personal best, so it can be shown alongside the time.<br>"
+            + "Item names only - no bank, no location.</html>",
+        position = 6,
+        section = apiSection
+    )
+    default boolean sendLoadoutWithPbs() {
+        return true;
+    }
     /*
     @ConfigItem(
         name = "[ADVANCED] Custom API Endpoint",

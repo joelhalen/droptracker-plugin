@@ -5,6 +5,8 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.KCService;
+import io.droptracker.service.StateSyncScheduler;
+import io.droptracker.service.StateSyncService;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.Rarity;
 import lombok.extern.slf4j.Slf4j;
@@ -28,13 +30,20 @@ public class ClogHandler extends BaseEventHandler {
     private final Rarity rarity;
     private final KCService kcService;
     private final ItemIDSearch itemIDFinder;
+    /* State sync: a newly unlocked slot should reach the website promptly,
+     * rather than waiting out the periodic sync interval. */
+    private final StateSyncService stateSyncService;
+    private final StateSyncScheduler stateSyncScheduler;
 
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
 
     private static final Duration RECENT_DROP = Duration.ofSeconds(30L);
     
     @Inject
-    public ClogHandler(ItemIDSearch itemIDFinder, Rarity rarity, KCService kcService) {
+    public ClogHandler(ItemIDSearch itemIDFinder, Rarity rarity, KCService kcService,
+                       StateSyncService stateSyncService, StateSyncScheduler stateSyncScheduler) {
+        this.stateSyncService = stateSyncService;
+        this.stateSyncScheduler = stateSyncScheduler;
         this.itemIDFinder = itemIDFinder;
         this.rarity = rarity;
         this.kcService = kcService;
@@ -118,6 +127,15 @@ public class ClogHandler extends BaseEventHandler {
                 }
             }
             
+            // Feed the state snapshot too: one new slot is cheap to record and
+            // means the profile page updates now instead of at the next
+            // scheduled sync. Additive only - this never implies the rest of
+            // the log was read.
+            if (itemId != null && stateSyncService != null && stateSyncService.isEnabled()) {
+                stateSyncService.storeItem(itemId, 1);
+                stateSyncScheduler.scheduleRapid("clog-item");
+            }
+
             Drop loot = itemId != null ? getLootSource(itemId) : null;
             Integer killCount = 0;
             if (loot != null && kcService != null) {

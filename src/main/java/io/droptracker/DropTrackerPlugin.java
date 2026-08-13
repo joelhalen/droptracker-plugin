@@ -63,6 +63,9 @@ import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.ManifestService;
+import io.droptracker.service.CollectionLogScraper;
+import io.droptracker.service.StateSyncScheduler;
+import io.droptracker.service.StateSyncService;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.SubmissionManager;
@@ -159,6 +162,15 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ManifestService manifestService;
 
+	/* Account state sync: the current-state counterpart to the event
+	 * submissions. Off unless the user opts in via syncAccountState. */
+	@Inject
+	private StateSyncService stateSyncService;
+	@Inject
+	private StateSyncScheduler stateSyncScheduler;
+	@Inject
+	private CollectionLogScraper collectionLogScraper;
+
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
 	private EventNotificationService eventNotificationService;
@@ -227,6 +239,11 @@ public class DropTrackerPlugin extends Plugin {
 		// blocks on it, and consumers fall back to built-in defaults until it
 		// lands (or if it never does).
 		manifestService.startUp();
+
+		// Scheduling only; nothing is sent until the manifest has loaded and the
+		// player is logged in, and nothing at all if the user has not opted in.
+		stateSyncScheduler.startUp();
+		collectionLogScraper.startUp();
 
 		// In-game event notifications + HUD: the overlays render nothing on
 		// their own; the service's poll loop idles until the server reports a
@@ -303,6 +320,9 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() {
 		gameState.lazySet(null);
 
+		collectionLogScraper.shutDown();
+		stateSyncScheduler.shutDown();
+		stateSyncService.reset();
 		manifestService.shutDown();
 		eventNotificationService.stop();
 		overlayManager.remove(eventToastOverlay);

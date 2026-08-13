@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.NearbyPlayerTracker;
+import io.droptracker.service.LoadoutCapture;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
@@ -85,6 +86,10 @@ public class PbHandler extends BaseEventHandler {
 
     @Inject
     protected NearbyPlayerTracker nearbyPlayerTracker;
+
+    /* Gear and inventory at the moment of the kill; see LoadoutCapture. */
+    @Inject
+    protected LoadoutCapture loadoutCapture;
 
     private final AtomicInteger badTicks = new AtomicInteger();
     private final AtomicReference<KillData> killData = new AtomicReference<>();
@@ -433,6 +438,20 @@ public class PbHandler extends BaseEventHandler {
         fieldData.put("is_pb", data.isPersonalBest);
         fieldData.put("team_size", data.teamSize != null ? data.teamSize : "Solo");
         fieldData.put("killcount", data.count);
+
+        // Loadout at the moment of the kill. Captured here because this runs on
+        // the client thread immediately after the kill is recognised - by the
+        // time a submission is assembled the player may have banked or died.
+        if (loadoutCapture != null && loadoutCapture.isEnabled()) {
+            String equipment = loadoutCapture.captureEquipment();
+            String inventory = loadoutCapture.captureInventory();
+            if (equipment != null) {
+                fieldData.put("equipment", equipment);
+            }
+            if (inventory != null) {
+                fieldData.put("inventory", inventory);
+            }
+        }
         
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
