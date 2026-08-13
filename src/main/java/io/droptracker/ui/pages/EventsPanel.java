@@ -3,13 +3,16 @@ package io.droptracker.ui.pages;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.EventState;
+import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.service.EventNotificationService;
+import io.droptracker.service.EventTaskPrefs;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
 import net.runelite.api.Client;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -38,6 +41,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
@@ -54,14 +58,17 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * "Events" side-panel tab: one card per active event — themed header with the
  * time remaining, stat tiles, the tracked task (click any task in the list to
- * track it on the HUD; click again to let the server decide), a full-width
- * standings table with per-team board pop-outs, and the team roster.
+ * pin it; the top pin leads the HUD, and with none the server decides), a
+ * full-width standings table with per-team board pop-outs, the team's recent
+ * submissions and the team roster.
  */
 public class EventsPanel {
     private final DropTrackerConfig config;
@@ -71,6 +78,7 @@ public class EventsPanel {
     private final ItemManager itemManager;
     private final RemoteImageCache remoteImages;
     private final ItemIDSearch itemIds;
+    private final EventTaskPrefs taskPrefs;
 
     /* Tracked-task required-item strip: small wrapping grid of item sprites. */
     private static final int REQ_ICONS_PER_ROW = 5;
@@ -86,11 +94,16 @@ public class EventsPanel {
      * and must not fold the task list back to its size-based default.
      */
     private final java.util.Map<String, Boolean> sectionCollapsed = new java.util.HashMap<>();
+    /**
+     * Whether the "N hidden" group of a card is currently folded open (key:
+     * eventId). Hiding is persisted; peeking at what you hid is not.
+     */
+    private final java.util.Map<String, Boolean> hiddenRevealed = new java.util.HashMap<>();
 
     public EventsPanel(DropTrackerConfig config, DropTrackerApi api,
                        EventNotificationService service, Client client,
                        ItemManager itemManager, RemoteImageCache remoteImages,
-                       ItemIDSearch itemIds) {
+                       ItemIDSearch itemIds, ConfigManager configManager) {
         this.config = config;
         this.api = api;
         this.service = service;
@@ -98,6 +111,7 @@ public class EventsPanel {
         this.itemManager = itemManager;
         this.remoteImages = remoteImages;
         this.itemIds = itemIds;
+        this.taskPrefs = new EventTaskPrefs(configManager, service);
     }
 
     public JPanel create() {
@@ -237,7 +251,9 @@ public class EventsPanel {
         body.add(stats);
         body.add(vgap(8));
 
-        // The task being worked toward (tracked pick or server focus).
+        // The task being worked toward (top pin or server focus). Pins own the
+        // canonical tracked task, so re-point it before asking what to headline.
+        taskPrefs.syncFocus(entry);
         EventNotificationService.DisplayTask display = service.displayTask(entry);
         if ("awaiting_roll".equals(entry.getBoardStatus())) {
             body.add(rollBanner());
@@ -262,6 +278,20 @@ public class EventsPanel {
             JPanel table = standingsTable(entry, standings,
                 team != null ? team.getId() : -1, boardAvailable);
             body.add(section(event.getId() + ":standings", "Standings", table, false));
+            body.add(vgap(8));
+        }
+
+        if (team != null) {
+            // Same grid the Player and Group tabs use, fed by the team's own
+            // feed. Older servers send no field at all — the placeholder keeps
+            // the section honest instead of pretending the team is idle.
+            List<RecentSubmission> submissions = entry.getTeamRecentSubmissions();
+            boolean anySubmissions = submissions != null && !submissions.isEmpty();
+            JComponent feed = anySubmissions
+                ? PanelElements.createRecentSubmissionPanel(submissions, itemManager, client, true, false)
+                : PanelElements.createRecentSubmissionsPlaceholder(submissions == null
+                    ? "No team activity available" : "Nothing scored yet");
+            body.add(section(event.getId() + ":submissions", "Team activity", feed, !anySubmissions));
             body.add(vgap(8));
         }
 
@@ -353,20 +383,26 @@ public class EventsPanel {
         JPanel head = new JPanel(new BorderLayout());
         head.setAlignmentX(Component.LEFT_ALIGNMENT);
         head.setBackground(DropTrackerTheme.SURFACE_2);
-        JLabel caption = new JLabel(task.tracked ? "TRACKING (your pick)" : "TRACKING (auto)");
+        // With several pins the headline is simply the first one still open,
+        // so say which of them the player is looking at.
+        int pins = task.tracked ? taskPrefs.pinned(entry.getEvent().getId()).size() : 0;
+        JLabel caption = new JLabel(!task.tracked ? "TRACKING (auto)"
+            : (pins > 1 ? "TRACKING (pin 1 of " + pins + ")" : "TRACKING (your pick)"));
         caption.setFont(FontManager.getRunescapeSmallFont());
         caption.setForeground(task.tracked ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
         head.add(caption, BorderLayout.WEST);
         if (task.tracked) {
-            JLabel reset = new JLabel("auto ✕");
+            JLabel reset = new JLabel("unpin ✕");
             reset.setFont(FontManager.getRunescapeSmallFont());
             reset.setForeground(DropTrackerTheme.TEXT_MUTED);
-            reset.setToolTipText("Stop tracking this task and let the server pick again");
+            reset.setToolTipText(pins > 1
+                ? "Unpin this task and track the next pin instead"
+                : "Unpin this task and let the server pick again");
             reset.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             reset.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    service.setTrackedTask(entry.getEvent().getId(), 0);
+                    taskPrefs.unpin(entry, task.id);
                     rebuild();
                 }
             });
@@ -638,24 +674,133 @@ public class EventsPanel {
         list.setBackground(DropTrackerTheme.SURFACE_1);
         list.setAlignmentX(Component.LEFT_ALIGNMENT);
         int displayedId = display != null ? display.id : -1;
-        boolean manual = display != null && display.tracked;
+        if (!pickable) {
+            // Board games force the current tile: nothing to pin or hide.
+            for (EventState.TaskInfo task : tasks) {
+                list.add(taskRow(entry, task, displayedId, false, false, false));
+                list.add(vgap(2));
+            }
+            return list;
+        }
+
+        int eventId = entry.getEvent().getId();
+        Set<Integer> pins = taskPrefs.pinned(eventId);
+        Set<Integer> hides = taskPrefs.hidden(eventId);
+        List<EventState.TaskInfo> pinned = new ArrayList<>();
+        List<EventState.TaskInfo> rest = new ArrayList<>();
+        List<EventState.TaskInfo> hidden = new ArrayList<>();
+        // Pins lead the list in the order they were pinned — the first one
+        // still open is the task the HUD is tracking.
+        for (Integer id : pins) {
+            EventState.TaskInfo task = taskInfoById(entry, id);
+            if (task != null) {
+                pinned.add(task);
+            }
+        }
         for (EventState.TaskInfo task : tasks) {
-            list.add(taskRow(entry, task, displayedId, manual, pickable));
+            if (pins.contains(task.getId())) {
+                continue;
+            }
+            (hides.contains(task.getId()) ? hidden : rest).add(task);
+        }
+
+        for (EventState.TaskInfo task : pinned) {
+            list.add(taskRow(entry, task, displayedId, true, true, false));
             list.add(vgap(2));
         }
-        if (pickable) {
-            JLabel hint = new JLabel("Click a task to track it on the HUD.");
-            hint.setFont(FontManager.getRunescapeSmallFont());
-            hint.setForeground(DropTrackerTheme.TEXT_MUTED);
-            hint.setBorder(new EmptyBorder(2, 2, 0, 0));
-            hint.setAlignmentX(Component.LEFT_ALIGNMENT);
-            list.add(hint);
+        for (EventState.TaskInfo task : rest) {
+            list.add(taskRow(entry, task, displayedId, true, false, false));
+            list.add(vgap(2));
         }
+        if (!hidden.isEmpty()) {
+            String key = String.valueOf(eventId);
+            boolean revealed = Boolean.TRUE.equals(hiddenRevealed.get(key));
+            list.add(hiddenHeader(entry, key, hidden.size(), revealed));
+            list.add(vgap(2));
+            if (revealed) {
+                for (EventState.TaskInfo task : hidden) {
+                    list.add(taskRow(entry, task, displayedId, true, false, true));
+                    list.add(vgap(2));
+                }
+            }
+        }
+
+        JLabel hint = new JLabel("<html><div style='width:"
+            + (PluginPanel.PANEL_WIDTH - 60) + "px;'>"
+            + "Click a task to pin it to the top and the HUD; ✕ hides it."
+            + "</div></html>");
+        hint.setFont(FontManager.getRunescapeSmallFont());
+        hint.setForeground(DropTrackerTheme.TEXT_MUTED);
+        hint.setBorder(new EmptyBorder(2, 2, 0, 0));
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        list.add(hint);
         return list;
     }
 
+    /** Fold-out header for the tasks the user hid, with a way back. */
+    private JComponent hiddenHeader(EventState.Entry entry, String key, int count, boolean revealed) {
+        JPanel row = new JPanel(new BorderLayout(5, 0)) {
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+            }
+        };
+        row.setBackground(DropTrackerTheme.SURFACE_1);
+        row.setBorder(new EmptyBorder(2, 2, 2, 4));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        JLabel chevron = new JLabel(revealed
+            ? PanelElements.getExpandedIcon() : PanelElements.getCollapsedIcon());
+        row.add(chevron, BorderLayout.WEST);
+
+        JLabel label = new JLabel(count + " hidden");
+        label.setFont(FontManager.getRunescapeSmallFont());
+        label.setForeground(DropTrackerTheme.TEXT_MUTED);
+        row.add(label, BorderLayout.CENTER);
+
+        row.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                hiddenRevealed.put(key, !revealed);
+                rebuild();
+            }
+        });
+
+        JLabel unhideAll = new JLabel("unhide all");
+        unhideAll.setFont(FontManager.getRunescapeSmallFont());
+        unhideAll.setForeground(DropTrackerTheme.TEXT_MUTED);
+        unhideAll.setToolTipText("Show every hidden task again");
+        unhideAll.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        unhideAll.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                taskPrefs.unhideAll(entry.getEvent().getId());
+                rebuild();
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                unhideAll.setForeground(DropTrackerTheme.GOLD_BRIGHT);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                unhideAll.setForeground(DropTrackerTheme.TEXT_MUTED);
+            }
+        });
+        row.add(unhideAll, BorderLayout.EAST);
+        return row;
+    }
+
+    /**
+     * One task row. {@code controls} adds the pin/hide glyphs and click-to-pin
+     * (off for board games, whose tile is forced); {@code pinned} marks a row
+     * in the pin set; {@code hidden} renders it inside the folded-out hidden
+     * group, where the only action is putting it back.
+     */
     private JPanel taskRow(EventState.Entry entry, EventState.TaskInfo task,
-                           int displayedId, boolean displayedIsManual, boolean pickable) {
+                           int displayedId, boolean controls, boolean pinned, boolean hidden) {
         boolean isDisplayed = task.getId() == displayedId;
 
         JPanel row = new JPanel(new BorderLayout(5, 0)) {
@@ -668,7 +813,8 @@ public class EventsPanel {
         row.setBackground(baseBg);
         row.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 2, 0, 0,
-                isDisplayed ? DropTrackerTheme.GOLD : DropTrackerTheme.SURFACE_3),
+                isDisplayed ? DropTrackerTheme.GOLD
+                    : (pinned ? DropTrackerTheme.BRONZE : DropTrackerTheme.SURFACE_3)),
             new EmptyBorder(3, 4, 3, 4)));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -677,9 +823,9 @@ public class EventsPanel {
         applyTaskIcon(icon, task.getIconItemId(), task.getIconPath(), 20);
         row.add(icon, BorderLayout.WEST);
 
-        JLabel label = new JLabel(truncate(task.getLabel(), 30));
+        JLabel label = new JLabel(truncate(task.getLabel(), controls ? 22 : 30));
         label.setFont(FontManager.getRunescapeSmallFont());
-        label.setForeground(task.isCompleted() ? DropTrackerTheme.TEXT_MUTED
+        label.setForeground(task.isCompleted() || hidden ? DropTrackerTheme.TEXT_MUTED
             : (isDisplayed ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT));
         row.add(label, BorderLayout.CENTER);
 
@@ -695,28 +841,42 @@ public class EventsPanel {
             state = new JLabel("");
         }
         state.setFont(FontManager.getRunescapeSmallFont());
-        row.add(state, BorderLayout.EAST);
+
+        if (!controls) {
+            row.add(state, BorderLayout.EAST);
+        } else {
+            JPanel east = new JPanel(new BorderLayout(3, 0));
+            east.setOpaque(false);
+            east.add(state, BorderLayout.CENTER);
+
+            JPanel glyphs = new JPanel(new BorderLayout(1, 0));
+            glyphs.setOpaque(false);
+            // A completed task can't lead the HUD, but one pinned before it
+            // completed still needs its way out.
+            if (!hidden && (!task.isCompleted() || pinned)) {
+                glyphs.add(controlGlyph(pinned ? "★" : "☆",
+                    pinned ? DropTrackerTheme.GOLD : DropTrackerTheme.STONE,
+                    pinned ? "Unpin this task" : "Pin this task to the top and the HUD",
+                    () -> togglePin(entry, task.getId(), pinned)), BorderLayout.WEST);
+            }
+            glyphs.add(controlGlyph(hidden ? "+" : "✕", DropTrackerTheme.STONE,
+                hidden ? "Show this task again" : "Hide this task",
+                () -> {
+                    taskPrefs.toggleHidden(entry, task.getId());
+                    rebuild();
+                }), BorderLayout.EAST);
+            east.add(glyphs, BorderLayout.EAST);
+            row.add(east, BorderLayout.EAST);
+        }
 
         row.setToolTipText(taskTooltip(task));
 
-        if (pickable && !task.isCompleted()) {
+        if (controls && !hidden && (!task.isCompleted() || pinned)) {
             row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             row.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    int eventId = entry.getEvent().getId();
-                    // Clicking the manually tracked task reverts to auto.
-                    if (isDisplayed && displayedIsManual) {
-                        service.setTrackedTask(eventId, 0);
-                    } else {
-                        service.setTrackedTask(eventId, task.getId());
-                        // Tracking a task is an act of focus: point the HUD at
-                        // this event too, otherwise picks made in a second
-                        // event never show anywhere (the HUD keeps rendering
-                        // the pinned/first event).
-                        config.setPinnedEventId(eventId);
-                    }
-                    rebuild();
+                    togglePin(entry, task.getId(), pinned);
                 }
 
                 @Override
@@ -731,6 +891,45 @@ public class EventsPanel {
             });
         }
         return row;
+    }
+
+    /** Pin or unpin a task and redraw. Pinning is an act of focus: point the
+     *  HUD at this event too, otherwise pins made in a second event never show
+     *  anywhere (the HUD keeps rendering the pinned/first event). */
+    private void togglePin(EventState.Entry entry, int taskId, boolean pinned) {
+        taskPrefs.togglePin(entry, taskId);
+        if (!pinned) {
+            config.setPinnedEventId(entry.getEvent().getId());
+        }
+        rebuild();
+    }
+
+    /** Small clickable control in a task row. Sans-serif on purpose: the
+     *  RuneScape bitmap fonts have no symbol coverage to fall back on. */
+    private static JLabel controlGlyph(String text, Color color, String tooltip, Runnable action) {
+        JLabel glyph = new JLabel(text);
+        glyph.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        glyph.setForeground(color);
+        glyph.setToolTipText(tooltip);
+        glyph.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        glyph.setBorder(new EmptyBorder(0, 2, 0, 2));
+        glyph.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                action.run();
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                glyph.setForeground(DropTrackerTheme.GOLD_BRIGHT);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                glyph.setForeground(color);
+            }
+        });
+        return glyph;
     }
 
     /** Tooltip explaining the task: full label, badge, description,

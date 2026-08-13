@@ -605,14 +605,29 @@ public class PanelElements {
 
     public static JPanel createRecentSubmissionPanel(List<RecentSubmission> recentSubmissions,
                                                      ItemManager itemManager, Client client, boolean forGroup) {
+        return createRecentSubmissionPanel(recentSubmissions, itemManager, client, forGroup, true);
+    }
+
+    /**
+     * {@link #createRecentSubmissionPanel(List, ItemManager, Client, boolean)} with
+     * {@code withTitle} off for callers that already sit under a heading of their
+     * own (the Events tab's collapsible sections) — the grid alone, no second
+     * "Recent Submissions" caption and no space reserved for it.
+     */
+    public static JPanel createRecentSubmissionPanel(List<RecentSubmission> recentSubmissions,
+                                                     ItemManager itemManager, Client client,
+                                                     boolean forGroup, boolean withTitle) {
+        // Without the title block the container is just the 80px grid inside
+        // the 10px top/bottom border.
+        final int containerHeight = withTitle ? 150 : 100;
 
         // Main container with title and submissions
         JPanel container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
         container.setBackground(DropTrackerTheme.SURFACE_1);
         container.setBorder(new EmptyBorder(10, 0, 10, 0));
-        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150)); // Increased from 120 to 150
-        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 150));
+        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, containerHeight));
+        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, containerHeight));
         container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
 
         // Title panel to ensure centering
@@ -666,8 +681,10 @@ public class PanelElements {
         submissionWrapper.add(updateValidSubmissionPanel(panel, recentSubmissions, itemManager, client, forGroup));
 
         // Add components to container
-        container.add(titlePanel);
-        container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
+        if (withTitle) {
+            container.add(titlePanel);
+            container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
+        }
         container.add(submissionWrapper);
 
         return container;
@@ -804,14 +821,18 @@ public class PanelElements {
                             clogContainer.repaint();
                         });
                     }
-                } else if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-                    // Handle personal best submissions with image URL
+                } else {
+                    // Personal bests, and event completions credited by any
+                    // other source type (manual, kc, …): the API's image_path
+                    // is the only icon there is.
+                    boolean isPb = submission.getSubmissionType().equalsIgnoreCase("pb");
                     HttpUrl imageUrl = submission.imageUrl();
 
                     if (imageUrl != null) {
+                        final int size = isPb ? 16 : 28;
                         final JLabel pbContainer = PanelElements.createStyledIconContainer(effects);
                         pbContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
-                        pbContainer.setText("PB");
+                        pbContainer.setText(isPb ? "PB" : "");
                         pbContainer.setFont(FontManager.getRunescapeSmallFont());
                         pbContainer.setForeground(DropTrackerTheme.TEXT);
                         iconContainer = pbContainer;
@@ -820,7 +841,7 @@ public class PanelElements {
                         CompletableFuture.supplyAsync(() -> {
                             BufferedImage image = fetchImage(imageUrl);
                             if (image != null) {
-                                Image scaled = image.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+                                Image scaled = image.getScaledInstance(size, size, Image.SCALE_SMOOTH);
                                 return new ImageIcon(scaled);
                             }
                             return null;
@@ -908,6 +929,8 @@ public class PanelElements {
                             "<b>" + itemName + "</b><br>" +
                             "<i>from: " + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
                             "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
+                } else {
+                    tooltip += genericSubmissionTooltip(submission);
                 }
             } else {
                 if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
@@ -926,6 +949,8 @@ public class PanelElements {
                     tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
                             "<b>" + itemName + "</b><br>" +
                             "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
+                } else {
+                    tooltip += genericSubmissionTooltip(submission);
                 }
             }
             tooltip += "</p></html>";
@@ -934,6 +959,24 @@ public class PanelElements {
         } catch (Exception e) {
             return sanitizeTxt(submission.getPlayerName() + " - " + submission.getSubmissionType() + " - " + submission.getSourceName());
         }
+    }
+
+    /**
+     * Fallback body for submission types the tabs have no bespoke wording for —
+     * an event completion credited by kc, xp or a moderator's hand. The API's
+     * own display name is the only thing that describes those, and an empty
+     * tooltip would be worse than a plain one.
+     */
+    private static String genericSubmissionTooltip(RecentSubmission submission) {
+        String body = "<b>" + sanitizeTxt(submission.getDisplayName()) + "</b><br>" +
+                sanitizeTxt(submission.getPlayerName()) + "<br>";
+        if (submission.getSourceName() != null) {
+            body += "for: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>";
+        }
+        if (submission.getValue() != null) {
+            body += sanitizeTxt(submission.getValue()) + "<br>";
+        }
+        return body + "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
     }
 
     private static String sanitizeTxt(String tooltip) {

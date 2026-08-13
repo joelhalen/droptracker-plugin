@@ -1,6 +1,7 @@
 package io.droptracker.ui.overlays;
 
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.models.api.EventNotification;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.EventNotificationService.Toast;
 import net.runelite.client.game.ItemManager;
@@ -24,8 +25,13 @@ import java.util.List;
 
 /**
  * Transient event pop-ups ("Chat + text pop-ups" / "Enhanced display"):
- * up to {@value #MAX_VISIBLE} small cards stacked top-center, fading out over
- * the last second of their {@link Toast#LIFETIME_MS} lifetime.
+ * up to {@value #MAX_VISIBLE} small cards stacked top-center, each at most
+ * {@value #MAX_BODY_LINES} body lines tall, fading out over the last second
+ * of their (priority-dependent) lifetime.
+ *
+ * Cards are styled by the envelope's importance tier: a completion that
+ * finished a bingo tile gets a bright frame, an accent rail and a longer
+ * life; a routine progress tick gets a dim frame and flicks past.
  *
  * Stands down while the Enhanced Display HUD is painting: the HUD then draws
  * the same queue as nudges anchored beneath itself (one movable object for
@@ -34,15 +40,26 @@ import java.util.List;
 @Singleton
 public class EventToastOverlay extends Overlay {
     private static final int MAX_VISIBLE = 3;
+    /**
+     * Hard ceiling on card height. Bodies used to wrap unbounded "so the
+     * detail never gets cut", which let three cards eat the whole top of the
+     * screen; the detail that matters leads the line anyway.
+     */
+    private static final int MAX_BODY_LINES = 3;
     private static final int WIDTH = 280;
     private static final int PADDING = 8;
     private static final int ICON_SIZE = 24;
     private static final int GAP = 6;
+    private static final int RAIL_WIDTH = 3;
     private static final long FADE_MS = 1000;
 
     private static final Color BACKGROUND = new Color(0x15, 0x11, 0x0c, 230);
     private static final Color BORDER = new Color(0x7a, 0x5a, 0x32, 255);
+    private static final Color BORDER_HIGH = new Color(0xff, 0xd9, 0x66, 255);
+    private static final Color BORDER_LOW = new Color(0x5a, 0x5a, 0x52, 255);
     private static final Color TITLE = new Color(0xff, 0xb8, 0x3f);
+    private static final Color TITLE_HIGH = new Color(0xff, 0xd9, 0x66);
+    private static final Color TITLE_LOW = new Color(0xd8, 0xc9, 0xa3);
     private static final Color BODY = new Color(0xef, 0xe6, 0xd2);
 
     private final DropTrackerConfig config;
@@ -93,14 +110,14 @@ public class EventToastOverlay extends Overlay {
     }
 
     private int drawToast(Graphics2D g, Toast toast, int top, long now) {
-        long age = now - toast.getCreatedAt();
-        long remaining = Toast.LIFETIME_MS - age;
+        long remaining = toast.remainingMs(now);
         float alpha = remaining < FADE_MS ? Math.max(remaining / (float) FADE_MS, 0f) : 1f;
+        boolean important = toast.getPriority() == EventNotification.Priority.HIGH;
 
         FontMetrics titleFm = g.getFontMetrics(FontManager.getRunescapeBoldFont());
         FontMetrics bodyFm = g.getFontMetrics(FontManager.getRunescapeSmallFont());
 
-        int textLeft = PADDING;
+        int textLeft = PADDING + (important ? RAIL_WIDTH : 0);
         BufferedImage icon = null;
         if (toast.getIconItemId() != null && toast.getIconItemId() > 0) {
             icon = itemManager.getImage(toast.getIconItemId());
@@ -109,8 +126,7 @@ public class EventToastOverlay extends Overlay {
             }
         }
         int textWidth = WIDTH - textLeft - PADDING;
-        // Unbounded: wrap the whole body rather than ellipsizing the detail.
-        List<String> bodyLines = wrap(toast.getBody(), bodyFm, textWidth, Integer.MAX_VALUE);
+        List<String> bodyLines = wrap(toast.getBody(), bodyFm, textWidth, MAX_BODY_LINES);
         int height = PADDING + titleFm.getHeight()
             + bodyLines.size() * bodyFm.getHeight() + PADDING;
         height = Math.max(height, icon != null ? ICON_SIZE + 2 * PADDING : 0);
@@ -120,17 +136,22 @@ public class EventToastOverlay extends Overlay {
 
         g.setColor(BACKGROUND);
         g.fillRoundRect(0, top, WIDTH, height, 8, 8);
-        g.setColor(BORDER);
+        g.setColor(borderFor(toast));
         g.drawRoundRect(0, top, WIDTH - 1, height - 1, 8, 8);
+        if (important) {
+            // Accent rail: the one card you should look at reads as such even
+            // out of the corner of your eye.
+            g.fillRect(1, top + 2, RAIL_WIDTH, height - 4);
+        }
 
         if (icon != null) {
-            g.drawImage(icon, PADDING, top + (height - ICON_SIZE) / 2,
-                ICON_SIZE, ICON_SIZE, null);
+            g.drawImage(icon, PADDING + (important ? RAIL_WIDTH : 0),
+                top + (height - ICON_SIZE) / 2, ICON_SIZE, ICON_SIZE, null);
         }
 
         int textY = top + PADDING + titleFm.getAscent();
         g.setFont(FontManager.getRunescapeBoldFont());
-        g.setColor(TITLE);
+        g.setColor(titleFor(toast));
         g.drawString(ellipsize(toast.getTitle(), titleFm, textWidth), textLeft, textY);
 
         g.setFont(FontManager.getRunescapeSmallFont());
@@ -145,26 +166,61 @@ public class EventToastOverlay extends Overlay {
         return height;
     }
 
+    private static Color borderFor(Toast toast) {
+        switch (toast.getPriority()) {
+            case HIGH:
+                return BORDER_HIGH;
+            case LOW:
+                return BORDER_LOW;
+            default:
+                return BORDER;
+        }
+    }
+
+    private static Color titleFor(Toast toast) {
+        switch (toast.getPriority()) {
+            case HIGH:
+                return TITLE_HIGH;
+            case LOW:
+                return TITLE_LOW;
+            default:
+                return TITLE;
+        }
+    }
+
+    /** Word-wrap into at most {@code maxLines} lines, marking the last one
+     *  with "…" whenever anything had to be dropped. */
     private static List<String> wrap(String text, FontMetrics fm, int width, int maxLines) {
         List<String> lines = new ArrayList<>();
         if (text == null || text.isEmpty()) {
             return lines;
         }
         StringBuilder current = new StringBuilder();
+        boolean clipped = false;
         for (String word : text.split(" ")) {
             String candidate = current.length() == 0 ? word : current + " " + word;
             if (fm.stringWidth(candidate) <= width || current.length() == 0) {
                 current = new StringBuilder(candidate);
+            } else if (lines.size() == maxLines - 1) {
+                clipped = true; // no room for another line: drop the tail
+                break;
             } else {
                 lines.add(current.toString());
                 current = new StringBuilder(word);
-                if (lines.size() == maxLines - 1) {
-                    break;
-                }
             }
         }
         if (current.length() > 0 && lines.size() < maxLines) {
-            lines.add(ellipsize(current.toString(), fm, width));
+            lines.add(current.toString());
+        }
+        if (!lines.isEmpty()) {
+            int last = lines.size() - 1;
+            String tail = lines.get(last);
+            if (clipped || !String.join(" ", lines).equals(text)) {
+                tail += "…";
+            }
+            // Always through ellipsize: a single word wider than the card
+            // (a long team name) has no wrap point to break on.
+            lines.set(last, ellipsize(tail, fm, width));
         }
         return lines;
     }

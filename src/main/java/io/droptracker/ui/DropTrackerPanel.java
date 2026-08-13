@@ -21,6 +21,7 @@ import io.droptracker.util.RemoteImageCache;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.game.ItemManager;
@@ -83,6 +84,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private RemoteImageCache remoteImageCache;
 	@Inject
 	private ItemIDSearch itemIDSearch;
+	@Inject
+	private ConfigManager configManager;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -147,7 +150,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			groupPanel = new GroupPanel(client, config, api, itemManager, this, httpClient);
 			groupComponent = groupPanel.create();
 			eventsPanel = new EventsPanel(config, api, eventNotificationService,
-				client, itemManager, remoteImageCache, itemIDSearch);
+				client, itemManager, remoteImageCache, itemIDSearch, configManager);
 			eventsComponent = eventsPanel.create();
 			eventNotificationService.setOnStateUpdated(() -> {
 				if (eventsPanel != null) {

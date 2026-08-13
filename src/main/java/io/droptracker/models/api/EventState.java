@@ -1,6 +1,7 @@
 package io.droptracker.models.api;
 
 import com.google.gson.annotations.SerializedName;
+import io.droptracker.models.submissions.RecentSubmission;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
@@ -56,6 +57,14 @@ public class EventState {
         private List<Member> members;
         @SerializedName("members_total")
         private int membersTotal;
+        /**
+         * The own team's latest scoring submissions, in the shape the Player
+         * and Group tabs already render (capped server-side); null from older
+         * servers, empty for a team that has not scored yet.
+         */
+        @SerializedName("team_recent_submissions")
+        @Nullable
+        private List<RecentSubmission> teamRecentSubmissions;
     }
 
     @Getter

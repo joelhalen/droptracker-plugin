@@ -113,6 +113,24 @@ public class ChatMessageUtil {
     }
 
     public void sendEventChatMessage(String eventName, String teamName, String messageContent) {
+        sendEventChatMessage(eventName, teamName, null, null, null, messageContent);
+    }
+
+    /**
+     * Accented event line: an uppercase type tag ("COMPLETE", "LEAD CHANGE",
+     * "PROGRESS"...) in a brightened accent, the body in the accent itself,
+     * and — when {@code emphasis} occurs in the body — that one substring
+     * (usually the item name) lifted back to the bright shade. A null accent
+     * reproduces the old uncoloured line exactly.
+     *
+     * <p>Colours must go through {@link ChatMessageBuilder#append(Color,
+     * String)}: the plain {@code append(String)} runs {@code escapeJagex},
+     * which would print the tags literally. All strings must already be
+     * sanitized/capped by the caller.</p>
+     */
+    public void sendEventChatMessage(String eventName, String teamName,
+                                     String tag, String accentHex,
+                                     String emphasis, String messageContent) {
         ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
         messageBuilder.append(ChatColorType.HIGHLIGHT)
                 .append("[")
@@ -127,12 +145,45 @@ public class ChatMessageUtil {
                     .append(ChatColorType.HIGHLIGHT)
                     .append("): ");
         }
-        messageBuilder.append(ChatColorType.NORMAL).append(messageContent);
+        Color accent = accentHex != null ? ColorUtil.fromHex(accentHex) : null;
+        if (accent == null) {
+            if (tag != null && !tag.isEmpty()) {
+                messageBuilder.append(ChatColorType.HIGHLIGHT).append(tag).append(" ");
+            }
+            messageBuilder.append(ChatColorType.NORMAL).append(messageContent);
+        } else {
+            Color bright = ColorUtil.colorLerp(accent, Color.WHITE, 0.45);
+            if (tag != null && !tag.isEmpty()) {
+                messageBuilder.append(bright, tag).append(" ");
+            }
+            appendEmphasized(messageBuilder, messageContent, emphasis, accent, bright);
+        }
         chatMessageManager.queue(
                 QueuedMessage.builder()
                         .type(ChatMessageType.CONSOLE)
                         .runeLiteFormattedMessage(messageBuilder.build())
                         .build()
         );
+    }
+
+    /** Body in {@code accent}, with the first occurrence of {@code emphasis}
+     *  (if any) in {@code bright}. Segments are appended side by side, never
+     *  nested: RuneScape's {@code </col>} resets to the chat default rather
+     *  than to an enclosing tag. */
+    private static void appendEmphasized(ChatMessageBuilder builder, String body,
+                                         String emphasis, Color accent, Color bright) {
+        int at = emphasis != null && !emphasis.isEmpty() ? body.indexOf(emphasis) : -1;
+        if (at < 0) {
+            builder.append(accent, body);
+            return;
+        }
+        if (at > 0) {
+            builder.append(accent, body.substring(0, at));
+        }
+        builder.append(bright, emphasis);
+        String rest = body.substring(at + emphasis.length());
+        if (!rest.isEmpty()) {
+            builder.append(accent, rest);
+        }
     }
 }

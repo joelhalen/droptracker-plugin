@@ -533,12 +533,25 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "eventImportantPopupsOnly",
+        name = "Pop-ups: important only",
+        description = "<html>Only pop up the big moments - a drop that finishes a bingo tile,<br />"
+            + "a lead change, a line, a blackout, the event starting or ending.<br />"
+            + "Ordinary completions and progress ticks stay in chat only.</html>",
+        position = 3,
+        section = eventSection
+    )
+    default boolean eventImportantPopupsOnly() {
+        return false;
+    }
+
+    @ConfigItem(
         keyName = "eventHudDetail",
         name = "HUD detail",
         description = "<html>Enhanced display only:<br />"
             + "<b>Compact</b> - task icon, name and progress.<br />"
             + "<b>Detailed</b> - adds your team name, rank and score.</html>",
-        position = 3,
+        position = 4,
         section = eventSection
     )
     default EventHudDetail eventHudDetail() {

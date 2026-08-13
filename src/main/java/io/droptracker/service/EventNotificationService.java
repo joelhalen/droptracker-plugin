@@ -2,7 +2,6 @@ package io.droptracker.service;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
-import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventState;
 import io.droptracker.util.ChatMessageUtil;
@@ -50,9 +49,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * keeps the {@code /event_state} snapshot the HUD and Events tab render.
  *
  * Stacking rules: envelopes are processed per poll as one batch, grouped by
- * event — at most one pop-up per event per batch, chat collapses beyond
+ * event — at most ONE pop-up per batch (coalesced across events, headlined by
+ * the most important update), chat collapses beyond
  * {@value #MAX_CHAT_LINES_PER_EVENT} lines per event, a seen-id LRU guards
- * against replays, and at most one state refresh runs per batch.
+ * against replays, and at most one state refresh runs per batch. Pop-ups are
+ * additionally deduped by (event, task, type) for
+ * {@value #TOAST_DEDUPE_WINDOW_MS}ms across batches, and their lifetime and
+ * styling follow the envelope's {@code priority} tier.
  */
 @Slf4j
 @Singleton
@@ -79,7 +82,16 @@ public class EventNotificationService {
     private static final int CATCHUP_MIN_ENVELOPES = 4;
     private static final long CATCHUP_MIN_AGE_SECONDS = 600;
     private static final int MAX_CHAT_LINES_PER_EVENT = 3;
+    /** Indented detail lines under the catch-up header (plus that header). */
+    private static final int CATCHUP_MAX_DETAIL_LINES = 4;
     private static final int MAX_TOASTS_QUEUED = 6;
+    /**
+     * A pop-up about the same (event, task, type) inside this window is the
+     * same update to a human — a task ticking twice in a breath (two players
+     * feeding it, a re-drain) must not queue twice.
+     */
+    static final long TOAST_DEDUPE_WINDOW_MS = 10_000L;
+    private static final int TOAST_KEYS_MAX = 32;
     /** Re-check the active_event flag this often when idle (no live event). */
     private static final int IDLE_RECHECK_SECONDS = 60;
     /** Recheck cadence for a 404 (identity not registered) — terminal-ish. */
@@ -130,6 +142,15 @@ public class EventNotificationService {
     /** Toasts pending display; consumed by EventToastOverlay. */
     @Getter
     private final ConcurrentLinkedDeque<Toast> toasts = new ConcurrentLinkedDeque<>();
+
+    /** Last shown-at per pop-up dedupe key; guarded by its own monitor. */
+    private final Map<String, Long> recentToastKeys =
+        new LinkedHashMap<String, Long>() {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
+                return size() > TOAST_KEYS_MAX;
+            }
+        };
 
     /** Latest /event_state snapshot (HUD + Events tab). */
     @Getter
@@ -200,6 +221,9 @@ public class EventNotificationService {
             call.cancel();
         }
         toasts.clear();
+        synchronized (recentToastKeys) {
+            recentToastKeys.clear();
+        }
         eventState = null;
         eventStateAtMs = 0;
     }
@@ -366,11 +390,7 @@ public class EventNotificationService {
             DebugLogger.log("[EventNotifications] batch size=" + fresh.size());
             boolean catchUp = firstBatchOfSession && isCatchUpBatch(fresh);
             firstBatchOfSession = false;
-            if (catchUp) {
-                processCatchUpBatch(fresh);
-            } else {
-                processBatch(fresh);
-            }
+            renderBatch(fresh, catchUp);
         }
         if (Boolean.TRUE.equals(response.activeEvent)) {
             serverReportedActiveEvent = true;
@@ -564,17 +584,25 @@ public class EventNotificationService {
      * The task the HUD and the Events tab headline for an entry: the user's
      * tracked pick while it exists and is incomplete, else the server's focus
      * task ("the server decides"). Null when neither applies.
+     *
+     * <p>A pin always wins — it is the user saying "this one" — but a server
+     * focus the user hid is skipped for the next visible incomplete task, in
+     * the order the panel lists them. The server stamps a focus for hours
+     * after you progress a task, so without that skip the gold TRACKING box
+     * keeps headlining the very tile you just filed under "N hidden".
      */
     @Nullable
     public DisplayTask displayTask(EventState.Entry entry) {
         if (entry == null || entry.getEvent() == null) {
             return null;
         }
-        int tracked = trackedTaskId(entry.getEvent().getId());
+        int eventId = entry.getEvent().getId();
+        int tracked = trackedTaskId(eventId);
         // Board games have no free task choice: the current tile is the task.
         boolean pickable = !"board_game".equals(entry.getEvent().getKind());
-        if (tracked > 0 && pickable && entry.getTasks() != null) {
-            for (EventState.TaskInfo task : entry.getTasks()) {
+        List<EventState.TaskInfo> tasks = entry.getTasks();
+        if (tracked > 0 && pickable && tasks != null) {
+            for (EventState.TaskInfo task : tasks) {
                 if (task.getId() == tracked && !task.isCompleted()) {
                     return new DisplayTask(task.getId(), task.getLabel(),
                         task.getHave(), task.getNeed(),
@@ -586,9 +614,46 @@ public class EventNotificationService {
         if (focus == null) {
             return null;
         }
-        return new DisplayTask(focus.getId(), focus.getLabel(),
-            focus.getHave(), focus.getNeed(),
-            focus.getIconItemId(), focus.getIconPath(), false);
+        Set<Integer> hidden = pickable ? hiddenTaskIds(eventId) : Collections.emptySet();
+        if (!hidden.contains(focus.getId())) {
+            return new DisplayTask(focus.getId(), focus.getLabel(),
+                focus.getHave(), focus.getNeed(),
+                focus.getIconItemId(), focus.getIconPath(), false);
+        }
+        if (tasks != null) {
+            for (EventState.TaskInfo task : tasks) {
+                if (!task.isCompleted() && !hidden.contains(task.getId())) {
+                    return new DisplayTask(task.getId(), task.getLabel(),
+                        task.getHave(), task.getNeed(),
+                        task.getIconItemId(), task.getIconPath(), false);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Task ids the user hid for this event in the Events tab. Package-private
+     * and overridable: this is the seam the notification tests drive, since
+     * {@link ConfigManager} cannot be constructed off a live client.
+     */
+    Set<Integer> hiddenTaskIds(int eventId) {
+        return eventId > 0
+            ? EventTaskPrefs.hidden(configManager, eventId) : Collections.emptySet();
+    }
+
+    /**
+     * True when an envelope is a routine update about a task the user hid.
+     * Only task-scoped chatter consults this: event-level news (lead changes,
+     * lines, start/end) is never about the one task whose id it happens to
+     * carry, and a genuine completion is deliberately still announced.
+     */
+    private boolean hiddenTask(EventNotification n) {
+        EventNotification.Data data = n.getData();
+        Integer taskId = data != null ? data.getTaskId() : null;
+        Integer eventId = n.getEvent() != null ? n.getEvent().getId() : null;
+        return taskId != null && taskId > 0 && eventId != null
+            && hiddenTaskIds(eventId).contains(taskId);
     }
 
     /** Unified view of the headlined task, from either source. */
@@ -619,6 +684,19 @@ public class EventNotificationService {
 
     /* ===================== batch rendering ===================== */
 
+    /**
+     * Renders one drained batch: the digest on the session's first stale
+     * flood, else the normal per-event render. Package-private — this is the
+     * seam the notification tests drive.
+     */
+    void renderBatch(List<EventNotification> batch, boolean catchUp) {
+        if (catchUp) {
+            processCatchUpBatch(batch);
+        } else {
+            processBatch(batch);
+        }
+    }
+
     private void processBatch(List<EventNotification> batch) {
         // Group per event id (0 = event-less, e.g. submission notices).
         Map<Integer, List<EventNotification>> byEvent = new LinkedHashMap<>();
@@ -627,14 +705,17 @@ public class EventNotificationService {
                 ? n.getEvent().getId() : 0;
             byEvent.computeIfAbsent(eventId, k -> new ArrayList<>()).add(n);
         }
+        List<Toast> candidates = new ArrayList<>();
         for (Map.Entry<Integer, List<EventNotification>> group : byEvent.entrySet()) {
-            renderEventGroup(group.getValue());
+            candidates.addAll(renderEventGroup(group.getValue()));
         }
+        queueBatchToasts(candidates);
     }
 
-    private void renderEventGroup(List<EventNotification> group) {
-        EventDisplayMode mode = config.eventDisplayMode();
-        List<String> chatLines = new ArrayList<>();
+    /** Renders one event's slice of a batch to chat and returns the pop-ups it
+     *  earned; the caller coalesces them across events into one card. */
+    private List<Toast> renderEventGroup(List<EventNotification> group) {
+        List<Rendered> chatLines = new ArrayList<>();
         List<Toast> groupToasts = new ArrayList<>();
         Set<String> dedupe = new LinkedHashSet<>();
         String eventName = groupEventName(group);
@@ -646,42 +727,88 @@ public class EventNotificationService {
                 continue; // unknown type, filtered, or identical line in batch
             }
             if (rendered.chatEligible) {
-                chatLines.add(rendered.text);
+                chatLines.add(rendered);
             }
             if (rendered.toastEligible) {
                 groupToasts.add(new Toast(rendered.title, rendered.text,
-                    rendered.iconItemId, System.currentTimeMillis()));
+                    rendered.iconItemId, System.currentTimeMillis(),
+                    rendered.priority, rendered.dedupeKey));
             }
         }
 
         // Chat: everything up to the cap, then a collapse line.
         int lines = 0;
-        for (String line : chatLines) {
+        for (Rendered line : chatLines) {
             if (lines == MAX_CHAT_LINES_PER_EVENT && chatLines.size() > MAX_CHAT_LINES_PER_EVENT + 1) {
-                sendLine(eventName, teamName,
+                sendLine(eventName, teamName, null, HEX_INFO, null,
                     "... and " + (chatLines.size() - MAX_CHAT_LINES_PER_EVENT) + " more event updates.");
                 break;
             }
-            sendLine(eventName, teamName, line);
+            sendLine(eventName, teamName, line.chatTag, line.chatHex,
+                line.chatEmphasis, line.text);
             lines++;
         }
+        return groupToasts;
+    }
 
-        // Pop-ups: at most ONE per event per batch — a multi-envelope batch
-        // becomes a single summarizing toast.
-        if (mode.popupsEnabled() && !groupToasts.isEmpty()) {
-            Toast toast;
-            if (groupToasts.size() == 1) {
-                toast = groupToasts.get(0);
-            } else {
-                Toast first = groupToasts.get(0);
-                toast = new Toast(first.title,
-                    groupToasts.size() + " event updates — " + first.body,
-                    first.iconItemId, System.currentTimeMillis());
+    /**
+     * At most ONE pop-up per batch: the most important update headlines it and
+     * the rest fold into a "+N more" tail. Several events completing tasks in
+     * the same poll used to mean one tall card each — three of those at
+     * TOP_CENTER is most of the screen.
+     */
+    private void queueBatchToasts(List<Toast> candidates) {
+        if (candidates.isEmpty()) {
+            return;
+        }
+        Toast lead = candidates.get(0);
+        for (Toast candidate : candidates) {
+            // Priority is declared most-important-first; ties keep the first.
+            if (candidate.getPriority().ordinal() < lead.getPriority().ordinal()) {
+                lead = candidate;
             }
-            toasts.addLast(toast);
-            while (toasts.size() > MAX_TOASTS_QUEUED) {
-                toasts.pollFirst();
+        }
+        int folded = candidates.size() - 1;
+        offerToast(folded == 0 ? lead
+            : new Toast(lead.getTitle(),
+                lead.getBody() + " (+" + folded + " more)",
+                lead.getIconItemId(), lead.getCreatedAt(),
+                lead.getPriority(), lead.getDedupeKey()));
+    }
+
+    /**
+     * Queues a pop-up subject to the display mode, the "important only"
+     * filter, the cross-batch dedupe window and the queue cap.
+     */
+    private void offerToast(Toast toast) {
+        if (!config.eventDisplayMode().popupsEnabled()) {
+            return;
+        }
+        if (config.eventImportantPopupsOnly()
+                && toast.getPriority() != EventNotification.Priority.HIGH) {
+            return;
+        }
+        if (!claimToastKey(toast.getDedupeKey(), toast.getCreatedAt())) {
+            return;
+        }
+        toasts.addLast(toast);
+        while (toasts.size() > MAX_TOASTS_QUEUED) {
+            toasts.pollFirst();
+        }
+    }
+
+    /** False when this dedupe key already popped inside the window. */
+    private boolean claimToastKey(@Nullable String key, long now) {
+        if (key == null) {
+            return true;
+        }
+        synchronized (recentToastKeys) {
+            Long last = recentToastKeys.get(key);
+            if (last != null && now - last < TOAST_DEDUPE_WINDOW_MS) {
+                return false;
             }
+            recentToastKeys.put(key, now);
+            return true;
         }
     }
 
@@ -727,11 +854,17 @@ public class EventNotificationService {
         return null;
     }
 
-    /** "[Event Name] (Team name): line" when the event is known, else the
-     *  default [DropTracker] tag (submission notices, event-less groups). */
-    private void sendLine(@Nullable String eventName, @Nullable String teamName, String line) {
+    /**
+     * "[Event Name] (Team name): TAG line" when the event is known, else the
+     * default [DropTracker] tag (submission notices, event-less groups) —
+     * which has no accent scheme, so the styling is dropped there.
+     */
+    private void sendLine(@Nullable String eventName, @Nullable String teamName,
+                          @Nullable String tag, @Nullable String accentHex,
+                          @Nullable String emphasis, String line) {
         if (eventName != null) {
-            chatMessageUtil.sendEventChatMessage(eventName, teamName, line);
+            chatMessageUtil.sendEventChatMessage(eventName, teamName, tag, accentHex,
+                emphasis, line);
         } else {
             chatMessageUtil.sendChatMessage(line);
         }
@@ -764,23 +897,30 @@ public class EventNotificationService {
                 ? n.getEvent().getId() : 0;
             byEvent.computeIfAbsent(eventId, k -> new ArrayList<>()).add(n);
         }
+        List<Toast> candidates = new ArrayList<>();
         for (Map.Entry<Integer, List<EventNotification>> group : byEvent.entrySet()) {
             if (group.getKey() == 0) {
-                renderEventGroup(group.getValue());
+                candidates.addAll(renderEventGroup(group.getValue()));
             } else {
-                summarizeEventGroup(group.getValue());
+                Toast digest = summarizeEventGroup(group.getValue());
+                if (digest != null) {
+                    candidates.add(digest);
+                }
             }
         }
+        queueBatchToasts(candidates);
     }
 
     /**
-     * One event's backlog as a short digest: a tally line ("While you were
-     * away: 4 tasks completed (+23 pts), 2 bingo lines..."), the still-true
-     * facts (event started/ended, current leader), and the one actionable
-     * item (a pending dice roll). At most four lines and one pop-up,
-     * regardless of backlog size.
+     * One event's backlog as a short digest: a "While you were away:" header
+     * followed by indented tallies ("4 tasks completed (+23 pts)"), the
+     * still-true facts (event started/ended, current leader) and the one
+     * actionable item (a pending dice roll). At most a header plus
+     * {@value #CATCHUP_MAX_DETAIL_LINES} lines and one pop-up, regardless of
+     * backlog size. Returns the pop-up (null when the digest is empty).
      */
-    private void summarizeEventGroup(List<EventNotification> group) {
+    @Nullable
+    private Toast summarizeEventGroup(List<EventNotification> group) {
         String eventName = groupEventName(group);
         String teamName = teamNameFor(groupEventId(group));
 
@@ -812,7 +952,9 @@ public class EventNotificationService {
                     }
                     break;
                 case "event_task_progress":
-                    progressedTasks.add(data.getTaskLabel() != null ? data.getTaskLabel() : "?");
+                    if (!hiddenTask(n)) {
+                        progressedTasks.add(data.getTaskLabel() != null ? data.getTaskLabel() : "?");
+                    }
                     break;
                 case "event_line":
                     bingoLines++;
@@ -850,58 +992,85 @@ public class EventNotificationService {
             }
         }
 
-        List<String> parts = new ArrayList<>();
+        // The closing line is the one that outranks every tally: what state
+        // the event is in now, or the action waiting on the team.
+        String closing = null;
+        String closingHex = null;
+        if (ended) {
+            closing = "The event has ended.";
+            closingHex = HEX_INFO;
+        } else if (rollPrompt) {
+            closing = "Your team can roll the dice!";
+            closingHex = HEX_ACTION;
+        }
+        int budget = CATCHUP_MAX_DETAIL_LINES - (closing != null ? 1 : 0);
+
+        List<DigestLine> details = new ArrayList<>();
+        if (started) {
+            details.add(new DigestLine("The event started.", HEX_ACTION));
+        }
         if (completions > 0) {
-            parts.add(plural(completions, "task") + " completed"
-                + (completionPts > 0 ? " (+" + ValueFormat.abbrev(completionPts) + " pts)" : ""));
+            details.add(new DigestLine(plural(completions, "task") + " completed"
+                + (completionPts > 0 ? " (+" + ValueFormat.abbrev(completionPts) + " pts)" : ""),
+                HEX_COMPLETE));
         }
         if (bingoLines > 0) {
-            parts.add(plural(bingoLines, "bingo line")
-                + (bonusPts > 0 && !blackout ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""));
+            details.add(new DigestLine(plural(bingoLines, "bingo line")
+                + (bonusPts > 0 && !blackout ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""),
+                HEX_LINE));
         }
         if (blackout) {
-            parts.add("a board blackout"
-                + (bonusPts > 0 ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""));
-        }
-        if (boardTurns > 0) {
-            parts.add(plural(boardTurns, "dice roll"));
-        }
-        if (!progressedTasks.isEmpty() && config.eventTaskProgressNotifications()) {
-            parts.add("progress on " + plural(progressedTasks.size(), "task"));
-        }
-
-        List<String> lines = new ArrayList<>();
-        if (started) {
-            lines.add("The event started while you were away!");
-        }
-        if (!parts.isEmpty()) {
-            lines.add("While you were away: " + String.join(", ", parts) + ".");
+            details.add(new DigestLine("Board blackout"
+                + (bonusPts > 0 ? " (+" + ValueFormat.abbrev(bonusPts) + " pts)" : ""),
+                HEX_BLACKOUT));
         }
         if (leadTeam != null) {
-            lines.add(leadTeam + " now leads"
-                + (leadScore != null ? " (" + ValueFormat.abbrev(leadScore) + " pts)" : "") + ".");
+            details.add(new DigestLine(leadTeam + " now leads"
+                + (leadScore != null ? " (" + ValueFormat.abbrev(leadScore) + " pts)" : ""),
+                HEX_LEAD));
         }
-        if (ended) {
-            lines.add("The event has ended.");
-        } else if (rollPrompt) {
-            lines.add("Task complete — your team can roll the dice!");
+        // Fillers: only worth a line while the important tallies leave room.
+        if (boardTurns > 0 && details.size() < budget) {
+            details.add(new DigestLine(plural(boardTurns, "dice roll"), HEX_INFO));
         }
-        if (lines.isEmpty()) {
-            return;
+        if (!progressedTasks.isEmpty() && config.eventTaskProgressNotifications()
+                && details.size() < budget) {
+            details.add(new DigestLine("Progress on " + plural(progressedTasks.size(), "task"),
+                HEX_MUTED));
         }
-        for (String line : lines) {
-            sendLine(eventName, teamName, line);
+        while (details.size() > budget) {
+            details.remove(details.size() - 1);
+        }
+        if (details.isEmpty() && closing == null) {
+            return null;
         }
 
-        if (config.eventDisplayMode().popupsEnabled()) {
-            String body = !parts.isEmpty()
-                ? "While you were away: " + String.join(", ", parts) + "."
-                : lines.get(0);
-            toasts.addLast(new Toast("While you were away", body, toastIcon,
-                System.currentTimeMillis()));
-            while (toasts.size() > MAX_TOASTS_QUEUED) {
-                toasts.pollFirst();
-            }
+        // Header + indented tallies, rather than one run-on sentence.
+        sendLine(eventName, teamName, null, HEX_LEAD, null, "While you were away:");
+        List<String> summary = new ArrayList<>(details.size());
+        for (DigestLine detail : details) {
+            sendLine(eventName, teamName, null, detail.hex, null, CATCHUP_INDENT + detail.text);
+            summary.add(detail.text);
+        }
+        if (closing != null) {
+            sendLine(eventName, teamName, null, closingHex, null, CATCHUP_INDENT + closing);
+        }
+
+        String body = summary.isEmpty() ? closing : String.join(", ", summary) + ".";
+        // The digest is a once-per-session headline: HIGH so "important only"
+        // never swallows the one card that explains what you missed.
+        return new Toast("While you were away", body, toastIcon,
+            System.currentTimeMillis(), EventNotification.Priority.HIGH, null);
+    }
+
+    /** One indented line of a catch-up digest, with its accent colour. */
+    private static class DigestLine {
+        final String text;
+        final String hex;
+
+        DigestLine(String text, String hex) {
+            this.text = text;
+            this.hex = hex;
         }
     }
 
@@ -911,26 +1080,106 @@ public class EventNotificationService {
 
     /* ===================== per-type renderers ===================== */
 
+    /**
+     * Chat accents, one per kind of news, so a completion, a lead change and
+     * a KC tick never read the same. Mirrors the side panel's palette
+     * (DropTrackerTheme) — chat can't reference AWT colours from here, so the
+     * hexes are duplicated deliberately.
+     */
+    private static final String HEX_COMPLETE = "#6fbf73";
+    private static final String HEX_TILE = "#7fe08a";
+    private static final String HEX_LEAD = "#ffd966";
+    private static final String HEX_LINE = "#ff8c42";
+    private static final String HEX_BLACKOUT = "#e05c4d";
+    private static final String HEX_ACTION = "#ffb83f";
+    private static final String HEX_INFO = "#d8c9a3";
+    private static final String HEX_MUTED = "#8f8778";
+    private static final String CATCHUP_INDENT = "  - ";
+
     /** A rendered notification: local text composed from typed fields only. */
     private static class Rendered {
         final String title;
+        /** Plain body: the pop-up card and the in-batch dedupe key. */
         final String text;
-        final Integer iconItemId;
-        final boolean chatEligible;
-        final boolean toastEligible;
+        /** Uppercase chat tag, e.g. "TILE COMPLETE"; null = no tag. */
+        String chatTag;
+        /** Chat accent for the tag/body; null = the legacy uncoloured line. */
+        String chatHex;
+        /** Substring of {@link #text} to lift out of the accent (item name). */
+        String chatEmphasis;
+        Integer iconItemId;
+        EventNotification.Priority priority = EventNotification.Priority.NORMAL;
+        boolean chatEligible = true;
+        boolean toastEligible = true;
+        /** (event, task, type); null opts out of the cross-batch pop-up dedupe. */
+        String dedupeKey;
 
-        Rendered(String title, String text, Integer iconItemId,
-                 boolean chatEligible, boolean toastEligible) {
+        Rendered(String title, String text) {
             this.title = title;
             this.text = text;
-            this.iconItemId = iconItemId;
-            this.chatEligible = chatEligible;
-            this.toastEligible = toastEligible;
+        }
+
+        Rendered tag(String tag, String hex) {
+            this.chatTag = tag;
+            this.chatHex = hex;
+            return this;
+        }
+
+        Rendered emphasis(@Nullable String emphasis) {
+            this.chatEmphasis = emphasis;
+            return this;
+        }
+
+        Rendered icon(@Nullable Integer itemId) {
+            this.iconItemId = itemId;
+            return this;
+        }
+
+        Rendered priority(EventNotification.Priority priority) {
+            this.priority = priority;
+            return this;
+        }
+
+        Rendered chatOnly() {
+            this.toastEligible = false;
+            return this;
         }
     }
 
+    /**
+     * Renders an envelope, then stamps the importance tier the pop-up styling
+     * and lifetime key off. The server's {@code priority} wins whenever it is
+     * present; when the field is absent altogether — a server older than the
+     * signal — the per-type default the renderer picked stands in, so tiering
+     * never collapses into one flat style. An unknown value parses as NORMAL,
+     * per the envelope contract.
+     */
     @Nullable
     private Rendered render(EventNotification n) {
+        Rendered rendered = renderTyped(n);
+        if (rendered == null) {
+            return null;
+        }
+        if (n.getPriority() != null) {
+            rendered.priority = n.priorityTier();
+        }
+        rendered.dedupeKey = dedupeKey(n);
+        return rendered;
+    }
+
+    /** Pop-up identity across batches: the same task ticking the same way. */
+    private static String dedupeKey(EventNotification n) {
+        Integer eventId = n.getEvent() != null ? n.getEvent().getId() : null;
+        EventNotification.Data data = n.getData();
+        Object task = null;
+        if (data != null) {
+            task = data.getTaskId() != null ? data.getTaskId() : clean(data.getTaskLabel());
+        }
+        return eventId + "|" + task + "|" + n.getType();
+    }
+
+    @Nullable
+    private Rendered renderTyped(EventNotification n) {
         EventNotification.Data data = n.getData();
         String eventName = n.getEvent() != null ? clean(n.getEvent().getName()) : null;
         String type = n.getType();
@@ -956,17 +1205,57 @@ public class EventNotificationService {
                 if (data.getPoints() != null && data.getPoints() > 0) {
                     text.append(" (+").append(ValueFormat.abbrev(data.getPoints())).append(" pts)");
                 }
-                return new Rendered("Task complete!", text.toString(), data.getIconItemId(), true, true);
+                // A completion that actually filled a bingo cell is the big
+                // moment of the whole feed — name the tile and the standing it
+                // moved the team to, and lift it out of the ordinary tier.
+                List<String> cells = cleanAll(data.getCellLabels());
+                boolean filledTile = !cells.isEmpty()
+                    || (data.getCellIdxs() != null && !data.getCellIdxs().isEmpty());
+                // A cell usually inherits its task's label; naming it again
+                // would read "completing: Bandos set — tile: Bandos set".
+                cells.removeIf(label -> label.equalsIgnoreCase(task));
+                if (!cells.isEmpty()) {
+                    text.append(" — tile: ").append(cells.get(0));
+                    if (cells.size() > 1) {
+                        text.append(" +").append(cells.size() - 1);
+                    }
+                }
+                if (filledTile) {
+                    String standing = tileStanding(data);
+                    if (standing != null) {
+                        text.append(" — ").append(standing);
+                    }
+                }
+                if ("manual".equals(data.getSourceType())) {
+                    // Organizer-granted credit: say so, so nobody hunts for a
+                    // drop that never happened.
+                    text.append(" (manual award)");
+                }
+                return new Rendered(filledTile ? "Tile complete!" : "Task complete!",
+                    text.toString())
+                    .tag(filledTile ? "TILE COMPLETE" : "COMPLETE",
+                        filledTile ? HEX_TILE : HEX_COMPLETE)
+                    .emphasis(item)
+                    .icon(data.getIconItemId())
+                    .priority(filledTile ? EventNotification.Priority.HIGH
+                        : EventNotification.Priority.NORMAL);
             }
             case "event_task_progress": {
                 if (!config.eventTaskProgressNotifications()) {
                     return null; // the client-side mute switch for the chattiest type
                 }
+                if (hiddenTask(n)) {
+                    return null; // hiding a task in the panel mutes its ticks too
+                }
                 String who = player != null ? player : "A teammate";
                 String item = clean(data.getReceivedItem());
                 String progress = data.getProgress() != null && data.getTarget() != null
                     ? " (" + ValueFormat.abbrev(data.getProgress())
-                        + "/" + ValueFormat.abbrev(data.getTarget()) + ")" : "";
+                        + "/" + ValueFormat.abbrev(data.getTarget()) + ")"
+                    // Metric ticks report a rounded percentage instead of the
+                    // raw pair (XP/KC targets fold across many paths).
+                    : data.getMilestonePct() != null
+                        ? " (" + data.getMilestonePct() + "%)" : "";
                 // With the driving drop named: "K0eppy received Bandos hilt,
                 // progressing Bandos set (2/5)"; without (XP/GP/KC ticks),
                 // the compact form.
@@ -974,8 +1263,10 @@ public class EventNotificationService {
                     ? who + " received " + item + qtySuffix(data)
                         + ", progressing " + orUnknown(task) + progress
                     : who + " progressed " + orUnknown(task) + progress;
-                return new Rendered("Task progress", text,
-                    data.getIconItemId(), true, true);
+                return new Rendered("Task progress", text)
+                    .tag("PROGRESS", HEX_MUTED)
+                    .icon(data.getIconItemId())
+                    .priority(EventNotification.Priority.LOW);
             }
             case "event_lead_change": {
                 String leader = team != null ? team : "A team";
@@ -983,30 +1274,40 @@ public class EventNotificationService {
                     ? " (" + ValueFormat.abbrev(data.getTeamScore()) + " pts)" : "";
                 return new Rendered("Lead change!",
                     leader + " took the lead" + score
-                        + (eventName != null ? " in " + eventName : "") + "!",
-                    null, true, true);
+                        + (eventName != null ? " in " + eventName : "") + "!")
+                    .tag("LEAD CHANGE", HEX_LEAD)
+                    .emphasis(team)
+                    .priority(EventNotification.Priority.HIGH);
             }
             case "event_started":
                 return new Rendered("Event started",
-                    (eventName != null ? eventName : "Your event") + " has started!",
-                    null, true, true);
+                    (eventName != null ? eventName : "Your event") + " has started!")
+                    .tag("EVENT STARTED", HEX_ACTION)
+                    .emphasis(eventName)
+                    .priority(EventNotification.Priority.HIGH);
             case "event_ended":
                 return new Rendered("Event ended",
-                    (eventName != null ? eventName : "Your event") + " has ended.",
-                    null, true, true);
+                    (eventName != null ? eventName : "Your event") + " has ended.")
+                    .tag("EVENT ENDED", HEX_INFO)
+                    .emphasis(eventName)
+                    .priority(EventNotification.Priority.HIGH);
             case "event_line": {
                 String who = team != null ? team : "Your team";
                 String bonus = data.getBonusPoints() != null
                     ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
-                return new Rendered("Bingo line!", who + " completed a line" + bonus + "!",
-                    null, true, true);
+                return new Rendered("Bingo line!", who + " completed a line" + bonus + "!")
+                    .tag("BINGO LINE", HEX_LINE)
+                    .emphasis(team)
+                    .priority(EventNotification.Priority.HIGH);
             }
             case "event_blackout": {
                 String who = team != null ? team : "Your team";
                 String bonus = data.getBonusPoints() != null
                     ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
-                return new Rendered("Blackout!", who + " blacked out the board" + bonus + "!",
-                    null, true, true);
+                return new Rendered("Blackout!", who + " blacked out the board" + bonus + "!")
+                    .tag("BLACKOUT", HEX_BLACKOUT)
+                    .emphasis(team)
+                    .priority(EventNotification.Priority.HIGH);
             }
             case "event_board_turn": {
                 String who = player != null ? player : (team != null ? team : "Your team");
@@ -1020,21 +1321,24 @@ public class EventNotificationService {
                 if (data.getNextTaskLabel() != null) {
                     text.append(": ").append(clean(data.getNextTaskLabel()));
                 }
-                return new Rendered("Board roll", text.toString(), null, true, true);
+                return new Rendered("Board roll", text.toString())
+                    .tag("BOARD", HEX_INFO)
+                    .priority(EventNotification.Priority.NORMAL);
             }
             case "event_board_roll_prompt":
                 return new Rendered("Roll the dice!",
                     "Task complete — your team can roll the dice!"
                         + (data.getCoinsAwarded() != null && data.getCoinsAwarded() > 0
-                            ? " (+" + ValueFormat.abbrev(data.getCoinsAwarded()) + " coins)" : ""),
-                    null, true, true);
+                            ? " (+" + ValueFormat.abbrev(data.getCoinsAwarded()) + " coins)" : ""))
+                    .tag("YOUR TURN", HEX_ACTION)
+                    .priority(EventNotification.Priority.HIGH);
             case "submission_notice": {
                 // Legacy server-text channel: sanitized plain chat only, gated
                 // by the pre-existing receiveInGameMessages config.
                 if (!config.receiveInGameMessages() || data.getMessage() == null) {
                     return null;
                 }
-                return new Rendered("DropTracker", clean(data.getMessage()), null, true, false);
+                return new Rendered("DropTracker", clean(data.getMessage())).chatOnly();
             }
             default:
                 DebugLogger.log("[EventNotifications] dropping unknown type=" + type);
@@ -1044,6 +1348,48 @@ public class EventNotificationService {
 
     private static String orUnknown(String value) {
         return value != null ? value : "a task";
+    }
+
+    /** Sanitized copy of a server-sent string list, empties dropped. */
+    private static List<String> cleanAll(@Nullable List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>(values.size());
+        for (String value : values) {
+            String cleaned = clean(value);
+            if (cleaned != null) {
+                out.add(cleaned);
+            }
+        }
+        return out;
+    }
+
+    /** "7 tiles, 2nd of 5" from a completion's board-standing fields; null
+     *  when the server sent neither (older servers, non-bingo events). */
+    @Nullable
+    private static String tileStanding(EventNotification.Data data) {
+        List<String> parts = new ArrayList<>(2);
+        if (data.getTilesCompleted() != null && data.getTilesCompleted() > 0) {
+            parts.add(plural(data.getTilesCompleted(), "tile"));
+        }
+        if (data.getTeamRank() != null && data.getTeamRank() > 0
+                && data.getTeamCount() != null && data.getTeamCount() > 0) {
+            parts.add(ordinal(data.getTeamRank()) + " of " + data.getTeamCount());
+        }
+        return parts.isEmpty() ? null : String.join(", ", parts);
+    }
+
+    private static String ordinal(int n) {
+        if (n % 100 >= 11 && n % 100 <= 13) {
+            return n + "th";
+        }
+        switch (n % 10) {
+            case 1: return n + "st";
+            case 2: return n + "nd";
+            case 3: return n + "rd";
+            default: return n + "th";
+        }
     }
 
     /** " ×3" when a real item stack drove the update; never for point
@@ -1073,22 +1419,53 @@ public class EventNotificationService {
     /** A transient on-screen pop-up. */
     @Getter
     public static class Toast {
-        public static final long LIFETIME_MS = 6000;
+        /** Per-tier lifetimes: the big moments linger, routine ticks flick by. */
+        static final long LIFETIME_HIGH_MS = 9000;
+        static final long LIFETIME_NORMAL_MS = 6000;
+        static final long LIFETIME_LOW_MS = 3500;
+
         private final String title;
         private final String body;
         @Nullable
         private final Integer iconItemId;
         private final long createdAt;
+        private final EventNotification.Priority priority;
+        /** (event, task, type) for the cross-batch dedupe; null = always show. */
+        @Nullable
+        private final String dedupeKey;
 
         public Toast(String title, String body, @Nullable Integer iconItemId, long createdAt) {
+            this(title, body, iconItemId, createdAt, EventNotification.Priority.NORMAL, null);
+        }
+
+        public Toast(String title, String body, @Nullable Integer iconItemId, long createdAt,
+                     EventNotification.Priority priority, @Nullable String dedupeKey) {
             this.title = title;
             this.body = body;
             this.iconItemId = iconItemId;
             this.createdAt = createdAt;
+            this.priority = priority != null ? priority : EventNotification.Priority.NORMAL;
+            this.dedupeKey = dedupeKey;
+        }
+
+        public long lifetimeMs() {
+            switch (priority) {
+                case HIGH:
+                    return LIFETIME_HIGH_MS;
+                case LOW:
+                    return LIFETIME_LOW_MS;
+                default:
+                    return LIFETIME_NORMAL_MS;
+            }
+        }
+
+        /** Milliseconds of life left; <= 0 once expired. */
+        public long remainingMs(long now) {
+            return lifetimeMs() - (now - createdAt);
         }
 
         public boolean expired(long now) {
-            return now - createdAt > LIFETIME_MS;
+            return remainingMs(now) <= 0;
         }
     }
 }

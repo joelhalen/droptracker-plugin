@@ -2,6 +2,7 @@ package io.droptracker.ui.overlays;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.EventHudDetail;
+import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventState;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.DropTrackerTheme;
@@ -241,6 +242,9 @@ public class EventHudOverlay extends Overlay {
     private static final int MAX_NUDGES = 3;
     private static final int NUDGE_GAP = 4;
     private static final int NUDGE_ICON = 20;
+    /** Ceiling on nudge height — three cards of unbounded body used to be
+     *  able to run off the bottom of the screen. */
+    private static final int MAX_NUDGE_BODY_LINES = 3;
     private static final long NUDGE_FADE_MS = 1000;
 
     /** Draws the pending toasts as compact HUD-styled cards below the HUD
@@ -266,9 +270,10 @@ public class EventHudOverlay extends Overlay {
     }
 
     private int drawNudge(Graphics2D g, EventNotificationService.Toast toast, int top, long now) {
-        long remaining = EventNotificationService.Toast.LIFETIME_MS - (now - toast.getCreatedAt());
+        long remaining = toast.remainingMs(now);
         float alpha = remaining < NUDGE_FADE_MS
             ? Math.max(remaining / (float) NUDGE_FADE_MS, 0f) : 1f;
+        Color accent = nudgeAccent(toast.getPriority());
 
         Font titleFont = FontManager.getRunescapeBoldFont();
         Font smallFont = FontManager.getRunescapeSmallFont();
@@ -284,9 +289,7 @@ public class EventHudOverlay extends Overlay {
             }
         }
         int textWidth = WIDTH - textLeft - PAD;
-        // Full body, never "…" — the card grows a line instead of cutting
-        // off exactly the detail (item, task, progress) the nudge exists for.
-        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, Integer.MAX_VALUE);
+        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, MAX_NUDGE_BODY_LINES);
         int height = 6 + titleFm.getHeight() + bodyLines.size() * smallFm.getHeight() + 6;
         if (icon != null) {
             height = Math.max(height, NUDGE_ICON + 12);
@@ -300,7 +303,7 @@ public class EventHudOverlay extends Overlay {
         g.fillRect(1, top + 1, WIDTH - 2, height - 2);
         g.setColor(EDGE_DARK);
         g.drawRect(0, top, WIDTH - 1, height - 1);
-        g.setColor(FRAME_BRONZE);
+        g.setColor(accent);
         g.drawRect(1, top + 1, WIDTH - 3, height - 3);
 
         if (icon != null) {
@@ -310,7 +313,7 @@ public class EventHudOverlay extends Overlay {
         g.setFont(titleFont);
         int titleY = top + 6 + titleFm.getAscent();
         shadowed(g, truncateToWidth(toast.getTitle(), titleFm, textWidth),
-            textLeft, titleY, DropTrackerTheme.GOLD);
+            textLeft, titleY, accent);
         g.setFont(smallFont);
         int lineY = titleY + smallFm.getHeight();
         for (String line : bodyLines) {
@@ -320,6 +323,19 @@ public class EventHudOverlay extends Overlay {
 
         g.setComposite(previous);
         return height;
+    }
+
+    /** Frame + title colour for a nudge, by importance tier: the tile-finishing
+     *  drop and the 50-KC tick must not look alike at a glance. */
+    private static Color nudgeAccent(EventNotification.Priority priority) {
+        switch (priority) {
+            case HIGH:
+                return DropTrackerTheme.GOLD_BRIGHT;
+            case LOW:
+                return DropTrackerTheme.STONE;
+            default:
+                return FRAME_BRONZE;
+        }
     }
 
     /* ===================== painting helpers ===================== */

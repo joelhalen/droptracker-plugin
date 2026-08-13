@@ -4,6 +4,8 @@ import com.google.gson.annotations.SerializedName;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * One typed notification envelope drained from GET /notifications.
@@ -25,8 +27,50 @@ public class EventNotification {
     @SerializedName("event")
     @Nullable
     private EventRef event;
+    /**
+     * Broadcast importance ("high" / "normal" / "low"), additive to the
+     * versionless envelope. Older servers omit it entirely — read it through
+     * {@link #priorityTier()}, never raw.
+     */
+    @SerializedName("priority")
+    @Nullable
+    private String priority;
     @SerializedName("data")
     private Data data;
+
+    /**
+     * Parsed broadcast importance. Missing or unrecognised values are
+     * {@link Priority#NORMAL}: the field post-dates the plugin's own wire
+     * contract, so a server that never sends it must keep working exactly as
+     * before.
+     */
+    public Priority priorityTier() {
+        return Priority.from(priority);
+    }
+
+    /** Importance tiers, declared most-important first (see {@code ordinal}). */
+    public enum Priority {
+        /** Finished a bingo tile/cell, lead change, line, blackout, start/end. */
+        HIGH,
+        /** An ordinary task completion that did not finish a tile. */
+        NORMAL,
+        /** Routine progress ticks and KC/XP milestones. */
+        LOW;
+
+        public static Priority from(@Nullable String raw) {
+            if (raw != null) {
+                switch (raw.toLowerCase(Locale.ROOT)) {
+                    case "high":
+                        return HIGH;
+                    case "low":
+                        return LOW;
+                    default:
+                        break;
+                }
+            }
+            return NORMAL;
+        }
+    }
 
     @Getter
     public static class EventRef {
@@ -42,6 +86,8 @@ public class EventNotification {
      */
     @Getter
     public static class Data {
+        @SerializedName("task_id")
+        private Integer taskId;
         @SerializedName("task_label")
         private String taskLabel;
         @SerializedName("team_id")
@@ -72,6 +118,25 @@ public class EventNotification {
         private Boolean pointsBased;
         @SerializedName("bonus_points")
         private Integer bonusPoints;
+        /**
+         * event_completion on a bingo board: the cells this completion filled
+         * (empty/absent = the task advanced no tile). Sent since the events
+         * rewrite; the labels list only carries the cells that have one.
+         */
+        @SerializedName("cell_idxs")
+        private List<Integer> cellIdxs;
+        @SerializedName("cell_labels")
+        private List<String> cellLabels;
+        /** Tiles this team has completed in total, after this completion. */
+        @SerializedName("tiles_completed")
+        private Integer tilesCompleted;
+        @SerializedName("team_rank")
+        private Integer teamRank;
+        @SerializedName("team_count")
+        private Integer teamCount;
+        /** How the credit was earned: "drop", "manual", "collection_log"... */
+        @SerializedName("source_type")
+        private String sourceType;
         @SerializedName("line")
         private String line;
         @SerializedName("dice_str")
