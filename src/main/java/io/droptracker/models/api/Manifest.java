@@ -38,6 +38,9 @@ public class Manifest {
 	@SerializedName("combat_achievement_varps")
 	private List<Integer> combatAchievementVarps;
 
+	@SerializedName("combat_achievement_tasks")
+	private List<CombatAchievementTask> combatAchievementTasks;
+
 	@SerializedName("quest_ids")
 	private List<Integer> questIds;
 
@@ -46,6 +49,14 @@ public class Manifest {
 
 	public List<Integer> getCombatAchievementVarps() {
 		return combatAchievementVarps == null ? Collections.emptyList() : combatAchievementVarps;
+	}
+
+	/**
+	 * Per-task varbits, so completion can be reported per boss rather than as a
+	 * single total. Empty means the plugin reports only the raw varps.
+	 */
+	public List<CombatAchievementTask> getCombatAchievementTasks() {
+		return combatAchievementTasks == null ? Collections.emptyList() : combatAchievementTasks;
 	}
 
 	/**
@@ -58,6 +69,16 @@ public class Manifest {
 
 	public SyncSettings getSync() {
 		return sync == null ? SyncSettings.defaults() : sync;
+	}
+
+	/** One combat achievement task: which varbit holds it, and whose it is. */
+	@Data
+	public static class CombatAchievementTask {
+		@SerializedName("varbit")
+		private Integer varbit;
+
+		@SerializedName("boss")
+		private String boss;
 	}
 
 	@Data

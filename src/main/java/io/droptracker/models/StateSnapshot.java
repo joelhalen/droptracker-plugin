@@ -68,6 +68,17 @@ public class StateSnapshot {
 	@SerializedName("ca_varps")
 	private Map<Integer, Integer> combatAchievementVarps = new HashMap<>();
 
+	/**
+	 * Varbit ids of individually completed combat achievement tasks.
+	 *
+	 * <p>Sent alongside the raw varps rather than instead of them: the varps are
+	 * the complete truth (including tasks RuneLite has no constant for), while
+	 * this list is what lets progress be shown per boss, the way the in-game
+	 * interface does. Empty when the manifest carries no task registry.
+	 */
+	@SerializedName("ca_tasks")
+	private List<Integer> completedCombatAchievementTasks = new ArrayList<>();
+
 	/** One entry per diary area and tier. */
 	@SerializedName("diary_tiers")
 	private List<DiaryTier> diaryTiers = new ArrayList<>();

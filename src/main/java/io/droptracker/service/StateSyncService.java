@@ -247,7 +247,7 @@ public class StateSyncService {
 	 * partial set would look like the player had un-completed tasks.
 	 */
 	private void collectCombatAchievements(StateSnapshot snapshot, Manifest manifest) {
-		if (manifest == null || manifest.getCombatAchievementVarps().isEmpty()) {
+		if (manifest == null) {
 			return;
 		}
 		Map<Integer, Integer> varps = new HashMap<>();
@@ -255,6 +255,22 @@ public class StateSyncService {
 			varps.put(varpId, client.getVarpValue(varpId));
 		}
 		snapshot.setCombatAchievementVarps(varps);
+
+		// Individual task varbits, so the site can show progress per boss the
+		// way the in-game interface does. Reported alongside the raw varps, not
+		// instead of them: the varps still cover tasks the registry has no
+		// entry for.
+		List<Integer> completed = new java.util.ArrayList<>();
+		for (Manifest.CombatAchievementTask task : manifest.getCombatAchievementTasks()) {
+			Integer varbit = task.getVarbit();
+			if (varbit == null) {
+				continue;
+			}
+			if (client.getVarbitValue(varbit) > 0) {
+				completed.add(varbit);
+			}
+		}
+		snapshot.setCompletedCombatAchievementTasks(completed);
 	}
 
 	private void collectDiaries(StateSnapshot snapshot) {
