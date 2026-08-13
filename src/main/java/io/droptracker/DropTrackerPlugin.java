@@ -62,6 +62,7 @@ import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
+import io.droptracker.service.ManifestService;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.SubmissionManager;
@@ -153,6 +154,11 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClanRelayService clanRelayService;
 
+	/* Server-controlled reference data: which varps/quest ids to read. Fetched
+	 * once per session; every consumer tolerates it being absent. */
+	@Inject
+	private ManifestService manifestService;
+
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
 	private EventNotificationService eventNotificationService;
@@ -216,6 +222,11 @@ public class DropTrackerPlugin extends Plugin {
 		executor.submit(() -> urlManager.loadEndpoints());
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
+
+		// Server-controlled reference data. Fetched in the background; nothing
+		// blocks on it, and consumers fall back to built-in defaults until it
+		// lands (or if it never does).
+		manifestService.startUp();
 
 		// In-game event notifications + HUD: the overlays render nothing on
 		// their own; the service's poll loop idles until the server reports a
@@ -292,6 +303,7 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() {
 		gameState.lazySet(null);
 
+		manifestService.shutDown();
 		eventNotificationService.stop();
 		overlayManager.remove(eventToastOverlay);
 		overlayManager.remove(eventHudOverlay);

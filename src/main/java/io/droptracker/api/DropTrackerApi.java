@@ -8,6 +8,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.models.api.Manifest;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
@@ -413,6 +414,49 @@ public class DropTrackerApi {
             } catch (JsonSyntaxException e) {
                 throw new IOException("Malformed response from " + url, e);
             }
+        }
+    }
+
+    /**
+     * Fetches the server-controlled manifest. Blocking; call off the client thread.
+     *
+     * <p>Bypasses the HTTP cache with {@link CacheControl#FORCE_NETWORK}. This is
+     * not optional: {@code panelHttpClient} is derived from RuneLite's injected
+     * OkHttpClient, which has a persistent <em>disk</em> cache shared by the whole
+     * client, and the manifest is served with a {@code max-age}. Without this a
+     * client would keep re-reading a cached manifest across restarts for as long
+     * as the entry lived — so a server-side fix would appear not to work, which
+     * defeats the entire reason the manifest is server-side.
+     *
+     * @return the manifest, or null if unavailable — callers fall back to their
+     *         built-in defaults rather than failing.
+     */
+    public Manifest getManifest() {
+        if (!config.useApi()) {
+            return null;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/manifest");
+        if (url == null) {
+            return null;
+        }
+        Request request = new Request.Builder()
+                .url(url)
+                .cacheControl(CacheControl.FORCE_NETWORK)
+                .build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                log.debug("Manifest request failed with status {}", response.code());
+                return null;
+            }
+            ResponseBody body = response.body();
+            if (body == null) {
+                return null;
+            }
+            return gson.fromJson(body.string(), Manifest.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("Couldn't fetch the manifest: {}", e.toString());
+            return null;
         }
     }
 
