@@ -62,6 +62,11 @@ import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.KCService;
+import io.droptracker.service.ManifestService;
+import io.droptracker.service.CollectionLogScraper;
+import io.droptracker.service.PlayerModelService;
+import io.droptracker.service.StateSyncScheduler;
+import io.droptracker.service.StateSyncService;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.SubmissionManager;
@@ -153,6 +158,24 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClanRelayService clanRelayService;
 
+	/* Server-controlled reference data: which varps/quest ids to read. Fetched
+	 * once per session; every consumer tolerates it being absent. */
+	@Inject
+	private ManifestService manifestService;
+
+	/* Account state sync: the current-state counterpart to the event
+	 * submissions. Off unless the user opts in via syncAccountState. */
+	@Inject
+	private StateSyncService stateSyncService;
+	@Inject
+	private StateSyncScheduler stateSyncScheduler;
+	@Inject
+	private CollectionLogScraper collectionLogScraper;
+
+	/* 3D character export; off unless the user opts in. */
+	@Inject
+	private PlayerModelService playerModelService;
+
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
 	private EventNotificationService eventNotificationService;
@@ -216,6 +239,16 @@ public class DropTrackerPlugin extends Plugin {
 		executor.submit(() -> urlManager.loadEndpoints());
 		// Load untradeable item IDs on startup for screenshotting purposes
 		executor.submit(() -> loadUntradeables());
+
+		// Server-controlled reference data. Fetched in the background; nothing
+		// blocks on it, and consumers fall back to built-in defaults until it
+		// lands (or if it never does).
+		manifestService.startUp();
+
+		// Scheduling only; nothing is sent until the manifest has loaded and the
+		// player is logged in, and nothing at all if the user has not opted in.
+		stateSyncScheduler.startUp();
+		collectionLogScraper.startUp();
 
 		// In-game event notifications + HUD: the overlays render nothing on
 		// their own; the service's poll loop idles until the server reports a
@@ -292,6 +325,11 @@ public class DropTrackerPlugin extends Plugin {
 	protected void shutDown() {
 		gameState.lazySet(null);
 
+		collectionLogScraper.shutDown();
+		stateSyncScheduler.shutDown();
+		stateSyncService.reset();
+		playerModelService.reset();
+		manifestService.shutDown();
 		eventNotificationService.stop();
 		overlayManager.remove(eventToastOverlay);
 		overlayManager.remove(eventHudOverlay);
@@ -580,6 +618,9 @@ public class DropTrackerPlugin extends Plugin {
 		// Keep the raid roster warm even while tracking is paused so that
 		// re-enabling mid-raid still produces complete participant lists.
 		nearbyPlayerTracker.onGameTick();
+		// Character model export: cheap no-op unless the outfit changed and the
+		// player has been standing still.
+		playerModelService.onTick();
 
 		if (!isTracking) {
 			return;

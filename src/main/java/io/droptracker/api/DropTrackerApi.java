@@ -8,6 +8,8 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.models.StateSnapshot;
+import io.droptracker.models.api.Manifest;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
@@ -413,6 +415,129 @@ public class DropTrackerApi {
             } catch (JsonSyntaxException e) {
                 throw new IOException("Malformed response from " + url, e);
             }
+        }
+    }
+
+    /**
+     * Fetches the server-controlled manifest. Blocking; call off the client thread.
+     *
+     * <p>Bypasses the HTTP cache with {@link CacheControl#FORCE_NETWORK}. This is
+     * not optional: {@code panelHttpClient} is derived from RuneLite's injected
+     * OkHttpClient, which has a persistent <em>disk</em> cache shared by the whole
+     * client, and the manifest is served with a {@code max-age}. Without this a
+     * client would keep re-reading a cached manifest across restarts for as long
+     * as the entry lived — so a server-side fix would appear not to work, which
+     * defeats the entire reason the manifest is server-side.
+     *
+     * @return the manifest, or null if unavailable — callers fall back to their
+     *         built-in defaults rather than failing.
+     */
+    public Manifest getManifest() {
+        if (!config.useApi()) {
+            return null;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/manifest");
+        if (url == null) {
+            return null;
+        }
+        Request request = new Request.Builder()
+                .url(url)
+                .cacheControl(CacheControl.FORCE_NETWORK)
+                .build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                log.debug("Manifest request failed with status {}", response.code());
+                return null;
+            }
+            ResponseBody body = response.body();
+            if (body == null) {
+                return null;
+            }
+            return gson.fromJson(body.string(), Manifest.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("Couldn't fetch the manifest: {}", e.toString());
+            return null;
+        }
+    }
+
+    /**
+     * Posts a full account state snapshot to {@code /state/sync}. Blocking; call
+     * off the client thread.
+     *
+     * <p>Sent as plain JSON rather than through the webhook envelope the rest of
+     * the plugin uses: a snapshot is maps of thousands of ids, which does not
+     * fit the embed-fields shape and would be lossy to squeeze into it.
+     *
+     * <p>The endpoint is idempotent, so a caller that cannot tell whether a
+     * request landed is free to send it again.
+     *
+     * @return true when the server accepted the snapshot.
+     */
+    public boolean postStateSnapshot(StateSnapshot snapshot) {
+        if (!config.useApi() || snapshot == null) {
+            return false;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/state/sync");
+        if (url == null) {
+            return false;
+        }
+        RequestBody body = RequestBody.create(
+                MediaType.parse("application/json; charset=utf-8"), gson.toJson(snapshot));
+        Request request = new Request.Builder().url(url).post(body).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                log.debug("State sync rejected with status {}", response.code());
+                return false;
+            }
+            return true;
+        } catch (IOException e) {
+            log.debug("State sync failed: {}", e.toString());
+            return false;
+        }
+    }
+
+    /**
+     * Uploads the player's character model as binary glTF. Blocking; call off
+     * the client thread.
+     *
+     * <p>Keyed by an outfit fingerprint so the server can skip work it has
+     * already done: the same character in the same gear renders identically, so
+     * one upload per distinct outfit is enough.
+     *
+     * @return true when the server accepted (or already had) the model.
+     */
+    public boolean uploadPlayerModel(String fingerprint, byte[] model, @Nullable byte[] petModel) {
+        if (!config.useApi() || model == null || model.length == 0) {
+            return false;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/player/model");
+        if (url == null) {
+            return false;
+        }
+
+        MediaType glb = MediaType.parse("model/gltf-binary");
+        MultipartBody.Builder body = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("acc_hash", String.valueOf(client.getAccountHash()))
+                .addFormDataPart("fingerprint", fingerprint)
+                .addFormDataPart("model", "model.glb", RequestBody.create(glb, model));
+        if (petModel != null && petModel.length > 0) {
+            body.addFormDataPart("pet_model", "pet.glb", RequestBody.create(glb, petModel));
+        }
+
+        Request request = new Request.Builder().url(url).post(body.build()).build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful()) {
+                log.debug("Model upload rejected with status {}", response.code());
+                return false;
+            }
+            return true;
+        } catch (IOException e) {
+            log.debug("Model upload failed: {}", e.toString());
+            return false;
         }
     }
 
