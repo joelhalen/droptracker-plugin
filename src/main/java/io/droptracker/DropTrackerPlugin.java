@@ -691,6 +691,14 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	@Subscribe
+	public void onInteractingChanged(InteractingChanged interactingChanged) {
+		// Feeds the death handler's killer attribution: the interaction is
+		// usually already cleared by the time ActorDeath fires, so the target
+		// has to be tracked as it changes.
+		deathHandler.onInteractingChanged(interactingChanged);
+	}
+
+	@Subscribe
 	public void onStatChanged(StatChanged statChanged) {
 		if (!isTracking || !config.trackExperience()) {
 			return;
