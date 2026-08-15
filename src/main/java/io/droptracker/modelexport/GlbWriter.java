@@ -6,7 +6,6 @@
  */
 package io.droptracker.modelexport;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import lombok.NonNull;
@@ -106,7 +105,6 @@ public final class GlbWriter {
             throw new IOException("Refusing to write an empty model");
         }
 
-        final Gson gson = new Gson();
         final BinaryChunk bin = new BinaryChunk();
 
         final JsonArray bufferViews = new JsonArray();
@@ -218,7 +216,7 @@ public final class GlbWriter {
         asset.addProperty("version", "2.0");
         asset.addProperty("generator", "RuneProfile");
         if (options.extras != null && !options.extras.isEmpty()) {
-            asset.add("extras", gson.toJsonTree(options.extras));
+            asset.add("extras", extrasToJson(options.extras));
         }
 
         final JsonObject gltf = new JsonObject();
@@ -244,7 +242,30 @@ public final class GlbWriter {
         extensionsUsed.add("KHR_materials_unlit");
         gltf.add("extensionsUsed", extensionsUsed);
 
-        return assemble(gson.toJson(gltf), bin.toByteArray());
+        return assemble(gltf.toString(), bin.toByteArray());
+    }
+
+    /**
+     * Serialises the caller's extras map by hand.
+     *
+     * A {@code Gson} instance would do this in one call, but the plugin hub
+     * rejects plugins that construct their own — you are expected to inject the
+     * client's — and a static writer has nowhere to inject one. The map only
+     * ever carries strings and numbers, so reflection buys nothing.
+     */
+    private static JsonObject extrasToJson(@NonNull Map<String, Object> extras) {
+        final JsonObject json = new JsonObject();
+        for (Map.Entry<String, Object> entry : extras.entrySet()) {
+            final Object value = entry.getValue();
+            if (value instanceof Number) {
+                json.addProperty(entry.getKey(), (Number) value);
+            } else if (value instanceof Boolean) {
+                json.addProperty(entry.getKey(), (Boolean) value);
+            } else if (value != null) {
+                json.addProperty(entry.getKey(), String.valueOf(value));
+            }
+        }
+        return json;
     }
 
     /** Resolves a texture id to its pixels; lets the writer stay free of client types. */
