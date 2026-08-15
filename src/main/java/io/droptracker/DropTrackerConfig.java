@@ -626,7 +626,7 @@ public interface DropTrackerConfig extends Config {
         section = apiSection
     )
     default boolean syncAccountState() {
-        return false;
+        return true;
     }
 
     @ConfigItem(
@@ -634,7 +634,7 @@ public interface DropTrackerConfig extends Config {
         keyName = "sendLoadoutWithPbs",
         description = "<html>Include the gear you were wearing and the inventory you were<br>"
             + "carrying when you set a personal best, so it can be shown alongside the time.<br>"
-            + "Item names only - no bank, no location.</html>",
+            + "This includes a 3D model of your character to be displayed alongside the PB entry.</html>",
         position = 6,
         section = apiSection
     )
@@ -652,7 +652,7 @@ public interface DropTrackerConfig extends Config {
         section = apiSection
     )
     default boolean uploadCharacterModel() {
-        return false;
+        return true;
     }
     /*
     @ConfigItem(
