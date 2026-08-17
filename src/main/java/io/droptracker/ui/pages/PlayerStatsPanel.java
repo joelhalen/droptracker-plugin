@@ -109,7 +109,7 @@ public class PlayerStatsPanel {
             buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
             buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
 
-            JButton viewStatsButton = new JButton("⚡ View My Stats (" + playerName + ")");
+            JButton viewStatsButton = new JButton("View My Stats (" + playerName + ")");
             DropTrackerTheme.styleButton(viewStatsButton);
             viewStatsButton.setPreferredSize(new Dimension(200, 30));
             viewStatsButton.setToolTipText("View your DropTracker statistics");
@@ -366,7 +366,8 @@ public class PlayerStatsPanel {
             performPlayerSearch(playerResult.getPlayerName());
         });
 
-        JButton viewProfileButton = new JButton("⇱ View Profile");
+        JButton viewProfileButton = new JButton("View Profile");
+        viewProfileButton.setIcon(PanelElements.getExternalLinkIcon());
         DropTrackerTheme.styleButton(viewProfileButton);
         viewProfileButton.setMargin(new Insets(0, 5, 0, 5));
         viewProfileButton.addActionListener(e -> {
@@ -421,7 +422,7 @@ public class PlayerStatsPanel {
 
         // Add each group as a separate label for proper scaling
         for (PlayerSearchResult.PlayerGroup group : groups) {
-            StringBuilder groupText = new StringBuilder("• ");
+            StringBuilder groupText = new StringBuilder("- ");
             groupText.append(group.getName());
             if (group.getMembers() != null) {
                 groupText.append(" (").append(group.getMembers()).append(" members)");

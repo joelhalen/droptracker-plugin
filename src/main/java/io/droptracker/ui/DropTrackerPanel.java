@@ -11,6 +11,7 @@ import javax.swing.*;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.components.PanelIcons;
 import io.droptracker.ui.pages.ActivityPanel;
 import io.droptracker.ui.pages.EventsPanel;
 import io.droptracker.ui.pages.GroupPanel;
@@ -235,7 +236,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		docsButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
 		docsButton.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("docs").toString()));
 
-		JButton refreshButton = new JButton("↻");
+		JButton refreshButton = new JButton(
+			PanelIcons.refresh(DropTrackerTheme.TEXT, 12));
 		DropTrackerTheme.styleButton(refreshButton);
 		refreshButton.setToolTipText("Refresh panel");
 		refreshButton.setPreferredSize(new Dimension(26, 26));

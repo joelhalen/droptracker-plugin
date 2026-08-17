@@ -8,6 +8,7 @@ import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.DropTrackerTheme;
+import io.droptracker.ui.components.PanelIcons;
 import io.droptracker.ui.components.PanelElements;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
@@ -280,7 +281,10 @@ public class ActivityPanel {
         actions.setBackground(DropTrackerTheme.SURFACE_2);
 
         if (submission.getStatus() == SubmissionStatus.FAILED) {
-            JButton retryButton = smallActionButton("↻", "Retry sending this submission");
+            // Painted icon: the RuneScape fonts have no "↻" glyph, so its
+            // colour rides on the icon rather than the foreground.
+            JButton retryButton = smallActionButton("", "Retry sending this submission");
+            retryButton.setIcon(PanelIcons.refresh(DropTrackerTheme.EMBER, 11));
             retryButton.setForeground(DropTrackerTheme.EMBER);
             retryButton.addActionListener(e -> {
                 submissionManager.retrySubmission(submission);

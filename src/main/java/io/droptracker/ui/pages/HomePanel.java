@@ -105,10 +105,10 @@ public class HomePanel {
 
         JTextArea body = new JTextArea(
             "Enable \"Use API Connections\" in the plugin settings to unlock:\n"
-            + "• Live top player & group leaderboards\n"
-            + "• Player and group lookups\n"
-            + "• Submission tracking with retries\n"
-            + "• Participation in clan events");
+            + "- Live top player & group leaderboards\n"
+            + "- Player and group lookups\n"
+            + "- Submission tracking with retries\n"
+            + "- Participation in clan events");
         body.setWrapStyleWord(true);
         body.setLineWrap(true);
         body.setOpaque(false);

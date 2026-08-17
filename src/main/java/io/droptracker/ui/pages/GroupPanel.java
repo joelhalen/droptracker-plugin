@@ -121,7 +121,7 @@ public class GroupPanel {
         instructionLabel.setHorizontalAlignment(JLabel.CENTER);
 
 
-        JButton createGroupButton = PanelElements.createExternalLinkButton("⚡ Create a Group", "Click to visit the group creation documentation", false, this::openCreateGroupPage);
+        JButton createGroupButton = PanelElements.createExternalLinkButton("Create a Group", "Click to visit the group creation documentation", false, this::openCreateGroupPage);
 
         JButton groupPageButton = PanelElements.createExternalLinkButton("View All Groups", "Click to visit the group page", true, this::openGroupPage);
 

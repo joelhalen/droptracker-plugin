@@ -371,7 +371,9 @@ public class EventHudOverlay extends Overlay {
     }
 
     private String taskLabel(EventNotificationService.DisplayTask task) {
-        return (task.tracked ? "★ " : "") + (task.label != null ? task.label : "");
+        // "*" not "★": this string is drawn with a RuneScape font, which has
+        // no star glyph (see PanelIcons).
+        return (task.tracked ? "* " : "") + (task.label != null ? task.label : "");
     }
 
     @Nullable

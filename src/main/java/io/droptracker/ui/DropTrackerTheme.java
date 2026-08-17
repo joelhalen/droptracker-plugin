@@ -1,5 +1,6 @@
 package io.droptracker.ui;
 
+import io.droptracker.ui.components.PanelIcons;
 import net.runelite.client.ui.FontManager;
 
 import javax.swing.BorderFactory;
@@ -101,10 +102,10 @@ public final class DropTrackerTheme {
         });
     }
 
-    /** Small round status dot ("●") in the given color. */
+    /** Small round status dot in the given color. Painted rather than drawn as
+     *  a "●" glyph, which no bundled font carries (see PanelIcons). */
     public static JLabel statusDot(Color color) {
-        JLabel dot = new JLabel("●");
-        dot.setFont(FontManager.getRunescapeSmallFont());
+        JLabel dot = new JLabel(PanelIcons.dot(color, 10));
         dot.setForeground(color);
         return dot;
     }

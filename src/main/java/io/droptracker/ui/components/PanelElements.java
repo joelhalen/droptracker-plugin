@@ -150,6 +150,11 @@ public class PanelElements {
         return BOARD_ICON;
     }
 
+    /** Small "opens externally" icon (16x16), for buttons that leave the client. */
+    public static ImageIcon getExternalLinkIcon() {
+        return EXTERNAL_LINK_ICON;
+    }
+
     // Method to load lootboard for a specific group ID
     public static void loadLootboardForGroup(int groupId) {
         // Check if we already have this group cached
@@ -454,10 +459,10 @@ public class PanelElements {
         contentPanel.setLayout(new BorderLayout());
         contentPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
-        String defaultUpdateText = "• Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
-                "• Added pet collection submissions when adventure logs are opened.\n\n" +
-                "• Fixed various personal best tracking bugs.\n\n" +
-                "• A new side panel & stats functionality";
+        String defaultUpdateText = "- Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
+                "- Added pet collection submissions when adventure logs are opened.\n\n" +
+                "- Fixed various personal best tracking bugs.\n\n" +
+                "- A new side panel & stats functionality";
 
         // Start with default or fallback text
         String initialText = (config != null && config.useApi()) ? "Loading updates..." : defaultUpdateText;
@@ -595,7 +600,9 @@ public class PanelElements {
 
     public static JButton createLootboardButton(String text, String tooltip, Runnable action) {
         // No remote <img> tags here: Swing HTML would fetch them over the network.
-        JButton button = new JButton(text + " ⇱");
+        // The board icon already signals "opens externally"; the old " ⇱"
+        // suffix had no glyph in any bundled font.
+        JButton button = new JButton(text);
         button.setIcon(BOARD_ICON);
         button.setToolTipText(tooltip);
         DropTrackerTheme.styleButton(button);
@@ -659,7 +666,7 @@ public class PanelElements {
         titlePanel.add(Box.createRigidArea(new Dimension(0, 3)));
 
         // Alternative: Single HTML label combining warning and text
-        JLabel combinedLabel = new JLabel("<html><div style='text-align: center;'><font color='orange'>⚠</font> <font color='#C0C0C0'>Clicking an icon opens a screenshot, if available.</font></div></html>");
+        JLabel combinedLabel = new JLabel("<html><div style='text-align: center;'><font color='orange'>!</font> <font color='#C0C0C0'>Clicking an icon opens a screenshot, if available.</font></div></html>");
         combinedLabel.setFont(FontManager.getRunescapeSmallFont());
         combinedLabel.setHorizontalAlignment(SwingConstants.CENTER);
         combinedLabel.setAlignmentX(Component.CENTER_ALIGNMENT);

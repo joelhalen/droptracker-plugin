@@ -8,6 +8,7 @@ import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.EventTaskPrefs;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.components.PanelIcons;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
@@ -24,6 +25,7 @@ import javax.annotation.Nullable;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -392,7 +394,7 @@ public class EventsPanel {
         caption.setForeground(task.tracked ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
         head.add(caption, BorderLayout.WEST);
         if (task.tracked) {
-            JLabel reset = new JLabel("unpin ✕");
+            JLabel reset = new JLabel("unpin ×");
             reset.setFont(FontManager.getRunescapeSmallFont());
             reset.setForeground(DropTrackerTheme.TEXT_MUTED);
             reset.setToolTipText(pins > 1
@@ -568,7 +570,7 @@ public class EventsPanel {
             html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
         }
         if (obtained) {
-            html.append("</font></strike> ✓");
+            html.append("</font></strike> (done)");
         }
         html.append("</html>");
         return html.toString();
@@ -617,13 +619,12 @@ public class EventsPanel {
         g.setFont(FontManager.getRunescapeSmallFont());
         java.awt.FontMetrics fm = g.getFontMetrics();
         if (obtained) {
-            String tick = "✓";
-            int tx = size - fm.stringWidth(tick);
-            int ty = fm.getAscent() - 1;
-            g.setColor(Color.BLACK);
-            g.drawString(tick, tx + 1, ty + 1);
-            g.setColor(DropTrackerTheme.GREEN);
-            g.drawString(tick, tx, ty);
+            // Painted, not drawn as text: no font on any platform is
+            // guaranteed to carry a tick glyph (see PanelIcons).
+            int tick = Math.max(7, size / 2);
+            int tx = size - tick;
+            PanelIcons.paintCheck(g, tx + 1, 1, tick, Color.BLACK);
+            PanelIcons.paintCheck(g, tx, 0, tick, DropTrackerTheme.GREEN);
         }
         if (points != null && points > 0) {
             // Full-alpha even on dimmed sprites: the award must stay readable.
@@ -727,7 +728,7 @@ public class EventsPanel {
 
         JLabel hint = new JLabel("<html><div style='width:"
             + (PluginPanel.PANEL_WIDTH - 60) + "px;'>"
-            + "Click a task to pin it to the top and the HUD; ✕ hides it."
+            + "Click a task to pin it to the top and the HUD; × hides it."
             + "</div></html>");
         hint.setFont(FontManager.getRunescapeSmallFont());
         hint.setForeground(DropTrackerTheme.TEXT_MUTED);
@@ -831,8 +832,7 @@ public class EventsPanel {
 
         JLabel state;
         if (task.isCompleted()) {
-            state = new JLabel("✓");
-            state.setForeground(DropTrackerTheme.GREEN);
+            state = new JLabel(PanelIcons.check(DropTrackerTheme.GREEN, 11));
         } else if (task.getNeed() > 1 || task.getHave() > 0) {
             state = new JLabel(ValueFormat.abbrev(task.getHave())
                 + "/" + ValueFormat.abbrev(task.getNeed()));
@@ -854,12 +854,14 @@ public class EventsPanel {
             // A completed task can't lead the HUD, but one pinned before it
             // completed still needs its way out.
             if (!hidden && (!task.isCompleted() || pinned)) {
-                glyphs.add(controlGlyph(pinned ? "★" : "☆",
-                    pinned ? DropTrackerTheme.GOLD : DropTrackerTheme.STONE,
+                Color pinColor = pinned ? DropTrackerTheme.GOLD : DropTrackerTheme.STONE;
+                glyphs.add(controlGlyph(
+                    PanelIcons.star(pinColor, 11, pinned),
+                    PanelIcons.star(DropTrackerTheme.GOLD_BRIGHT, 11, pinned),
                     pinned ? "Unpin this task" : "Pin this task to the top and the HUD",
                     () -> togglePin(entry, task.getId(), pinned)), BorderLayout.WEST);
             }
-            glyphs.add(controlGlyph(hidden ? "+" : "✕", DropTrackerTheme.STONE,
+            glyphs.add(controlGlyph(hidden ? "+" : "×", DropTrackerTheme.STONE,
                 hidden ? "Show this task again" : "Hide this task",
                 () -> {
                     taskPrefs.toggleHidden(entry, task.getId());
@@ -910,6 +912,22 @@ public class EventsPanel {
         JLabel glyph = new JLabel(text);
         glyph.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
         glyph.setForeground(color);
+        return wireControlGlyph(glyph, tooltip, action,
+            () -> glyph.setForeground(DropTrackerTheme.GOLD_BRIGHT),
+            () -> glyph.setForeground(color));
+    }
+
+    /** Icon-backed control. A painted icon carries its own colour, so the
+     *  caller supplies the hover variant rather than us recolouring text. */
+    private static JLabel controlGlyph(Icon icon, Icon hoverIcon, String tooltip, Runnable action) {
+        JLabel glyph = new JLabel(icon);
+        return wireControlGlyph(glyph, tooltip, action,
+            () -> glyph.setIcon(hoverIcon),
+            () -> glyph.setIcon(icon));
+    }
+
+    private static JLabel wireControlGlyph(JLabel glyph, String tooltip, Runnable action,
+                                           Runnable onEnter, Runnable onExit) {
         glyph.setToolTipText(tooltip);
         glyph.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         glyph.setBorder(new EmptyBorder(0, 2, 0, 2));
@@ -921,12 +939,12 @@ public class EventsPanel {
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                glyph.setForeground(DropTrackerTheme.GOLD_BRIGHT);
+                onEnter.run();
             }
 
             @Override
             public void mouseExited(MouseEvent e) {
-                glyph.setForeground(color);
+                onExit.run();
             }
         });
         return glyph;
@@ -955,7 +973,7 @@ public class EventsPanel {
                 // re-receiving it can't advance the task (server-decided;
                 // never set on point/any-of tasks where re-receives count).
                 boolean obtained = Boolean.TRUE.equals(req.getObtained());
-                html.append("<br/>• ");
+                html.append("<br/>- ");
                 if (obtained) {
                     html.append("<strike><font color='#8a7c5e'>");
                 }
@@ -967,7 +985,7 @@ public class EventsPanel {
                     html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
                 }
                 if (obtained) {
-                    html.append("</font></strike> ✓");
+                    html.append("</font></strike> (done)");
                 }
             }
         }
@@ -976,7 +994,7 @@ public class EventsPanel {
                 .append(ValueFormat.progress(task.getHave(), task.getNeed()));
         }
         if (task.isCompleted()) {
-            html.append("<br/><br/>Completed ✓");
+            html.append("<br/><br/>Completed");
         }
         if (task.getPoints() > 0) {
             html.append("<br/>Worth ").append(task.getPoints()).append(" points");
@@ -1014,9 +1032,12 @@ public class EventsPanel {
 
             JPanel nameCol = new JPanel(new BorderLayout(4, 0));
             nameCol.setBackground(rowBg);
-            JLabel swatch = new JLabel("■");
-            swatch.setFont(FontManager.getRunescapeSmallFont());
-            swatch.setForeground(parseColor(standing.getColor(), DropTrackerTheme.STONE));
+            // An opaque block rather than a glyph: the colour IS the content,
+            // so there is nothing for a font to fail to render.
+            JLabel swatch = new JLabel();
+            swatch.setOpaque(true);
+            swatch.setBackground(parseColor(standing.getColor(), DropTrackerTheme.STONE));
+            swatch.setPreferredSize(new Dimension(8, 8));
             nameCol.add(swatch, BorderLayout.WEST);
             JLabel name = new JLabel(truncate(standing.getName(), 18) + (own ? " (you)" : ""));
             name.setFont(own ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont());
