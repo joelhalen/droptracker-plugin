@@ -1,6 +1,6 @@
 /*
  * Adapted from RuneProfile (github.com/ReinhardtR/runeprofile-plugin),
- * BSD 2-Clause License. Exports a game Model as binary glTF so the player's
+ * Copyright (c) 2022, Reinhardt Rijna, BSD 2-Clause License (see LICENSE). Exports a game Model as binary glTF so the player's
  * character - equipment included, since the local player's model is composed
  * from what they are wearing - can be rendered outside the client.
  */

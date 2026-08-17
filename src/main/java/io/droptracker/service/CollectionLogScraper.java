@@ -25,7 +25,8 @@ import net.runelite.client.eventbus.Subscribe;
  * them when the interface asks. The technique here — open the log, invoke its
  * "Search" operation so the server transmits every slot, then re-run the init
  * script to put the interface back — comes from WikiSync
- * (github.com/weirdgloop/WikiSync, BSD 2-Clause) by way of RuneProfile.
+ * (github.com/weirdgloop/WikiSync), Copyright (c) 2021, andmcadams,
+ * BSD 2-Clause License (see LICENSE), by way of RuneProfile.
  *
  * <p>Why it matters: without a full read we can only ever know about items that
  * dropped while the plugin was running, so a player's collection log page would
