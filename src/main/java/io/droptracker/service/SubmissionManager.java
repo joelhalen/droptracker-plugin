@@ -13,6 +13,7 @@ import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.util.NpcUtilities;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +41,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -64,6 +67,9 @@ public class SubmissionManager {
     /** Thread-safe list of submissions the player has received which qualified for notifications */
     @Getter
     private final List<ValidSubmission> validSubmissions = new CopyOnWriteArrayList<>();
+
+    /** Screenshot captures held back a game tick; drained by {@link #onGameTick()}. */
+    private final Queue<Runnable> deferredCaptures = new ConcurrentLinkedQueue<>();
 
     /** Callback for UI updates when submissions change */
     @Setter
@@ -769,13 +775,44 @@ public class SubmissionManager {
     // ========== Capture (Screenshot) ==========
 
     /**
+     * Runs any screenshot captures held back a game tick. Called from the
+     * plugin's {@code onGameTick} ahead of its tracking check: a capture is
+     * only ever queued for a submission that already qualified, so draining
+     * unconditionally keeps a mid-flight tracking toggle from stranding it
+     * here and firing a stale frame whenever tracking resumes.
+     */
+    public void onGameTick() {
+        Runnable capture;
+        while ((capture = deferredCaptures.poll()) != null) {
+            try {
+                capture.run();
+            } catch (Exception e) {
+                log.debug("Deferred screenshot capture failed", e);
+            }
+        }
+    }
+
+    private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+        // Sources that announce loot a tick late would otherwise be
+        // photographed before their own drop message (issue #48).
+        String source = extractSourceName(webhook);
+        if (NpcUtilities.needsDeferredScreenshot(source)) {
+            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                    "deferring screenshot one game tick; source=" + source);
+            deferredCaptures.add(() -> captureNow(webhook, submission, hideDMs));
+            return;
+        }
+        captureNow(webhook, submission, hideDMs);
+    }
+
+    /**
      * Captures a single screenshot and sends the webhook with it.
      *
      * @param webhook The webhook body to send after capture
      * @param submission Optional ValidSubmission for tracking
      * @param hideDMs Whether to hide PM chat during capture
      */
-    private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+    private void captureNow(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
         debugLogEventFlow("capture", submission != null ? submission.getType() : null,
                 "capturing screenshot; hideDMs=" + hideDMs);
 

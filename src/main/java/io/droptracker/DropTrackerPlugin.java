@@ -621,6 +621,10 @@ public class DropTrackerPlugin extends Plugin {
 		// Character model export: cheap no-op unless the outfit changed and the
 		// player has been standing still.
 		playerModelService.onTick();
+		// Screenshots deferred a tick so late-announcing bosses are captured
+		// with their drop message on screen; drained before the tracking check
+		// so a mid-flight toggle can't strand one (see SubmissionManager).
+		submissionManager.onGameTick();
 
 		if (!isTracking) {
 			return;

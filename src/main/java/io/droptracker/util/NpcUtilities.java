@@ -33,6 +33,20 @@ public class NpcUtilities {
             "Eldric the Ice King", "Dusk", "Corrupted Hunllef", "Crystalline Hunllef","Maggot King");
     public static final Set<String> LONG_TICK_NPC_NAMES = Set.of("Grotesque Guardians", "Yama");
 
+    /**
+     * Sources that announce their loot in chat a tick after the loot event
+     * fires. Capturing the next frame there photographs the moment before the
+     * drop message exists, so the screenshot cannot corroborate the drop
+     * (issue #48). Captures for these sources wait one game tick.
+     */
+    public static final Set<String> DEFERRED_SCREENSHOT_NPC_NAMES = Set.of(
+            "The Nightmare", "Phosani's Nightmare");
+
+    /** Whether a submission from {@code source} must delay its screenshot a tick. */
+    public static boolean needsDeferredScreenshot(@Nullable String source) {
+        return source != null && DEFERRED_SCREENSHOT_NPC_NAMES.contains(source);
+    }
+
     /* Mad Angel npc ids (Wyrmscraig, released 2026-07-29) — raw literals because
      * RuneLite 1.12.33 (latest release) has no NpcID constant for this NPC yet.
      * Two in-game variants exist, each with two ids: the version fought during
