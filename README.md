@@ -166,4 +166,8 @@ and the adapted files carry a notice pointing back to their source:
 | [WikiSync](https://github.com/weirdgloop/WikiSync) (andmcadams) | Full collection-log read technique, by way of RuneProfile — `CollectionLogScraper` |
 | [RuneLite](https://github.com/runelite/runelite) (Abex) | Jagex HSL colour conversion — `modelexport/JagexColor` |
 | [TrackScape Connector](https://github.com/fatfingers23/trackscape-connector-plugin) (Bailey Townsend) | Clan broadcast/chat relay and the Discord→game chat bridge — `ClanRelayService`, `ChatMessageUtil` |
-| [Dink](https://github.com/pajlads/DinkPlugin) (pajlads) | Chat/popup watcher patterns used across the event handlers |
+| [Dink](https://github.com/pajlads/DinkPlugin) (pajlads, Jake Barter) | Chat/popup watcher patterns used across the event handlers — see the header on `DropTrackerPlugin` |
+
+Video capture lives in the separate
+[droptracker-video-capture](https://github.com/DropTracker-io/droptracker-video-capture)
+companion plugin, and its own `LICENSE` carries the credit for that code.
