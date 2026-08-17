@@ -251,6 +251,42 @@ public class PbHandlerParseTest {
         assertEquals("10:30", gauntlet.group("duration"));
     }
 
+    /**
+     * The shape that poisoned ~47 ToB rows between 2026-08-04 and 08-17: a
+     * non-PB raid, where the completion line carries no PB marker so nothing
+     * returned early and the fallback took Verzik's room split as the raid
+     * time. 5:34.20 is not a Theatre of Blood time; it is roughly a third of
+     * the world record.
+     */
+    private static final String TOB_NON_PB_TOTAL_HOLDS_THE_BEST =
+        "Wave 'The Final Challenge' (Normal Mode) complete!<br>" +
+            "Duration: <col=ff0000>5:34.20</col><br>" +
+            "Theatre of Blood completion time: <col=ff0000>18:54.60</col><br>" +
+            "Theatre of Blood total completion time: <col=ff0000>21:42.60</col>. Personal best: 20:45.00";
+
+    /** A room that was itself a PB, on a raid that was not. */
+    private static final String TOB_ROOM_PB_ONLY =
+        "Wave 'The Final Challenge' (Normal Mode) complete!<br>" +
+            "Duration: <col=ff0000>4:53.80</col> (new personal best)<br>" +
+            "Theatre of Blood completion time: <col=ff0000>19:14.40</col>";
+
+    @Test
+    public void tobNonPbRaidTakesTheCompletionTimeNotTheVerzikSplit() {
+        Matcher m = timeMatcherFor(TOB_NON_PB_TOTAL_HOLDS_THE_BEST);
+        assertEquals("18:54.60", m.group("duration"));
+        assertNull("the room split must not be reported as the raid time", m.group("pbIndicator"));
+        assertEquals(Duration.ofMinutes(18).plusSeconds(54).plusMillis(600),
+            PbHandler.parseTime(m.group("duration")));
+    }
+
+    @Test
+    public void tobRoomPersonalBestDoesNotHijackTheRaidTime() {
+        // The only (new personal best) in this message sits on the room line,
+        // so a "prefer the PB-flagged line" rule alone would submit 4:53.80.
+        Matcher m = timeMatcherFor(TOB_ROOM_PB_ONLY);
+        assertEquals("19:14.40", m.group("duration"));
+    }
+
     @Test
     public void withoutAnyPbInfoTheFirstTimedLineStillWins() {
         // Unchanged fallback: what a single scan of the whole message returned.

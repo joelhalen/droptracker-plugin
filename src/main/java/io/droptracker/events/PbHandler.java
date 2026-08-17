@@ -64,6 +64,16 @@ public class PbHandler extends BaseEventHandler {
         Pattern.CASE_INSENSITIVE
     );
 
+    /**
+     * A raid's in-raid completion line — the metric the adventure log and clan
+     * bots track. The lookbehind keeps the wall-clock "total completion time"
+     * out, same as {@link #TOTAL_COMPLETION_PATTERN}.
+     */
+    private static final Pattern COMPLETION_TIME_PATTERN = Pattern.compile(
+        "(?<!total )completion time:",
+        Pattern.CASE_INSENSITIVE
+    );
+
     @VisibleForTesting
     static Pattern bossCountPattern() {
         return BOSS_COUNT_PATTERN;
@@ -230,15 +240,38 @@ public class PbHandler extends BaseEventHandler {
      * Picks the line to read a kill time from: drops "total completion time"
      * lines, prefers a line carrying personal-best info, else the first timed
      * line. Null when the message has no usable time.
+     * <p>
+     * When the message states a raid completion time, that line is the ONLY
+     * candidate. The same message also carries the final room's
+     * {@code Duration:} — at ToB that is the Verzik split, which sits first and
+     * so won any fallback that was allowed to look past the completion line.
+     * Two ways that happened: a non-PB raid, where the completion line carries
+     * no PB marker at all and nothing returned early; and a room that was
+     * itself a personal best, whose {@code Duration:} line carries the marker
+     * the completion line lacks. Both submitted a ~5 minute "raid" time.
      */
     @VisibleForTesting
     static String selectTimeLine(String message) {
         if (message == null) {
             return null;
         }
+        String[] lines = message.split("\n");
+        String fromCompletion = selectTimeLine(lines, true);
+        return fromCompletion != null ? fromCompletion : selectTimeLine(lines, false);
+    }
+
+    /**
+     * @param completionOnly restrict candidates to raid completion lines; the
+     *                       caller retries without it for everything that has
+     *                       no completion line (CoX, Gauntlet, ordinary bosses)
+     */
+    private static String selectTimeLine(String[] lines, boolean completionOnly) {
         String firstTimed = null;
-        for (String line : message.split("\n")) {
+        for (String line : lines) {
             if (TOTAL_COMPLETION_PATTERN.matcher(line).find()) {
+                continue;
+            }
+            if (completionOnly && !COMPLETION_TIME_PATTERN.matcher(line).find()) {
                 continue;
             }
             Matcher matcher = TIME_WITH_PB_PATTERN.matcher(line);
