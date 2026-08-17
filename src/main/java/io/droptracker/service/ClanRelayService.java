@@ -1,3 +1,8 @@
+/*
+ * Adapted from the TrackScape Connector
+ * (github.com/fatfingers23/trackscape-connector-plugin),
+ * Copyright (c) 2023, Bailey Townsend, BSD 2-Clause License (see LICENSE).
+ */
 package io.droptracker.service;
 
 import com.google.inject.Inject;

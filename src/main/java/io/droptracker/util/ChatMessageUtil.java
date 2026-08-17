@@ -94,7 +94,9 @@ public class ChatMessageUtil {
      */
     /**
      * Discord→game bridge line, rendered to look like clan chat (visible only
-     * to this client — nothing is sent to the game server). The sender is
+     * to this client — nothing is sent to the game server). Approach adapted
+     * from the TrackScape Connector, Copyright (c) 2023, Bailey Townsend,
+     * BSD 2-Clause License (see LICENSE). The sender is
      * suffixed so a Discord user can never be mistaken for an in-game
      * clanmate; both strings must already be sanitized/capped by the caller.
      */

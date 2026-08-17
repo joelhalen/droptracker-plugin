@@ -165,4 +165,5 @@ and the adapted files carry a notice pointing back to their source:
 | [RuneProfile](https://github.com/ReinhardtR/runeprofile-plugin) (Reinhardt Rijna) | glTF export of the player's character model — `io.droptracker.modelexport` |
 | [WikiSync](https://github.com/weirdgloop/WikiSync) (andmcadams) | Full collection-log read technique, by way of RuneProfile — `CollectionLogScraper` |
 | [RuneLite](https://github.com/runelite/runelite) (Abex) | Jagex HSL colour conversion — `modelexport/JagexColor` |
+| [TrackScape Connector](https://github.com/fatfingers23/trackscape-connector-plugin) (Bailey Townsend) | Clan broadcast/chat relay and the Discord→game chat bridge — `ClanRelayService`, `ChatMessageUtil` |
 | [Dink](https://github.com/pajlads/DinkPlugin) (pajlads) | Chat/popup watcher patterns used across the event handlers |
