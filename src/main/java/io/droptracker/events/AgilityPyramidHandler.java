@@ -56,7 +56,7 @@ public class AgilityPyramidHandler extends BaseEventHandler {
 
     @Override
     public boolean isEnabled() {
-        return config.trackAgilityPyramid();
+        return config.trackActivities() && config.trackAgilityPyramid();
     }
 
     public void onTick() {

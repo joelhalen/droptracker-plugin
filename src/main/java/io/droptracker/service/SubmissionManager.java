@@ -170,7 +170,7 @@ public class SubmissionManager {
                         killTrace != null ? killTrace.toDebugSummary() : "trace unavailable");
                 }
                 boolean isPb = isFieldTrue(webhook, "is_pb");
-                if (config.screenshotPBs() && isPb) {
+                if (config.screenshots() && isPb) {
                     requiredScreenshot = true;
                 }
                 if (!isPb) {
@@ -189,14 +189,14 @@ public class SubmissionManager {
                     debugLogEventFlow("skipped", type, "clogEmbeds=false");
                     return;
                 }
-                if (config.screenshotNewClogs()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case COMBAT_ACHIEVEMENT:
                 if (!config.caEmbeds()) {
                     debugLogEventFlow("skipped", type, "caEmbeds=false");
                     return;
                 }
-                if (config.screenshotCAs()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case LEVEL_UP:
                 if (!config.levelEmbed()) {
@@ -205,7 +205,7 @@ public class SubmissionManager {
                 }
                 // Honor the "Minimum Level to Screenshot" option: only capture
                 // when at least one skill reached that level (default 1 = always).
-                if (config.screenshotLevel()
+                if (config.screenshots()
                         && maxNewLevelIn(webhook) >= config.minLevelToScreenshot()) {
                     requiredScreenshot = true;
                 }
@@ -215,28 +215,28 @@ public class SubmissionManager {
                     debugLogEventFlow("skipped", type, "questsEmbed=false");
                     return;
                 }
-                if (config.screenshotQuests()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case PET:
                 if (!config.petEmbeds()) {
                     debugLogEventFlow("skipped", type, "petEmbeds=false");
                     return;
                 }
-                if (config.screenshotPets()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case DEATH:
                 if (!config.deathEmbeds()) {
                     debugLogEventFlow("skipped", type, "deathEmbeds=false");
                     return;
                 }
-                if (config.screenshotDeaths()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case DIARY:
                 if (!config.diaryEmbeds()) {
                     debugLogEventFlow("skipped", type, "diaryEmbeds=false");
                     return;
                 }
-                if (config.screenshotDiaries()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case EXPERIENCE:
                 // No screenshots for experience events
@@ -246,7 +246,7 @@ public class SubmissionManager {
                     debugLogEventFlow("skipped", type, "xpMilestoneEmbeds=false");
                     return;
                 }
-                if (config.screenshotXpMilestones()) requiredScreenshot = true;
+                if (config.screenshots()) requiredScreenshot = true;
                 break;
             case EXPERIENCE_UPDATE:
                 // Background XP snapshot for event tracking: no screenshot,
@@ -324,7 +324,7 @@ public class SubmissionManager {
         debugLogEventFlow("nearby-trace", SubmissionType.DROP,
             nearbyTrace != null ? nearbyTrace.toDebugSummary() : "trace unavailable");
 
-        boolean requiredScreenshot = (config.screenshotDrops() && totalValue > config.screenshotValue()) || valueModified;
+        boolean requiredScreenshot = (config.screenshots() && totalValue > config.screenshotValue()) || valueModified;
         debugLogEventFlow("received", SubmissionType.DROP, "totalValue=" + totalValue + ", singleValue=" + singleValue
                 + ", valueModified=" + valueModified + ", screenshotRequired=" + requiredScreenshot
                 + ", screenshotThreshold=" + config.screenshotValue());
@@ -831,7 +831,10 @@ public class SubmissionManager {
             executor.submit(() -> {
                 byte[] imageBytes = null;
                 try {
-                    int thresholdBytes = config.imageCompressionThresholdKb() * 1024;
+                    // Compression off = always lossless, whatever the size.
+                    int thresholdBytes = config.compressImages()
+                        ? config.imageCompressionThresholdKb() * 1024
+                        : Integer.MAX_VALUE;
                     byte[] pngBytes = convertImageToPngBytes(bufferedImage);
                     if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
                         // PNG is within the threshold — send lossless

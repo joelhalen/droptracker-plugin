@@ -56,7 +56,7 @@ public class LoadoutCapture {
 	}
 
 	public boolean isEnabled() {
-		return config.sendLoadoutWithPbs();
+		return config.uploadCharacterModel() && config.sendLoadoutWithPbs();
 	}
 
 	/**

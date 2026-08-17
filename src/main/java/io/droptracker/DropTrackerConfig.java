@@ -7,54 +7,186 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
+/**
+ * Four sections: what we track, when we screenshot, events, and everything
+ * advanced. Clan Chat keeps its own section because it relays other people's
+ * messages and deserves to stay obvious.
+ * <p>
+ * <b>keyName is a data migration.</b> A player's stored value is looked up by
+ * keyName, so renaming one silently resets that setting for everybody who had
+ * configured it. Section, position, display name and description are all free
+ * to change; keyName is not. Options retired from the UI keep their keyName and
+ * become {@code hidden = true} so the value still applies and existing code
+ * still reads it.
+ */
 @ConfigGroup(DropTrackerConfig.GROUP)
 public interface DropTrackerConfig extends Config {
-    /*
-     * Section Positions:
-     * 1 (0) - General Settings
-     * 2 (1) - Values
-     * 2 (2) - Screenshots
-     */
+
     String GROUP = "droptracker";
 
-    /* Loot related Tracking */
+    // ==================== Tracking ====================
+
     @ConfigSection(
-        name = "Loot Tracking",
-        description = "Define what rules you want set for loot",
+        name = "Tracking",
+        description = "What the DropTracker records and sends for you",
         position = 1,
         closedByDefault = false
     )
-    String LootSection = "Loot Tracking";
+    String trackingSection = "Tracking";
 
     @ConfigItem(
         keyName = "lootEmbeds",
-        name = "Enable Loot Tracking",
+        name = "Drops",
         description = "Should we send your drops to the DropTracker?",
-        position = 0,
-        section = LootSection
+        position = 1,
+        section = trackingSection
     )
     default boolean lootEmbeds() {
         return true;
     }
 
     @ConfigItem(
-        keyName = "valueableDrops",
-        name = "Screenshot Drops",
-        description = "Do you want to submit screenshots when a drop<br />"
-            + "Exceeds the threshold you set?",
-        position = 1,
-        section = LootSection
+        keyName = "pbEmbeds",
+        name = "Personal Bests",
+        description = "Do you want DropTracker to track your PBs?",
+        position = 2,
+        section = trackingSection
     )
-    default boolean screenshotDrops() {
+    default boolean pbEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "clogEmbeds",
+        name = "Collection Logs",
+        description = "<html>Should we send new collection log slot unlocks to the DropTracker?<br>"
+            + "<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
+        position = 3,
+        section = trackingSection
+    )
+    default boolean clogEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "caEmbeds",
+        name = "Combat Achievements",
+        description = "Should we send your Combat Achievements to the DropTracker?",
+        position = 4,
+        section = trackingSection
+    )
+    default boolean caEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "petEmbeds",
+        name = "Pets",
+        description = "Do you want DropTracker to track your Pets?",
+        position = 5,
+        section = trackingSection
+    )
+    default boolean petEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "levelEmbed",
+        name = "Levels",
+        description = "Do you want to send level gains to the DropTracker",
+        position = 6,
+        section = trackingSection
+    )
+    default boolean levelEmbed() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "xpMilestoneEmbeds",
+        name = "XP Milestones",
+        description = "<html>Send a notification when a level-99 skill crosses an XP milestone.<br />"
+            + "Your group's settings determine which milestones are announced (default: every 25M XP).</html>",
+        position = 7,
+        section = trackingSection
+    )
+    default boolean xpMilestoneEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "questsEmbed",
+        name = "Quests",
+        description = "Do you want to send quest completions to the DropTracker?",
+        position = 8,
+        section = trackingSection
+    )
+    default boolean questsEmbed() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "deathEmbeds",
+        name = "Deaths",
+        description = "Do you want to send player deaths to the DropTracker?",
+        position = 9,
+        section = trackingSection
+    )
+    default boolean deathEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "diaryEmbeds",
+        name = "Achievement Diaries",
+        description = "Do you want to send achievement diary completions to the DropTracker?",
+        position = 10,
+        section = trackingSection
+    )
+    default boolean diaryEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "trackActivities",
+        name = "Activity Tracking",
+        description = "<html>Track items from activities RuneLite's loot tracker misses:<br />"
+            + "Mage Training Arena reward purchases, Agility Pyramid tops and<br />"
+            + "deep sea trawling catches.</html>",
+        position = 11,
+        section = trackingSection
+    )
+    default boolean trackActivities() {
+        return true;
+    }
+
+    // ==================== Screenshots ====================
+
+    @ConfigSection(
+        name = "Screenshots",
+        description = "When the plugin attaches a screenshot to a submission",
+        position = 2,
+        closedByDefault = false
+    )
+    String screenshotSection = "Screenshots";
+
+    @ConfigItem(
+        keyName = "screenshots",
+        name = "Enable Screenshots",
+        description = "<html>Attach screenshots to the things you track above.<br />"
+            + "Turn this off to submit everything without images.</html>",
+        position = 1,
+        section = screenshotSection
+    )
+    default boolean screenshots() {
         return true;
     }
 
     @ConfigItem(
         keyName = "screenshotValue",
-        name = "Screenshot minimum",
+        name = "Loot screenshot value",
         description = "What minimum value would you like drops to be sent with an attached image for?",
         position = 2,
-        section = LootSection
+        section = screenshotSection
     )
     default int screenshotValue() {
         return 250000;
@@ -63,442 +195,82 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "screenshotUntradeables",
         name = "Screenshot untradeables",
-        description = "Take screenshots of notable untradeable drops (champion scrolls, boss heads,<br />"
+        description = "<html>Take screenshots of notable untradeable drops (champion scrolls, boss heads,<br />"
             + "raid kits, etc.) even though they arrive with no GE value.<br />"
             + "Note: with the API enabled, an item required by one of your active events<br />"
-            + "is always screenshotted for proof, regardless of this setting.",
+            + "is always screenshotted for proof, regardless of this setting.</html>",
         position = 3,
-        section = LootSection
+        section = screenshotSection
     )
     default boolean screenshotUntradeables() {
         return true;
     }
 
-    /* Personal Best related Tracking */
-    @ConfigSection(
-        name = "Personal Bests",
-        description = "Should we send your personal bests to the DropTracker?",
-        position = 2,
-        closedByDefault = false
-    )
-    String PbSection = "Personal Bests";
-
     @ConfigItem(
-        keyName = "pbEmbeds",
-        name = "Enable PBs",
-        description = "Do you want DropTracker to track your PBs?",
-        position = 1,
-        section = PbSection
-    )
-    default boolean pbEmbeds() {
-        return true;
-    }
-
-    @ConfigItem(
-        keyName = "screenshotPB",
-        name = "Screenshot PBs",
-        description = "Do you want a screenshot to be sent\n"
-            + "when you acquire a new Personal Best?",
-        position = 2,
-        section = PbSection
-    )
-    default boolean screenshotPBs() {
-        return true;
-    }
-
-    /* Collection Log related Tracking */
-    @ConfigSection(
-        name = "Collection Logs",
-        description = "<html>Define what rules you want set for Collection Log <br>"
-            + "<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
-        position = 3,
-        closedByDefault = false
-    )
-    String ClogSection = "Collection Logs";
-
-    @ConfigItem(
-        keyName = "clogEmbeds",
-        name = "Enable Clogs",
-        description = "Should we send new collection log slot unlocks to the DropTracker?",
-        position = 1,
-        section = ClogSection
-    )
-    default boolean clogEmbeds() {
-        return true;
-    }
-
-    @ConfigItem(
-        keyName = "screenshotClog",
-        name = "Screenshot Clogs",
-        description = "Do you want screenshots to be sent when you\n"
-            + "receive new collection log slots?",
-        position = 2,
-        section = ClogSection
-    )
-    default boolean screenshotNewClogs() {
-        return true;
-    }
-
-    /* Combat Achievement related Tracking */
-    @ConfigSection(
-        name = "Combat Achievements",
-        description = "Define what rules you want set for Combat Achievements",
+        keyName = "minLevelToScreenshot",
+        name = "Minimum level to screenshot",
+        description = "<html>Only screenshot level-ups at or above this level.<br />"
+            + "Levels below it are still tracked and sent - just without an image.</html>",
         position = 4,
-        closedByDefault = false
+        section = screenshotSection
     )
-    String CaSection = "Combat Achievements";
-
-    @ConfigItem(
-        keyName = "caEmbeds",
-        name = "Enable CAs",
-        description = "Should we send your Combat Achievements to the DropTracker?",
-        position = 3,
-        section = CaSection
-    )
-    default boolean caEmbeds() {
-        return true;
+    default int minLevelToScreenshot() {
+        return 75;
     }
-
-    @ConfigItem(
-        keyName = "screenshotCAs",
-        name = "Screenshot CAs",
-        description = "Do you want a screenshot to be sent\n"
-            + "when you complete a Combat Task?",
-        position = 3,
-        section = CaSection
-    )
-    default boolean screenshotCAs() {
-        return true;
-    }
-
-    /* Pet related Tracking */
-    @ConfigSection(
-            name = "Pet Tracking",
-            description = "Should we send your pets to the DropTracker?",
-            position = 5,
-            closedByDefault = false
-    )
-    String PetSection = "Pet Tracking";
-
-    @ConfigItem(
-            keyName = "petEmbeds",
-            name = "Enable Pets",
-            description = "Do you want DropTracker to track your Pets?",
-            position = 1,
-            section = PetSection
-    )
-    default boolean petEmbeds() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "screenshotPets",
-            name = "Screenshot Pets",
-            description = "Do you want to send screenshots when you acquire a pet?",
-            position = 2,
-            section = PetSection
-    )
-    default boolean screenshotPets() {
-        return true;
-    }
-
-
-    /* Experience/Level related Tracking */
-    @ConfigSection(
-            name = "Experience / Level ",
-            description = "Should we send your experience to the DropTracker?",
-            position = 6,
-            closedByDefault = false
-    )
-    String XPSection = "Experience / Level ";
-
-    @ConfigItem(
-            keyName = "trackExperience",
-            name = "Track Experience",
-            description = "Do you want to send experience gains to the DropTracker?",
-            position = 1,
-            section = XPSection
-    )
-    default boolean trackExperience() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "levelEmbed",
-            name = "Enable Levels",
-            description = "Do you want to send level gains to the DropTracker",
-            position = 2,
-            section = XPSection
-    )
-    default boolean levelEmbed(){ return true;}
-
-    @ConfigItem(
-            keyName = "screenshotLevel",
-            name = "Screenshot Levels",
-            description = "Do you want to send screenshots when you level up?",
-            position = 3,
-            section = XPSection
-    )
-    default boolean screenshotLevel(){ return true;}
-
-    @ConfigItem(
-            keyName = "minLevelToScreenshot",
-            name = "Minimum Level to Screenshot",
-            description = "<html>What minimum level should we take screenshots for you achieving?<br />",
-            position = 4,
-            section = XPSection
-    )
-    default int minLevelToScreenshot() {return 1;}
-
-    @ConfigItem(
-            keyName = "xpMilestoneEmbeds",
-            name = "Enable XP Milestones",
-            description = "<html>Send a notification when a level-99 skill crosses an XP milestone.<br />" +
-                    "Your group's settings determine which milestones are announced (default: every 25M XP).",
-            position = 5,
-            section = XPSection
-    )
-    default boolean xpMilestoneEmbeds() { return true; }
-
-    @ConfigItem(
-            keyName = "screenshotXpMilestones",
-            name = "Screenshot XP Milestones",
-            description = "Do you want to send screenshots when you reach an XP milestone?",
-            position = 6,
-            section = XPSection
-    )
-    default boolean screenshotXpMilestones() { return false; }
-
-    /* Quest related Tracking */
-    @ConfigSection(
-            name = "Quest Tracking",
-            description = "Should we send your quests to the DropTracker?",
-            position = 7,
-            closedByDefault = false
-    )
-    String QuestSection = "Quest Tracking";
-
-    @ConfigItem(
-            keyName = "questsEmbed",
-            name = "Track Quests",
-            description = "Do you want to send quest completions to the DropTracker?",
-            position = 1,
-            section = QuestSection
-    )
-    default boolean questsEmbed() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "screenshotQuests",
-            name = "Screenshot Quests",
-            description = "Do you want to send screenshots when you complete a quest?",
-            position = 2,
-            section = QuestSection
-    )
-    default boolean screenshotQuests() {
-        return true;
-    }
-
-    @ConfigSection(
-            name = "Death Tracking",
-            description = "Should we send your deaths to the DropTracker?",
-            position = 8,
-            closedByDefault = true
-    )
-    String DeathSection = "Death Tracking";
-
-    @ConfigItem(
-            keyName = "deathEmbeds",
-            name = "Track Deaths",
-            description = "Do you want to send player deaths to the DropTracker?",
-            position = 1,
-            section = DeathSection
-    )
-    default boolean deathEmbeds() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "screenshotDeaths",
-            name = "Screenshot Deaths",
-            description = "Do you want to send screenshots when you die?",
-            position = 2,
-            section = DeathSection
-    )
-    default boolean screenshotDeaths() {
-        return false;
-    }
-
-    @ConfigSection(
-            name = "Diary Tracking",
-            description = "Should we send your achievement diary completions to the DropTracker?",
-            position = 9,
-            closedByDefault = true
-    )
-    String DiarySection = "Diary Tracking";
-
-    @ConfigItem(
-            keyName = "diaryEmbeds",
-            name = "Track Diaries",
-            description = "Do you want to send achievement diary completions to the DropTracker?",
-            position = 1,
-            section = DiarySection
-    )
-    default boolean diaryEmbeds() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "screenshotDiaries",
-            name = "Screenshot Diaries",
-            description = "Do you want to send screenshots when you complete an achievement diary?",
-            position = 2,
-            section = DiarySection
-    )
-    default boolean screenshotDiaries() {
-        return true;
-    }
-
-    /* Activities RuneLite's loot tracker misses (no loot event fires for these) */
-    @ConfigSection(
-            name = "Activity Tracking",
-            description = "Track items from activities that never appear in RuneLite's loot tracker.",
-            position = 13,
-            closedByDefault = true
-    )
-    String ActivitySection = "Activity Tracking";
-
-    @ConfigItem(
-            keyName = "trackMta",
-            name = "Mage Training Arena",
-            description = "Track reward shop purchases (and the Bones to Peaches unlock) at the Mage Training Arena.",
-            position = 1,
-            section = ActivitySection
-    )
-    default boolean trackMta() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "trackAgilityPyramid",
-            name = "Agility Pyramid",
-            description = "Track pyramid tops obtained at the Agility Pyramid.",
-            position = 2,
-            section = ActivitySection
-    )
-    default boolean trackAgilityPyramid() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "trackTrawling",
-            name = "Deep Sea Trawling",
-            description = "Track fish you catch while deep sea trawling. Counts catches as they land in<br />"
-                + "your net, not what you later collect from it.",
-            position = 3,
-            section = ActivitySection
-    )
-    default boolean trackTrawling() {
-        return true;
-    }
-
-    /* Clan chat relay + two-way Discord bridge (requires API + group config) */
-    @ConfigSection(
-            name = "Clan Chat",
-            description = "Relay your clan's broadcasts and chat to your group's DropTracker features.<br />"
-                + "Requires the API connection, and your group must configure its clan name on droptracker.io.",
-            position = 12,
-            closedByDefault = true
-    )
-    String ClanSection = "Clan Chat";
-
-    @ConfigItem(
-            keyName = "relayClanBroadcasts",
-            name = "Relay clan broadcasts",
-            description = "Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
-                + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
-                + "One relaying member covers the whole clan; duplicates are handled server-side.",
-            position = 1,
-            section = ClanSection
-    )
-    default boolean relayClanBroadcasts() {
-        return false;
-    }
-
-    @ConfigItem(
-            keyName = "relayClanChat",
-            name = "Relay clan chat to Discord",
-            description = "Mirror your clan chat into your group's configured Discord bridge channel.<br />"
-                + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.",
-            position = 2,
-            section = ClanSection
-    )
-    default boolean relayClanChat() {
-        return false;
-    }
-
-    @ConfigItem(
-            keyName = "receiveDiscordChat",
-            name = "Show Discord messages in game",
-            description = "Display messages sent in your group's Discord bridge channel inside your<br />"
-                + "clan chat box (visible only to you; nothing is sent to the game server).",
-            position = 3,
-            section = ClanSection
-    )
-    default boolean receiveDiscordChat() {
-        return true;
-    }
-
-    /* Settings for Hiding Split Chat, Side Panel and API connections */
-    @ConfigSection(
-        name = "Miscellaneous",
-        description = "Miscellaneous plugin config options",
-        position = 10,
-        closedByDefault = false
-    )
-    String miscSettings = "Additional Settings";
 
     @ConfigItem(
         keyName = "hideWhispers",
         name = "Hide PMs",
-        description = "Do you want your private chat to be\n" + "hidden when screenshots are taken?",
-        position = 7,
-        section = miscSettings
+        description = "Do you want your private chat to be hidden when screenshots are taken?",
+        position = 5,
+        section = screenshotSection
     )
     default boolean hideDMs() {
         return false;
     }
 
     @ConfigItem(
+        keyName = "compressImages",
+        name = "Compress screenshots",
+        description = "<html>Convert large screenshots to JPEG before sending.<br />"
+            + "Turn this off to always send lossless PNG, whatever the size.</html>",
+        position = 6,
+        section = screenshotSection
+    )
+    default boolean compressImages() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "imageCompressionThresholdKb",
-        name = "Image Compression Threshold (KB)",
+        name = "Compression threshold (KB)",
         description = "<html>Maximum screenshot size (in KB) before JPEG compression is applied.<br>"
             + "Screenshots smaller than this threshold are sent as lossless PNG.<br>"
             + "Set to 0 to always compress to JPEG.</html>",
-        position = 9,
-        section = miscSettings
+        position = 7,
+        section = screenshotSection
     )
     default int imageCompressionThresholdKb() {
-        return 500;
+        return 1500;
     }
 
-    /* Event Notifications (docs/EVENT_PLUGIN_NOTIFICATIONS_PLAN.md — P2) */
+    // ==================== Events ====================
+
     @ConfigSection(
-        name = "Event Notifications",
+        name = "Events",
         description = "In-game notifications and HUD for DropTracker events (requires the API)",
-        position = 11,
+        position = 3,
         closedByDefault = false
     )
-    String eventSection = "Event Notifications";
+    String eventSection = "Events";
 
     @ConfigItem(
         keyName = "eventNotifications",
-        name = "Event notifications",
-        description = "Show in-game notifications about your DropTracker events<br />"
+        name = "Receive notifications",
+        description = "<html>Show in-game notifications about your DropTracker events<br />"
             + "(task completions, lead changes, board turns...).<br />"
-            + "Requires 'Use API Connections'. Fine-tune which types you receive on the website.",
-        position = 0,
+            + "Requires 'Use API Connections'. Fine-tune which types you receive on the website.</html>",
+        position = 1,
         section = eventSection
     )
     default boolean eventNotifications() {
@@ -507,13 +279,13 @@ public interface DropTrackerConfig extends Config {
 
     @ConfigItem(
         keyName = "eventDisplayMode",
-        name = "Display style",
+        name = "Display type",
         description = "<html>How event notifications appear:<br />"
             + "<b>Chat messages only</b> - lines in your chatbox.<br />"
             + "<b>Chat + text pop-ups</b> - also shows brief on-screen pop-ups.<br />"
             + "<b>Enhanced display (HUD)</b> - also shows a movable overlay with your<br />"
             + "current task, progress and team standing (hold Alt to drag it).</html>",
-        position = 1,
+        position = 2,
         section = eventSection
     )
     default EventDisplayMode eventDisplayMode() {
@@ -523,9 +295,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventTaskProgressNotifications",
         name = "Task progress notifications",
-        description = "Notify when teammates progress (not just complete) your team's tasks.<br />"
-            + "The chattiest type - this is the mute switch for it.",
-        position = 2,
+        description = "<html>Notify when teammates progress (not just complete) your team's tasks.<br />"
+            + "The chattiest type - this is the mute switch for it.</html>",
+        position = 3,
         section = eventSection
     )
     default boolean eventTaskProgressNotifications() {
@@ -533,21 +305,8 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
-        keyName = "eventImportantPopupsOnly",
-        name = "Pop-ups: important only",
-        description = "<html>Only pop up the big moments - a drop that finishes a bingo tile,<br />"
-            + "a lead change, a line, a blackout, the event starting or ending.<br />"
-            + "Ordinary completions and progress ticks stay in chat only.</html>",
-        position = 3,
-        section = eventSection
-    )
-    default boolean eventImportantPopupsOnly() {
-        return false;
-    }
-
-    @ConfigItem(
         keyName = "eventHudDetail",
-        name = "HUD detail",
+        name = "HUD details",
         description = "<html>Enhanced display only:<br />"
             + "<b>Compact</b> - task icon, name and progress.<br />"
             + "<b>Detailed</b> - adds your team name, rank and score.</html>",
@@ -557,6 +316,224 @@ public interface DropTrackerConfig extends Config {
     default EventHudDetail eventHudDetail() {
         return EventHudDetail.DETAILED;
     }
+
+    // ==================== Clan Chat ====================
+
+    @ConfigSection(
+        name = "Clan Chat",
+        description = "Relay your clan's broadcasts and chat to your group's DropTracker features.<br />"
+            + "Requires the API connection, and your group must configure its clan name on droptracker.io.",
+        position = 4,
+        closedByDefault = true
+    )
+    String clanSection = "Clan Chat";
+
+    @ConfigItem(
+        keyName = "relayClanBroadcasts",
+        name = "Relay clan broadcasts",
+        description = "<html>Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
+            + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
+            + "One relaying member covers the whole clan; duplicates are handled server-side.</html>",
+        position = 1,
+        section = clanSection
+    )
+    default boolean relayClanBroadcasts() {
+        return false;
+    }
+
+    @ConfigItem(
+        keyName = "relayClanChat",
+        name = "Relay clan chat to Discord",
+        description = "<html>Mirror your clan chat into your group's configured Discord bridge channel.<br />"
+            + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.</html>",
+        position = 2,
+        section = clanSection
+    )
+    default boolean relayClanChat() {
+        return false;
+    }
+
+    @ConfigItem(
+        keyName = "receiveDiscordChat",
+        name = "Show Discord messages in game",
+        description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
+            + "clan chat box (visible only to you; nothing is sent to the game server).</html>",
+        position = 3,
+        section = clanSection
+    )
+    default boolean receiveDiscordChat() {
+        return true;
+    }
+
+    // ==================== Advanced ====================
+
+    @ConfigSection(
+        name = "Advanced",
+        description = "API connection, account sync and debugging",
+        position = 5,
+        closedByDefault = true
+    )
+    String advancedSection = "Advanced";
+
+    @ConfigItem(
+        keyName = "useApi",
+        name = "Use API",
+        description = "<html>Enables external connections to the DropTracker database, for panel data.<br />"
+            + "<b>Note</b>: The API is currently <b>required</b> for participation in events!</html>",
+        position = 1,
+        section = advancedSection,
+        warning = "<html><b>WARNING</b>: In order to connect to the DropTracker API,<br>"
+            + "your client must make out-going connections to the developer's server.<br>"
+            + "This server can not be verified by the RuneLite developers.<br>"
+            + "<b>Are you sure?</b></html>"
+    )
+    default boolean useApi() {
+        return false;
+    }
+
+    @ConfigItem(
+        keyName = "receiveInGameMessages",
+        name = "Receive in-game messages",
+        description = "Do you want to see chat messages from the plugin to confirm your submissions/etc?",
+        position = 2,
+        section = advancedSection
+    )
+    default boolean receiveInGameMessages() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "syncAccountState",
+        name = "Sync account progress",
+        description = "<html>Periodically send your skills, quests, achievement diaries,<br>"
+            + "combat achievements and collection log to DropTracker, so your<br>"
+            + "profile page can show your current progress.<br>"
+            + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
+        position = 3,
+        section = advancedSection
+    )
+    default boolean syncAccountState() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "uploadCharacterModel",
+        name = "Send character model & gear",
+        description = "<html>Send a 3D model of your character (and pet) so your profile page<br>"
+            + "can show it, and so the gear and inventory you were carrying can be<br>"
+            + "pictured alongside your personal bests.<br>"
+            + "The model is sent once per outfit, while you are standing still - never during combat.</html>",
+        position = 4,
+        section = advancedSection
+    )
+    default boolean uploadCharacterModel() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "showSidePanel",
+        name = "Show Side Panel",
+        description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>"
+            + "<b>Note</b>: Requires the API to be enabled.</html>",
+        position = 5,
+        section = advancedSection
+    )
+    default boolean showSidePanel() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "debugLogging",
+        name = "Debug Logging",
+        description = "Do you want the DropTracker to log data locally to your machine for debugging purposes?",
+        position = 6,
+        section = advancedSection
+    )
+    default boolean debugLogging() {
+        return false;
+    }
+
+    // ==================== Retired from the UI ====================
+    /*
+     * Kept (not deleted) so a player's existing value still applies and the
+     * code reading it keeps working. Un-hide by removing `hidden = true`.
+     */
+
+    /** Master gate for the whole XP/level pipeline; "Levels" and "XP Milestones" sit under it. */
+    @ConfigItem(
+        keyName = "trackExperience",
+        name = "Track Experience",
+        description = "Do you want to send experience gains to the DropTracker?",
+        hidden = true
+    )
+    default boolean trackExperience() {
+        return true;
+    }
+
+    /** Folded into "Activity Tracking"; an existing opt-out still wins. */
+    @ConfigItem(
+        keyName = "trackMta",
+        name = "Mage Training Arena",
+        description = "Track reward shop purchases (and the Bones to Peaches unlock) at the Mage Training Arena.",
+        hidden = true
+    )
+    default boolean trackMta() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "trackAgilityPyramid",
+        name = "Agility Pyramid",
+        description = "Track pyramid tops obtained at the Agility Pyramid.",
+        hidden = true
+    )
+    default boolean trackAgilityPyramid() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "trackTrawling",
+        name = "Deep Sea Trawling",
+        description = "Track fish you catch while deep sea trawling.",
+        hidden = true
+    )
+    default boolean trackTrawling() {
+        return true;
+    }
+
+    /** Folded into "Send character model & gear"; an existing opt-out still wins. */
+    @ConfigItem(
+        keyName = "sendLoadoutWithPbs",
+        name = "Send gear with personal bests",
+        description = "Include the gear and inventory you carried when you set a personal best.",
+        hidden = true
+    )
+    default boolean sendLoadoutWithPbs() {
+        return true;
+    }
+
+    /** Nuance of "Display type"; retired to keep the Events section to four options. */
+    @ConfigItem(
+        keyName = "eventImportantPopupsOnly",
+        name = "Pop-ups: important only",
+        description = "Only pop up the big moments; ordinary completions stay in chat.",
+        hidden = true
+    )
+    default boolean eventImportantPopupsOnly() {
+        return false;
+    }
+
+    @ConfigItem(
+        keyName = "pollUpdates",
+        name = "Polling Updates",
+        description = "Auto-update the side panel content/stats periodically.",
+        hidden = true
+    )
+    default boolean pollUpdates() {
+        return true;
+    }
+
+    // ==================== Internal state ====================
 
     @ConfigItem(
         name = "pinnedEventId",
@@ -579,140 +556,6 @@ public interface DropTrackerConfig extends Config {
     )
     void setPinnedEventId(int eventId);
 
-    /* API Configuration */
-    @ConfigSection(
-        name = "API Configuration",
-        description = "Configure settings related to integration with our external API",
-        position = 9,
-        closedByDefault = true
-    )
-    String apiSection = "API Configuration";
-
-    @ConfigItem(
-        name = "Use API Connections",
-        keyName = "useApi",
-        description = "Enables external connections to the DropTracker database, for panel data.<br />"
-            + "<b>Note</b>: The API is currently <b>required</b> for participation in events!",
-        position = 1,
-        section = apiSection,
-        warning = "<html><b>WARNING</b>: In order to connect to the DropTracker API,<br>"
-            + "your client must make out-going connections to the developer's server.<br>"
-            + "This server can not be verified by the RuneLite developers.<br>"
-            + "<b>Are you sure?</b></html>"
-    )
-    default boolean useApi() {
-        return false;
-    }
-
-    @ConfigItem(
-        name = "Receive in-game messages",
-        keyName = "receiveInGameMessages",
-        description = "Do you want to see chat messages from the plugin to confirm your submissions/etc?",
-        position = 2,
-        section = apiSection
-    )
-    default boolean receiveInGameMessages() {
-        return true;
-    }
-
-    @ConfigItem(
-        name = "Sync account progress",
-        keyName = "syncAccountState",
-        description = "<html>Periodically send your skills, quests, achievement diaries,<br>"
-            + "combat achievements and collection log to DropTracker, so your<br>"
-            + "profile page can show your current progress.<br>"
-            + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
-        position = 5,
-        section = apiSection
-    )
-    default boolean syncAccountState() {
-        return true;
-    }
-
-    @ConfigItem(
-        name = "Send gear with personal bests",
-        keyName = "sendLoadoutWithPbs",
-        description = "<html>Include the gear you were wearing and the inventory you were<br>"
-            + "carrying when you set a personal best, so it can be shown alongside the time.<br>"
-            + "This includes a 3D model of your character to be displayed alongside the PB entry.</html>",
-        position = 6,
-        section = apiSection
-    )
-    default boolean sendLoadoutWithPbs() {
-        return true;
-    }
-
-    @ConfigItem(
-        name = "Upload character model",
-        keyName = "uploadCharacterModel",
-        description = "<html>Send a 3D model of your character (and pet) so your profile page<br>"
-            + "can show it, and so your gear can be pictured alongside your personal bests.<br>"
-            + "Sent once per outfit, while you are standing still - never during combat.</html>",
-        position = 7,
-        section = apiSection
-    )
-    default boolean uploadCharacterModel() {
-        return true;
-    }
-    /*
-    @ConfigItem(
-        name = "[ADVANCED] Custom API Endpoint",
-        keyName = "customApiEndpoint",
-        description = "<html><b>Warning!</b>: Changing this option will likely cause<br>your submissions to no longer be processed at all!<br>This is intended as a debugging option.</html>",
-        position = 3,
-        section = apiSection
-    )
-
-     */
-
-
-    @ConfigItem(
-        name = "Debug Logging",
-        keyName = "debugLogging",
-        description = "Do you want the DropTracker to log data locally to your machine for debugging purposes?",
-        position = 4,
-        section = apiSection
-    )
-    default boolean debugLogging() {
-        return false;
-    }
-
-
-    /* Side panel settings */
-    @ConfigSection(
-        name = "Side Panel",
-        description = "Configure options related to the DropTracker Panel",
-        position = 10,
-        closedByDefault = true
-    )
-    String sidePanelSection = "Side Panel";
-
-    @ConfigItem(
-        name = "Show Side Panel",
-        keyName = "showSidePanel",
-        description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>"
-            + "<b>Note</b>: Requires the API to be enabled.</html>",
-        position = 0,
-        section = sidePanelSection
-    )
-    default boolean showSidePanel() {
-        return true;
-    }
-	
-	@ConfigItem(
-		name = "Polling Updates",
-		keyName = "pollUpdates",
-		description = "<html>Do you want to auto-update your DropTracker<br>" 
-			+ "side panel content/stats periodically?</html>",
-		position = 1,
-		section = sidePanelSection
-	)
-	default boolean pollUpdates() {
-		return true;
-	}
-
-
-    /* Hidden config items for storing internal info */
     @ConfigItem(
         name = "lastVersionNotified",
         keyName = "lastVersionNotified",
@@ -750,18 +593,20 @@ public interface DropTrackerConfig extends Config {
     void setLastAccountName(String accountName);
 
     @ConfigItem(
-            name = "customApiEndpoint",
-            keyName = "customApiEndpoint",
-            description = "customApiEndpoint",
-            hidden = true
+        name = "customApiEndpoint",
+        keyName = "customApiEndpoint",
+        description = "customApiEndpoint",
+        hidden = true
     )
-    default String customApiEndpoint() {return "";}
+    default String customApiEndpoint() {
+        return "";
+    }
 
     @ConfigItem(
-            name = "customApiEndpoint",
-            keyName = "customApiEndpoint",
-            description = "customApiEndpoint",
-            hidden = true
+        name = "customApiEndpoint",
+        keyName = "customApiEndpoint",
+        description = "customApiEndpoint",
+        hidden = true
     )
     void setCustomApiEndpoint(String customApiEndpoint);
 

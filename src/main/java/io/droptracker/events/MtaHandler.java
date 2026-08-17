@@ -79,7 +79,7 @@ public class MtaHandler extends BaseEventHandler {
 
     @Override
     public boolean isEnabled() {
-        return config.trackMta();
+        return config.trackActivities() && config.trackMta();
     }
 
     public void onTick() {

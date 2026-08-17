@@ -73,7 +73,7 @@ public class TrawlingHandler extends BaseEventHandler {
 
     @Override
     public boolean isEnabled() {
-        return config.trackTrawling();
+        return config.trackActivities() && config.trackTrawling();
     }
 
     public void onGameMessage(String message) {
