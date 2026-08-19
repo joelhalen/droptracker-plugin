@@ -294,6 +294,15 @@ public class ExperienceHandler extends BaseEventHandler {
         if (currentXp.equals(lastSnapshotXp)) {
             return;
         }
+        /* Before any state is consumed below: skipping without a name has to
+           leave the snapshot pending, not swallow it. The login snapshot is the
+           one most likely to land here, since it fires while the RSN may still
+           be loading. */
+        String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping {} XP snapshot: no resolvable player name", reason);
+            return;
+        }
 
         Map<String, List<Integer>> skillsData = new LinkedHashMap<>();
         long totalXp = 0;
@@ -311,7 +320,7 @@ public class ExperienceHandler extends BaseEventHandler {
 
         Integer combatLevel = currentLevels.get(COMBAT_NAME);
 
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " experience update");
+        CustomWebhookBody webhook = createWebhookBody(playerName + " experience update");
         CustomWebhookBody.Embed embed = createEmbed("Experience Update", "experience_update");
         embed.addField("snapshot_reason", reason, true);
         embed.addField("total_level", String.valueOf(totalLevel), true);
@@ -373,6 +382,14 @@ public class ExperienceHandler extends BaseEventHandler {
         final int n = xpReached.size();
         if (n == 0) return;
 
+        // Bail before xpReached is cleared, so the milestone survives to the
+        // next attempt rather than being lost with the submission.
+        String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping XP milestone submission: no resolvable player name");
+            return;
+        }
+
         int interval = XP_INTERVAL_MILLIONS * 1_000_000;
         List<String> milestones = new ArrayList<>(n);
         
@@ -416,7 +433,7 @@ public class ExperienceHandler extends BaseEventHandler {
         List<String> skillsLeveled = new ArrayList<>(); // No level ups for XP milestones
         Map<String, Object> fieldData = createLevelUpFieldData(milestones, skillsLeveled, experienceData);
         
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " reached an XP milestone!");
+        CustomWebhookBody webhook = createWebhookBody(playerName + " reached an XP milestone!");
         CustomWebhookBody.Embed embed = createEmbed("XP Milestone Reached", "experience_milestone");
         
         addFields(embed, fieldData);
@@ -431,6 +448,13 @@ public class ExperienceHandler extends BaseEventHandler {
         /* For level ups specifically  */
         int n = levelledSkills.size();
         if (n == 0) return;
+
+        // Bail before levelledSkills is drained, for the same reason as notifyXp.
+        String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping level up submission: no resolvable player name");
+            return;
+        }
 
         // Prepare level state
         List<String> levelled = new ArrayList<>(n);
@@ -529,7 +553,7 @@ public class ExperienceHandler extends BaseEventHandler {
             fieldData.put("combat_level", combatLevel);
         }
         
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " leveled up!");
+        CustomWebhookBody webhook = createWebhookBody(playerName + " leveled up!");
         CustomWebhookBody.Embed embed = createEmbed("Level Up!", "level_up");
         
         addFields(embed, fieldData);

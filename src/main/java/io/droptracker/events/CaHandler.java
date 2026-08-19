@@ -37,6 +37,10 @@ public class CaHandler extends BaseEventHandler {
             int totalPoints = client.getVarbitValue(TOTAL_POINTS_ID);
 
             String player = getPlayerName();
+            if (player == null) {
+                log.debug("Skipping combat achievement submission: no resolvable player name");
+                return;
+            }
             CustomWebhookBody combatWebhook = createWebhookBody(player + " has completed a new combat task:");
             CustomWebhookBody.Embed combatAchievementEmbed = createEmbed(null, "combat_achievement");
             

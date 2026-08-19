@@ -74,7 +74,13 @@ public class QuestHandler extends BaseEventHandler {
             return;
         }
 
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " completed a quest!");
+        String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping quest submission: no resolvable player name");
+            return;
+        }
+
+        CustomWebhookBody webhook = createWebhookBody(playerName + " completed a quest!");
         CustomWebhookBody.Embed embed = createEmbed("Quest Completed!", "quest");
         
         Map<String, Object> fieldData = new HashMap<>();

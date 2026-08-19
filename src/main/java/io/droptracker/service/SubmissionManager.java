@@ -14,6 +14,7 @@ import io.droptracker.models.submissions.ValidSubmission;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.util.NpcUtilities;
+import io.droptracker.util.PlayerIdentity;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.Text;
 import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import javax.imageio.ImageIO;
 import javax.inject.Inject;
@@ -146,6 +148,10 @@ public class SubmissionManager {
      * Entry point for non-drop events (PBs, CLogs, CAs, Pets, Quests, Levels, XP, etc.)
      */
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
+        if (hasUnidentifiedEmbed(webhook)) {
+            debugLogEventFlow("skipped", type, "player_name missing; submission has no identity");
+            return;
+        }
         boolean requiredScreenshot = false;
         boolean shouldHideDm = config.hideDMs();
         debugLogEventFlow("received", type, "entry=non-drop, useApi=" + config.useApi() + ", hideDMs=" + shouldHideDm);
@@ -315,6 +321,10 @@ public class SubmissionManager {
      * Entry point for drop events (value-based qualification)
      */
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue, boolean valueModified) {
+        if (hasUnidentifiedEmbed(customWebhookBody)) {
+            debugLogEventFlow("skipped", SubmissionType.DROP, "player_name missing; submission has no identity");
+            return;
+        }
         if (!config.lootEmbeds()) {
             debugLogEventFlow("skipped", SubmissionType.DROP, "lootEmbeds=false");
             return;
@@ -371,6 +381,36 @@ public class SubmissionManager {
             }
         }
         return null;
+    }
+
+    /**
+     * Last line of defence for the identity fix: a submission whose
+     * {@code player_name} is present but blank cannot be attributed to anyone,
+     * and the backend rejects it anyway. Handlers already skip these at the
+     * source; this stops a future path from reintroducing a nameless — or
+     * worse, invented — submission by accident. Embeds that carry no
+     * {@code player_name} at all (the adventure log names its field
+     * {@code player}) are left alone.
+     */
+    @VisibleForTesting
+    static boolean hasUnidentifiedEmbed(CustomWebhookBody webhook) {
+        if (webhook == null || webhook.getEmbeds() == null) {
+            return false;
+        }
+        for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
+            if (embed == null || embed.getFields() == null) {
+                continue;
+            }
+            for (CustomWebhookBody.Field field : embed.getFields()) {
+                if (field == null || !"player_name".equalsIgnoreCase(field.getName())) {
+                    continue;
+                }
+                if (PlayerIdentity.isMissingName(field.getValue())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private NearbyPlayerTracker.NearbyPlayerTrace addParticipantsField(CustomWebhookBody webhook) {

@@ -185,7 +185,13 @@ public class PetHandler extends BaseEventHandler {
             gameMessage = "has a funny feeling like they're being followed";
         }
 
-        CustomWebhookBody webhook = createWebhookBody(getPlayerName() + " received a pet!");
+        String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping pet submission: no resolvable player name");
+            return;
+        }
+
+        CustomWebhookBody webhook = createWebhookBody(playerName + " received a pet!");
         CustomWebhookBody.Embed embed = createEmbed("Pet Drop!", "pet");
         
         Map<String, Object> fieldData = new HashMap<>();

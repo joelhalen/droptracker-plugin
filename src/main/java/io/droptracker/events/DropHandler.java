@@ -197,6 +197,12 @@ public class DropHandler extends BaseEventHandler {
 			// Gather all game state info needed
 			List<ItemStack> stackedItems = new ArrayList<>(ItemStacks.stack(finalItems));
 			String localPlayerName = getPlayerName();
+			if (localPlayerName == null) {
+				/* No identity, no submission: the drop cannot be attributed to
+				   anyone, and this bails before the screenshot work below. */
+				log.debug("Skipping drop submission for {}: no resolvable player name", npcName);
+				return;
+			}
 			AtomicInteger totalValue = new AtomicInteger(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
 			AtomicInteger singleValue = new AtomicInteger(0);

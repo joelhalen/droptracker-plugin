@@ -8,11 +8,13 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.util.DebugLogger;
+import io.droptracker.util.PlayerIdentity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 
+import javax.annotation.Nullable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.Map;
 
@@ -59,13 +61,21 @@ public abstract class BaseEventHandler {
     }
 
     /**
-     * Gets the local player's name.
-     * 
-     * @return the local player's name, or "Unknown" if null/empty
+     * Resolves the RSN to submit this event under.
+     *
+     * <p>See {@link PlayerIdentity} for why this never falls back to a made-up
+     * name, and what it does fall back to instead.
+     *
+     * @return the RSN, or {@code null} when it cannot be established — callers
+     *         must skip the submission entirely rather than send it nameless
      */
+    @Nullable
     protected String getPlayerName() {
-        String playerName = plugin.getLocalPlayerName();
-        return (playerName != null && !playerName.trim().isEmpty()) ? playerName : "Unknown";
+        return PlayerIdentity.resolve(
+            plugin != null ? plugin.getLocalPlayerName() : null,
+            getAccountHash(),
+            config != null ? config.lastAccountName() : null,
+            config != null ? config.lastAccountHash() : null);
     }
 
     /**
@@ -93,7 +103,16 @@ public abstract class BaseEventHandler {
         String accountHash = getAccountHash();
         String pluginVersion = plugin != null && plugin.pluginVersion != null ? plugin.pluginVersion : "unknown";
         String guid = api != null ? api.generateGuidForSubmission() : "unknown";
-        
+
+        /* Handlers are expected to bail before building an embed they have no
+           identity for. If one ever forgets, an empty name is what makes the
+           submission fail SubmissionManager's identity check instead of going
+           out under a made-up one. */
+        if (playerName == null) {
+            log.debug("Building an embed with no resolvable player name; this submission will be dropped");
+            playerName = "";
+        }
+
         embed.addField("player_name", playerName, true);
         embed.addField("acc_hash", accountHash, true);
         embed.addField("p_v", pluginVersion, true);

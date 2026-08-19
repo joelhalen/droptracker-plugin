@@ -116,6 +116,10 @@ public class DeathHandler extends BaseEventHandler {
         boolean npc = killer instanceof NPC;
 
         String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping death submission: no resolvable player name");
+            return;
+        }
         CustomWebhookBody webhook = createWebhookBody(playerName + " has died!");
         CustomWebhookBody.Embed embed = createEmbed(playerName + " has died!", "death");
 

@@ -458,6 +458,11 @@ public class PbHandler extends BaseEventHandler {
 
     private void sendKillNotification(KillData data) {
         String player = getPlayerName();
+        if (player == null) {
+            DebugLogger.log("[PbHandler][send] skipping kill notification; no resolvable player name");
+            log.debug("Skipping kill time submission: no resolvable player name");
+            return;
+        }
         String formattedTime = formatTime(data.time, isPreciseTiming(client));
         String formattedBestTime = formatTime(data.bestTime, isPreciseTiming(client));
         

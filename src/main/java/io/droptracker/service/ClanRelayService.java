@@ -12,6 +12,7 @@ import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.util.PlayerIdentity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.clan.ClanChannel;
@@ -171,6 +172,21 @@ public class ClanRelayService {
     }
 
     private void sendBatch(List<PendingLine> lines, SubmissionType type) {
+        /* The relayer's own identity is what the server authenticates the batch
+           against, and it rejects a batch without one. Flushing happens off the
+           client thread, so an unreadable name here is routine — resolve it the
+           same way submissions do, and drop the batch rather than relay it
+           anonymously or under an invented name. */
+        String relayerName = PlayerIdentity.resolve(
+            plugin.getLocalPlayerName(),
+            String.valueOf(client.getAccountHash()),
+            config.lastAccountName(),
+            config.lastAccountHash());
+        if (relayerName == null) {
+            log.debug("Skipping clan relay batch: no resolvable player name");
+            return;
+        }
+
         CustomWebhookBody webhook = null;
         for (PendingLine line : lines) {
             if (line.type != type) {
@@ -188,7 +204,7 @@ public class ClanRelayService {
             if (line.sender != null) {
                 embed.addField("sender", line.sender, true);
             }
-            embed.addField("player_name", plugin.getLocalPlayerName(), true);
+            embed.addField("player_name", relayerName, true);
             embed.addField("acc_hash", String.valueOf(client.getAccountHash()), true);
             embed.addField("p_v", plugin.pluginVersion != null ? plugin.pluginVersion : "unknown", true);
             embed.addField("guid", api.generateGuidForSubmission(), true);

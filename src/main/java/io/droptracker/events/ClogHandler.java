@@ -156,6 +156,10 @@ public class ClogHandler extends BaseEventHandler {
             }
                     
             String player = getPlayerName();
+            if (player == null) {
+                log.debug("Skipping collection log submission: no resolvable player name");
+                return;
+            }
             CustomWebhookBody collectionLogBody = createWebhookBody(player + " received a collection log:");
             CustomWebhookBody.Embed collEmbed = createEmbed(player + " received a collection log:", "collection_log");
             

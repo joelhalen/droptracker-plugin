@@ -43,6 +43,10 @@ public class DiaryHandler extends BaseEventHandler {
         String area = matcher.group("area").trim();
 
         String playerName = getPlayerName();
+        if (playerName == null) {
+            log.debug("Skipping diary submission: no resolvable player name");
+            return;
+        }
         CustomWebhookBody webhook = createWebhookBody(playerName + " completed an achievement diary!");
         CustomWebhookBody.Embed embed = createEmbed(playerName + " completed the " + tier + " " + area + " diary!", "diary");
 
