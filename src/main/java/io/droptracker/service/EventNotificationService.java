@@ -419,6 +419,9 @@ public class EventNotificationService {
     /** Age past which a bridge chat line is history, not conversation. */
     private static final long BRIDGE_LINE_MAX_AGE_SECONDS = 120;
 
+    /** Server-side cap for Discord→game lines (clan_chat_bridge.py). */
+    private static final int BRIDGE_MESSAGE_MAX_CHARS = 200;
+
     /**
      * Renders {@code clan_chat_message} envelopes (Discord→game bridge) as
      * clan-styled chat lines and returns the batch without them. Stale lines
@@ -442,7 +445,10 @@ public class EventNotificationService {
             }
             EventNotification.Data data = n.getData();
             String sender = data != null ? clean(data.getSender()) : null;
-            String message = data != null ? clean(data.getMessage()) : null;
+            // Matches the server's DISCORD_TO_GAME_MAX_CHARS (200) — the
+            // generic 120 cap would re-truncate lines the backend already
+            // capped, silently eating the tail of longer Discord messages.
+            String message = data != null ? clean(data.getMessage(), BRIDGE_MESSAGE_MAX_CHARS) : null;
             if (sender == null || message == null) {
                 continue;
             }
@@ -1405,6 +1411,11 @@ public class EventNotificationService {
     /** Tag-strip + length-cap every server-supplied string before rendering. */
     @Nullable
     static String clean(@Nullable String value) {
+        return clean(value, MAX_TEXT_LENGTH);
+    }
+
+    @Nullable
+    static String clean(@Nullable String value, int maxLength) {
         if (value == null) {
             return null;
         }
@@ -1412,8 +1423,8 @@ public class EventNotificationService {
         if (stripped.isEmpty()) {
             return null;
         }
-        return stripped.length() > MAX_TEXT_LENGTH
-            ? stripped.substring(0, MAX_TEXT_LENGTH - 1) + "…" : stripped;
+        return stripped.length() > maxLength
+            ? stripped.substring(0, maxLength - 1) + "…" : stripped;
     }
 
     /** A transient on-screen pop-up. */

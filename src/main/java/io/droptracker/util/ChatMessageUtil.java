@@ -101,17 +101,22 @@ public class ChatMessageUtil {
      * clanmate; both strings must already be sanitized/capped by the caller.
      */
     public void sendDiscordClanMessage(String sender, String messageContent) {
-        String clanName = client.getClanChannel() != null
-                ? net.runelite.client.util.Text.removeTags(client.getClanChannel().getName())
-                : "Discord";
-        chatMessageManager.queue(
-                QueuedMessage.builder()
-                        .type(ChatMessageType.CLAN_CHAT)
-                        .name(sender + " (Discord)")
-                        .sender(clanName)
-                        .value(messageContent)
-                        .build()
-        );
+        // Callers arrive on the OkHttp callback thread (the notification
+        // poller), and client.getClanChannel() is only safe on the client
+        // thread — hop over for the read; queue() itself is thread-safe.
+        clientThread.invokeLater(() -> {
+            String clanName = client.getClanChannel() != null
+                    ? net.runelite.client.util.Text.removeTags(client.getClanChannel().getName())
+                    : "Discord";
+            chatMessageManager.queue(
+                    QueuedMessage.builder()
+                            .type(ChatMessageType.CLAN_CHAT)
+                            .name(sender + " (Discord)")
+                            .sender(clanName)
+                            .value(messageContent)
+                            .build()
+            );
+        });
     }
 
     public void sendEventChatMessage(String eventName, String teamName, String messageContent) {

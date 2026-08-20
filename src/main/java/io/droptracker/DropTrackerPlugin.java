@@ -79,6 +79,7 @@ import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -211,6 +212,8 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Inject
 	private Client client;
+	@Inject
+	private ClientThread clientThread;
 
 	public String pluginVersion = "6.0";
 	// Add a new flag to track when we need to update on next available tick
@@ -250,6 +253,12 @@ public class DropTrackerPlugin extends Plugin {
 		overlayManager.add(eventToastOverlay);
 		overlayManager.add(eventHudOverlay);
 		eventNotificationService.start();
+
+		// Seed the clan-channel binding for the Discord chat bridge: enabling
+		// the plugin while already logged in and sitting in a clan fires no
+		// ClanChannelChanged, so without this the inbound direction (and the
+		// ?clan= presence heartbeat) stays dead until the next relog.
+		clientThread.invokeLater(() -> clanRelayService.updateClanChannel(client.getClanChannel()));
 
 		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
 			+ ", sidePanelEnabled=" + config.showSidePanel()
