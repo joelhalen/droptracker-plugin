@@ -45,14 +45,12 @@ import javax.swing.SwingUtilities;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
-import io.droptracker.events.AgilityPyramidHandler;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
 import io.droptracker.events.DeathHandler;
 import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
 import io.droptracker.events.ExperienceHandler;
-import io.droptracker.events.MtaHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.QuestHandler;
 import io.droptracker.events.PetHandler;
@@ -139,10 +137,6 @@ public class DropTrackerPlugin extends Plugin {
 	public DeathHandler deathHandler;
 	@Inject
 	public DiaryHandler diaryHandler;
-	@Inject
-	public MtaHandler mtaHandler;
-	@Inject
-	public AgilityPyramidHandler agilityPyramidHandler;
 	@Inject
 	public TrawlingHandler trawlingHandler;
 
@@ -425,49 +419,6 @@ public class DropTrackerPlugin extends Plugin {
 		widgetEventHandler.onWidgetLoaded(widget);
 		// Also check for quest completion widgets
 		questHandler.onWidgetLoaded(widget);
-		if (mtaHandler.isEnabled()) {
-			mtaHandler.onWidgetLoaded(widget);
-		}
-	}
-
-	@Subscribe
-	public void onWidgetClosed(WidgetClosed widget) {
-		if (mtaHandler.isEnabled()) {
-			mtaHandler.onWidgetClosed(widget);
-		}
-	}
-
-	@Subscribe
-	public void onVarbitChanged(VarbitChanged event) {
-		if (!isTracking) {
-			return;
-		}
-		if (mtaHandler.isEnabled()) {
-			mtaHandler.onVarbitChanged(event);
-		}
-	}
-
-	@Subscribe
-	public void onItemContainerChanged(ItemContainerChanged event) {
-		if (!isTracking) {
-			return;
-		}
-		if (mtaHandler.isEnabled()) {
-			mtaHandler.onItemContainerChanged(event);
-		}
-		if (agilityPyramidHandler.isEnabled()) {
-			agilityPyramidHandler.onItemContainerChanged(event);
-		}
-	}
-
-	@Subscribe
-	public void onMenuOptionClicked(MenuOptionClicked event) {
-		if (!isTracking) {
-			return;
-		}
-		if (agilityPyramidHandler.isEnabled()) {
-			agilityPyramidHandler.onMenuOptionClicked(event);
-		}
 	}
 
 	/** Add support for Yama's special drop mechanics */
@@ -681,8 +632,6 @@ public class DropTrackerPlugin extends Plugin {
 		pbHandler.onTick();
 		widgetEventHandler.onGameTick(event);
 		petHandler.onTick();
-		mtaHandler.onTick();
-		agilityPyramidHandler.onTick();
 
 		if (config.trackExperience()) {
 			experienceHandler.onTick();
@@ -730,8 +679,6 @@ public class DropTrackerPlugin extends Plugin {
 			pbHandler.reset();
 			petHandler.reset();
 			clogHandler.reset();
-			mtaHandler.reset();
-			agilityPyramidHandler.reset();
 		}
 
 		justLoggedIn.set(newState == GameState.LOGGED_IN);

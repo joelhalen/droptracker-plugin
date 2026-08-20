@@ -121,7 +121,7 @@ public class DropHandler extends BaseEventHandler {
 
 	/**
 	 * Entry point for activity loot that never fires a RuneLite loot event
-	 * (MTA reward purchases, Agility Pyramid tops, deep sea trawling catches).
+	 * (deep sea trawling catches).
 	 * The source name must exist in the server's npc_list, or the submission
 	 * is rejected server-side.
 	 */

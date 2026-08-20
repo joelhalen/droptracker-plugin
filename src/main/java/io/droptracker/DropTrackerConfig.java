@@ -150,7 +150,6 @@ public interface DropTrackerConfig extends Config {
         keyName = "trackActivities",
         name = "Activity Tracking",
         description = "<html>Track items from activities RuneLite's loot tracker misses:<br />"
-            + "Mage Training Arena reward purchases, Agility Pyramid tops and<br />"
             + "deep sea trawling catches.</html>",
         position = 11,
         section = trackingSection
@@ -471,26 +470,6 @@ public interface DropTrackerConfig extends Config {
     }
 
     /** Folded into "Activity Tracking"; an existing opt-out still wins. */
-    @ConfigItem(
-        keyName = "trackMta",
-        name = "Mage Training Arena",
-        description = "Track reward shop purchases (and the Bones to Peaches unlock) at the Mage Training Arena.",
-        hidden = true
-    )
-    default boolean trackMta() {
-        return true;
-    }
-
-    @ConfigItem(
-        keyName = "trackAgilityPyramid",
-        name = "Agility Pyramid",
-        description = "Track pyramid tops obtained at the Agility Pyramid.",
-        hidden = true
-    )
-    default boolean trackAgilityPyramid() {
-        return true;
-    }
-
     @ConfigItem(
         keyName = "trackTrawling",
         name = "Deep Sea Trawling",

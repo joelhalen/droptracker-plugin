@@ -44,7 +44,7 @@ public class DropTrackerConfigKeyNamesTest {
         "useApi", "receiveInGameMessages", "syncAccountState",
         "uploadCharacterModel", "showSidePanel", "debugLogging",
         // Retired from the UI, kept so existing values still apply
-        "trackExperience", "trackMta", "trackAgilityPyramid", "trackTrawling",
+        "trackExperience", "trackTrawling",
         "sendLoadoutWithPbs", "eventImportantPopupsOnly", "pollUpdates",
         // Internal state
         "pinnedEventId", "lastVersionNotified", "lastAccountName",
