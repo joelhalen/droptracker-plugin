@@ -158,6 +158,31 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    @ConfigItem(
+            keyName = "relayClanBroadcasts",
+            name = "Clan Broadcasts",
+            description = "<html>Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
+                    + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
+                    + "One relaying member covers the whole clan; duplicates are handled server-side.</html>",
+            position = 12,
+            section = trackingSection
+    )
+    default boolean relayClanBroadcasts() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "relayClanChat",
+            name = "Relay clan chat to Discord",
+            description = "<html>Mirror your clan chat into your group's configured Discord bridge channel.<br />"
+                    + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.</html>",
+            position = 13,
+            section = trackingSection
+    )
+    default boolean relayClanChat() {
+        return false;
+    }
+
     // ==================== Screenshots ====================
 
     @ConfigSection(
@@ -316,53 +341,6 @@ public interface DropTrackerConfig extends Config {
         return EventHudDetail.DETAILED;
     }
 
-    // ==================== Clan Chat ====================
-
-    @ConfigSection(
-        name = "Clan Chat",
-        description = "Relay your clan's broadcasts and chat to your group's DropTracker features.<br />"
-            + "Requires the API connection, and your group must configure its clan name on droptracker.io.",
-        position = 4,
-        closedByDefault = true
-    )
-    String clanSection = "Clan Chat";
-
-    @ConfigItem(
-        keyName = "relayClanBroadcasts",
-        name = "Relay clan broadcasts",
-        description = "<html>Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
-            + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
-            + "One relaying member covers the whole clan; duplicates are handled server-side.</html>",
-        position = 1,
-        section = clanSection
-    )
-    default boolean relayClanBroadcasts() {
-        return false;
-    }
-
-    @ConfigItem(
-        keyName = "relayClanChat",
-        name = "Relay clan chat to Discord",
-        description = "<html>Mirror your clan chat into your group's configured Discord bridge channel.<br />"
-            + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.</html>",
-        position = 2,
-        section = clanSection
-    )
-    default boolean relayClanChat() {
-        return false;
-    }
-
-    @ConfigItem(
-        keyName = "receiveDiscordChat",
-        name = "Show Discord messages in game",
-        description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
-            + "clan chat box (visible only to you; nothing is sent to the game server).</html>",
-        position = 3,
-        section = clanSection
-    )
-    default boolean receiveDiscordChat() {
-        return true;
-    }
 
     // ==================== Advanced ====================
 
@@ -402,13 +380,25 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "receiveDiscordChat",
+            name = "Show Discord messages in game",
+            description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
+                    + "clan chat box (visible only to you; nothing is sent to the game server).</html>",
+            position = 3,
+            section = advancedSection
+    )
+    default boolean receiveDiscordChat() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "syncAccountState",
         name = "Sync account progress",
         description = "<html>Periodically send your skills, quests, achievement diaries,<br>"
             + "combat achievements and collection log to DropTracker, so your<br>"
             + "profile page can show your current progress.<br>"
             + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
-        position = 3,
+        position = 4,
         section = advancedSection
     )
     default boolean syncAccountState() {
@@ -422,7 +412,7 @@ public interface DropTrackerConfig extends Config {
             + "can show it, and so the gear and inventory you were carrying can be<br>"
             + "pictured alongside your personal bests.<br>"
             + "The model is sent once per outfit, while you are standing still - never during combat.</html>",
-        position = 4,
+        position = 5,
         section = advancedSection
     )
     default boolean uploadCharacterModel() {
@@ -434,7 +424,7 @@ public interface DropTrackerConfig extends Config {
         name = "Show Side Panel",
         description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>"
             + "<b>Note</b>: Requires the API to be enabled.</html>",
-        position = 5,
+        position = 6,
         section = advancedSection
     )
     default boolean showSidePanel() {
@@ -445,7 +435,7 @@ public interface DropTrackerConfig extends Config {
         keyName = "debugLogging",
         name = "Debug Logging",
         description = "Do you want the DropTracker to log data locally to your machine for debugging purposes?",
-        position = 6,
+        position = 7,
         section = advancedSection
     )
     default boolean debugLogging() {
