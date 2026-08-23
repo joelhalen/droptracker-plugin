@@ -430,7 +430,8 @@ public class DropTrackerApi {
      * defeats the entire reason the manifest is server-side.
      *
      * @return the manifest, or null if unavailable — callers fall back to their
-     *         built-in defaults rather than failing.
+     *         built-in defaults rather than failing. A manifest that parsed but
+     *         had an unreadable section is still returned, minus that section.
      */
     public Manifest getManifest() {
         if (!config.useApi()) {
@@ -454,7 +455,10 @@ public class DropTrackerApi {
             if (body == null) {
                 return null;
             }
-            return gson.fromJson(body.string(), Manifest.class);
+            // Manifest.fromJson, not gson.fromJson(.., Manifest.class): the
+            // reflective adapter would abandon the whole document over one
+            // section whose shape changed, taking every other section with it.
+            return Manifest.fromJson(gson, body.string());
         } catch (IOException | JsonSyntaxException e) {
             log.debug("Couldn't fetch the manifest: {}", e.toString());
             return null;

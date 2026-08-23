@@ -245,6 +245,13 @@ public class StateSyncService {
 	 * <p>Deliberately does nothing without a manifest: the varps are not a
 	 * contiguous range, so there is no safe range to guess at, and sending a
 	 * partial set would look like the player had un-completed tasks.
+	 *
+	 * <p>Raw varps only, no per-task breakdown. The server holds the task
+	 * registry and decodes these bits into named, tiered, per-monster tasks when
+	 * a profile is read, which means a registry correction applies retroactively
+	 * to everything already stored — a decode done here could only ever be
+	 * staler than that, and would still miss the tasks the registry has no entry
+	 * for that the varps cover anyway.
 	 */
 	private void collectCombatAchievements(StateSnapshot snapshot, Manifest manifest) {
 		if (manifest == null) {
@@ -255,22 +262,6 @@ public class StateSyncService {
 			varps.put(varpId, client.getVarpValue(varpId));
 		}
 		snapshot.setCombatAchievementVarps(varps);
-
-		// Individual task varbits, so the site can show progress per boss the
-		// way the in-game interface does. Reported alongside the raw varps, not
-		// instead of them: the varps still cover tasks the registry has no
-		// entry for.
-		List<Integer> completed = new java.util.ArrayList<>();
-		for (Manifest.CombatAchievementTask task : manifest.getCombatAchievementTasks()) {
-			Integer varbit = task.getVarbit();
-			if (varbit == null) {
-				continue;
-			}
-			if (client.getVarbitValue(varbit) > 0) {
-				completed.add(varbit);
-			}
-		}
-		snapshot.setCompletedCombatAchievementTasks(completed);
 	}
 
 	private void collectDiaries(StateSnapshot snapshot) {
