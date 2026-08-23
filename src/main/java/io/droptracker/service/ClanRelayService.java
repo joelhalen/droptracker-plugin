@@ -12,6 +12,7 @@ import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.PlayerIdentity;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -109,13 +110,25 @@ public class ClanRelayService {
         queueLine(new PendingLine(SubmissionType.CLAN_BROADCAST, null, message));
     }
 
-    /** A CLAN_CHAT player line (sender may still carry icon tags). */
+    /**
+     * A CLAN_CHAT player line (sender may still carry icon tags).
+     *
+     * <p>Discord lines the bridge renders locally arrive here too —
+     * {@code client.addChatMessage} posts a real {@code ChatMessage}, so the
+     * Discord→game direction feeds straight back into the game→Discord one.
+     * Unguarded that echoes every Discord message back into the channel it
+     * was typed in, so lines wearing {@link
+     * ChatMessageUtil#DISCORD_SENDER_MARKER} stop here.</p>
+     */
     public void onClanChat(String senderName, String message) {
         if (!config.useApi() || !config.relayClanChat()) {
             return;
         }
         String sender = senderName != null ? Text.removeTags(Text.toJagexName(senderName)) : null;
         if (sender == null || sender.trim().isEmpty()) {
+            return;
+        }
+        if (ChatMessageUtil.isDiscordBridgeSender(sender)) {
             return;
         }
         queueLine(new PendingLine(SubmissionType.CLAN_CHAT, sender.trim(), message));

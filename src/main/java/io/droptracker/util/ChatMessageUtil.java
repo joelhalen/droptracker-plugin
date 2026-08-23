@@ -87,18 +87,33 @@ public class ChatMessageUtil {
     }
 
     /**
-     * Event-notification line: prefixed "[Event Name] (Team name):" instead
-     * of the generic [DropTracker] tag so lines read as the event talking.
-     * Both names must already be sanitized/capped by the caller; teamName is
-     * optional (omitted before the first /event_state snapshot lands).
+     * Stamped onto a Discord author's name when their line is rendered in the
+     * game's clan chat. Two jobs: a Discord user can never be mistaken for an
+     * in-game clanmate, AND it is what stops the bridge from looping — the
+     * render goes through {@code client.addChatMessage}, which posts a real
+     * {@link net.runelite.api.events.ChatMessage}, so our own injected line
+     * comes straight back through the plugin's chat subscriber. An in-game
+     * display name cannot contain parentheses, so no real clanmate wears it.
      */
+    public static final String DISCORD_SENDER_MARKER = "(Discord)";
+
+    /**
+     * Whether a CLAN_CHAT sender name is one of our own rendered Discord
+     * lines. Substring rather than suffix: the marker is appended at the end
+     * today, but the test has to keep holding if the rendered name is ever
+     * decorated further, and no real name can contain it either way.
+     */
+    public static boolean isDiscordBridgeSender(String name) {
+        return name != null && name.contains(DISCORD_SENDER_MARKER);
+    }
+
     /**
      * Discord→game bridge line, rendered to look like clan chat (visible only
      * to this client — nothing is sent to the game server). Approach adapted
      * from the TrackScape Connector, Copyright (c) 2023, Bailey Townsend,
-     * BSD 2-Clause License (see LICENSE). The sender is
-     * suffixed so a Discord user can never be mistaken for an in-game
-     * clanmate; both strings must already be sanitized/capped by the caller.
+     * BSD 2-Clause License (see LICENSE). The sender carries
+     * {@link #DISCORD_SENDER_MARKER}; both strings must already be
+     * sanitized/capped by the caller.
      */
     public void sendDiscordClanMessage(String sender, String messageContent) {
         // Callers arrive on the OkHttp callback thread (the notification
@@ -111,7 +126,7 @@ public class ChatMessageUtil {
             chatMessageManager.queue(
                     QueuedMessage.builder()
                             .type(ChatMessageType.CLAN_CHAT)
-                            .name(sender + " (Discord)")
+                            .name(sender + " " + DISCORD_SENDER_MARKER)
                             .sender(clanName)
                             .value(messageContent)
                             .build()
@@ -119,6 +134,12 @@ public class ChatMessageUtil {
         });
     }
 
+    /**
+     * Event-notification line: prefixed "[Event Name] (Team name):" instead
+     * of the generic [DropTracker] tag so lines read as the event talking.
+     * Both names must already be sanitized/capped by the caller; teamName is
+     * optional (omitted before the first /event_state snapshot lands).
+     */
     public void sendEventChatMessage(String eventName, String teamName, String messageContent) {
         sendEventChatMessage(eventName, teamName, null, null, null, messageContent);
     }
