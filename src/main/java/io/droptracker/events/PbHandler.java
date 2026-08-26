@@ -50,8 +50,16 @@ public class PbHandler extends BaseEventHandler {
         Pattern.CASE_INSENSITIVE
     );
     
+    /**
+     * The game buckets large teams rather than reporting a head count, and the
+     * bucket label is the whole token: "16-23 players", "24+ players", "6+
+     * players". The range and open-ended alternatives must precede the bare
+     * {@code \d+}, or it matches the low end alone and a 16-23 raid is
+     * submitted as a 16-player one, splitting the board away from the same
+     * raid's adventure-log and clan-broadcast copies (suggestion #153).
+     */
     private static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
-        "Team size:\\s*(?<size>\\d+|Solo|\\d\\+)\\s*(?:players?)?",
+        "Team size:\\s*(?<size>\\d+\\s*-\\s*\\d+|\\d+\\s*\\+|\\d+|Solo)\\s*(?:players?)?",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -371,7 +379,10 @@ public class PbHandler extends BaseEventHandler {
             if (raw.equalsIgnoreCase("solo")) {
                 return "Solo";
             }
-            return raw;
+            // "16 - 23" and "24 +" are the same brackets as "16-23" and "24+";
+            // the label is the board's identity, so spacing cannot vary.
+            String size = raw.replaceAll("\\s+", "");
+            return "1".equals(size) ? "Solo" : size;
         }
 
         boolean mentionsToa = message.contains("Tombs of Amascut") || (bossName != null && bossName.contains("Tombs of Amascut"));

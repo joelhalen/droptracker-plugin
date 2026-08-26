@@ -108,6 +108,33 @@ public class PbHandlerParseTest {
         assertFalse(PbHandler.teamSizePattern().matcher("Fight duration: 1:23").find());
     }
 
+    /**
+     * The game buckets big Chambers teams and puts the bucket label on the
+     * line. Matching only the leading digits submitted a 16-23 raid as "16",
+     * which is a board the game does not have (suggestion #153).
+     */
+    @Test
+    public void teamSizeKeepsRangeBracketsWhole() {
+        Matcher m = PbHandler.teamSizePattern().matcher("Team size: 16-23 players");
+        assertTrue(m.find());
+        assertEquals("16-23", m.group("size"));
+
+        Matcher low = PbHandler.teamSizePattern().matcher("Team size: 11-15 players");
+        assertTrue(low.find());
+        assertEquals("11-15", low.group("size"));
+    }
+
+    @Test
+    public void teamSizeKeepsOpenEndedBracketsWhole() {
+        Matcher cox = PbHandler.teamSizePattern().matcher("Team size: 24+ players");
+        assertTrue(cox.find());
+        assertEquals("24+", cox.group("size"));
+
+        Matcher nightmare = PbHandler.teamSizePattern().matcher("Team size: 6+ players");
+        assertTrue(nightmare.find());
+        assertEquals("6+", nightmare.group("size"));
+    }
+
     // --- TIME_WITH_PB_PATTERN ---
 
     @Test
