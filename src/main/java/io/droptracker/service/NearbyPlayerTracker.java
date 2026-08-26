@@ -160,16 +160,82 @@ public class NearbyPlayerTracker
         {
             return 0;
         }
-        Set<String> roster = new LinkedHashSet<>();
-        if (raidType.equals(activeRaidType))
-        {
-            roster.addAll(authoritativeRoster);
-        }
+        Set<String> live = new LinkedHashSet<>();
         if (client.isClientThread())
         {
-            captureAuthoritativeRoster(raidType, roster);
+            captureAuthoritativeRoster(raidType, live);
         }
-        return roster.size();
+        Set<String> history = raidType.equals(activeRaidType) ? authoritativeRoster : Collections.emptySet();
+        return boundedRoster(live, history, rosterCapacity(raidType)).size();
+    }
+
+    /**
+     * How many member slots the raid's authoritative source publishes, which is
+     * also the largest party the game will let into it: Theatre of Blood has
+     * five health orbs, Tombs of Amascut eight. 0 means "no fixed ceiling" —
+     * Chambers of Xeric has no small cap, so mass raids stay legal there.
+     */
+    static int rosterCapacity(String raidType)
+    {
+        if (RAID_TOB.equals(raidType))
+        {
+            return 5;
+        }
+        if (RAID_TOA.equals(raidType))
+        {
+            return 8;
+        }
+        return 0;
+    }
+
+    /**
+     * Merges a live roster read with the accumulated one, never exceeding what
+     * the raid can hold.
+     *
+     * <p>The accumulated roster exists because the authoritative sources go
+     * quiet at the end of a raid, while the completion chat and the loot chest
+     * arrive after that (issue #43). But accumulating is only safe *within* one
+     * raid, and the lifecycle that is supposed to guarantee that has holes —
+     * ToB's state varbit covers spectating as well as raiding, so consecutive
+     * runs could pile up without the roster ever being cleared. That is how the
+     * PB team-size bracket, which reads this roster since plugin 6.0, started
+     * submitting Theatre of Blood times as 6-, 7-, 8- and 9-player raids
+     * (suggestion #140) and how split credit reached people who were in an
+     * earlier run rather than this one.
+     *
+     * <p>So the live read wins: it is the current raid's party, straight from
+     * the game. History only fills slots the live read left empty — the
+     * disconnected or departed members it exists for — and never past the
+     * ceiling, which self-heals a contaminated roster as soon as the next
+     * raid's names appear.
+     */
+    static Set<String> boundedRoster(Set<String> live, Set<String> history, int capacity)
+    {
+        Set<String> merged = new LinkedHashSet<>(live);
+        for (String name : history)
+        {
+            if (capacity > 0 && merged.size() >= capacity)
+            {
+                break;
+            }
+            merged.add(name);
+        }
+        if (capacity > 0 && merged.size() > capacity)
+        {
+            // The live read alone overflowed, which the slot count says cannot
+            // happen — keep the first `capacity` names rather than trust it.
+            Set<String> trimmed = new LinkedHashSet<>();
+            for (String name : merged)
+            {
+                if (trimmed.size() >= capacity)
+                {
+                    break;
+                }
+                trimmed.add(name);
+            }
+            return trimmed;
+        }
+        return merged;
     }
 
     /**
@@ -215,7 +281,11 @@ public class NearbyPlayerTracker
         }
         ticksSinceRosterScan = 0;
 
-        captureAuthoritativeRoster(raidType, authoritativeRoster);
+        Set<String> live = new LinkedHashSet<>();
+        captureAuthoritativeRoster(raidType, live);
+        Set<String> merged = boundedRoster(live, authoritativeRoster, rosterCapacity(raidType));
+        authoritativeRoster.clear();
+        authoritativeRoster.addAll(merged);
         authoritativeCaptureWorked |= !authoritativeRoster.isEmpty();
         // Sampled throughout the raid because the raid varbits reset before the
         // loot chest opens: by submission time there is nothing left to read.
@@ -539,18 +609,20 @@ public class NearbyPlayerTracker
         if (submissionRaidType != null)
         {
             // Raid submission: participants come from the authoritative roster
-            // only. Start from the accumulated roster (survives the varbit
-            // reset at completion) and merge a live read, since the ToB/ToA
-            // varcstrings and CoX sidepanel usually remain populated at
-            // loot-chest time.
-            Set<String> roster = new LinkedHashSet<>();
+            // only. Read it live first — the ToB/ToA varcstrings and the CoX
+            // sidepanel usually remain populated at loot-chest time — and let
+            // the accumulated roster (which survives the varbit reset at
+            // completion) fill the slots the live read left empty, bounded by
+            // what the raid can hold. See boundedRoster.
+            Set<String> live = new LinkedHashSet<>();
+            captureAuthoritativeRoster(submissionRaidType, live);
+            Set<String> history = submissionRaidType.equals(activeRaidType)
+                ? authoritativeRoster
+                : Collections.<String>emptySet();
+            Set<String> roster = boundedRoster(live, history, rosterCapacity(submissionRaidType));
             if (submissionRaidType.equals(activeRaidType))
             {
-                roster.addAll(authoritativeRoster);
-            }
-            captureAuthoritativeRoster(submissionRaidType, roster);
-            if (submissionRaidType.equals(activeRaidType))
-            {
+                authoritativeRoster.clear();
                 authoritativeRoster.addAll(roster);
             }
 
