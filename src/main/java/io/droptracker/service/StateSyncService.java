@@ -89,7 +89,15 @@ public class StateSyncService {
 		return manifest == null || manifest.getSync().isEnabled();
 	}
 
-	/** Records a collection log slot. Quantities of zero mean "not obtained". */
+	/**
+	 * Records a collection log slot the player has filled.
+	 *
+	 * <p>The zero check is a guard, not a filter: the game transmits a slot
+	 * only once it has been obtained, so nothing legitimate arrives with a
+	 * quantity of zero. It stays because "absent means not obtained" is what the
+	 * server reads a complete snapshot as, and a zero slipping through would say
+	 * the opposite.
+	 */
 	public void storeItem(int itemId, int quantity) {
 		if (quantity <= 0) {
 			return;

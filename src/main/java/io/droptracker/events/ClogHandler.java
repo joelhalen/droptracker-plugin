@@ -4,6 +4,7 @@ import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.service.CollectionLogSlots;
 import io.droptracker.service.KCService;
 import io.droptracker.service.StateSyncScheduler;
 import io.droptracker.service.StateSyncService;
@@ -34,6 +35,9 @@ public class ClogHandler extends BaseEventHandler {
      * rather than waiting out the periodic sync interval. */
     private final StateSyncService stateSyncService;
     private final StateSyncScheduler stateSyncScheduler;
+    /* Which ids the collection log actually has slots for, so the id we record
+     * for an unlock is the log's, not the first item to share its name. */
+    private final CollectionLogSlots collectionLogSlots;
 
     private final AtomicBoolean popupStarted = new AtomicBoolean(false);
 
@@ -41,9 +45,11 @@ public class ClogHandler extends BaseEventHandler {
     
     @Inject
     public ClogHandler(ItemIDSearch itemIDFinder, Rarity rarity, KCService kcService,
-                       StateSyncService stateSyncService, StateSyncScheduler stateSyncScheduler) {
+                       StateSyncService stateSyncService, StateSyncScheduler stateSyncScheduler,
+                       CollectionLogSlots collectionLogSlots) {
         this.stateSyncService = stateSyncService;
         this.stateSyncScheduler = stateSyncScheduler;
+        this.collectionLogSlots = collectionLogSlots;
         this.itemIDFinder = itemIDFinder;
         this.rarity = rarity;
         this.kcService = kcService;
@@ -131,8 +137,19 @@ public class ClogHandler extends BaseEventHandler {
             // means the profile page updates now instead of at the next
             // scheduled sync. Additive only - this never implies the rest of
             // the log was read.
-            if (itemId != null && stateSyncService != null && stateSyncService.isEnabled()) {
-                stateSyncService.storeItem(itemId, 1);
+            //
+            // The id has to be the *collection log's*, which is not always the
+            // one a name resolves to: ItemIDSearch answers with the earliest
+            // item sharing the name, so "Coal bag" gives 764 where the log
+            // holds 25627. A wrong id leaves the slot looking unfilled and puts
+            // a non-slot into the account's item map, so an id the log does not
+            // define is dropped rather than recorded - a full read of the log
+            // reports the slot properly soon enough.
+            Integer slotId = collectionLogSlots != null
+                    ? collectionLogSlots.resolve(itemId, itemName)
+                    : itemId;
+            if (slotId != null && stateSyncService != null && stateSyncService.isEnabled()) {
+                stateSyncService.storeItem(slotId, 1);
                 stateSyncScheduler.scheduleRapid("clog-item");
             }
 

@@ -43,7 +43,18 @@ import net.runelite.client.eventbus.Subscribe;
 @Singleton
 public class CollectionLogScraper {
 
-	/** Fired once per collection log slot, carrying (itemId, quantity). */
+	/**
+	 * Fired once per <em>obtained</em> collection log slot, carrying
+	 * (itemId, quantity).
+	 *
+	 * <p>Obtained only — the interface draws every slot on a page greyed out
+	 * before the server transmits anything, and this script is what un-greys the
+	 * ones the player has. So a complete read cannot tell us which slots
+	 * <em>exist</em>, only which are filled; the slot list has to come from the
+	 * cache instead (see {@link CollectionLogSlots}). WikiSync sets one bit per
+	 * firing with no quantity check and publishes the result as a player's
+	 * obtained items, which is the practical proof.
+	 */
 	private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
 	/** Fired when the collection log interface finishes building. */
 	private static final int COLLECTION_LOG_SETUP = 7797;
