@@ -80,6 +80,28 @@ public class ManifestParseTest {
     }
 
     @Test
+    public void readsTheTeamIndicatorKillSwitch() {
+        Manifest manifest = Manifest.fromJson(gson,
+            "{\"team_indicators\":{\"enabled\":false,\"max_roster_age_minutes\":15}}");
+
+        assertNotNull(manifest);
+        assertTrue(!manifest.getTeamIndicators().isEnabled());
+        assertEquals(15, manifest.getTeamIndicators().getMaxRosterAgeMinutes());
+    }
+
+    @Test
+    public void teamIndicatorsDefaultToOnWhenAbsentOrUnreadable() {
+        // Same posture as sync's switch: it exists to turn the feature off
+        // deliberately, never to fail closed on a manifest we could not read.
+        assertTrue(Manifest.fromJson(gson, "{\"version\":\"abc\"}")
+            .getTeamIndicators().isEnabled());
+        assertTrue(Manifest.fromJson(gson, "{\"team_indicators\":[1,2]}")
+            .getTeamIndicators().isEnabled());
+        assertEquals(60, Manifest.fromJson(gson, "{\"team_indicators\":{}}")
+            .getTeamIndicators().getMaxRosterAgeMinutes());
+    }
+
+    @Test
     public void nonsenseSyncValuesFallBackRatherThanDisablingSync() {
         Manifest manifest = Manifest.fromJson(gson,
             "{\"sync\":{\"interval_minutes\":0,\"rapid_seconds\":-1}}");

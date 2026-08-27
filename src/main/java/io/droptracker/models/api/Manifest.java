@@ -78,6 +78,9 @@ public class Manifest {
 	@SerializedName("sync")
 	private SyncSettings sync;
 
+	@SerializedName("team_indicators")
+	private TeamIndicatorSettings teamIndicators;
+
 	/**
 	 * Parses a manifest document section by section.
 	 *
@@ -104,6 +107,7 @@ public class Manifest {
 		manifest.combatAchievementVarps = section(gson, root, "combat_achievement_varps", INT_LIST);
 		manifest.questIds = section(gson, root, "quest_ids", INT_LIST);
 		manifest.sync = section(gson, root, "sync", SyncSettings.class);
+		manifest.teamIndicators = section(gson, root, "team_indicators", TeamIndicatorSettings.class);
 		return manifest;
 	}
 
@@ -174,6 +178,46 @@ public class Manifest {
 
 		public int getRapidSeconds() {
 			return rapidSeconds == null || rapidSeconds < 0 ? 3 : rapidSeconds;
+		}
+	}
+
+	public TeamIndicatorSettings getTeamIndicators() {
+		return teamIndicators == null ? TeamIndicatorSettings.defaults() : teamIndicators;
+	}
+
+	/** Server-side controls for the clan-chat event team badges (web103a). */
+	@Data
+	public static class TeamIndicatorSettings {
+		@SerializedName("enabled")
+		private Boolean enabled;
+
+		@SerializedName("max_roster_age_minutes")
+		private Integer maxRosterAgeMinutes;
+
+		static TeamIndicatorSettings defaults() {
+			TeamIndicatorSettings settings = new TeamIndicatorSettings();
+			settings.enabled = Boolean.TRUE;
+			settings.maxRosterAgeMinutes = 60;
+			return settings;
+		}
+
+		/**
+		 * Kill switch. Defaults to enabled for the same reason sync's does: a
+		 * manifest we could not read must not silently disable a feature the
+		 * user turned on. This exists to stop a misbehaving decoration for
+		 * every client in minutes, without a Plugin Hub round-trip.
+		 */
+		public boolean isEnabled() {
+			return enabled == null || enabled;
+		}
+
+		/**
+		 * Backstop refetch interval for a client that somehow missed a
+		 * roster_version bump. The version gate is the real mechanism.
+		 */
+		public int getMaxRosterAgeMinutes() {
+			return maxRosterAgeMinutes == null || maxRosterAgeMinutes <= 0
+				? 60 : maxRosterAgeMinutes;
 		}
 	}
 }

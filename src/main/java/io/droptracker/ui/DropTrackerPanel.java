@@ -93,6 +93,9 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private ActivityPanel activityPanel;
 	private HomePanel homePanel;
 	private EventsPanel eventsPanel;
+	/** This panel's registration on the event service's state-updated signal,
+	 *  held so a re-init can deregister the previous one. */
+	private Runnable stateUpdatedListener;
 	private JTabbedPane tabbedPane;
 
 	// The actual component instances added as tabs
@@ -153,11 +156,16 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			eventsPanel = new EventsPanel(config, api, eventNotificationService,
 				client, itemManager, remoteImageCache, itemIDSearch, configManager);
 			eventsComponent = eventsPanel.create();
-			eventNotificationService.setOnStateUpdated(() -> {
+			// init() re-runs whenever the API toggle changes, so drop the
+			// previous registration first — the service keeps a list now, and
+			// re-adding without this would refresh the panel once per init().
+			eventNotificationService.removeStateUpdatedListener(stateUpdatedListener);
+			stateUpdatedListener = () -> {
 				if (eventsPanel != null) {
 					eventsPanel.onUpdated();
 				}
-			});
+			};
+			eventNotificationService.addStateUpdatedListener(stateUpdatedListener);
 
 			tabbedPane.addTab("Home", homeComponent);
 			tabbedPane.addTab("Activity", activityComponent);
@@ -170,7 +178,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			groupComponent = null;
 			eventsComponent = null;
 			eventsPanel = null;
-			eventNotificationService.setOnStateUpdated(null);
+			eventNotificationService.removeStateUpdatedListener(stateUpdatedListener);
+			stateUpdatedListener = null;
 			tabbedPane.addTab("Home", homeComponent);
 		}
 
@@ -293,7 +302,10 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		if (activityPanel != null) {
 			activityPanel.cleanup();
 		}
-		eventNotificationService.setOnStateUpdated(null);
+		// Only this panel's own registration — the team indicator service has
+		// its own listener on the same signal and must outlive the panel.
+		eventNotificationService.removeStateUpdatedListener(stateUpdatedListener);
+		stateUpdatedListener = null;
 		eventsPanel = null;
 	}
 

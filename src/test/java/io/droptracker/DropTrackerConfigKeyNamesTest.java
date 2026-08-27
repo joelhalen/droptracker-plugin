@@ -37,7 +37,8 @@ public class DropTrackerConfigKeyNamesTest {
         "imageCompressionThresholdKb",
         // Events
         "eventNotifications", "eventDisplayMode", "eventTaskProgressNotifications",
-        "eventHudDetail",
+        "eventHudDetail", "eventTeamIndicators", "eventTeamIndicatorColorNames",
+        "eventTeamIndicatorsPublicChat",
         // Clan Chat
         "relayClanBroadcasts", "relayClanChat", "receiveDiscordChat",
         // Advanced

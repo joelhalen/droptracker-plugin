@@ -2,6 +2,7 @@ package io.droptracker;
 
 import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventHudDetail;
+import io.droptracker.models.TeamIndicatorStyle;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
@@ -339,6 +340,44 @@ public interface DropTrackerConfig extends Config {
     )
     default EventHudDetail eventHudDetail() {
         return EventHudDetail.DETAILED;
+    }
+
+    @ConfigItem(
+        keyName = "eventTeamIndicators",
+        name = "Team indicators in chat",
+        description = "<html>Mark clan chat lines from players in your event with their team.<br />"
+            + "<b>Team color orb</b> - the same colored circle their team's Discord channel uses.<br />"
+            + "<b>Tag</b> - a short team label, e.g. [RR].<br />"
+            + "Only applies while you are in a live event, and only to its participants.</html>",
+        position = 5,
+        section = eventSection
+    )
+    default TeamIndicatorStyle eventTeamIndicators() {
+        return TeamIndicatorStyle.ORB;
+    }
+
+    @ConfigItem(
+        keyName = "eventTeamIndicatorColorNames",
+        name = "Color teammates' names",
+        description = "<html>Draw the sender's name in their team's color, as well as badging the line.<br />"
+            + "Reads the room at a glance during a clan-vs-clan; turn it off if you find it busy.</html>",
+        position = 6,
+        section = eventSection
+    )
+    default boolean eventTeamIndicatorColorNames() {
+        return true;
+    }
+
+    @ConfigItem(
+        keyName = "eventTeamIndicatorsPublicChat",
+        name = "Also badge public chat",
+        description = "<html>Badge public chat as well as clan chat.<br />"
+            + "Useful at a shared boss or raid during a clan-vs-clan; noisy in a city.</html>",
+        position = 7,
+        section = eventSection
+    )
+    default boolean eventTeamIndicatorsPublicChat() {
+        return false;
     }
 
 

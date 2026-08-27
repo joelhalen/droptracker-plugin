@@ -1156,6 +1156,39 @@ public class DropTrackerApi {
     }
 
     /**
+     * Team membership for the clan-chat badges. Roster-gated server-side: only
+     * events this account is on a team of come back, so there is nothing to
+     * filter here.
+     *
+     * Called only when /event_state's roster_version changes, never on a timer
+     * — this carries a whole event's membership, unlike the state poll.
+     */
+    public io.droptracker.models.api.EventRoster fetchEventRoster(String playerName, long accountHash) {
+        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+            return null;
+        }
+        HttpUrl base = HttpUrl.parse(getApiUrl() + "/event_roster");
+        if (base == null) {
+            return null;
+        }
+        HttpUrl url = base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .build();
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            return gson.fromJson(response.body().string(), io.droptracker.models.api.EventRoster.class);
+        } catch (IOException | JsonSyntaxException e) {
+            log.debug("/event_roster fetch failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * URL of the server-rendered board image for an event (optionally one
      * team's view). The identity params ride along because the endpoint is
      * roster-gated (private events stay hidden without them).

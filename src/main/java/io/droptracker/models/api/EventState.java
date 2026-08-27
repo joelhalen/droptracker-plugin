@@ -65,6 +65,17 @@ public class EventState {
         @SerializedName("team_recent_submissions")
         @Nullable
         private List<RecentSubmission> teamRecentSubmissions;
+        /**
+         * Changes whenever this event's clan-chat team badges would look
+         * different — a roster edit, a rename, a recolor, a retag. The team
+         * indicator service refetches GET /event_roster only when it stops
+         * matching what it holds, so a settled event never repeats a payload
+         * that carries the whole event's membership. Null from older servers,
+         * which simply means no badges.
+         */
+        @SerializedName("roster_version")
+        @Nullable
+        private String rosterVersion;
     }
 
     @Getter

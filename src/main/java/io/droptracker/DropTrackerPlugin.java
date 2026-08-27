@@ -59,6 +59,7 @@ import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
+import io.droptracker.service.EventTeamIndicatorService;
 import io.droptracker.service.KCService;
 import io.droptracker.service.ManifestService;
 import io.droptracker.service.CollectionLogScraper;
@@ -174,6 +175,9 @@ public class DropTrackerPlugin extends Plugin {
 	/* Event notifications + HUD (EVENT_PLUGIN_NOTIFICATIONS_PLAN P2) */
 	@Inject
 	private EventNotificationService eventNotificationService;
+	/* Clan-chat team badges during an event (suggestion #150) */
+	@Inject
+	private EventTeamIndicatorService eventTeamIndicatorService;
 	@Inject
 	private EventToastOverlay eventToastOverlay;
 	@Inject
@@ -253,6 +257,9 @@ public class DropTrackerPlugin extends Plugin {
 		overlayManager.add(eventToastOverlay);
 		overlayManager.add(eventHudOverlay);
 		eventNotificationService.start();
+		// Rides the state poll's "fresh state landed" signal; fetches a roster
+		// only when the event's roster_version changes.
+		eventTeamIndicatorService.startUp();
 
 		// Seed the clan-channel binding for the Discord chat bridge: enabling
 		// the plugin while already logged in and sitting in a clan fires no
@@ -334,6 +341,7 @@ public class DropTrackerPlugin extends Plugin {
 		playerModelService.reset();
 		manifestService.shutDown();
 		eventNotificationService.stop();
+		eventTeamIndicatorService.shutDown();
 		overlayManager.remove(eventToastOverlay);
 		overlayManager.remove(eventHudOverlay);
 
@@ -483,6 +491,26 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
+		// Deliberately ABOVE the isTracking gate. That flag is the
+		// webhook-exhaustion kill switch for submissions; a display feature
+		// behind it would silently lose its badges for anyone whose webhook
+		// list failed to replenish, with no way to tell why.
+		switch (message.getType()) {
+			case CLAN_CHAT:
+			case CLAN_GUEST_CHAT:
+			case CLAN_GIM_CHAT:
+			case FRIENDSCHAT:
+				eventTeamIndicatorService.decorate(message.getMessageNode());
+				break;
+			case PUBLICCHAT:
+				if (config.eventTeamIndicatorsPublicChat()) {
+					eventTeamIndicatorService.decorate(message.getMessageNode());
+				}
+				break;
+			default:
+				break;
+		}
+
 		if (!isTracking) {
 			return;
 		}
@@ -671,6 +699,12 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged gameStateChanged) {
 		GameState newState = gameStateChanged.getGameState();
+
+		// Ahead of the LOADING short-circuit and the same-state guard: the
+		// team-badge sprite block has to be claimed at LOGIN_SCREEN and
+		// released at STARTING, because the client rebuilds its mod-icon
+		// array on a restart.
+		eventTeamIndicatorService.onGameStateChanged(newState);
 
 		if (newState == GameState.LOADING) {
 			return;

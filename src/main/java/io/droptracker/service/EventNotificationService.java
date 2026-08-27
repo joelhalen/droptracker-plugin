@@ -8,7 +8,6 @@ import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.util.ValueFormat;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
@@ -26,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -158,10 +158,15 @@ public class EventNotificationService {
     private volatile EventState eventState;
     private volatile long eventStateAtMs = 0;
 
-    /** Invoked (off-EDT) whenever a fresh event state lands. */
-    @Setter
-    @Nullable
-    private Runnable onStateUpdated;
+    /**
+     * Invoked (off-EDT) whenever a fresh event state lands.
+     *
+     * A list rather than a single slot: the side panel and the clan-chat team
+     * indicators both hang off this signal, and with one setter the second
+     * registration silently replaced the first — the panel would simply stop
+     * refreshing, with nothing in the log to say why.
+     */
+    private final List<Runnable> stateUpdatedListeners = new CopyOnWriteArrayList<>();
 
     /**
      * Stamped by EventHudOverlay each frame it paints. While fresh, the HUD
@@ -531,9 +536,22 @@ public class EventNotificationService {
         return new LinkedHashSet<>(ids);
     }
 
+    /** Register a listener for fresh state. Safe to call more than once. */
+    public void addStateUpdatedListener(Runnable listener) {
+        if (listener != null) {
+            stateUpdatedListeners.add(listener);
+        }
+    }
+
+    public void removeStateUpdatedListener(Runnable listener) {
+        if (listener != null) {
+            stateUpdatedListeners.remove(listener);
+        }
+    }
+
     private void notifyStateUpdated() {
-        Runnable callback = onStateUpdated;
-        if (callback != null) {
+        for (Runnable callback : stateUpdatedListeners) {
+            // One listener throwing must not cost the others their update.
             try {
                 callback.run();
             } catch (Exception e) {
