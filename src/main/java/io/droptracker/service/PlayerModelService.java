@@ -169,6 +169,82 @@ public class PlayerModelService {
 		});
 	}
 
+	/**
+	 * Manually captures the player's current model and pins it as their
+	 * profile model on the website. Triggered by the panel's "Send Player
+	 * Model" button, so unlike {@link #onTick()} it does not wait for the
+	 * player to be idle — the player chose this exact moment — and it does not
+	 * skip already-uploaded outfits, because the point is to (re)pin this one.
+	 *
+	 * <p>Deliberately gated only on {@link DropTrackerConfig#useApi()}, not on
+	 * the automatic-upload toggle: pressing the button is explicit consent.
+	 *
+	 * <p>May be called from any thread; the capture hops to the client thread
+	 * and the upload to the executor. The callback receives a short
+	 * user-facing result message and always runs on the Swing EDT.
+	 */
+	public void sendCurrentModel(java.util.function.BiConsumer<Boolean, String> callback) {
+		if (!config.useApi()) {
+			finish(callback, false, "Enable the DropTracker API in the plugin settings first");
+			return;
+		}
+		if (!exporting.compareAndSet(false, true)) {
+			finish(callback, false, "Already sending a model — try again in a moment");
+			return;
+		}
+		clientThread.invoke(() -> {
+			Player local = client.getGameState() == GameState.LOGGED_IN
+					? client.getLocalPlayer() : null;
+			if (local == null) {
+				exporting.set(false);
+				finish(callback, false, "Log in to send your player model");
+				return;
+			}
+
+			String fingerprint = fingerprintOf(local);
+			byte[] model = null;
+			byte[] petModel = null;
+			try {
+				model = exportModel(local);
+				petModel = exportPet();
+			} catch (Exception e) {
+				log.debug("Could not export the player model: {}", e.toString());
+			}
+			if (fingerprint == null || model == null) {
+				exporting.set(false);
+				finish(callback, false, "Could not capture your model — try again");
+				return;
+			}
+
+			final String fp = fingerprint;
+			final byte[] modelBytes = model;
+			final byte[] petBytes = petModel;
+			executor.execute(() -> {
+				boolean ok = false;
+				try {
+					ok = api.uploadPlayerModel(fp, modelBytes, petBytes, true);
+				} catch (Exception e) {
+					log.debug("Manual model upload failed: {}", e.toString());
+				} finally {
+					exporting.set(false);
+				}
+				if (ok) {
+					// The automatic path now knows this outfit is uploaded.
+					uploadedFingerprint = fp;
+					nextAttemptAtMs = 0;
+				}
+				finish(callback, ok, ok
+						? "Model sent! Your profile now shows this outfit"
+						: "Upload failed — check your connection and try again");
+			});
+		});
+	}
+
+	private static void finish(java.util.function.BiConsumer<Boolean, String> callback,
+	                           boolean ok, String message) {
+		javax.swing.SwingUtilities.invokeLater(() -> callback.accept(ok, message));
+	}
+
 	/** True while the player is doing anything other than standing still. */
 	private boolean isAnimating(Player local) {
 		return local.getAnimation() != -1

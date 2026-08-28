@@ -513,6 +513,15 @@ public class DropTrackerApi {
      * @return true when the server accepted (or already had) the model.
      */
     public boolean uploadPlayerModel(String fingerprint, byte[] model, @Nullable byte[] petModel) {
+        return uploadPlayerModel(fingerprint, model, petModel, false);
+    }
+
+    /**
+     * @param pin when true, the server records this outfit as the one the
+     *            player chose for their profile, so later automatic uploads
+     *            of other outfits do not replace it.
+     */
+    public boolean uploadPlayerModel(String fingerprint, byte[] model, @Nullable byte[] petModel, boolean pin) {
         if (!config.useApi() || model == null || model.length == 0) {
             return false;
         }
@@ -527,6 +536,9 @@ public class DropTrackerApi {
                 .addFormDataPart("acc_hash", String.valueOf(client.getAccountHash()))
                 .addFormDataPart("fingerprint", fingerprint)
                 .addFormDataPart("model", "model.glb", RequestBody.create(glb, model));
+        if (pin) {
+            body.addFormDataPart("pin", "1");
+        }
         if (petModel != null && petModel.length > 0) {
             body.addFormDataPart("pet_model", "pet.glb", RequestBody.create(glb, petModel));
         }

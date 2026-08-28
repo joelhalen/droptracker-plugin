@@ -7,6 +7,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopPlayersResult;
 import io.droptracker.models.submissions.RecentSubmission;
+import io.droptracker.service.PlayerModelService;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.StateViews;
 import io.droptracker.ui.components.PanelElements;
@@ -31,18 +32,20 @@ public class PlayerStatsPanel {
     private final DropTrackerApi api;
     private final DropTrackerPlugin plugin;
     private final ItemManager itemManager;
+    private final PlayerModelService playerModelService;
 
     // UI components that we need to update
     private JPanel contentPanel;
     private JTextField searchField;
     private JPanel leaderboardPlaceholder;
 
-    public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager) {
+    public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, PlayerModelService playerModelService) {
         this.client = client;
         this.plugin = plugin;
         this.config = config;
         this.api = api;
         this.itemManager = itemManager;
+        this.playerModelService = playerModelService;
     }
 
     public JPanel create() {
@@ -117,6 +120,16 @@ public class PlayerStatsPanel {
 
             buttonPanel.add(viewStatsButton);
             defaultPanel.add(buttonPanel);
+
+            if (config.useApi()) {
+                JPanel modelButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+                modelButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
+                modelButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                modelButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+                modelButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
+                modelButtonPanel.add(createSendModelButton());
+                defaultPanel.add(modelButtonPanel);
+            }
             defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
         }
 
@@ -401,6 +414,38 @@ public class PlayerStatsPanel {
         contentPanel.add(playerInfoPanel);
         contentPanel.revalidate();
         contentPanel.repaint();
+    }
+
+    /**
+     * The "Send Player Model" button: captures the character as it looks right
+     * now and pins that model to the player's droptracker.io profile. All
+     * feedback happens on the button itself — it narrates the send and shows
+     * the outcome, then returns to normal so it can be used again.
+     */
+    private JButton createSendModelButton() {
+        final String idleLabel = "Send Player Model";
+        JButton sendModelButton = new JButton(idleLabel);
+        DropTrackerTheme.styleButton(sendModelButton);
+        sendModelButton.setPreferredSize(new Dimension(200, 30));
+        sendModelButton.setToolTipText("<html>Uploads your character (and pet) exactly as they look right now<br/>"
+                + "and shows that model on your droptracker.io profile.<br/>"
+                + "Stand still with your favourite gear on, then click.</html>");
+        sendModelButton.addActionListener(e -> {
+            sendModelButton.setEnabled(false);
+            sendModelButton.setText("Sending model…");
+            playerModelService.sendCurrentModel((ok, message) -> {
+                // Callback already arrives on the EDT.
+                sendModelButton.setText(ok ? "Model sent!" : "Failed to send");
+                sendModelButton.setToolTipText(message);
+                Timer restore = new Timer(4000, ev -> {
+                    sendModelButton.setText(idleLabel);
+                    sendModelButton.setEnabled(true);
+                });
+                restore.setRepeats(false);
+                restore.start();
+            });
+        });
+        return sendModelButton;
     }
 
     private JPanel createGroupsPanel(List<PlayerSearchResult.PlayerGroup> groups) {

@@ -87,6 +87,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private ItemIDSearch itemIDSearch;
 	@Inject
 	private ConfigManager configManager;
+	@Inject
+	private io.droptracker.service.PlayerModelService playerModelService;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -149,7 +151,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		if (config.useApi()) {
 			activityPanel = new ActivityPanel(config, api, submissionManager, this);
 			activityComponent = activityPanel.create();
-			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
+			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager, playerModelService);
 			playerComponent = statsPanel.create();
 			groupPanel = new GroupPanel(client, config, api, itemManager, this, httpClient);
 			groupComponent = groupPanel.create();
