@@ -12,6 +12,7 @@ import javax.inject.Inject;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.service.RecentCombatTracker;
 import io.droptracker.util.DeathRegions;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.RegionNameRegistry;
@@ -26,10 +27,13 @@ import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.InteractingChanged;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.game.NPCManager;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.VisibleForTesting;
 
 /**
  * Tracks local player deaths and submits them to the DropTracker.
@@ -71,16 +75,56 @@ public class DeathHandler extends BaseEventHandler {
      */
     private WeakReference<Actor> lastTarget = new WeakReference<>(null);
 
+    /**
+     * The engagements of the last few ticks, in both directions.
+     *
+     * <p>The live scan below can only ever find an actor that is still targeting
+     * us on the death tick, and on a great many deaths nothing is: the game drops
+     * an NPC's target as soon as that target dies, instanced bosses despawn with
+     * the instance, and in a group the boss has already moved on to whoever is
+     * still alive. This is the memory that lets those deaths still be attributed.
+     */
+    @VisibleForTesting
+    final RecentCombatTracker recentCombat = new RecentCombatTracker();
+
     @Override
     public boolean isEnabled() {
         return config.deathEmbeds();
     }
 
     public void onInteractingChanged(InteractingChanged event) {
-        if (event.getSource() == client.getLocalPlayer()
-                && event.getTarget() != null
-                && event.getTarget().getCombatLevel() > 0) {
-            lastTarget = new WeakReference<>(event.getTarget());
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null) {
+            return;
+        }
+
+        Actor source = event.getSource();
+        Actor target = event.getTarget();
+        int tick = client.getTickCount();
+
+        if (source == localPlayer) {
+            // Outbound: what we are attacking.
+            if (target != null) {
+                if (target.getCombatLevel() > 0) {
+                    lastTarget = new WeakReference<>(target);
+                }
+                recentCombat.recordAttacking(target, tick);
+            } else {
+                recentCombat.endAttacking(null, tick);
+            }
+            return;
+        }
+
+        // Inbound: what is attacking us. This half of the signal used to be
+        // thrown away, even though it is the one that actually answers "who
+        // killed me" — the outbound target only says who we were fighting.
+        if (target == localPlayer) {
+            recentCombat.recordAttackedBy(source, tick);
+        } else if (source != null) {
+            // It turned away from us (or onto someone else). Remembering *when*
+            // it disengaged is what makes a boss that dropped its target on the
+            // death tick rank ahead of every older candidate.
+            recentCombat.endAttackedBy(source, tick);
         }
     }
 
@@ -106,14 +150,21 @@ public class DeathHandler extends BaseEventHandler {
             if (self || event.getActor() == lastTarget.get()) {
                 lastTarget = new WeakReference<>(null);
             }
+            if (self) {
+                // Respawning starts a new fight; nothing before the death can
+                // explain the next one.
+                recentCombat.clear();
+            } else {
+                recentCombat.forget(event.getActor());
+            }
         }
     }
 
     private void submitDeath(Player localPlayer) {
         WorldPoint location = currentLocation(localPlayer);
-        Actor killer = identifyKiller(localPlayer);
-        boolean pk = killer instanceof Player;
-        boolean npc = killer instanceof NPC;
+        Killer killer = identifyKiller(localPlayer);
+        boolean pk = killer != null && killer.isPlayer();
+        boolean npc = killer != null && killer.isNpc();
 
         String playerName = getPlayerName();
         if (playerName == null) {
@@ -128,21 +179,22 @@ public class DeathHandler extends BaseEventHandler {
         // value we do not have must be left out rather than added empty.
         Map<String, Object> fieldData = new LinkedHashMap<>();
 
-        String killerName = NpcUtilities.canonicalizeSpecialSource(actorName(killer));
+        String killerName = killer != null
+                ? NpcUtilities.canonicalizeSpecialSource(killer.getName())
+                : null;
         if (killerName != null) {
             fieldData.put("source", killerName);
         }
         fieldData.put("killer_type", pk ? KILLER_PLAYER : npc ? KILLER_NPC : KILLER_UNKNOWN);
         fieldData.put("is_pvp", pk);
 
-        if (npc) {
-            NPC killerNpc = (NPC) killer;
-            fieldData.put("killer_npc_id", killerNpc.getId());
-            if (killerNpc.getCombatLevel() > 0) {
-                fieldData.put("killer_combat_level", killerNpc.getCombatLevel());
+        if (killer != null) {
+            if (npc && killer.getNpcId() != null) {
+                fieldData.put("killer_npc_id", killer.getNpcId());
             }
-        } else if (pk && killer.getCombatLevel() > 0) {
-            fieldData.put("killer_combat_level", killer.getCombatLevel());
+            if (killer.getCombatLevel() > 0) {
+                fieldData.put("killer_combat_level", killer.getCombatLevel());
+            }
         }
 
         if (location != null) {
@@ -203,21 +255,35 @@ public class DeathHandler extends BaseEventHandler {
 
     @Nullable
     private static String actorName(@Nullable Actor actor) {
-        if (actor == null) {
-            return null;
-        }
-        String name = actor.getName();
-        return name != null && !name.trim().isEmpty() ? name : null;
+        return actor != null ? RecentCombatTracker.cleanName(actor.getName()) : null;
     }
 
     /**
-     * @return the actor that most likely killed us, or null when the death
-     *         cannot be attributed (poison, falling damage, an attacker that
-     *         already despawned).
+     * @return who most likely killed us, or null when the death cannot be
+     *         attributed at all (poison, falling damage, an attacker we never
+     *         saw engage us).
      */
     @Nullable
-    private Actor identifyKiller(Player localPlayer) {
+    @VisibleForTesting
+    Killer identifyKiller(Player localPlayer) {
         boolean pvpEnabled = isPvpEnabled();
+
+        Actor live = findLiveKiller(localPlayer, pvpEnabled);
+        if (live != null) {
+            return Killer.of(live);
+        }
+
+        // Nothing is targeting us any more. Fall back to who was, moments ago:
+        // by the time ActorDeath fires the interaction is usually already gone,
+        // which is exactly how a death ends up with no source on it at all.
+        return recentCombat.mostLikelyKiller(client.getTickCount(), pvpEnabled)
+                .map(Killer::of)
+                .orElse(null);
+    }
+
+    /** The Dink-style scan: an actor that is still targeting us right now. */
+    @Nullable
+    private Actor findLiveKiller(Player localPlayer, boolean pvpEnabled) {
         Predicate<Actor> interactingWithUs = actor -> isInteractingWith(localPlayer, actor);
 
         // Fast path: whatever we were last engaged with, if it is still a
@@ -227,7 +293,7 @@ public class DeathHandler extends BaseEventHandler {
             return recentTarget;
         }
 
-        WorldView worldView = client.getTopLevelWorldView();
+        WorldView worldView = worldView(localPlayer);
         if (worldView == null) {
             return null;
         }
@@ -251,10 +317,33 @@ public class DeathHandler extends BaseEventHandler {
                 .orElse(null);
     }
 
+    /**
+     * The world view to search for candidates.
+     *
+     * <p>The local player's own view rather than the top level one: content that
+     * runs in a nested world view keeps its NPCs there, and scanning the top
+     * level would find none of them.
+     */
+    @Nullable
+    private WorldView worldView(@Nullable Player localPlayer) {
+        WorldView own = localPlayer != null ? localPlayer.getWorldView() : null;
+        return own != null ? own : client.getTopLevelWorldView();
+    }
+
     private boolean isPvpEnabled() {
+        if (isPvpSafeZone()) {
+            // Bank/lobby areas of PvP worlds and Deadman — nobody can be
+            // attacked here, so no bystander should be blamed.
+            return false;
+        }
         return client.getVarbitValue(VarbitID.INSIDE_WILDERNESS) > 0
                 || client.getWorldType().contains(WorldType.PVP)
                 || client.getWorldType().contains(WorldType.DEADMAN);
+    }
+
+    private boolean isPvpSafeZone() {
+        Widget widget = client.getWidget(InterfaceID.PvpIcons.SAFEZONE);
+        return widget != null && !widget.isHidden();
     }
 
     /** Whether the actor is alive and targeting the local player. */
@@ -309,7 +398,7 @@ public class DeathHandler extends BaseEventHandler {
                                         .thenComparingInt(NPCComposition::getCombatLevel)
                                         .thenComparingInt(NPCComposition::getSize)
                                         .thenComparing(NPCComposition::isMinimapVisible)
-                                        .thenComparing(c -> npcManager.getHealth(c.getId()),
+                                        .thenComparing(c -> npcManager != null ? npcManager.getHealth(c.getId()) : null,
                                                 Comparator.nullsFirst(Comparator.naturalOrder()))))
                 .thenComparingInt(npc -> -distanceTo(localPlayer, npc))
                 .reversed();
@@ -337,5 +426,73 @@ public class DeathHandler extends BaseEventHandler {
             return Integer.MAX_VALUE;
         }
         return localPlayer.getLocalLocation().distanceTo(other.getLocalLocation());
+    }
+
+    /**
+     * Who killed us, as a snapshot rather than a live scene reference.
+     *
+     * <p>The fallback path names actors that have already despawned by the time
+     * the submission is built, so the attribution cannot be an {@link Actor}.
+     */
+    @VisibleForTesting
+    static final class Killer {
+
+        private final String name;
+        private final Integer npcId;
+        private final int combatLevel;
+        private final boolean player;
+        private final boolean npc;
+
+        private Killer(@Nullable String name, @Nullable Integer npcId, int combatLevel,
+                boolean player, boolean npc) {
+            this.name = name;
+            this.npcId = npcId;
+            this.combatLevel = combatLevel;
+            this.player = player;
+            this.npc = npc;
+        }
+
+        static Killer of(Actor actor) {
+            if (actor instanceof NPC) {
+                NPC killerNpc = (NPC) actor;
+                String name = actorName(killerNpc);
+                if (name == null) {
+                    // Some instanced NPCs report no name until their composition
+                    // is transformed; without this the embed would carry an NPC
+                    // id and no source at all.
+                    NPCComposition composition = killerNpc.getTransformedComposition();
+                    name = composition != null ? RecentCombatTracker.cleanName(composition.getName()) : null;
+                }
+                return new Killer(name, killerNpc.getId(), killerNpc.getCombatLevel(), false, true);
+            }
+            return new Killer(actorName(actor), null, actor.getCombatLevel(), actor instanceof Player, false);
+        }
+
+        static Killer of(RecentCombatTracker.Engagement engagement) {
+            return new Killer(engagement.getName(), engagement.getNpcId(), engagement.getCombatLevel(),
+                    engagement.isPlayer(), engagement.isNpc());
+        }
+
+        @Nullable
+        String getName() {
+            return name;
+        }
+
+        @Nullable
+        Integer getNpcId() {
+            return npcId;
+        }
+
+        int getCombatLevel() {
+            return combatLevel;
+        }
+
+        boolean isPlayer() {
+            return player;
+        }
+
+        boolean isNpc() {
+            return npc;
+        }
     }
 }
