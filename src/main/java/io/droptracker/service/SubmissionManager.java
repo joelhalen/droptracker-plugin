@@ -68,6 +68,11 @@ public class SubmissionManager {
     /** Screenshot captures held back a game tick; drained by {@link #onGameTick()}. */
     private final Queue<Runnable> deferredCaptures = new ConcurrentLinkedQueue<>();
 
+    /** Guards the one-frame encode memo below; see {@link #encodeForUpload(BufferedImage)}. */
+    private final Object encodeLock = new Object();
+    private BufferedImage lastEncodedImage;
+    private byte[] lastEncodedBytes;
+
     /** Callback for UI updates when submissions change */
     @Setter
     private SubmissionUpdateCallback updateCallback;
@@ -836,20 +841,19 @@ public class SubmissionManager {
             // PNG/JPEG encoding can take hundreds of ms for large frames; keep it
             // off the frame-listener thread so the client doesn't stall.
             executor.submit(() -> {
+                if (bufferedImage == null) {
+                    // No frame could be captured with the player's privacy mode
+                    // applied. Send the submission without proof rather than lose
+                    // it — an unhidden frame is never the fallback.
+                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                            "screenshot unavailable; sending without an image");
+                    sendWebhookDirect(webhook, null, submission);
+                    return;
+                }
+
                 byte[] imageBytes = null;
                 try {
-                    // Compression off = always lossless, whatever the size.
-                    int thresholdBytes = config.compressImages()
-                        ? config.imageCompressionThresholdKb() * 1024
-                        : Integer.MAX_VALUE;
-                    byte[] pngBytes = convertImageToPngBytes(bufferedImage);
-                    if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
-                        // PNG is within the threshold — send lossless
-                        imageBytes = pngBytes;
-                    } else {
-                        // PNG exceeds threshold (or threshold is 0) — compress to JPEG
-                        imageBytes = convertImageToJpegBytes(bufferedImage);
-                    }
+                    imageBytes = encodeForUpload(bufferedImage);
                 } catch (IOException e) {
                     log.error("Error converting image to byte array", e);
                     debugLogEventFlow("capture", submission != null ? submission.getType() : null,
@@ -861,6 +865,38 @@ public class SubmissionManager {
                 sendWebhookDirect(webhook, imageBytes, submission);
             });
         });
+    }
+
+    /**
+     * Encodes a captured frame for upload, remembering the last one.
+     *
+     * <p>ScreenshotPrivacyService hands the same frame to every submission that a
+     * single moment produced — a drop and the collection log slot it filled share
+     * one capture — so without this the identical image is compressed once per
+     * submission. Encoding is the expensive half of a screenshot, so the second
+     * caller waits on the lock and leaves with the bytes the first one produced.
+     */
+    private byte[] encodeForUpload(BufferedImage bufferedImage) throws IOException {
+        synchronized (encodeLock) {
+            if (bufferedImage == lastEncodedImage && lastEncodedBytes != null) {
+                return lastEncodedBytes;
+            }
+
+            // Compression off = always lossless, whatever the size.
+            int thresholdBytes = config.compressImages()
+                ? config.imageCompressionThresholdKb() * 1024
+                : Integer.MAX_VALUE;
+            byte[] pngBytes = convertImageToPngBytes(bufferedImage);
+            byte[] imageBytes = thresholdBytes > 0 && pngBytes.length <= thresholdBytes
+                // PNG is within the threshold — send lossless
+                ? pngBytes
+                // PNG exceeds threshold (or threshold is 0) — compress to JPEG
+                : convertImageToJpegBytes(bufferedImage);
+
+            lastEncodedImage = bufferedImage;
+            lastEncodedBytes = imageBytes;
+            return imageBytes;
+        }
     }
 
     private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {

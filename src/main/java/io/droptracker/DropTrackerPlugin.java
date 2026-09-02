@@ -648,6 +648,10 @@ public class DropTrackerPlugin extends Plugin {
 		// with their drop message on screen; drained before the tracking check
 		// so a mid-flight toggle can't strand one (see SubmissionManager).
 		submissionManager.onGameTick();
+		// Watchdog for a capture whose frame never arrives: ticks keep coming
+		// when rendering has stopped, and a stalled cycle holds every later
+		// capture behind it.
+		screenshotPrivacyService.onGameTick();
 
 		if (!isTracking) {
 			return;

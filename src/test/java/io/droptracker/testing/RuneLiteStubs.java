@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import net.runelite.api.Client;
 import net.runelite.api.IndexedObjectSet;
@@ -35,7 +36,9 @@ public final class RuneLiteStubs {
     }
 
     /**
-     * @return the mutable override map backing a stub, keyed by method name
+     * @return the mutable override map backing a stub, keyed by method name.
+     *         A value may be a {@code Function<Object[], Object>}, which is
+     *         applied to the call's arguments instead of being returned.
      */
     public static Map<String, Object> state(Object stub) {
         return ((Handler) Proxy.getInvocationHandler(stub)).values;
@@ -181,7 +184,16 @@ public final class RuneLiteStubs {
                     break;
             }
             if (values.containsKey(name)) {
-                return values.get(name);
+                Object value = values.get(name);
+                if (value instanceof Function) {
+                    // Argument-sensitive stub: getWidget(id) has to answer
+                    // differently per component, and a setter has to record what
+                    // it was handed. A fixed value per method name cannot.
+                    @SuppressWarnings("unchecked")
+                    Function<Object[], Object> function = (Function<Object[], Object>) value;
+                    return function.apply(args == null ? new Object[0] : args);
+                }
+                return value;
             }
             return defaultValue(method.getReturnType());
         }

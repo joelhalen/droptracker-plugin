@@ -248,8 +248,9 @@ public interface DropTrackerConfig extends Config {
         keyName = "privacyMode",
         name = "Privacy mode",
         description = "<html>What to hide from the frame a screenshot captures.<br />"
-            + "Hide DMs: split private messages only.<br />"
-            + "Hide messages + DMs: also the chat transcript and typed input.<br />"
+            + "Hide DMs: private messages. With split private chat off they are<br />"
+            + "ordinary chat lines, so the transcript is hidden with them.<br />"
+            + "Hide messages + DMs: always hides the transcript and typed input.<br />"
             + "Hide entire chatbox: the whole chat area; in fixed mode the game<br />"
             + "view expands into the freed space for the shot.</html>",
         position = 5,
