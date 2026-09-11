@@ -14,6 +14,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.RecentCombatTracker;
 import io.droptracker.util.DeathRegions;
+import io.droptracker.util.DeathValuation;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.RegionNameRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ import net.runelite.api.events.InteractingChanged;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.NPCManager;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -55,6 +57,9 @@ public class DeathHandler extends BaseEventHandler {
 
     @Inject
     private NPCManager npcManager;
+
+    @Inject
+    private ItemManager itemManager;
 
     @Inject
     private RegionNameRegistry regionNames;
@@ -166,11 +171,23 @@ public class DeathHandler extends BaseEventHandler {
         boolean pk = killer != null && killer.isPlayer();
         boolean npc = killer != null && killer.isNpc();
 
+        // Classified before the fields are built because the valuation below
+        // needs it: a safe death loses nothing regardless of what is carried.
+        // An unknown location is treated as dangerous — the server filters on
+        // this, and guessing "safe" would silently swallow the notification.
+        boolean safeDeath = location != null && DeathRegions.isSafe(client, location.getRegionID());
+
         String playerName = getPlayerName();
         if (playerName == null) {
             log.debug("Skipping death submission: no resolvable player name");
             return;
         }
+
+        // Read while the containers still hold what the player died with — they
+        // are emptied within a tick or two of here, and this is still the death
+        // tick. After the name check so a submission we are about to drop does
+        // not price a full inventory on the client thread first.
+        DeathValuation.Valuation valuation = DeathValuation.value(client, itemManager, safeDeath);
         CustomWebhookBody webhook = createWebhookBody(playerName + " has died!");
         CustomWebhookBody.Embed embed = createEmbed(playerName + " has died!", "death");
 
@@ -219,7 +236,19 @@ public class DeathHandler extends BaseEventHandler {
             fieldData.put("coordinates", location.getX() + "," + location.getY() + "," + location.getPlane());
             fieldData.put("plane", location.getPlane());
             fieldData.put("instanced", isInstance(localPlayer));
-            fieldData.put("is_safe_death", DeathRegions.isSafe(client, regionId));
+        }
+
+        // Sent unconditionally, not inside the location block: the server's
+        // safe-death filter defaults to muting safe deaths, so a death that
+        // could not be located must still say which side of that line it fell
+        // on rather than arriving with the field missing.
+        fieldData.put("is_safe_death", safeDeath);
+
+        if (valuation != null) {
+            // What the death actually cost — the value a group filters on.
+            fieldData.put("value_lost", valuation.getLostValue());
+            fieldData.put("value_kept", valuation.getKeptValue());
+            fieldData.put("items_lost", valuation.getLostItemCount());
         }
 
         addFields(embed, fieldData);
