@@ -289,6 +289,9 @@ public class PetHandler extends BaseEventHandler {
     // release per new pet and to keep skill names out of NPC resolution.
     private static final Map<String, String> PET_TO_SOURCE = Map.ofEntries(
         Map.entry("Abyssal orphan", "Abyssal Sire"),
+        // "Mad Angel" (not the collection-log page's "The Mad Angel") — the npc
+        // name the kc storage and npc_list are both keyed on.
+        Map.entry("Aggy", "Mad Angel"),
         Map.entry("Baby mole", "Giant Mole"),
         Map.entry("Baron", "Duke Sucellus"),
         Map.entry("Butch", "Vardorvis"),

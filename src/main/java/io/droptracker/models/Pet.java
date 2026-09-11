@@ -82,6 +82,10 @@ public enum Pet
     TINY_TEMPOR("Tiny tempor", ItemID.TINY_TEMPOR),
     NEXLING("Nexling", ItemID.NEXLING),
     ABYSSAL_PROTECTOR("Abyssal protector", ItemID.ABYSSAL_PROTECTOR),
+    // Hunter skilling pet (goats on Wyrmscraig) — no boss source, so it belongs
+    // here rather than in PetHandler.PET_TO_SOURCE; the backend attributes the
+    // skill (utils/osrs_pets SKILLING_PET_SKILL).
+    MR_MCGROOT("Mr mcgroot", ItemID.MR_MCGROOT),
     ;
 
     private final String name;
