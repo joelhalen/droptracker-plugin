@@ -5,6 +5,7 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.LoadoutCapture;
+import io.droptracker.service.PlayerModelService;
 import io.droptracker.util.NpcUtilities;
 import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
@@ -108,6 +109,10 @@ public class PbHandler extends BaseEventHandler {
     /* Gear and inventory at the moment of the kill; see LoadoutCapture. */
     @Inject
     protected LoadoutCapture loadoutCapture;
+
+    /* Which uploaded character model the kill was made in; see PlayerModelService. */
+    @Inject
+    protected PlayerModelService playerModelService;
 
     private final AtomicInteger badTicks = new AtomicInteger();
     private final AtomicReference<KillData> killData = new AtomicReference<>();
@@ -499,6 +504,15 @@ public class PbHandler extends BaseEventHandler {
             }
             if (inventory != null) {
                 fieldData.put("inventory", inventory);
+            }
+            // The outfit fingerprint pairs this time with the character model
+            // the automatic upload files under the same key, so the leaderboard
+            // shows the model as worn for the kill rather than whatever the
+            // player happened to upload last. Same consent as the gear itself.
+            String fingerprint = playerModelService != null
+                    ? playerModelService.currentFingerprint() : null;
+            if (fingerprint != null) {
+                fieldData.put("model_fingerprint", fingerprint);
             }
         }
         

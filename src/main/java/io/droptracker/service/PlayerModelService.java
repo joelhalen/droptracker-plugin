@@ -274,6 +274,22 @@ public class PlayerModelService {
 	}
 
 	/**
+	 * Fingerprint of the local player's current outfit, or null without one.
+	 *
+	 * <p>What a personal best attaches so the server can pair the time with the
+	 * model of the outfit it was set in: the automatic upload files that model
+	 * under exactly this key, so the two meet without any further exchange.
+	 * Cheap (no export, no upload) and deliberately not gated on
+	 * {@link #isEnabled()} - the caller owns the consent decision.
+	 *
+	 * <p>Must be called on the client thread.
+	 */
+	@Nullable
+	public String currentFingerprint() {
+		return client == null ? null : fingerprintOf(client.getLocalPlayer());
+	}
+
+	/**
 	 * A stable identifier for "how this character currently looks".
 	 *
 	 * <p>Covers worn equipment, body kits and colours, because all three change

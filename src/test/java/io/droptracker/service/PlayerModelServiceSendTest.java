@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -150,5 +151,28 @@ public class PlayerModelServiceSendTest {
 
         assertNotEquals(fingerprint, service.fingerprintOf(playerWith(new int[]{512, 1024, 4096}, colors, 0)));
         assertNotEquals(fingerprint, service.fingerprintOf(playerWith(outfit, colors, 1)));
+    }
+
+    // ── the fingerprint a personal best attaches ────────────────────────────
+
+    @Test
+    public void currentFingerprintIsTheLocalPlayersOutfitUnderTheUploadsOwnKey() {
+        // A PB submission and the automatic upload must agree on the key, or
+        // the leaderboard can never find the model for the time.
+        Player local = playerWith(new int[]{512, 1024, 2048}, new int[]{1, 2, 3, 4, 5}, 0);
+        Map<String, Object> clientAnswers = new HashMap<>();
+        clientAnswers.put("getLocalPlayer", local);
+        Client client = stub(Client.class, clientAnswers);
+        PlayerModelService service = new PlayerModelService(client, null, config(true), null, null);
+
+        assertEquals(service.fingerprintOf(local), service.currentFingerprint());
+    }
+
+    @Test
+    public void currentFingerprintIsNullWithoutALocalPlayer() {
+        Client client = stub(Client.class, new HashMap<>());
+        PlayerModelService service = new PlayerModelService(client, null, config(true), null, null);
+
+        assertNull(service.currentFingerprint());
     }
 }
