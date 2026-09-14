@@ -89,6 +89,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private ConfigManager configManager;
 	@Inject
 	private io.droptracker.service.PlayerModelService playerModelService;
+	@Inject
+	private io.droptracker.api.DeathMessageApi deathMessageApi;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -145,7 +147,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		tabbedPane.setForeground(DropTrackerTheme.TEXT);
 		tabbedPane.setFont(FontManager.getRunescapeSmallFont());
 
-		homePanel = new HomePanel(config, api, client, this);
+		homePanel = new HomePanel(config, api, client, this, deathMessageApi);
 		homeComponent = homePanel.create();
 
 		if (config.useApi()) {

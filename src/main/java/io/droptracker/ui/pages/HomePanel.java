@@ -2,9 +2,11 @@ package io.droptracker.ui.pages;
 
 import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.DropTrackerConfig;
+import io.droptracker.api.DeathMessageApi;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.DropTrackerTheme;
+import io.droptracker.ui.components.DeathMessageDialog;
 import io.droptracker.ui.components.PanelElements;
 import net.runelite.api.Client;
 import net.runelite.client.ui.FontManager;
@@ -21,17 +23,20 @@ public class HomePanel {
     private final DropTrackerApi api;
     private final Client client;
     private final DropTrackerPanel panel;
+    private final DeathMessageApi deathMessageApi;
 
     // Store references for dynamic updates
     private JPanel homePanel;
     private @Nullable JPanel playerButtonRow;
     private int playerButtonIndex = -1; // Tracks where to insert the button
 
-    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel) {
+    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel,
+                     DeathMessageApi deathMessageApi) {
         this.config = config;
         this.api = api;
         this.client = client;
         this.panel = panel;
+        this.deathMessageApi = deathMessageApi;
     }
 
     public JPanel create() {
@@ -183,7 +188,7 @@ public class HomePanel {
 
         // Add player button if the API is on and an account has been seen
         if (config.useApi() && config.lastAccountName() != null && !config.lastAccountName().isEmpty()) {
-            playerButtonRow = new JPanel(new GridLayout(1, 1, 5, 0));
+            playerButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
             playerButtonRow.setBackground(DropTrackerTheme.SURFACE_0);
             playerButtonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
             playerButtonRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
@@ -196,7 +201,16 @@ public class HomePanel {
             });
             playerStatsButton.setMargin(new Insets(0, 0, 0, 0));
 
+            // The line the account's clans post when it dies (members' own
+            // death messages); the same messages as the website and Discord.
+            JButton deathMessageButton = new JButton("Death message");
+            DropTrackerTheme.styleButton(deathMessageButton);
+            deathMessageButton.setToolTipText("Write what your clan sees when you die");
+            deathMessageButton.addActionListener(e -> DeathMessageDialog.open(client, config, deathMessageApi));
+            deathMessageButton.setMargin(new Insets(0, 0, 0, 0));
+
             playerButtonRow.add(playerStatsButton);
+            playerButtonRow.add(deathMessageButton);
 
             // Insert at the correct position (after the global lootboard button)
             homePanel.add(playerButtonRow, playerButtonIndex);
