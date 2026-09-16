@@ -244,6 +244,13 @@ public class SubmissionManager {
                 }
                 if (config.screenshots()) requiredScreenshot = true;
                 break;
+            case SLAYER_TASK:
+                if (!config.slayerEmbeds()) {
+                    debugLogEventFlow("skipped", type, "slayerEmbeds=false");
+                    return;
+                }
+                if (config.screenshots()) requiredScreenshot = true;
+                break;
             case EXPERIENCE:
                 // No screenshots for experience events
                 break;
@@ -587,6 +594,12 @@ public class SubmissionManager {
 
             case DIARY:
                 return groupConfig.isSendDiaries() ? null : "group sendDiaries=false";
+
+            case SLAYER_TASK:
+                // Sent regardless; groups have no slayer notifications yet, so
+                // the only group a completion means anything to is one whose
+                // live event may count it.
+                return groupConfig.isActiveEvent() ? null : "no active event in group";
 
             case EXPERIENCE:
             case EXPERIENCE_MILESTONE:

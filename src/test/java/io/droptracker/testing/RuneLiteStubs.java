@@ -35,6 +35,16 @@ public final class RuneLiteStubs {
     }
 
     /**
+     * An override whose result depends on the call's arguments: a varp read
+     * keyed by id, a cache table lookup keyed by row. Put one in a stub's
+     * {@link #state} map under the method name.
+     */
+    @FunctionalInterface
+    public interface Answer {
+        Object answer(Object[] args);
+    }
+
+    /**
      * @return the mutable override map backing a stub, keyed by method name
      */
     public static Map<String, Object> state(Object stub) {
@@ -181,7 +191,11 @@ public final class RuneLiteStubs {
                     break;
             }
             if (values.containsKey(name)) {
-                return values.get(name);
+                Object value = values.get(name);
+                if (value instanceof Answer) {
+                    return ((Answer) value).answer(args == null ? new Object[0] : args);
+                }
+                return value;
             }
             return defaultValue(method.getReturnType());
         }

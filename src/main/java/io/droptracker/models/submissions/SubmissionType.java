@@ -14,6 +14,7 @@ public enum SubmissionType {
     PET,
     DEATH,
     DIARY,
+    SLAYER_TASK,
     CLAN_BROADCAST,
     CLAN_CHAT
 }

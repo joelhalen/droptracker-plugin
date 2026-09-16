@@ -148,11 +148,23 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "slayerEmbeds",
+        name = "Slayer Tasks",
+        description = "<html>Send your completed slayer tasks to the DropTracker.<br />"
+            + "Events can count them as a goal.</html>",
+        position = 11,
+        section = trackingSection
+    )
+    default boolean slayerEmbeds() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "trackActivities",
         name = "Activity Tracking",
         description = "<html>Track items from activities RuneLite's loot tracker misses:<br />"
             + "deep sea trawling catches.</html>",
-        position = 11,
+        position = 12,
         section = trackingSection
     )
     default boolean trackActivities() {
@@ -165,7 +177,7 @@ public interface DropTrackerConfig extends Config {
             description = "<html>Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
                     + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
                     + "One relaying member covers the whole clan; duplicates are handled server-side.</html>",
-            position = 12,
+            position = 13,
             section = trackingSection
     )
     default boolean relayClanBroadcasts() {
@@ -177,7 +189,7 @@ public interface DropTrackerConfig extends Config {
             name = "Relay clan chat to Discord",
             description = "<html>Mirror your clan chat into your group's configured Discord bridge channel.<br />"
                     + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.</html>",
-            position = 13,
+            position = 14,
             section = trackingSection
     )
     default boolean relayClanChat() {

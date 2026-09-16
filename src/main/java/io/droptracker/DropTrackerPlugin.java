@@ -54,6 +54,7 @@ import io.droptracker.events.ExperienceHandler;
 import io.droptracker.events.PbHandler;
 import io.droptracker.events.QuestHandler;
 import io.droptracker.events.PetHandler;
+import io.droptracker.events.SlayerHandler;
 import io.droptracker.events.TrawlingHandler;
 import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.submissions.Drop;
@@ -141,6 +142,8 @@ public class DropTrackerPlugin extends Plugin {
 	public DiaryHandler diaryHandler;
 	@Inject
 	public TrawlingHandler trawlingHandler;
+	@Inject
+	public SlayerHandler slayerHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
@@ -266,6 +269,9 @@ public class DropTrackerPlugin extends Plugin {
 		// ClanChannelChanged, so without this the inbound direction (and the
 		// ?clan= presence heartbeat) stays dead until the next relog.
 		clientThread.invokeLater(() -> clanRelayService.updateClanChannel(client.getClanChannel()));
+		// Same for a slayer task already in progress: no varp changes to
+		// announce it, so the handler reads it directly.
+		slayerHandler.startUp();
 
 		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
 			+ ", sidePanelEnabled=" + config.showSidePanel()
@@ -369,6 +375,7 @@ public class DropTrackerPlugin extends Plugin {
 	protected void resetAll() {
 		kcService.reset();
 		petHandler.reset();
+		slayerHandler.reset();
 		loginWarningsShown = false;
 	}
 
@@ -564,11 +571,19 @@ public class DropTrackerPlugin extends Plugin {
 				if(trawlingHandler.isEnabled()) {
 					trawlingHandler.onGameMessage(chatMessage);
 				}
+				if(slayerHandler.isEnabled()) {
+					slayerHandler.onGameMessage(chatMessage);
+				}
 				break;
 			case SPAM:
 				// Trawling catch messages arrive as SPAM when game filtering is on
 				if(trawlingHandler.isEnabled()) {
 					trawlingHandler.onGameMessage(chatMessage);
+				}
+				// Slayer completion lines are GAMEMESSAGE; a filtered copy must
+				// not be the one that goes missing.
+				if(slayerHandler.isEnabled()) {
+					slayerHandler.onGameMessage(chatMessage);
 				}
 				break;
 			case FRIENDSCHATNOTIFICATION:
@@ -613,6 +628,9 @@ public class DropTrackerPlugin extends Plugin {
 		// with their drop message on screen; drained before the tracking check
 		// so a mid-flight toggle can't strand one (see SubmissionManager).
 		submissionManager.onGameTick();
+		// Slayer task state stays current while tracking is paused; the handler
+		// only submits when tracking is on.
+		slayerHandler.onTick();
 
 		if (!isTracking) {
 			return;
@@ -676,6 +694,11 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	@Subscribe
+	public void onVarbitChanged(VarbitChanged varbitChanged) {
+		slayerHandler.onVarbitChanged(varbitChanged);
+	}
+
+	@Subscribe
 	public void onActorDeath(ActorDeath actorDeath) {
 		deathHandler.onActorDeath(actorDeath);
 	}
@@ -714,6 +737,10 @@ public class DropTrackerPlugin extends Plugin {
 		if (previousState == newState) {
 			return;
 		}
+
+		// A login or hop re-sends the slayer varps, so a count reading zero
+		// then is not a finished task.
+		slayerHandler.onGameStateChanged(newState);
 
 		// Clear per-session handler state so a partially-coalesced PB, pet or
 		// collection-log popup from before a logout/hop can't fire stale

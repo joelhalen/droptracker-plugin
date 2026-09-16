@@ -30,7 +30,7 @@ public class DropTrackerConfigKeyNamesTest {
         // Tracking
         "lootEmbeds", "pbEmbeds", "clogEmbeds", "caEmbeds", "petEmbeds",
         "levelEmbed", "xpMilestoneEmbeds", "questsEmbed", "deathEmbeds",
-        "diaryEmbeds", "trackActivities",
+        "diaryEmbeds", "slayerEmbeds", "trackActivities",
         // Screenshots
         "screenshots", "screenshotValue", "screenshotUntradeables",
         "minLevelToScreenshot", "hideWhispers", "compressImages",
