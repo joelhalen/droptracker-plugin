@@ -11,6 +11,7 @@ import javax.inject.Singleton;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.modelexport.GlbExporter;
+import io.droptracker.models.api.ModelStatus;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
@@ -30,6 +31,15 @@ import net.runelite.client.callback.ClientThread;
  * GLB is a few hundred kilobytes; sending one with every personal best would be
  * absurd, and would mostly re-send an identical model. One upload per distinct
  * outfit is enough, because the render only changes when the outfit does.
+ *
+ * <p><b>Ask before sending.</b> Remembering only the last outfit was not enough:
+ * a player alternating between two of them re-sent one on every switch, forever,
+ * and the server measured four in five uploads as a model it already had (2026-09-14:
+ * ~264k uploads a day, ~20% of them new). So an outfit the server may already
+ * hold costs a ~200-byte question first, and the export — which runs on the
+ * client thread — happens only when the answer is no. The question doubles as
+ * how the server learns what the player is wearing, so switching back into known
+ * gear still moves their profile.
  *
  * <p>Exports wait for the player to be <b>idle</b>. {@code Player#getModel()}
  * returns the current animation frame, so a model captured mid-attack is
@@ -52,8 +62,15 @@ public class PlayerModelService {
 	private final DropTrackerApi api;
 	private final ScheduledExecutorService executor;
 
-	/** Fingerprint of the outfit we last uploaded, or null if none this session. */
-	private volatile String uploadedFingerprint;
+	/**
+	 * The outfit already settled with the server this session — either uploaded,
+	 * or confirmed as one it holds. Null until the first is settled.
+	 *
+	 * <p>One entry rather than a set on purpose: switching back to an earlier
+	 * outfit should ask again, because that question is what tells the server
+	 * which outfit is being worn now.
+	 */
+	private volatile String settledFingerprint;
 
 	/** Guards against two exports running at once — each one allocates a mesh. */
 	private final AtomicBoolean exporting = new AtomicBoolean(false);
@@ -68,10 +85,29 @@ public class PlayerModelService {
 	 * uploads again. A single 401 produced 258 requests in three minutes during
 	 * testing, each one re-exporting the whole model.
 	 */
-	private long nextAttemptAtMs;
+	// Volatile: written on the executor, read on the client thread.
+	private volatile long nextAttemptAtMs;
 
 	/** How long to wait after a failed upload before trying that outfit again. */
 	private static final long FAILURE_BACKOFF_MS = 5 * 60 * 1000L;
+
+	/**
+	 * The server does not know accounts it has never had a submission from, and
+	 * would refuse a model from one. Wait rather than ask on every outfit change.
+	 */
+	private static final long UNKNOWN_ACCOUNT_BACKOFF_MS = 30 * 60 * 1000L;
+
+	/**
+	 * Floor on the gap between two uploads. Asking first already removes the
+	 * repeat sends, but a player cycling through more outfits than the server
+	 * keeps would miss every time, so this bounds what that can cost: a skipped
+	 * upload is not recorded as settled, and the outfit goes up the next time
+	 * they stand still in it.
+	 */
+	private static final long MIN_UPLOAD_INTERVAL_MS = 30 * 1000L;
+
+	/** Earliest an upload may start, as a monotonic timestamp. */
+	private volatile long nextUploadAtMs;
 
 	@Inject
 	public PlayerModelService(Client client,
@@ -91,15 +127,19 @@ public class PlayerModelService {
 	}
 
 	public void reset() {
-		uploadedFingerprint = null;
+		settledFingerprint = null;
 		idleTicks = 0;
 		nextAttemptAtMs = 0;
+		nextUploadAtMs = 0;
 		exporting.set(false);
 	}
 
 	/**
-	 * Called each game tick. Exports when the outfit has changed and the player
-	 * has been idle long enough.
+	 * Called each game tick. Settles the current outfit with the server when it
+	 * has changed and the player has been idle long enough.
+	 *
+	 * <p>Nothing expensive happens here: whether to export is decided off this
+	 * thread, once the server has said whether it needs the model.
 	 *
 	 * <p>Must be called on the client thread.
 	 */
@@ -123,7 +163,7 @@ public class PlayerModelService {
 		}
 
 		String fingerprint = fingerprintOf(local);
-		if (fingerprint == null || fingerprint.equals(uploadedFingerprint)) {
+		if (fingerprint == null || fingerprint.equals(settledFingerprint)) {
 			return;
 		}
 		if (System.currentTimeMillis() < nextAttemptAtMs) {
@@ -133,38 +173,143 @@ public class PlayerModelService {
 			return;
 		}
 
-		byte[] model = null;
-		byte[] petModel = null;
+		// Read here because it is a client read, and it decides whether a model
+		// the server already holds is still missing the pet beside it.
+		final boolean petOut = client.getFollower() != null;
 		try {
-			model = exportModel(local);
-			petModel = exportPet();
-		} catch (Exception e) {
-			log.debug("Could not export the player model: {}", e.toString());
-		}
-
-		if (model == null) {
+			executor.execute(() -> settle(fingerprint, petOut));
+		} catch (RuntimeException e) {
+			// Never let a refused submission hold the guard — or reach the tick.
 			exporting.set(false);
-			return;
+			log.debug("Could not schedule the outfit check: {}", e.toString());
 		}
+	}
 
-		final byte[] modelBytes = model;
-		final byte[] petBytes = petModel;
-		// Upload off the client thread: it is a network round-trip with a
-		// payload measured in hundreds of kilobytes.
-		executor.execute(() -> {
-			try {
-				if (api.uploadPlayerModel(fingerprint, modelBytes, petBytes)) {
-					uploadedFingerprint = fingerprint;
+	/** What to do about an outfit once the server has answered. */
+	enum Action {
+		/** Export and send it. */
+		UPLOAD,
+		/** The server has it; nothing more to do this session. */
+		SETTLED,
+		/** The server does not know this account yet. */
+		UNKNOWN_ACCOUNT,
+		/** Held back by the upload floor; try again later. */
+		WAIT
+	}
+
+	/**
+	 * Pure decision, so the interesting cases are testable without a client.
+	 *
+	 * @param status what the server answered, or null when it could not be asked
+	 *               — which must lead to an upload, the behaviour that predates
+	 *               the check endpoint.
+	 */
+	static Action decide(@Nullable ModelStatus status, boolean petOut, long now, long nextUploadAtMs) {
+		if (status != null && !status.isAccepted()) {
+			return Action.UNKNOWN_ACCOUNT;
+		}
+		// A stored outfit can predate the pet now following the player, and the
+		// fingerprint cannot say so — it covers the character, not the follower.
+		if (status != null && status.hasModel() && (!petOut || status.hasPet())) {
+			return Action.SETTLED;
+		}
+		if (now < nextUploadAtMs) {
+			return Action.WAIT;
+		}
+		return Action.UPLOAD;
+	}
+
+	/** Asks the server about an outfit, then exports only if it needs one. */
+	private void settle(String fingerprint, boolean petOut) {
+		boolean release = true;
+		try {
+			Action action = decide(api.checkPlayerModel(fingerprint), petOut,
+					System.currentTimeMillis(), nextUploadAtMs);
+			switch (action) {
+				case SETTLED:
+					// The question itself told the server what is being worn,
+					// which is all the re-upload it replaces ever achieved.
+					settledFingerprint = fingerprint;
 					nextAttemptAtMs = 0;
-					log.debug("Uploaded character model for outfit {}", fingerprint);
-				} else {
-					// Back off rather than re-exporting on the very next tick.
-					nextAttemptAtMs = System.currentTimeMillis() + FAILURE_BACKOFF_MS;
-					log.debug("Model upload failed; not retrying for {} minutes",
-							FAILURE_BACKOFF_MS / 60000);
-				}
-			} finally {
+					log.debug("Server already holds outfit {}", fingerprint);
+					break;
+				case UNKNOWN_ACCOUNT:
+					nextAttemptAtMs = System.currentTimeMillis() + UNKNOWN_ACCOUNT_BACKOFF_MS;
+					break;
+				case WAIT:
+					// Hold the whole cycle, not just the upload: without this
+					// the question would be asked again on the very next tick.
+					nextAttemptAtMs = nextUploadAtMs;
+					break;
+				case UPLOAD:
+				default:
+					captureAndUpload(fingerprint);
+					// Only now has the guard changed hands: if the hop threw,
+					// the finally below has to release it.
+					release = false;
+					break;
+			}
+		} catch (Exception e) {
+			log.debug("Could not settle outfit {}: {}", fingerprint, e.toString());
+		} finally {
+			if (release) {
 				exporting.set(false);
+			}
+		}
+	}
+
+	/** Exports on the client thread, then uploads off it. */
+	private void captureAndUpload(String fingerprint) {
+		clientThread.invoke(() -> {
+			byte[] model = null;
+			byte[] petModel = null;
+			try {
+				Player local = client.getGameState() == GameState.LOGGED_IN
+						? client.getLocalPlayer() : null;
+				// The outfit can change between the question and the answer, and
+				// a model exported for a different one would be filed under the
+				// wrong key. The next tick picks the new one up.
+				if (local != null && fingerprint.equals(fingerprintOf(local))) {
+					model = exportModel(local);
+					petModel = exportPet();
+				}
+			} catch (Exception e) {
+				log.debug("Could not export the player model: {}", e.toString());
+			}
+
+			if (model == null) {
+				exporting.set(false);
+				return;
+			}
+
+			final byte[] modelBytes = model;
+			final byte[] petBytes = petModel;
+			// Upload off the client thread: it is a network round-trip with a
+			// payload measured in tens of kilobytes. The guard is released by
+			// whoever ends up owning the work, so a refused submission (the
+			// executor is shutting down) has to release it here or the uploader
+			// is stuck for the rest of the session.
+			try {
+				executor.execute(() -> {
+					try {
+						if (api.uploadPlayerModel(fingerprint, modelBytes, petBytes)) {
+							settledFingerprint = fingerprint;
+							nextAttemptAtMs = 0;
+							nextUploadAtMs = System.currentTimeMillis() + MIN_UPLOAD_INTERVAL_MS;
+							log.debug("Uploaded character model for outfit {}", fingerprint);
+						} else {
+							// Back off rather than re-exporting on the very next tick.
+							nextAttemptAtMs = System.currentTimeMillis() + FAILURE_BACKOFF_MS;
+							log.debug("Model upload failed; not retrying for {} minutes",
+									FAILURE_BACKOFF_MS / 60000);
+						}
+					} finally {
+						exporting.set(false);
+					}
+				});
+			} catch (RuntimeException e) {
+				exporting.set(false);
+				throw e;
 			}
 		});
 	}
@@ -229,8 +374,8 @@ public class PlayerModelService {
 					exporting.set(false);
 				}
 				if (ok) {
-					// The automatic path now knows this outfit is uploaded.
-					uploadedFingerprint = fp;
+					// The automatic path now knows this outfit is settled.
+					settledFingerprint = fp;
 					nextAttemptAtMs = 0;
 				}
 				finish(callback, ok, ok

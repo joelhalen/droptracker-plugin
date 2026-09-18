@@ -10,6 +10,7 @@ import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.StateSnapshot;
 import io.droptracker.models.api.Manifest;
+import io.droptracker.models.api.ModelStatus;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopGroupResult;
 import io.droptracker.models.api.TopPlayersResult;
@@ -26,6 +27,7 @@ import javax.inject.Singleton;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -554,6 +556,55 @@ public class DropTrackerApi {
         } catch (IOException e) {
             log.debug("Model upload failed: {}", e.toString());
             return false;
+        }
+    }
+
+    /**
+     * Asks whether the server already holds the model for an outfit. Blocking;
+     * call off the client thread.
+     *
+     * <p>The cheap half of {@link #uploadPlayerModel}: a couple of hundred
+     * bytes against a model measured in tens of kilobytes, and it spares the
+     * client the export as well as the upload. Answering it is also how the
+     * server learns which outfit the player is currently wearing, so a switch
+     * back into gear it already holds still reaches the profile.
+     *
+     * @return what the server holds, or null when it could not be asked — an
+     *         unreachable or older server must leave the caller sending the
+     *         model, which is what it did before this endpoint existed.
+     */
+    @Nullable
+    public ModelStatus checkPlayerModel(String fingerprint) {
+        if (!config.useApi() || fingerprint == null || fingerprint.isEmpty()) {
+            return null;
+        }
+        HttpUrl url = HttpUrl.parse(getApiUrl() + "/player/model/check");
+        if (url == null) {
+            return null;
+        }
+
+        Map<String, String> body = new HashMap<>();
+        body.put("acc_hash", String.valueOf(client.getAccountHash()));
+        body.put("fingerprint", fingerprint);
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(RequestBody.create(
+                        MediaType.parse("application/json; charset=utf-8"), gson.toJson(body)))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            // 202 is the server saying it does not know this account — a real
+            // answer, and the one case where sending the model is pointless.
+            if (!response.isSuccessful() && response.code() != 202) {
+                return null;
+            }
+            ResponseBody responseBody = response.body();
+            return responseBody == null
+                    ? null : gson.fromJson(responseBody.string(), ModelStatus.class);
+        } catch (Exception e) {
+            log.debug("Model check failed: {}", e.toString());
+            return null;
         }
     }
 
