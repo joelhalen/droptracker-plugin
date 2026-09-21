@@ -2,6 +2,7 @@ package io.droptracker;
 
 import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventHudDetail;
+import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.TeamIndicatorStyle;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
@@ -256,9 +257,28 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "privacyMode",
+        name = "Privacy mode",
+        description = "<html>What to hide from the frame a screenshot captures.<br />"
+            + "Hide DMs: private messages. With split private chat off they are<br />"
+            + "ordinary chat lines, so the transcript is hidden with them.<br />"
+            + "Hide messages + DMs: always hides the transcript and typed input.<br />"
+            + "Hide entire chatbox: the whole chat area; in fixed mode the game<br />"
+            + "view expands into the freed space for the shot.</html>",
+        position = 5,
+        section = screenshotSection
+    )
+    default PrivacyMode privacyMode() {
+        return PrivacyMode.NONE;
+    }
+
+    /** Retired in favor of {@link #privacyMode()}; read once at startup to
+     * migrate players who had it enabled over to {@code HIDE_DMS}. */
+    @ConfigItem(
         keyName = "hideWhispers",
         name = "Hide PMs",
-        description = "Do you want your private chat to be hidden when screenshots are taken?",
+        description = "Replaced by Privacy mode",
+        hidden = true,
         position = 5,
         section = screenshotSection
     )

@@ -7,6 +7,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionStatus;
 import io.droptracker.models.submissions.SubmissionType;
@@ -20,12 +21,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.WorldType;
-import net.runelite.api.annotations.Component;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.RuneLite;
-import net.runelite.client.callback.ClientThread;
-import net.runelite.client.ui.DrawManager;
 import net.runelite.client.util.Text;
 import okhttp3.*;
 import org.jetbrains.annotations.NotNull;
@@ -61,9 +57,8 @@ public class SubmissionManager {
     private final Gson gson;
     private final OkHttpClient okHttpClient;
     private final Client client;
-    private final ClientThread clientThread;
     private final UrlManager urlManager;
-    private final DrawManager drawManager;
+    private final ScreenshotPrivacyService screenshotPrivacy;
     private final NearbyPlayerTracker nearbyPlayerTracker;
 
     /** Thread-safe list of submissions the player has received which qualified for notifications */
@@ -72,6 +67,11 @@ public class SubmissionManager {
 
     /** Screenshot captures held back a game tick; drained by {@link #onGameTick()}. */
     private final Queue<Runnable> deferredCaptures = new ConcurrentLinkedQueue<>();
+
+    /** Guards the one-frame encode memo below; see {@link #encodeForUpload(BufferedImage)}. */
+    private final Object encodeLock = new Object();
+    private BufferedImage lastEncodedImage;
+    private byte[] lastEncodedBytes;
 
     /** Callback for UI updates when submissions change */
     @Setter
@@ -108,9 +108,8 @@ public class SubmissionManager {
         Gson gson,
         OkHttpClient okHttpClient,
         Client client,
-        ClientThread clientThread,
         UrlManager urlManager,
-        DrawManager drawManager,
+        ScreenshotPrivacyService screenshotPrivacy,
         NearbyPlayerTracker nearbyPlayerTracker
     ) {
         this.config = config;
@@ -119,27 +118,9 @@ public class SubmissionManager {
         this.gson = gson;
         this.okHttpClient = okHttpClient;
         this.client = client;
-        this.clientThread = clientThread;
         this.urlManager = urlManager;
-        this.drawManager = drawManager;
+        this.screenshotPrivacy = screenshotPrivacy;
         this.nearbyPlayerTracker = nearbyPlayerTracker;
-    }
-
-    // ========== Widget Helpers ==========
-
-    public static void hideWidget(Client client, ClientThread clientThread, @Component int info) {
-        Widget widget = client.getWidget(info);
-        if (widget != null) {
-            widget.setHidden(true);
-        }
-    }
-
-    public static void showWidget(Client client, ClientThread clientThread, @Component int info) {
-        clientThread.invoke(() -> {
-            Widget widget = client.getWidget(info);
-            if (widget != null)
-                widget.setHidden(false);
-        });
     }
 
     // ========== Public Entry Points for Event Handlers ==========
@@ -153,8 +134,8 @@ public class SubmissionManager {
             return;
         }
         boolean requiredScreenshot = false;
-        boolean shouldHideDm = config.hideDMs();
-        debugLogEventFlow("received", type, "entry=non-drop, useApi=" + config.useApi() + ", hideDMs=" + shouldHideDm);
+        PrivacyMode privacyMode = config.privacyMode();
+        debugLogEventFlow("received", type, "entry=non-drop, useApi=" + config.useApi() + ", privacyMode=" + privacyMode.name());
 
         // Check if the user has this event type enabled locally
         switch (type) {
@@ -183,7 +164,7 @@ public class SubmissionManager {
                     // Non-PB kill times: just send, no ValidSubmission tracking
                     debugLogEventFlow("send", type, "non-pb kill time; direct send; screenshotRequired=" + requiredScreenshot);
                     if (requiredScreenshot) {
-                        captureAndSend(webhook, null, shouldHideDm);
+                        captureAndSend(webhook, null, privacyMode);
                     } else {
                         sendWebhookDirect(webhook, null, null);
                     }
@@ -292,7 +273,7 @@ public class SubmissionManager {
 
         if (requiredScreenshot) {
             debugLogEventFlow("capture", type, "captureAndSend path selected");
-            captureAndSend(webhook, submission, shouldHideDm);
+            captureAndSend(webhook, submission, privacyMode);
         } else {
             debugLogEventFlow("send", type, "sendWebhookDirect path selected");
             sendWebhookDirect(webhook, null, submission);
@@ -357,9 +338,9 @@ public class SubmissionManager {
         }
 
         if (requiredScreenshot) {
-            boolean shouldHideDm = config.hideDMs();
-            debugLogEventFlow("capture", SubmissionType.DROP, "captureAndSend path selected; hideDMs=" + shouldHideDm);
-            captureAndSend(customWebhookBody, submission, shouldHideDm);
+            PrivacyMode privacyMode = config.privacyMode();
+            debugLogEventFlow("capture", SubmissionType.DROP, "captureAndSend path selected; privacyMode=" + privacyMode.name());
+            captureAndSend(customWebhookBody, submission, privacyMode);
         } else {
             debugLogEventFlow("send", SubmissionType.DROP, "sendWebhookDirect path selected");
             sendWebhookDirect(customWebhookBody, null, submission);
@@ -845,17 +826,17 @@ public class SubmissionManager {
         }
     }
 
-    private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+    private void captureAndSend(CustomWebhookBody webhook, ValidSubmission submission, PrivacyMode privacyMode) {
         // Sources that announce loot a tick late would otherwise be
         // photographed before their own drop message (issue #48).
         String source = extractSourceName(webhook);
         if (NpcUtilities.needsDeferredScreenshot(source)) {
             debugLogEventFlow("capture", submission != null ? submission.getType() : null,
                     "deferring screenshot one game tick; source=" + source);
-            deferredCaptures.add(() -> captureNow(webhook, submission, hideDMs));
+            deferredCaptures.add(() -> captureNow(webhook, submission, privacyMode));
             return;
         }
-        captureNow(webhook, submission, hideDMs);
+        captureNow(webhook, submission, privacyMode);
     }
 
     /**
@@ -863,39 +844,29 @@ public class SubmissionManager {
      *
      * @param webhook The webhook body to send after capture
      * @param submission Optional ValidSubmission for tracking
-     * @param hideDMs Whether to hide PM chat during capture
+     * @param privacyMode What to hide from the frame before it is captured
      */
-    private void captureNow(CustomWebhookBody webhook, ValidSubmission submission, boolean hideDMs) {
+    private void captureNow(CustomWebhookBody webhook, ValidSubmission submission, PrivacyMode privacyMode) {
         debugLogEventFlow("capture", submission != null ? submission.getType() : null,
-                "capturing screenshot; hideDMs=" + hideDMs);
+                "capturing screenshot; privacyMode=" + privacyMode.name());
 
-        if (hideDMs) {
-            hideWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-        }
-
-        drawManager.requestNextFrameListener(image -> {
-            BufferedImage bufferedImage = (BufferedImage) image;
-            if (hideDMs) {
-                showWidget(client, clientThread, InterfaceID.PmChat.CONTAINER);
-            }
-
+        screenshotPrivacy.capture(privacyMode, bufferedImage -> {
             // PNG/JPEG encoding can take hundreds of ms for large frames; keep it
             // off the frame-listener thread so the client doesn't stall.
             executor.submit(() -> {
+                if (bufferedImage == null) {
+                    // No frame could be captured with the player's privacy mode
+                    // applied. Send the submission without proof rather than lose
+                    // it — an unhidden frame is never the fallback.
+                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                            "screenshot unavailable; sending without an image");
+                    sendWebhookDirect(webhook, null, submission);
+                    return;
+                }
+
                 byte[] imageBytes = null;
                 try {
-                    // Compression off = always lossless, whatever the size.
-                    int thresholdBytes = config.compressImages()
-                        ? config.imageCompressionThresholdKb() * 1024
-                        : Integer.MAX_VALUE;
-                    byte[] pngBytes = convertImageToPngBytes(bufferedImage);
-                    if (thresholdBytes > 0 && pngBytes.length <= thresholdBytes) {
-                        // PNG is within the threshold — send lossless
-                        imageBytes = pngBytes;
-                    } else {
-                        // PNG exceeds threshold (or threshold is 0) — compress to JPEG
-                        imageBytes = convertImageToJpegBytes(bufferedImage);
-                    }
+                    imageBytes = encodeForUpload(bufferedImage);
                 } catch (IOException e) {
                     log.error("Error converting image to byte array", e);
                     debugLogEventFlow("capture", submission != null ? submission.getType() : null,
@@ -907,6 +878,38 @@ public class SubmissionManager {
                 sendWebhookDirect(webhook, imageBytes, submission);
             });
         });
+    }
+
+    /**
+     * Encodes a captured frame for upload, remembering the last one.
+     *
+     * <p>ScreenshotPrivacyService hands the same frame to every submission that a
+     * single moment produced — a drop and the collection log slot it filled share
+     * one capture — so without this the identical image is compressed once per
+     * submission. Encoding is the expensive half of a screenshot, so the second
+     * caller waits on the lock and leaves with the bytes the first one produced.
+     */
+    private byte[] encodeForUpload(BufferedImage bufferedImage) throws IOException {
+        synchronized (encodeLock) {
+            if (bufferedImage == lastEncodedImage && lastEncodedBytes != null) {
+                return lastEncodedBytes;
+            }
+
+            // Compression off = always lossless, whatever the size.
+            int thresholdBytes = config.compressImages()
+                ? config.imageCompressionThresholdKb() * 1024
+                : Integer.MAX_VALUE;
+            byte[] pngBytes = convertImageToPngBytes(bufferedImage);
+            byte[] imageBytes = thresholdBytes > 0 && pngBytes.length <= thresholdBytes
+                // PNG is within the threshold — send lossless
+                ? pngBytes
+                // PNG exceeds threshold (or threshold is 0) — compress to JPEG
+                : convertImageToJpegBytes(bufferedImage);
+
+            lastEncodedImage = bufferedImage;
+            lastEncodedBytes = imageBytes;
+            return imageBytes;
+        }
     }
 
     private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {

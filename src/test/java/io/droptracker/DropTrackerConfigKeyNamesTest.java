@@ -33,7 +33,7 @@ public class DropTrackerConfigKeyNamesTest {
         "diaryEmbeds", "slayerEmbeds", "trackActivities",
         // Screenshots
         "screenshots", "screenshotValue", "screenshotUntradeables",
-        "minLevelToScreenshot", "hideWhispers", "compressImages",
+        "minLevelToScreenshot", "privacyMode", "compressImages",
         "imageCompressionThresholdKb",
         // Events
         "eventNotifications", "eventDisplayMode", "eventTaskProgressNotifications",
@@ -45,7 +45,7 @@ public class DropTrackerConfigKeyNamesTest {
         "useApi", "receiveInGameMessages", "syncAccountState",
         "uploadCharacterModel", "showSidePanel", "debugLogging",
         // Retired from the UI, kept so existing values still apply
-        "trackExperience", "trackTrawling",
+        "trackExperience", "trackTrawling", "hideWhispers",
         "sendLoadoutWithPbs", "eventImportantPopupsOnly", "pollUpdates",
         // Internal state
         "pinnedEventId", "lastVersionNotified", "lastAccountName",

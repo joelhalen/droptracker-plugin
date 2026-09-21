@@ -57,6 +57,7 @@ import io.droptracker.events.PetHandler;
 import io.droptracker.events.SlayerHandler;
 import io.droptracker.events.TrawlingHandler;
 import io.droptracker.events.WidgetEventHandler;
+import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.submissions.Drop;
 import io.droptracker.service.ClanRelayService;
 import io.droptracker.service.EventNotificationService;
@@ -69,6 +70,7 @@ import io.droptracker.service.StateSyncScheduler;
 import io.droptracker.service.StateSyncService;
 import io.droptracker.service.NearbyPlayerTracker;
 import io.droptracker.service.RaidLootDeduplicator;
+import io.droptracker.service.ScreenshotPrivacyService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.overlays.EventHudOverlay;
@@ -149,6 +151,13 @@ public class DropTrackerPlugin extends Plugin {
 	public ChatMessageUtil chatMessageUtil;
 	@Inject
 	private SubmissionManager submissionManager;
+
+	/* Screenshot privacy: hides DMs / chat / the whole chatbox for the captured frame */
+	@Inject
+	private ScreenshotPrivacyService screenshotPrivacyService;
+
+	@Inject
+	private ConfigManager configManager;
 
 	@Inject
 	private NearbyPlayerTracker nearbyPlayerTracker;
@@ -235,6 +244,7 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Override
 	protected void startUp() {
+		migrateLegacyPrivacyConfig();
 		api.setOnGroupConfigsLoadedCallback(() -> submissionManager.onGroupConfigsLoaded());
 		if(config.showSidePanel()) {
 			createSidePanel();
@@ -277,6 +287,20 @@ public class DropTrackerPlugin extends Plugin {
 			+ ", sidePanelEnabled=" + config.showSidePanel()
 			+ (config.customApiEndpoint().equals("") ? ", customApiEndpoint=default" : ", customApiEndpoint=" + config.customApiEndpoint()));
 		DebugLogger.log("[DropTrackerPlugin][startup] pluginVersion=" + pluginVersion);
+	}
+
+	/**
+	 * "Hide PMs" (hideWhispers) grew into the Privacy Mode dropdown. A player who
+	 * had it enabled keeps DM hiding as their stored mode; the retired key stays
+	 * in place (hidden config item) so a plugin downgrade still honors it.
+	 */
+	private void migrateLegacyPrivacyConfig() {
+		if (configManager.getConfiguration(DropTrackerConfig.GROUP, "privacyMode") != null) {
+			return;
+		}
+		if (config.hideDMs()) {
+			configManager.setConfiguration(DropTrackerConfig.GROUP, "privacyMode", PrivacyMode.HIDE_DMS);
+		}
 	}
 
 	private void loadUntradeables() {
@@ -340,6 +364,10 @@ public class DropTrackerPlugin extends Plugin {
 	@Override
 	protected void shutDown() {
 		gameState.lazySet(null);
+
+		// Put back any privacy widget mutation still in flight (chatbox hidden
+		// mid-capture) before the rest of the teardown.
+		screenshotPrivacyService.shutDown();
 
 		collectionLogScraper.shutDown();
 		stateSyncScheduler.shutDown();
@@ -617,6 +645,13 @@ public class DropTrackerPlugin extends Plugin {
 	}
 
 	@Subscribe
+	public void onBeforeRender(BeforeRender event) {
+		// Drives the fixed-mode chatbox hide/expand/restore cycle; a no-op
+		// whenever no "hide entire chatbox" capture is in flight.
+		screenshotPrivacyService.onBeforeRender();
+	}
+
+	@Subscribe
 	public void onGameTick(GameTick event) {
 		// Keep the raid roster warm even while tracking is paused so that
 		// re-enabling mid-raid still produces complete participant lists.
@@ -631,6 +666,10 @@ public class DropTrackerPlugin extends Plugin {
 		// Slayer task state stays current while tracking is paused; the handler
 		// only submits when tracking is on.
 		slayerHandler.onTick();
+		// Watchdog for a capture whose frame never arrives: ticks keep coming
+		// when rendering has stopped, and a stalled cycle holds every later
+		// capture behind it.
+		screenshotPrivacyService.onGameTick();
 
 		if (!isTracking) {
 			return;
