@@ -526,26 +526,6 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe(priority = 1)
 	public void onChatMessage(ChatMessage message) {
-		// Deliberately ABOVE the isTracking gate. That flag is the
-		// webhook-exhaustion kill switch for submissions; a display feature
-		// behind it would silently lose its badges for anyone whose webhook
-		// list failed to replenish, with no way to tell why.
-		switch (message.getType()) {
-			case CLAN_CHAT:
-			case CLAN_GUEST_CHAT:
-			case CLAN_GIM_CHAT:
-			case FRIENDSCHAT:
-				eventTeamIndicatorService.decorate(message.getMessageNode());
-				break;
-			case PUBLICCHAT:
-				if (config.eventTeamIndicatorsPublicChat()) {
-					eventTeamIndicatorService.decorate(message.getMessageNode());
-				}
-				break;
-			default:
-				break;
-		}
-
 		if (!isTracking) {
 			return;
 		}

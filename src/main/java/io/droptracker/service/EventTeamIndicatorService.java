@@ -10,26 +10,38 @@ import io.droptracker.models.api.EventState;
 import io.droptracker.models.api.Manifest;
 import io.droptracker.util.ChatMessageUtil;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.IndexedSprite;
 import net.runelite.api.MessageNode;
+import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.game.ItemManager;
+import net.runelite.client.eventbus.EventBus;
+import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
+import org.jetbrains.annotations.VisibleForTesting;
 
 import javax.annotation.Nullable;
 import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -41,53 +53,96 @@ import java.util.regex.Pattern;
  * when an admin moves someone, and a clanmate who has never opened the site is
  * still badged.
  *
- * <p>Three things keep it cheap. The roster is fetched only when the
- * {@code roster_version} on the /event_state poll changes. A decoration touches
- * the one {@link MessageNode} that just arrived rather than walking the whole
- * chat buffer — the buffer is re-walked only when the roster or the config
- * actually changes. And the mod-icon slots are claimed once per client
- * lifetime and refilled in place, because growing that array repeatedly leaks
- * slots and stomps on icons other plugins appended after us.
+ * <p>The badge is applied while a chat line is being <em>drawn</em>, through
+ * the chat builder's {@code chatMessageBuilding} callback, and is never written
+ * back to the {@link MessageNode}. The first version did write it back, and
+ * that broke private messages:
+ * <ul>
+ * <li>{@code MessageNode.setName} changes more than the text. RuneLite also
+ * rebuilds the node's sender identity from whatever follows the last '>', so a
+ * name ending in {@code </col>} left the line with an empty sender. The game
+ * decides "is this from a friend?" from that identity, so with Private set to
+ * Friends a teammate's PMs vanished, and with Clan set to Friends so did their
+ * clan lines.</li>
+ * <li>The walk over {@code client.getMessages()} that badged lines already on
+ * screen reached every chat type, DMs included, which is how names in the PM
+ * pane got recoloured.</li>
+ * </ul>
+ * Now each line's type is checked before it is badged. The node keeps the name
+ * the server sent, other plugins read it unchanged, and switching the feature
+ * off clears every badge on the next redraw.
+ *
+ * <p>Whatever the badge adds must disappear under the game's
+ * {@code removetags}. The chat scripts strip tags from the drawn name to find
+ * the clan rank icon and to target Report, Kick, Ban, Add friend and Message.
+ * {@code <img>} and {@code <col>} strip cleanly. Literal text such as "[RR]"
+ * does not, so the tag is drawn into the team's sprite rather than typed into
+ * the name.
+ *
+ * <p>Two things keep it cheap. The roster is fetched only when the
+ * {@code roster_version} on the /event_state poll changes. And the mod-icon
+ * slots are claimed once per client lifetime and refilled in place, because
+ * growing that array repeatedly leaks slots and stomps on icons other plugins
+ * appended after us.
  */
 @Slf4j
 @Singleton
 public class EventTeamIndicatorService {
 
     /**
-     * Sprite slots reserved for team orbs. Teams past this fall back to their
-     * tag — a client's mod-icon array is shared with every other plugin, so
-     * this is a budget, not a target.
+     * Sprite slots reserved for team badges, one per team. Sized to the
+     * server's cap on teams per roster ({@code ROSTER_TEAMS_LIMIT}), so every
+     * team it sends can have one. A team that still ends up without a slot
+     * falls back to a coloured name.
      */
-    static final int MAX_TEAM_ICONS = 12;
+    static final int MAX_TEAM_ICONS = 32;
 
     /** Orb sprite size, matching the game's own chat icons. */
     private static final int ORB_SIZE = 12;
 
+    /** Columns between the orb and the tag when a badge shows both. */
+    private static final int PIECE_GAP = 2;
+
+    /** The chat builders' per-line callback (ChatBuilder and ChatSplitBuilder). */
+    private static final String CHAT_MESSAGE_BUILDING = "chatMessageBuilding";
+
     /**
-     * A leading coloured tag we wrote, e.g. {@code <col=cc3333>[RR]</col>}.
-     * Recognising our own output is what keeps decoration idempotent.
+     * Tag text for a team with no colour of its own. The server always sends
+     * an orb colour, so this is a backstop, picked to read on both the opaque
+     * and the transparent chatbox.
      */
-    private static final Pattern TAG_PREFIX =
-        Pattern.compile("^<col=[0-9a-fA-F]{6}>\\[[A-Za-z0-9 ]{1,8}\\]</col>");
+    private static final Color FALLBACK_TAG_COLOR = new Color(0x9f9f9f);
+
+    /** A colour tag, open or close — a coloured name replaces any already there. */
+    private static final Pattern COLOR_TAG = Pattern.compile("</?col(=[0-9a-fA-F]*)?>");
+
+    /**
+     * A moderator crown leading the name. The chat builder offers "Crown Info"
+     * only when the name starts with one, so a badge goes after it.
+     */
+    private static final Pattern LEADING_CROWN = Pattern.compile("^<img=[01]>");
 
     /** Runs of whitespace, folded to one — see {@link #normalize(String)}. */
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private final Client client;
     private final ClientThread clientThread;
+    private final EventBus eventBus;
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
-    private final ItemManager itemManager;
     private final ManifestService manifestService;
     private final EventNotificationService eventNotificationService;
     private final ScheduledExecutorService executor;
 
     /**
-     * Normalized RSN to badge, replaced wholesale on every roster load. Never
-     * mutated in place: the chat hook reads it from the client thread while the
-     * executor rebuilds it.
+     * Normalized RSN to badge, replaced wholesale, never mutated in place: the
+     * chat builder reads it on the client thread while the executor builds the
+     * next one.
      */
-    private volatile Map<String, TeamBadge> badgesByName = new HashMap<>();
+    private volatile Map<String, TeamBadge> badgesByName = Collections.emptyMap();
+
+    /** The loaded roster's teams in roster order, kept to redraw their sprites. */
+    private volatile List<TeamBadge> loadedTeams = Collections.emptyList();
 
     /** Roster version currently reflected in {@link #badgesByName}. */
     @Nullable
@@ -96,43 +151,50 @@ public class EventTeamIndicatorService {
     /** Event the loaded roster belongs to; 0 when nothing is loaded. */
     private volatile int loadedEventId;
 
-    /** First slot of our reserved block, or -1 before it is claimed. */
+    /**
+     * Bumped by every {@link #clear()}. A roster fetched before a clear must
+     * not be installed after it, or an event that just ended would put its
+     * badges back.
+     */
+    private final AtomicInteger generation = new AtomicInteger();
+
+    /** First slot of our reserved block, or -1 before it is claimed. Client thread. */
     private int iconOffset = -1;
 
     /** team id -> sprite slot, valid only while {@link #iconOffset} >= 0. */
-    private final Map<Integer, Integer> slotByTeam = new HashMap<>();
+    private volatile Map<Integer, Integer> slotByTeam = Collections.emptyMap();
 
     private final Runnable stateListener = this::onEventStateUpdated;
 
     @Inject
     public EventTeamIndicatorService(Client client,
                                      ClientThread clientThread,
+                                     EventBus eventBus,
                                      DropTrackerConfig config,
                                      DropTrackerApi api,
-                                     ItemManager itemManager,
                                      ManifestService manifestService,
                                      EventNotificationService eventNotificationService,
                                      ScheduledExecutorService executor) {
         this.client = client;
         this.clientThread = clientThread;
+        this.eventBus = eventBus;
         this.config = config;
         this.api = api;
-        this.itemManager = itemManager;
         this.manifestService = manifestService;
         this.eventNotificationService = eventNotificationService;
         this.executor = executor;
     }
 
     public void startUp() {
+        eventBus.register(this);
         eventNotificationService.addStateUpdatedListener(stateListener);
     }
 
     public void shutDown() {
+        eventBus.unregister(this);
         eventNotificationService.removeStateUpdatedListener(stateListener);
-        badgesByName = new HashMap<>();
-        loadedRosterVersion = null;
-        loadedEventId = 0;
-        slotByTeam.clear();
+        clear();
+        slotByTeam = Collections.emptyMap();
     }
 
     /**
@@ -143,9 +205,14 @@ public class EventTeamIndicatorService {
     public void onGameStateChanged(GameState state) {
         if (state == GameState.STARTING) {
             iconOffset = -1;
-            slotByTeam.clear();
-        } else if (state == GameState.LOGIN_SCREEN) {
+            slotByTeam = Collections.emptyMap();
+        } else if (state == GameState.LOGIN_SCREEN && iconOffset < 0) {
             claimIconSlots();
+            // A roster held across the restart needs its sprites again.
+            List<TeamBadge> teams = loadedTeams;
+            if (!teams.isEmpty()) {
+                assignIconSlots(teams, config.eventTeamIndicators());
+            }
         }
     }
 
@@ -193,10 +260,11 @@ public class EventTeamIndicatorService {
         if (eventId == loadedEventId && version.equals(loadedRosterVersion)) {
             return;
         }
-        executor.execute(() -> loadRoster(eventId, version));
+        final int fetchGeneration = generation.get();
+        executor.execute(() -> loadRoster(eventId, version, fetchGeneration));
     }
 
-    private void loadRoster(int eventId, String version) {
+    private void loadRoster(int eventId, String version, int fetchGeneration) {
         String playerName = client.getLocalPlayer() != null
             ? client.getLocalPlayer().getName() : null;
         long accountHash = client.getAccountHash();
@@ -219,19 +287,21 @@ public class EventTeamIndicatorService {
             return;
         }
 
-        Map<Integer, EventRoster.Team> teamsById = new HashMap<>();
+        Map<Integer, TeamBadge> badgeByTeam = new HashMap<>();
+        List<TeamBadge> teams = new ArrayList<>();
         for (EventRoster.Team team : entry.getTeams()) {
-            teamsById.put(team.getId(), team);
+            TeamBadge badge = new TeamBadge(team.getId(), team.getShortTag(),
+                colorOf(team.getOrbColor()), colorOf(team.getColor()));
+            badgeByTeam.put(team.getId(), badge);
+            teams.add(badge);
         }
         Map<String, TeamBadge> next = new HashMap<>();
         for (Map.Entry<String, List<String>> row : entry.getMembers().entrySet()) {
             Integer teamId = parseTeamId(row.getKey());
-            EventRoster.Team team = teamId == null ? null : teamsById.get(teamId);
-            if (team == null || row.getValue() == null) {
+            TeamBadge badge = teamId == null ? null : badgeByTeam.get(teamId);
+            if (badge == null || row.getValue() == null) {
                 continue;
             }
-            TeamBadge badge = new TeamBadge(team.getId(), team.getShortTag(),
-                colorOf(team.getOrbColor()), colorOf(team.getColor()));
             for (String name : row.getValue()) {
                 // Server-normalized already; normalize again so one changed
                 // implementation can never split the two sides silently.
@@ -241,142 +311,162 @@ public class EventTeamIndicatorService {
                 }
             }
         }
-        badgesByName = next;
-        loadedRosterVersion = version;
-        loadedEventId = eventId;
-        final List<EventRoster.Team> teams = entry.getTeams();
-        clientThread.invoke(() -> {
-            assignIconSlots(teams);
-            redecorateBuffer();
-        });
-    }
-
-    private void clear() {
-        badgesByName = new HashMap<>();
-        loadedRosterVersion = null;
-        loadedEventId = 0;
-        clientThread.invoke(this::redecorateBuffer);
+        clientThread.invoke(() -> install(next, teams, eventId, version, fetchGeneration));
     }
 
     /**
-     * Badge one incoming chat line. Called from the plugin's ChatMessage
-     * subscriber on the client thread.
+     * Swap a freshly fetched roster in and redraw the chatbox with it. Client
+     * thread, so the chat builder never sees names without their sprites.
+     */
+    private void install(Map<String, TeamBadge> badges, List<TeamBadge> teams,
+                         int eventId, String version, int fetchGeneration) {
+        if (fetchGeneration != generation.get()) {
+            // Cleared while this roster was in flight. Leaving the loaded
+            // version unset lets the next state poll fetch again if it should.
+            return;
+        }
+        assignIconSlots(teams, config.eventTeamIndicators());
+        loadedTeams = teams;
+        badgesByName = badges;
+        loadedRosterVersion = version;
+        loadedEventId = eventId;
+        client.refreshChat();
+    }
+
+    /** A loaded roster without the fetch or the sprite drawing. */
+    @VisibleForTesting
+    void useBadges(Map<String, TeamBadge> badges, Map<Integer, Integer> slots) {
+        badgesByName = badges;
+        slotByTeam = slots;
+    }
+
+    private void clear() {
+        generation.incrementAndGet();
+        boolean hadBadges = !badgesByName.isEmpty();
+        badgesByName = Collections.emptyMap();
+        loadedTeams = Collections.emptyList();
+        loadedRosterVersion = null;
+        loadedEventId = 0;
+        if (hadBadges) {
+            // Badges exist only while a line is drawn, so a redraw removes them.
+            clientThread.invoke(client::refreshChat);
+        }
+    }
+
+    /**
+     * Redraw on the display settings. They only change how a line is drawn,
+     * so nothing is refetched. A new style also needs new sprites.
+     */
+    @Subscribe
+    public void onConfigChanged(ConfigChanged event) {
+        if (!DropTrackerConfig.GROUP.equals(event.getGroup())) {
+            return;
+        }
+        String key = event.getKey();
+        if (!"eventTeamIndicators".equals(key)
+            && !"eventTeamIndicatorColorNames".equals(key)
+            && !"eventTeamIndicatorsPublicChat".equals(key)) {
+            return;
+        }
+        clientThread.invoke(() -> {
+            List<TeamBadge> teams = loadedTeams;
+            if (teams.isEmpty()) {
+                return;
+            }
+            if ("eventTeamIndicators".equals(key)) {
+                assignIconSlots(teams, config.eventTeamIndicators());
+            }
+            client.refreshChat();
+        });
+    }
+
+    /**
+     * Badge one chat line as the chatbox draws it, the same way RuneLite's own
+     * chat-channel rank icons are added: replace the name on the script stack
+     * and leave the {@link MessageNode} alone. The stack carries the line's
+     * id and split-PM flag (ints, top two) and its channel, name, message and
+     * timestamp (objects, top four).
      *
      * <p>Deliberately not gated on the plugin's {@code isTracking} flag: that
      * is the webhook-exhaustion kill switch for <em>submissions</em>, and
      * hiding a display feature behind it would silently drop badges for anyone
      * whose webhook list failed to replenish.
      */
-    public void decorate(MessageNode node) {
-        if (node == null) {
-            return;
-        }
-        TeamIndicatorStyle style = config.eventTeamIndicators();
-        if (style == TeamIndicatorStyle.OFF) {
+    @Subscribe
+    public void onScriptCallbackEvent(ScriptCallbackEvent event) {
+        if (!CHAT_MESSAGE_BUILDING.equals(event.getEventName())) {
             return;
         }
         Map<String, TeamBadge> badges = badgesByName;
         if (badges.isEmpty()) {
             return;
         }
-        String rawName = node.getName();
-        if (rawName == null || rawName.isEmpty()) {
-            return;
-        }
-        // Our own Discord->game bridge renders relayed lines as real chat
-        // messages, which come back through this subscriber. A Discord user is
-        // not a roster member and must never be badged as one.
-        if (ChatMessageUtil.isDiscordBridgeSender(rawName)) {
-            return;
-        }
-        if (applyBadge(node, badges, style)) {
-            client.refreshChat();
-        }
-    }
-
-    /**
-     * Prefix one node's name with its team badge, if it needs one.
-     *
-     * <p>The badge is <em>prefixed</em>, never rebuilt from a stripped name:
-     * the game bakes a clan member's rank icon into the same field, and
-     * rebuilding would throw it away. The result is just
-     * {@code <img=T><img=25>Name}, which is also how RuneLite's own rank icons
-     * sit beside each other.
-     *
-     * @return true when the node was changed
-     */
-    private boolean applyBadge(MessageNode node, Map<String, TeamBadge> badges,
-                               TeamIndicatorStyle style) {
-        String rawName = node.getName();
-        if (rawName == null || rawName.isEmpty() || hasBadge(rawName)) {
-            return false;
-        }
-        // Our own Discord->game bridge renders relayed lines as real chat
-        // messages, which come back through this subscriber. A Discord user is
-        // not a roster member and must never be badged as one.
-        if (ChatMessageUtil.isDiscordBridgeSender(rawName)) {
-            return false;
-        }
-        TeamBadge badge = badges.get(normalize(rawName));
-        if (badge == null) {
-            return false;
-        }
-        String decorated = badge.render(style, rawName, iconSlot(badge.teamId),
-            config.eventTeamIndicatorColorNames());
-        if (decorated == null || decorated.equals(rawName)) {
-            return false;
-        }
-        node.setName(decorated);
-        return true;
-    }
-
-    /**
-     * Badge the lines already on screen when a roster first lands — once, not
-     * per incoming line, which is what the plugin this was modelled on did.
-     * Must run on the client thread.
-     *
-     * <p>Additive only. Un-badging would mean reconstructing a name we did not
-     * author, and the buffer turns over on its own within a few minutes, so
-     * turning the feature off stops new badges rather than rewriting history.
-     */
-    public void redecorateBuffer() {
-        Map<String, TeamBadge> badges = badgesByName;
         TeamIndicatorStyle style = config.eventTeamIndicators();
-        if (badges.isEmpty() || style == TeamIndicatorStyle.OFF) {
+        if (style == null || style == TeamIndicatorStyle.OFF) {
             return;
         }
-        boolean changed = false;
-        for (MessageNode node : client.getMessages()) {
-            if (node != null && applyBadge(node, badges, style)) {
-                changed = true;
-            }
+        int[] intStack = client.getIntStack();
+        int intStackSize = client.getIntStackSize();
+        Object[] objectStack = client.getObjectStack();
+        int objectStackSize = client.getObjectStackSize();
+        if (intStack == null || objectStack == null || intStackSize < 2 || objectStackSize < 4) {
+            return;
         }
-        if (changed) {
-            client.refreshChat();
+        // The split private-chat pane builds through the same callback. It
+        // holds nothing but DMs, which are never ours to touch.
+        if (intStack[intStackSize - 2] == 1) {
+            return;
+        }
+        MessageNode node = client.getMessages().get(intStack[intStackSize - 1]);
+        if (node == null || !isBadgedChannel(node.getType())) {
+            return;
+        }
+        // Identify the sender by the node's own name, not the drawn one, which
+        // another plugin may already have decorated.
+        String sender = node.getName();
+        if (sender == null || sender.isEmpty()) {
+            return;
+        }
+        // Our own Discord->game bridge renders relayed lines as real chat
+        // messages. A Discord user is not a roster member and must never be
+        // badged as one.
+        if (ChatMessageUtil.isDiscordBridgeSender(sender)) {
+            return;
+        }
+        TeamBadge badge = badges.get(normalize(sender));
+        if (badge == null) {
+            return;
+        }
+        Object shown = objectStack[objectStackSize - 3];
+        if (!(shown instanceof String)) {
+            return;
+        }
+        String decorated = badge.render((String) shown, iconSlot(badge.teamId),
+            config.eventTeamIndicatorColorNames());
+        if (decorated != null) {
+            objectStack[objectStackSize - 3] = decorated;
         }
     }
 
     /**
-     * Whether a name already carries a badge of ours — a sprite from our
-     * reserved block, or a leading coloured tag. Both the live hook and the
-     * retro-walk can reach the same node, and a name may be re-decorated after
-     * a roster refresh; without this the badges would stack.
+     * The chat channels a badge belongs on. Everything else, including private
+     * messages, trade requests and broadcasts, is never touched.
      */
-    private boolean hasBadge(String name) {
-        if (iconOffset >= 0 && name.startsWith("<img=")) {
-            int close = name.indexOf('>');
-            if (close > 5) {
-                try {
-                    int slot = Integer.parseInt(name.substring(5, close));
-                    if (slot >= iconOffset && slot < iconOffset + MAX_TEAM_ICONS) {
-                        return true;
-                    }
-                } catch (NumberFormatException ignored) {
-                    // Someone else's tag; fall through to the tag check.
-                }
-            }
+    boolean isBadgedChannel(@Nullable ChatMessageType type) {
+        if (type == null) {
+            return false;
         }
-        return TAG_PREFIX.matcher(name).find();
+        switch (type) {
+            case CLAN_CHAT:
+            case CLAN_GUEST_CHAT:
+            case CLAN_GIM_CHAT:
+            case FRIENDSCHAT:
+                return true;
+            case PUBLICCHAT:
+                return config.eventTeamIndicatorsPublicChat();
+            default:
+                return false;
+        }
     }
 
     // ── sprites ──────────────────────────────────────────────────────────────
@@ -403,38 +493,84 @@ public class EventTeamIndicatorService {
         client.setModIcons(grown);
     }
 
-    /** Draw each team's orb into our reserved slots. Client thread. */
-    private void assignIconSlots(List<EventRoster.Team> teams) {
-        slotByTeam.clear();
+    /** Draw each team's badge for the style into our reserved slots. Client thread. */
+    private void assignIconSlots(List<TeamBadge> teams, TeamIndicatorStyle style) {
+        Map<Integer, Integer> slots = new HashMap<>();
         if (iconOffset < 0) {
             claimIconSlots();
         }
-        if (iconOffset < 0) {
-            return;  // no sprites available; TAG rendering still works
-        }
-        IndexedSprite[] modIcons = client.getModIcons();
-        if (modIcons == null || modIcons.length < iconOffset + MAX_TEAM_ICONS) {
-            return;
-        }
-        int used = 0;
-        for (EventRoster.Team team : teams) {
-            if (used >= MAX_TEAM_ICONS) {
-                break;
+        IndexedSprite[] modIcons = iconOffset < 0 ? null : client.getModIcons();
+        if (modIcons != null && modIcons.length >= iconOffset + MAX_TEAM_ICONS) {
+            Font font = FontManager.getRunescapeFont();
+            int used = 0;
+            for (TeamBadge team : teams) {
+                if (used >= MAX_TEAM_ICONS) {
+                    break;
+                }
+                BadgeArt art = drawBadge(team, style, font);
+                if (art == null) {
+                    continue;
+                }
+                IndexedSprite sprite = ImageUtil.getImageIndexedSprite(art.image, client);
+                // The font sits an <img> with its bottom row on the text
+                // baseline, measured by originalHeight. Rows past that hang
+                // below it, as a bracket's tail does.
+                sprite.setOriginalHeight(art.ascent);
+                int slot = iconOffset + used;
+                modIcons[slot] = sprite;
+                slots.put(team.teamId, slot);
+                used++;
             }
-            Color color = colorOf(team.getOrbColor());
-            if (color == null) {
-                continue;
-            }
-            int slot = iconOffset + used;
-            modIcons[slot] = orbSprite(color);
-            slotByTeam.put(team.getId(), slot);
-            used++;
         }
+        // No slot at all still works: every team falls back to a coloured name.
+        slotByTeam = slots;
     }
 
     private int iconSlot(int teamId) {
         Integer slot = slotByTeam.get(teamId);
         return slot == null ? -1 : slot;
+    }
+
+    /** A badge's pixels, and how many of its rows sit above the text baseline. */
+    static final class BadgeArt {
+        final BufferedImage image;
+        final int ascent;
+
+        BadgeArt(BufferedImage image, int ascent) {
+            this.image = image;
+            this.ascent = ascent;
+        }
+    }
+
+    /**
+     * A team's badge for a style: its orb, its tag, or both side by side.
+     *
+     * <p>ORB degrades to the tag for a team without an orb colour, which is
+     * why the default style can be ORB without every team needing one.
+     *
+     * @param font the chat font; with none, the tag is left out
+     * @return null when the style draws nothing for this team
+     */
+    @Nullable
+    static BadgeArt drawBadge(TeamBadge badge, TeamIndicatorStyle style, @Nullable Font font) {
+        if (style == null || style == TeamIndicatorStyle.OFF) {
+            return null;
+        }
+        List<BadgeArt> pieces = new ArrayList<>(2);
+        boolean orb = style.showsOrb() && badge.orbColor != null;
+        if (orb) {
+            pieces.add(drawOrb(badge.orbColor));
+        }
+        if ((style.showsTag() || !orb) && badge.tag != null && !badge.tag.isEmpty() && font != null) {
+            BadgeArt tag = drawText("[" + badge.tag + "]", badge.tagColor(), font);
+            if (tag != null) {
+                pieces.add(tag);
+            }
+        }
+        if (pieces.isEmpty()) {
+            return null;
+        }
+        return pieces.size() == 1 ? pieces.get(0) : sideBySide(pieces);
     }
 
     /**
@@ -445,18 +581,141 @@ public class EventTeamIndicatorService {
      * or come out as a fringe of near-transparent pixels. Two colors at 12px
      * is also simply what the game's own chat icons look like.
      */
-    private IndexedSprite orbSprite(Color color) {
+    private static BadgeArt drawOrb(Color color) {
         BufferedImage image = new BufferedImage(ORB_SIZE, ORB_SIZE, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = image.createGraphics();
         try {
             g.setComposite(AlphaComposite.Src);
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
-            g.setColor(color);
+            g.setColor(spriteSafe(color));
             g.fillOval(1, 1, ORB_SIZE - 2, ORB_SIZE - 2);
         } finally {
             g.dispose();
         }
-        return ImageUtil.getImageIndexedSprite(image, client);
+        // The whole square sits above the baseline, as the game's icons do.
+        return new BadgeArt(image, ORB_SIZE);
+    }
+
+    /**
+     * Text drawn in the chat font, cropped to its ink.
+     *
+     * <p>RuneLite's RuneScape font is the game's own chat glyphs, and with
+     * antialiasing off it lands on whole pixels exactly as the chatbox draws
+     * it. Its metrics are the catch: the glyphs stand a few rows above the
+     * baseline FontMetrics reports. So the baseline is measured instead, as
+     * the row under a capital.
+     */
+    @Nullable
+    static BadgeArt drawText(String text, Color color, Font font) {
+        BufferedImage probe = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D probeGraphics = probe.createGraphics();
+        FontMetrics metrics;
+        try {
+            metrics = probeGraphics.getFontMetrics(font);
+        } finally {
+            probeGraphics.dispose();
+        }
+        int width = metrics.stringWidth(text);
+        int height = metrics.getAscent() + metrics.getDescent();
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+        BufferedImage canvas = renderLine(text, color, font, width, height, metrics.getAscent());
+        BufferedImage capital = renderLine("H", color, font, width, height, metrics.getAscent());
+        int top = firstInkedRow(canvas);
+        int bottom = lastInkedRow(canvas);
+        int baseline = lastInkedRow(capital);
+        if (top < 0 || baseline < top) {
+            return null;
+        }
+        BufferedImage cropped = new BufferedImage(width, bottom - top + 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = cropped.createGraphics();
+        try {
+            g.setComposite(AlphaComposite.Src);
+            g.drawImage(canvas, 0, -top, null);
+        } finally {
+            g.dispose();
+        }
+        return new BadgeArt(cropped, baseline - top + 1);
+    }
+
+    private static BufferedImage renderLine(String text, Color color, Font font,
+                                            int width, int height, int baseline) {
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+            g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+            g.setFont(font);
+            g.setColor(spriteSafe(color));
+            g.drawString(text, 0, baseline);
+        } finally {
+            g.dispose();
+        }
+        return image;
+    }
+
+    /** Pieces laid out left to right, standing on one shared baseline. */
+    private static BadgeArt sideBySide(List<BadgeArt> pieces) {
+        int ascent = 0;
+        int descent = 0;
+        int width = PIECE_GAP * (pieces.size() - 1);
+        for (BadgeArt piece : pieces) {
+            ascent = Math.max(ascent, piece.ascent);
+            descent = Math.max(descent, piece.image.getHeight() - piece.ascent);
+            width += piece.image.getWidth();
+        }
+        BufferedImage image = new BufferedImage(width, ascent + descent, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            g.setComposite(AlphaComposite.Src);
+            int x = 0;
+            for (BadgeArt piece : pieces) {
+                g.drawImage(piece.image, x, ascent - piece.ascent, null);
+                x += piece.image.getWidth() + PIECE_GAP;
+            }
+        } finally {
+            g.dispose();
+        }
+        return new BadgeArt(image, ascent);
+    }
+
+    private static int firstInkedRow(BufferedImage image) {
+        for (int y = 0; y < image.getHeight(); y++) {
+            if (rowHasInk(image, y)) {
+                return y;
+            }
+        }
+        return -1;
+    }
+
+    private static int lastInkedRow(BufferedImage image) {
+        for (int y = image.getHeight() - 1; y >= 0; y--) {
+            if (rowHasInk(image, y)) {
+                return y;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean rowHasInk(BufferedImage image, int y) {
+        for (int x = 0; x < image.getWidth(); x++) {
+            if ((image.getRGB(x, y) >>> 24) != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * An opaque colour the sprite can hold. The indexed-sprite conversion
+     * only keeps fully opaque pixels, and it reads pure black as its
+     * transparent index, so black is nudged off zero.
+     */
+    static Color spriteSafe(Color color) {
+        int rgb = color.getRGB() & 0xFFFFFF;
+        return new Color(rgb == 0 ? 0x010101 : rgb);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -473,17 +732,6 @@ public class EventTeamIndicatorService {
             return "";
         }
         String stripped = Text.standardize(Text.removeTags(name));
-        // A tag badge survives tag-stripping as literal "[rr]" text, and an
-        // already-decorated name has to key the same as an undecorated one —
-        // otherwise a second pass over the buffer would miss every player it
-        // had already badged. No RSN can contain a bracket, so a leading
-        // bracketed group is always ours.
-        if (stripped.startsWith("[")) {
-            int close = stripped.indexOf(']');
-            if (close >= 0) {
-                stripped = stripped.substring(close + 1);
-            }
-        }
         // Collapse runs of whitespace as well as folding the separators: the
         // server's normalizer does, and two implementations that disagree by
         // one space badge nobody while looking perfectly correct on both sides.
@@ -538,51 +786,61 @@ public class EventTeamIndicatorService {
             this.accent = accent;
         }
 
-        /**
-         * The decorated sender name.
-         *
-         * <p>ORB degrades to the tag when no sprite slot was available, which
-         * is why the default style can be ORB without the feature depending on
-         * winning the mod-icon race.
-         */
+        /** The team's colour for text: the admin-set accent, else the orb's. */
         @Nullable
-        String render(TeamIndicatorStyle style, String rawName, int iconSlot, boolean colorName) {
-            StringBuilder out = new StringBuilder();
-            boolean drewOrb = style.showsOrb() && iconSlot >= 0;
-            if (drewOrb) {
-                out.append("<img=").append(iconSlot).append('>');
-            }
-            if ((style.showsTag() || (style.showsOrb() && !drewOrb)) && tag != null && !tag.isEmpty()) {
-                appendColored(out, "[" + tag + "]", accent);
-            }
-            // No prefix means nothing marks this as our work, and the
-            // idempotency check would not recognise it on a second pass — so a
-            // name-only recolor is not offered. In practice unreachable: the
-            // server always sends a tag, derived when no admin set one.
-            if (out.length() == 0) {
-                return null;
-            }
-            if (colorName) {
-                // </col> resets to the chat default rather than to an enclosing
-                // tag, so the color must wrap the name as a sibling and never
-                // be nested inside another color span.
-                appendColored(out, rawName, accent != null ? accent : orbColor);
-            } else {
-                out.append(rawName);
-            }
-            return out.toString();
+        Color nameColor() {
+            return accent != null ? accent : orbColor;
         }
 
-        private static void appendColored(StringBuilder out, String text, @Nullable Color color) {
-            if (color == null) {
-                out.append(text);
-                return;
+        Color tagColor() {
+            Color color = nameColor();
+            return color != null ? color : FALLBACK_TAG_COLOR;
+        }
+
+        /**
+         * The sender name as the line should draw it, or null to leave it as
+         * it is.
+         *
+         * <p>Only an {@code <img>} and a colour are ever added, both of which
+         * the game's {@code removetags} strips. The tag itself lives in the
+         * sprite. The badge leads the name, except that a moderator crown
+         * stays first, where the chat builder looks for it.
+         *
+         * @param shown     the name on the script stack; another plugin may
+         *                  already have given it an icon or a colour
+         * @param iconSlot  this team's sprite, or -1 when it has none
+         * @param colorName whether to draw the name in the team colour
+         */
+        @Nullable
+        String render(String shown, int iconSlot, boolean colorName) {
+            Color color = colorName ? nameColor() : null;
+            if (iconSlot < 0 && color == null) {
+                return null;
             }
-            out.append("<col=")
-                .append(String.format("%06x", color.getRGB() & 0xFFFFFF))
-                .append('>')
-                .append(text)
-                .append("</col>");
+            // Drop any colour the name already carries (RuneLite's chat colour
+            // config, applied by a subscriber that may run before this one) so
+            // the team colour is the one that shows. </col> resets to the chat
+            // default rather than to an enclosing tag, so the result must be
+            // one flat span, never a nested one.
+            String name = color != null ? COLOR_TAG.matcher(shown).replaceAll("") : shown;
+            Matcher crown = LEADING_CROWN.matcher(name);
+            String lead = crown.lookingAt() ? crown.group() : "";
+            String rest = name.substring(lead.length());
+
+            StringBuilder out = new StringBuilder(lead);
+            if (iconSlot >= 0) {
+                out.append("<img=").append(iconSlot).append('>');
+            }
+            if (color != null) {
+                out.append("<col=")
+                    .append(String.format("%06x", color.getRGB() & 0xFFFFFF))
+                    .append('>')
+                    .append(rest)
+                    .append("</col>");
+            } else {
+                out.append(rest);
+            }
+            return out.toString();
         }
     }
 }

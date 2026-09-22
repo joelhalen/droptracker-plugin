@@ -52,6 +52,14 @@ public class DropTrackerApi {
      */
     private static final int LONG_POLL_READ_TIMEOUT_SECONDS = 40;
 
+    /**
+     * How this build draws event team badges, sent on /event_state. 2 means
+     * the chatbox is decorated as it is drawn and message nodes are left
+     * alone. Builds that send nothing rename nodes and must not be given a
+     * roster.
+     */
+    static final int TEAM_BADGE_RENDERER = 2;
+
     private final DropTrackerConfig config;
     private final Gson gson;
     private final OkHttpClient httpClient;
@@ -1204,6 +1212,11 @@ public class DropTrackerApi {
         HttpUrl url = base.newBuilder()
             .addQueryParameter("player_name", playerName)
             .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            // This build badges chat lines as they are drawn and never renames
+            // a MessageNode. Builds before it (6.0.3-6.0.8) renamed nodes, which
+            // hid friends' PMs, so the server can withhold roster_version, and
+            // with it every badge, from any client that does not send this.
+            .addQueryParameter("badges", String.valueOf(TEAM_BADGE_RENDERER))
             .build();
         Request request = new Request.Builder().url(url).build();
         try (Response response = panelHttpClient.newCall(request).execute()) {
