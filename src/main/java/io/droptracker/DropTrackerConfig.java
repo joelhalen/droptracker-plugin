@@ -451,11 +451,23 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+        keyName = "dropConfirmations",
+        name = "Drop confirmations",
+        description = "<html>Show the \"Drop processed - a message has been sent to your group\" chat line.<br />"
+            + "Warnings, like a drop held back for a missing screenshot, still show.</html>",
+        position = 3,
+        section = advancedSection
+    )
+    default boolean dropConfirmations() {
+        return true;
+    }
+
+    @ConfigItem(
             keyName = "receiveDiscordChat",
             name = "Show Discord messages in game",
             description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
                     + "clan chat box (visible only to you; nothing is sent to the game server).</html>",
-            position = 3,
+            position = 4,
             section = advancedSection
     )
     default boolean receiveDiscordChat() {
@@ -469,7 +481,7 @@ public interface DropTrackerConfig extends Config {
             + "combat achievements and collection log to DropTracker, so your<br>"
             + "profile page can show your current progress.<br>"
             + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
-        position = 4,
+        position = 5,
         section = advancedSection
     )
     default boolean syncAccountState() {
@@ -483,7 +495,7 @@ public interface DropTrackerConfig extends Config {
             + "can show it, and so the gear and inventory you were carrying can be<br>"
             + "pictured alongside your personal bests.<br>"
             + "The model is sent once per outfit, while you are standing still - never during combat.</html>",
-        position = 5,
+        position = 6,
         section = advancedSection
     )
     default boolean uploadCharacterModel() {
@@ -495,7 +507,7 @@ public interface DropTrackerConfig extends Config {
         name = "Show Side Panel",
         description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>"
             + "<b>Note</b>: Requires the API to be enabled.</html>",
-        position = 6,
+        position = 7,
         section = advancedSection
     )
     default boolean showSidePanel() {
@@ -506,7 +518,7 @@ public interface DropTrackerConfig extends Config {
         keyName = "debugLogging",
         name = "Debug Logging",
         description = "Do you want the DropTracker to log data locally to your machine for debugging purposes?",
-        position = 7,
+        position = 8,
         section = advancedSection
     )
     default boolean debugLogging() {

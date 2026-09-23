@@ -117,6 +117,12 @@ public abstract class BaseEventHandler {
         embed.addField("acc_hash", accountHash, true);
         embed.addField("p_v", pluginVersion, true);
         embed.addField("guid", guid, true);
+        /* The server's "Drop processed" confirmation obeys this over the
+           player's website setting, which only covers builds without it. */
+        if (config != null) {
+            boolean confirm = config.receiveInGameMessages() && config.dropConfirmations();
+            embed.addField("drop_confirm", String.valueOf(confirm), true);
+        }
     }
 
     /**
