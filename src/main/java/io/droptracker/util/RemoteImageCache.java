@@ -33,11 +33,13 @@ import java.util.concurrent.ScheduledExecutorService;
 @Slf4j
 @Singleton
 public class RemoteImageCache {
-    private static final int MAX_ENTRIES = 64;
+    private static final int MAX_ENTRIES = 256;
     private static final int MAX_DIMENSION = 512;
 
     private final Map<String, BufferedImage> cache =
-        Collections.synchronizedMap(new LinkedHashMap<String, BufferedImage>() {
+        // Access-ordered, so an event board bigger than the cache evicts what it
+        // is not showing, not the icons the panel is about to ask for again.
+        Collections.synchronizedMap(new LinkedHashMap<String, BufferedImage>(64, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, BufferedImage> eldest) {
                 return size() > MAX_ENTRIES;

@@ -18,6 +18,7 @@ import io.droptracker.ui.pages.GroupPanel;
 import io.droptracker.ui.pages.HomePanel;
 import io.droptracker.ui.pages.PlayerStatsPanel;
 import io.droptracker.util.ItemIDSearch;
+import io.droptracker.util.ItemImageCache;
 import io.droptracker.util.RemoteImageCache;
 
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +84,8 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	private EventNotificationService eventNotificationService;
 	@Inject
 	private RemoteImageCache remoteImageCache;
+	@Inject
+	private ItemImageCache itemImageCache;
 	@Inject
 	private ItemIDSearch itemIDSearch;
 	@Inject
@@ -158,7 +161,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			groupPanel = new GroupPanel(client, config, api, itemManager, this, httpClient);
 			groupComponent = groupPanel.create();
 			eventsPanel = new EventsPanel(config, api, eventNotificationService,
-				client, itemManager, remoteImageCache, itemIDSearch, configManager);
+				client, itemManager, itemImageCache, remoteImageCache, itemIDSearch, configManager);
 			eventsComponent = eventsPanel.create();
 			// init() re-runs whenever the API toggle changes, so drop the
 			// previous registration first — the service keeps a list now, and

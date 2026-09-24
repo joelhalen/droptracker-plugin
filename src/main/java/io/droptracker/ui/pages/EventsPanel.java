@@ -10,6 +10,7 @@ import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.components.PanelElements;
 import io.droptracker.ui.components.PanelIcons;
 import io.droptracker.util.ItemIDSearch;
+import io.droptracker.util.ItemImageCache;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
 import net.runelite.api.Client;
@@ -17,7 +18,6 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.PluginPanel;
-import net.runelite.client.util.AsyncBufferedImage;
 import net.runelite.client.util.ImageUtil;
 import okhttp3.HttpUrl;
 
@@ -52,6 +52,7 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -78,6 +79,7 @@ public class EventsPanel {
     private final EventNotificationService service;
     private final Client client;
     private final ItemManager itemManager;
+    private final ItemImageCache itemImages;
     private final RemoteImageCache remoteImages;
     private final ItemIDSearch itemIds;
     private final EventTaskPrefs taskPrefs;
@@ -90,6 +92,10 @@ public class EventsPanel {
     private JPanel root;
     private JPanel listPanel;
     private JScrollPane scrollPane;
+    /** EDT only: a rebuild is already queued (see {@link #requestRebuild}). */
+    private boolean rebuildQueued;
+    /** EDT only: state changed while the tab was hidden. */
+    private boolean staleWhileHidden;
     /**
      * Expand/collapse choices per card section (key: eventId + section),
      * surviving rebuilds — clicking a task to track it re-renders the card
@@ -104,13 +110,15 @@ public class EventsPanel {
 
     public EventsPanel(DropTrackerConfig config, DropTrackerApi api,
                        EventNotificationService service, Client client,
-                       ItemManager itemManager, RemoteImageCache remoteImages,
+                       ItemManager itemManager, ItemImageCache itemImages,
+                       RemoteImageCache remoteImages,
                        ItemIDSearch itemIds, ConfigManager configManager) {
         this.config = config;
         this.api = api;
         this.service = service;
         this.client = client;
         this.itemManager = itemManager;
+        this.itemImages = itemImages;
         this.remoteImages = remoteImages;
         this.itemIds = itemIds;
         this.taskPrefs = new EventTaskPrefs(configManager, service);
@@ -146,6 +154,14 @@ public class EventsPanel {
 
         root.add(header, BorderLayout.NORTH);
         root.add(scrollPane, BorderLayout.CENTER);
+        // Catch up on anything that arrived while the tab was out of view.
+        root.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0
+                    && root.isShowing() && staleWhileHidden) {
+                staleWhileHidden = false;
+                rebuild();
+            }
+        });
 
         rebuild();
         refreshAsync();
@@ -159,7 +175,28 @@ public class EventsPanel {
 
     /** Called (any thread) when a fresh /event_state snapshot lands. */
     public void onUpdated() {
-        SwingUtilities.invokeLater(this::rebuild);
+        SwingUtilities.invokeLater(this::requestRebuild);
+    }
+
+    /**
+     * EDT. Every event notification refreshes the state, and most arrive while
+     * the player is fighting with this tab closed. Rebuilding then is wasted
+     * work, so a hidden tab only notes that it is stale and rebuilds when it
+     * is next shown. A burst of updates while it is showing makes one rebuild.
+     */
+    private void requestRebuild() {
+        if (root != null && !root.isShowing()) {
+            staleWhileHidden = true;
+            return;
+        }
+        if (rebuildQueued) {
+            return;
+        }
+        rebuildQueued = true;
+        SwingUtilities.invokeLater(() -> {
+            rebuildQueued = false;
+            rebuild();
+        });
     }
 
     private void rebuild() {
@@ -582,21 +619,18 @@ public class EventsPanel {
     private void applyRequirementIcon(JLabel target, @Nullable Integer itemId,
                                       @Nullable String iconPath, int size, boolean obtained,
                                       @Nullable Integer points) {
+        // Late arrivals update this one slot. They used to rebuild the whole
+        // panel, which re-requested every other icon on the board.
+        java.util.function.Consumer<BufferedImage> apply = image ->
+            setIconNow(target, new ImageIcon(styleRequirementImage(image, size, obtained, points)));
+        BufferedImage image = null;
         if (itemId != null && itemId > 0) {
-            AsyncBufferedImage itemImage = itemManager.getImage(itemId);
-            Runnable apply = () -> {
-                target.setIcon(new ImageIcon(styleRequirementImage(itemImage, size, obtained, points)));
-                target.revalidate();
-                target.repaint();
-            };
-            itemImage.onLoaded(apply);
-            apply.run();
+            image = itemImages.get(itemId, apply);
         } else if (iconPath != null) {
-            BufferedImage remote = remoteImages.get(iconPath,
-                () -> SwingUtilities.invokeLater(this::rebuild));
-            if (remote != null) {
-                target.setIcon(new ImageIcon(styleRequirementImage(remote, size, obtained, points)));
-            }
+            image = remoteImages.get(iconPath, () -> applyRemoteLater(iconPath, apply));
+        }
+        if (image != null) {
+            target.setIcon(new ImageIcon(styleRequirementImage(image, size, obtained, points)));
         }
     }
 
@@ -1245,22 +1279,34 @@ public class EventsPanel {
      *  naive square scaling squishes them, raw addTo clips them). */
     private void applyTaskIcon(JLabel target, @Nullable Integer iconItemId,
                                @Nullable String iconPath, int size) {
+        java.util.function.Consumer<BufferedImage> apply = image ->
+            setIconNow(target, fitIcon(image, size));
+        BufferedImage image = null;
         if (iconItemId != null && iconItemId > 0) {
-            AsyncBufferedImage itemImage = itemManager.getImage(iconItemId);
-            Runnable apply = () -> {
-                target.setIcon(fitIcon(itemImage, size));
-                target.revalidate();
-                target.repaint();
-            };
-            itemImage.onLoaded(apply);
-            apply.run();
+            image = itemImages.get(iconItemId, apply);
         } else if (iconPath != null) {
-            BufferedImage remote = remoteImages.get(iconPath,
-                () -> SwingUtilities.invokeLater(this::rebuild));
-            if (remote != null) {
-                target.setIcon(fitIcon(remote, size));
-            }
+            image = remoteImages.get(iconPath, () -> applyRemoteLater(iconPath, apply));
         }
+        if (image != null) {
+            target.setIcon(fitIcon(image, size));
+        }
+    }
+
+    /** EDT: an icon that arrived after its row was built. */
+    private static void setIconNow(JLabel target, Icon icon) {
+        target.setIcon(icon);
+        target.revalidate();
+        target.repaint();
+    }
+
+    /** Remote-fetch callback (background thread): hop to the EDT and apply. */
+    private void applyRemoteLater(String iconPath, java.util.function.Consumer<BufferedImage> apply) {
+        SwingUtilities.invokeLater(() -> {
+            BufferedImage image = remoteImages.get(iconPath, null);
+            if (image != null) {
+                apply.accept(image);
+            }
+        });
     }
 
     /** Scale into a size×size box, centered, aspect ratio preserved. */

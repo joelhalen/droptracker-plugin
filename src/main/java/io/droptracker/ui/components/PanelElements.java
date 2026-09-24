@@ -782,8 +782,10 @@ public class PanelElements {
                         dropContainer.setIcon(new ImageIcon(opaque));
                         iconContainer = dropContainer;
 
-                        originalImage.onLoaded(() -> {
-                            // Scale the loaded image to 16x16
+                        // onLoaded runs on the client thread (and re-posts there when
+                        // the sprite is already loaded): scale and relayout on the EDT.
+                        originalImage.onLoaded(() -> SwingUtilities.invokeLater(() -> {
+                            // Scale the loaded image to 28x28
                             Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
                             BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
                             Graphics g = scaledBuffered.getGraphics();
@@ -795,7 +797,7 @@ public class PanelElements {
                             dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
                             dropContainer.revalidate();
                             dropContainer.repaint();
-                        });
+                        }));
                     }
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
                     // Handle collection log items
@@ -814,8 +816,10 @@ public class PanelElements {
                         clogContainer.setIcon(new ImageIcon(opaque));
                         iconContainer = clogContainer;
 
-                        originalImage.onLoaded(() -> {
-                            // Scale the loaded image to 16x16
+                        // onLoaded runs on the client thread (and re-posts there when
+                        // the sprite is already loaded): scale and relayout on the EDT.
+                        originalImage.onLoaded(() -> SwingUtilities.invokeLater(() -> {
+                            // Scale the loaded image to 28x28
                             Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
                             BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
                             Graphics g = scaledBuffered.getGraphics();
@@ -826,7 +830,7 @@ public class PanelElements {
                             clogContainer.setIcon(new ImageIcon(finalImage));
                             clogContainer.revalidate();
                             clogContainer.repaint();
-                        });
+                        }));
                     }
                 } else {
                     // Personal bests, and event completions credited by any
