@@ -308,7 +308,7 @@ public class SubmissionManager {
     /**
      * Entry point for drop events (value-based qualification)
      */
-    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, int totalValue, int singleValue, boolean valueModified) {
+    public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, long totalValue, long singleValue, boolean valueModified) {
         if (hasUnidentifiedEmbed(customWebhookBody)) {
             debugLogEventFlow("skipped", SubmissionType.DROP, "player_name missing; submission has no identity");
             return;
@@ -332,7 +332,7 @@ public class SubmissionManager {
         debugLogEventFlow("qualification", SubmissionType.DROP, summarizeSubmission(submission));
 
         // Update session value statistics
-        this.sessionTotalValue += (long) totalValue;
+        this.sessionTotalValue += totalValue;
         if (submission != null) {
             submission.setTotalValue(totalValue);
         }
@@ -482,7 +482,7 @@ public class SubmissionManager {
      */
     private ValidSubmission createSubmissionIfQualified(
             CustomWebhookBody webhook, SubmissionType type,
-            boolean hasScreenshot, int totalValue, int singleValue) {
+            boolean hasScreenshot, long totalValue, long singleValue) {
 
         if (!config.useApi()) {
             debugLogEventFlow("qualification", type, "useApi=false; skipping group qualification");
@@ -534,7 +534,7 @@ public class SubmissionManager {
      * Returns null when the event qualifies, otherwise a concise reason it was excluded.
      */
     private String getQualificationFailureReason(SubmissionType type, GroupConfig groupConfig,
-                                                 boolean hasScreenshot, int totalValue, int singleValue) {
+                                                 boolean hasScreenshot, long totalValue, long singleValue) {
         // If the group requires screenshots and we don't have one, skip
         if (groupConfig.isOnlyScreenshots() && !hasScreenshot) {
             return "group requires screenshot";
@@ -1337,10 +1337,10 @@ public class SubmissionManager {
         final CustomWebhookBody webhook;
         final SubmissionType type;
         final boolean hasScreenshot;
-        final int totalValue;
-        final int singleValue;
+        final long totalValue;
+        final long singleValue;
 
-        PendingEvent(CustomWebhookBody webhook, SubmissionType type, boolean hasScreenshot, int totalValue, int singleValue) {
+        PendingEvent(CustomWebhookBody webhook, SubmissionType type, boolean hasScreenshot, long totalValue, long singleValue) {
             this.webhook = webhook;
             this.type = type;
             this.hasScreenshot = hasScreenshot;

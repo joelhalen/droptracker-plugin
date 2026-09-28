@@ -171,7 +171,7 @@ public final class DeathValuation {
      */
     private static long unitPrice(ItemManager itemManager, int itemId) {
         try {
-            int price = itemManager.getItemPrice(itemId);
+            long price = itemManager.getItemPrice(itemId);
             if (price > 0) {
                 return price;
             }

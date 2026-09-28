@@ -259,7 +259,7 @@ public abstract class BaseEventHandler {
      * @param value the total value of the event
      * @param singleValue the value of individual items (for stacked item checking)
      */
-    protected void sendData(CustomWebhookBody webhook, int value, int singleValue, boolean valueModified) {
+    protected void sendData(CustomWebhookBody webhook, long value, long singleValue, boolean valueModified) {
         if (webhook == null) {
             log.warn("Attempted to send null webhook data");
             return;

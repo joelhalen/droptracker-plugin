@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.inject.Inject;
@@ -203,9 +203,9 @@ public class DropHandler extends BaseEventHandler {
 				log.debug("Skipping drop submission for {}: no resolvable player name", npcName);
 				return;
 			}
-			AtomicInteger totalValue = new AtomicInteger(0);
+			AtomicLong totalValue = new AtomicLong(0);
 			List<CustomWebhookBody.Embed> embeds = new ArrayList<>();
-			AtomicInteger singleValue = new AtomicInteger(0);
+			AtomicLong singleValue = new AtomicLong(0);
 			
 			for (ItemStack item : stackedItems) {
 				int itemId = item.getId();
@@ -221,7 +221,7 @@ public class DropHandler extends BaseEventHandler {
 					untradeableScreenshot.set(true);
 				}
 				int qty = item.getQuantity();
-				int price = itemManager.getItemPrice(itemId);
+				long price = itemManager.getItemPrice(itemId);
 				ItemComposition itemComposition = itemManager.getItemComposition(itemId);
 				totalValue.addAndGet(qty * price);
 				singleValue.addAndGet(price);
@@ -251,7 +251,7 @@ public class DropHandler extends BaseEventHandler {
 					customWebhookBody.getEmbeds().addAll(embeds);
 
 					if (!customWebhookBody.getEmbeds().isEmpty()) {
-						int valueToSend = totalValue.get();
+						long valueToSend = totalValue.get();
 						Boolean valueModified = untradeableScreenshot.get();
 						sendData(customWebhookBody, valueToSend, singleValue.get(), valueModified);
 					}
