@@ -2,6 +2,8 @@ package io.droptracker;
 
 import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventHudDetail;
+import io.droptracker.models.EventNudgeStyle;
+import io.droptracker.models.EventPopupStyle;
 import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.TeamIndicatorStyle;
 import net.runelite.client.config.Config;
@@ -573,6 +575,30 @@ public interface DropTrackerConfig extends Config {
     )
     default boolean eventImportantPopupsOnly() {
         return false;
+    }
+
+    /**
+     * Pop-up layout candidates, hidden while they are play-tested: switched
+     * with {@code ::dtpopup style} / {@code ::dtpopup hud}, not the panel.
+     */
+    @ConfigItem(
+        keyName = "eventPopupStyle",
+        name = "Pop-up style",
+        description = "Layout of the on-screen event pop-ups (try them with ::dtpopup).",
+        hidden = true
+    )
+    default EventPopupStyle eventPopupStyle() {
+        return EventPopupStyle.CLASSIC;
+    }
+
+    @ConfigItem(
+        keyName = "eventNudgeStyle",
+        name = "HUD pop-up style",
+        description = "Layout of the pop-ups under the Enhanced display HUD (try them with ::dtpopup).",
+        hidden = true
+    )
+    default EventNudgeStyle eventNudgeStyle() {
+        return EventNudgeStyle.CLASSIC;
     }
 
     @ConfigItem(

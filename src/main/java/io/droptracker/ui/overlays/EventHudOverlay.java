@@ -2,10 +2,11 @@ package io.droptracker.ui.overlays;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.EventHudDetail;
-import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventState;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.DropTrackerTheme;
+import io.droptracker.ui.overlays.popup.PopupRenderer;
+import io.droptracker.ui.overlays.popup.PopupRenderers;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
 import net.runelite.client.game.ItemManager;
@@ -64,14 +65,17 @@ public class EventHudOverlay extends Overlay {
     private final EventNotificationService service;
     private final ItemManager itemManager;
     private final RemoteImageCache remoteImages;
+    private final PopupRenderers renderers;
 
     @Inject
     public EventHudOverlay(DropTrackerConfig config, EventNotificationService service,
-                           ItemManager itemManager, RemoteImageCache remoteImages) {
+                           ItemManager itemManager, RemoteImageCache remoteImages,
+                           PopupRenderers renderers) {
         this.config = config;
         this.service = service;
         this.itemManager = itemManager;
         this.remoteImages = remoteImages;
+        this.renderers = renderers;
         setPosition(OverlayPosition.TOP_LEFT);
         setResizable(false);
     }
@@ -239,103 +243,29 @@ public class EventHudOverlay extends Overlay {
 
     /* ===================== pop-up nudges ===================== */
 
-    private static final int MAX_NUDGES = 3;
-    private static final int NUDGE_GAP = 4;
-    private static final int NUDGE_ICON = 20;
-    /** Ceiling on nudge height — three cards of unbounded body used to be
-     *  able to run off the bottom of the screen. */
-    private static final int MAX_NUDGE_BODY_LINES = 3;
-    private static final long NUDGE_FADE_MS = 1000;
-
-    /** Draws the pending toasts as compact HUD-styled cards below the HUD
-     *  (starting at {@code hudHeight}); returns the new total height. */
+    /** Draws the pending toasts below the HUD (starting at {@code hudHeight})
+     *  in each one's nudge style; returns the new total height. */
     private int renderNudges(Graphics2D g, int hudHeight) {
         long now = System.currentTimeMillis();
-        List<EventNotificationService.Toast> visible = new ArrayList<>(MAX_NUDGES);
+        int y = hudHeight;
+        int shown = 0;
         Iterator<EventNotificationService.Toast> iterator = service.getToasts().iterator();
         while (iterator.hasNext()) {
             EventNotificationService.Toast toast = iterator.next();
             if (toast.expired(now)) {
                 iterator.remove();
-            } else if (visible.size() < MAX_NUDGES) {
-                visible.add(toast);
+                continue;
             }
-        }
-        int y = hudHeight;
-        for (EventNotificationService.Toast toast : visible) {
-            y += NUDGE_GAP;
-            y += drawNudge(g, toast, y, now);
+            PopupRenderer renderer = renderers.nudge(toast.getNudgeStyle() != null
+                ? toast.getNudgeStyle() : config.eventNudgeStyle());
+            if (shown >= renderer.maxVisible()) {
+                continue;
+            }
+            y += renderer.gap();
+            y += renderer.draw(g, toast, 0, y, WIDTH, now);
+            shown++;
         }
         return y;
-    }
-
-    private int drawNudge(Graphics2D g, EventNotificationService.Toast toast, int top, long now) {
-        long remaining = toast.remainingMs(now);
-        float alpha = remaining < NUDGE_FADE_MS
-            ? Math.max(remaining / (float) NUDGE_FADE_MS, 0f) : 1f;
-        Color accent = nudgeAccent(toast.getPriority());
-
-        Font titleFont = FontManager.getRunescapeBoldFont();
-        Font smallFont = FontManager.getRunescapeSmallFont();
-        FontMetrics titleFm = g.getFontMetrics(titleFont);
-        FontMetrics smallFm = g.getFontMetrics(smallFont);
-
-        int textLeft = PAD;
-        BufferedImage icon = null;
-        if (toast.getIconItemId() != null && toast.getIconItemId() > 0) {
-            icon = itemManager.getImage(toast.getIconItemId());
-            if (icon != null) {
-                textLeft += NUDGE_ICON + 6;
-            }
-        }
-        int textWidth = WIDTH - textLeft - PAD;
-        List<String> bodyLines = wrap(toast.getBody(), smallFm, textWidth, MAX_NUDGE_BODY_LINES);
-        int height = 6 + titleFm.getHeight() + bodyLines.size() * smallFm.getHeight() + 6;
-        if (icon != null) {
-            height = Math.max(height, NUDGE_ICON + 12);
-        }
-
-        java.awt.Composite previous = g.getComposite();
-        g.setComposite(java.awt.AlphaComposite.getInstance(
-            java.awt.AlphaComposite.SRC_OVER, alpha));
-
-        g.setColor(BG_BOTTOM);
-        g.fillRect(1, top + 1, WIDTH - 2, height - 2);
-        g.setColor(EDGE_DARK);
-        g.drawRect(0, top, WIDTH - 1, height - 1);
-        g.setColor(accent);
-        g.drawRect(1, top + 1, WIDTH - 3, height - 3);
-
-        if (icon != null) {
-            g.drawImage(icon, PAD, top + (height - NUDGE_ICON) / 2,
-                NUDGE_ICON, NUDGE_ICON, null);
-        }
-        g.setFont(titleFont);
-        int titleY = top + 6 + titleFm.getAscent();
-        shadowed(g, truncateToWidth(toast.getTitle(), titleFm, textWidth),
-            textLeft, titleY, accent);
-        g.setFont(smallFont);
-        int lineY = titleY + smallFm.getHeight();
-        for (String line : bodyLines) {
-            shadowed(g, line, textLeft, lineY, DropTrackerTheme.TEXT);
-            lineY += smallFm.getHeight();
-        }
-
-        g.setComposite(previous);
-        return height;
-    }
-
-    /** Frame + title colour for a nudge, by importance tier: the tile-finishing
-     *  drop and the 50-KC tick must not look alike at a glance. */
-    private static Color nudgeAccent(EventNotification.Priority priority) {
-        switch (priority) {
-            case HIGH:
-                return DropTrackerTheme.GOLD_BRIGHT;
-            case LOW:
-                return DropTrackerTheme.STONE;
-            default:
-                return FRAME_BRONZE;
-        }
     }
 
     /* ===================== painting helpers ===================== */
