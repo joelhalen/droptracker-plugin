@@ -339,9 +339,10 @@ public interface DropTrackerConfig extends Config {
         name = "Display type",
         description = "<html>How event notifications appear:<br />"
             + "<b>Chat messages only</b> - lines in your chatbox.<br />"
-            + "<b>Chat + text pop-ups</b> - also shows brief on-screen pop-ups.<br />"
-            + "<b>Enhanced display (HUD)</b> - also shows a movable overlay with your<br />"
-            + "current task, progress and team standing (hold Alt to drag it).</html>",
+            + "<b>Chat + text pop-ups</b> - also shows a slim banner for each update.<br />"
+            + "<b>Enhanced display (HUD)</b> - larger showcase pop-ups, plus a movable<br />"
+            + "overlay with your current task, progress and team standing<br />"
+            + "(hold Alt to drag either one).</html>",
         position = 2,
         section = eventSection
     )

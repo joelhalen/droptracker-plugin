@@ -73,6 +73,7 @@ import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.ScreenshotPrivacyService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.service.EventPopupPreview;
 import io.droptracker.ui.overlays.EventHudOverlay;
 import io.droptracker.ui.overlays.EventToastOverlay;
 import io.droptracker.util.ChatMessageUtil;
@@ -192,6 +193,9 @@ public class DropTrackerPlugin extends Plugin {
 	private EventTeamIndicatorService eventTeamIndicatorService;
 	@Inject
 	private EventToastOverlay eventToastOverlay;
+
+	@Inject
+	private EventPopupPreview eventPopupPreview;
 	@Inject
 	private EventHudOverlay eventHudOverlay;
 	@Inject
@@ -231,7 +235,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.0.12";
+	public String pluginVersion = "6.0.14";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -457,6 +461,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted command) {
 		chatMessageUtil.onCommandExecuted(command);
+		if (EventPopupPreview.COMMAND.equalsIgnoreCase(command.getCommand())) {
+			eventPopupPreview.onCommand(command.getArguments());
+		}
 	}
 
 	@Subscribe
