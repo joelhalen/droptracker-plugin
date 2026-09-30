@@ -566,7 +566,17 @@ public class PbHandler extends BaseEventHandler {
 
     @NotNull
     public String formatTime(@Nullable Duration duration, boolean precise) {
-        Temporal time = ObjectUtils.defaultIfNull(duration, Duration.ZERO).addTo(LocalTime.of(0, 0));
+        Duration formattedDuration = ObjectUtils.defaultIfNull(duration, Duration.ZERO);
+        boolean normalize = !precise && !formattedDuration.isZero() && !formattedDuration.isNegative();
+        if (normalize) {
+            // A whole-second time hides the fraction. Use the last possible
+            // game tick within that second so disabling precise timing cannot
+            // award a faster PB. Preserve zero as the missing-time sentinel.
+            long lastMillisInSecond = formattedDuration.getSeconds() * 1000 + 999;
+            formattedDuration = Duration.ofMillis(
+                lastMillisInSecond / Constants.GAME_TICK_LENGTH * Constants.GAME_TICK_LENGTH);
+        }
+        Temporal time = formattedDuration.addTo(LocalTime.of(0, 0));
         StringBuilder sb = new StringBuilder();
 
         int h = time.get(HOUR_OF_DAY);
@@ -575,7 +585,7 @@ public class PbHandler extends BaseEventHandler {
         sb.append(String.format("%02d", time.get(MINUTE_OF_HOUR))).append(':');
         sb.append(String.format("%02d", time.get(SECOND_OF_MINUTE)));
 
-        if (precise) sb.append('.').append(String.format("%02d", time.get(MILLI_OF_SECOND) / 10));
+        if (precise || normalize) sb.append('.').append(String.format("%02d", time.get(MILLI_OF_SECOND) / 10));
 
         return sb.toString();
     }
