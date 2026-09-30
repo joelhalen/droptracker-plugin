@@ -198,7 +198,8 @@ public class NpcUtilities {
     private static boolean isCorruptedGauntlet(LootReceived event, DropTrackerPlugin plugin) {
         return event.getType() == LootRecordType.EVENT && plugin.lastDrop != null
                 && "The Gauntlet".equals(event.getName())
-                && (CG_NAME.equals(plugin.lastDrop.getSource()) || CG_BOSS.equals(plugin.lastDrop.getSource()));
+                && (CG_NAME.equals(plugin.lastDrop.getSource()) || CG_BOSS.equals(plugin.lastDrop.getSource())
+                    || "The Corrupted Gauntlet".equals(plugin.lastDrop.getSource()));
     }
 
     private static boolean shouldUseChatName(LootReceived event, DropTrackerPlugin plugin) {
