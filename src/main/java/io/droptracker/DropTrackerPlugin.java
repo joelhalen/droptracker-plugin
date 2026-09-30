@@ -47,6 +47,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
+import io.droptracker.events.ConfigSnapshotHandler;
 import io.droptracker.events.DeathHandler;
 import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
@@ -147,6 +148,8 @@ public class DropTrackerPlugin extends Plugin {
 	public TrawlingHandler trawlingHandler;
 	@Inject
 	public SlayerHandler slayerHandler;
+	@Inject
+	private ConfigSnapshotHandler configSnapshotHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
@@ -408,11 +411,13 @@ public class DropTrackerPlugin extends Plugin {
 		kcService.reset();
 		petHandler.reset();
 		slayerHandler.reset();
+		configSnapshotHandler.reset();
 		loginWarningsShown = false;
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
+		configSnapshotHandler.onConfigChanged(configChanged.getGroup(), configChanged.getKey());
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				// Recreate the side panel which will reset the callback
@@ -767,6 +772,7 @@ public class DropTrackerPlugin extends Plugin {
 		// A login or hop re-sends the slayer varps, so a count reading zero
 		// then is not a finished task.
 		slayerHandler.onGameStateChanged(newState);
+		configSnapshotHandler.onGameStateChanged(newState);
 
 		// Clear per-session handler state so a partially-coalesced PB, pet or
 		// collection-log popup from before a logout/hop can't fire stale
