@@ -360,4 +360,48 @@ public class PbHandlerParseTest {
     public void noSourcesPreservesTheLegacyZeroBracket() {
         assertEquals("0", PbHandler.formatRaidTeamSize(0, 0));
     }
+
+    // --- Doom of Mokhaiotl delve levels (lines as printed in game) ---
+
+    @Test
+    public void delveLevelsOneToEightGetTheirOwnBoard() {
+        String line = "Delve level: 3 duration: 1:23. Personal best: 1:05";
+        assertEquals("Doom of Mokhaiotl (Level:3)", PbHandler.extractDelveBoss(line));
+        assertEquals(Integer.valueOf(3), PbHandler.delveLevel(line));
+
+        String eight = "Delve level: 8 duration: 1:57. Personal best: 1:44";
+        assertEquals("Doom of Mokhaiotl (Level:8)", PbHandler.extractDelveBoss(eight));
+        assertEquals(Integer.valueOf(8), PbHandler.delveLevel(eight));
+    }
+
+    @Test
+    public void deepLevelsShareTheEightPlusBoardButReportTheRealLevel() {
+        String line = "Delve level: 8+ (9) duration: 1:27 (new personal best)";
+        assertEquals("Doom of Mokhaiotl (Level:8+)", PbHandler.extractDelveBoss(line));
+        assertEquals(Integer.valueOf(9), PbHandler.delveLevel(line));
+
+        String deeper = "Delve level: 8+ (14) duration: 2:10. Personal best: 1:27";
+        assertEquals(Integer.valueOf(14), PbHandler.delveLevel(deeper));
+    }
+
+    @Test
+    public void theOneToEightTotalIsTheBossItselfWithNoLevel() {
+        String line = "Delve level 1 - 8 duration: 12:05. Personal best: 11:56";
+        assertEquals("Doom of Mokhaiotl", PbHandler.extractDelveBoss(line));
+        assertNull(PbHandler.delveLevel(line));
+    }
+
+    @Test
+    public void delveTimesParse() {
+        assertNotNull(PbHandler.selectTimeLine("Delve level: 8+ (9) duration: 1:27 (new personal best)"));
+        assertNotNull(PbHandler.selectTimeLine("Delve level: 8 duration: 1:57. Personal best: 1:44"));
+        // The level-start announcement has no time: not a kill.
+        assertNull(PbHandler.selectTimeLine("Delve level: 8+ (9)"));
+    }
+
+    @Test
+    public void otherMessagesHaveNoDelveLevel() {
+        assertNull(PbHandler.delveLevel("Fight duration: 1:23. Personal best: 1:05"));
+        assertNull(PbHandler.delveLevel(null));
+    }
 }
