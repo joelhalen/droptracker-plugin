@@ -10,27 +10,26 @@ import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
-import java.util.function.IntFunction;
 import java.util.Locale;
 
 /**
- * A slim banner: the icon on a colour block at the left, caption over
- * headline, the one number that matters on the right, and a thin line along
+ * A slim banner: the icon on a colour block at the left, caption (and who
+ * did it) over the headline, the one number that matters on the right, and a thin line along
  * the bottom that shows task progress or, failing that, the time left on
  * screen. Slides down into place and fades out. The least screen for the most
  * information, for players who want pop-ups but not panels.
  */
-class RibbonRenderer implements PopupRenderer {
+class BannerRenderer implements PopupRenderer {
     private static final int WIDTH = 340;
     private static final int HEIGHT = 40;
     private static final int BLOCK = 40;
     private static final long SLIDE_MS = 240;
     private static final long FADE_MS = 500;
 
-    private final IntFunction<BufferedImage> sprites;
+    private final PopupIcons icons;
 
-    RibbonRenderer(IntFunction<BufferedImage> sprites) {
-        this.sprites = sprites;
+    BannerRenderer(PopupIcons icons) {
+        this.icons = icons;
     }
 
     @Override
@@ -69,8 +68,7 @@ class RibbonRenderer implements PopupRenderer {
         g.fillRect(x + 1, top + 2, BLOCK - 1, HEIGHT - 3);
         g.setColor(accent);
         g.drawLine(x + BLOCK, top + 2, x + BLOCK, top + HEIGHT - 2);
-        Integer iconId = PopupPaint.iconOf(toast);
-        BufferedImage sprite = iconId != null ? sprites.apply(iconId) : null;
+        BufferedImage sprite = icons.forToast(toast);
         if (sprite != null) {
             PopupPaint.drawSprite(g, sprite, x + 4, top + 5, BLOCK - 8);
         } else {
@@ -100,8 +98,17 @@ class RibbonRenderer implements PopupRenderer {
         int textWidth = right - (column > 0 ? column + 10 : 0) - textX;
         g.setFont(PopupPaint.small());
         int captionY = top + 4 + smallFm.getAscent();
-        PopupPaint.shadowed(g, PopupPaint.ellipsize(card.getCaption().toUpperCase(Locale.ROOT),
-            smallFm, textWidth), textX, captionY, accent);
+        String captionText = PopupPaint.ellipsize(card.getCaption().toUpperCase(Locale.ROOT),
+            smallFm, textWidth);
+        PopupPaint.shadowed(g, captionText, textX, captionY, accent);
+        // Who did it, after the caption when it fits: "TASK COMPLETE - Zezima".
+        String who = card.getLeftValue();
+        int whoX = textX + smallFm.stringWidth(captionText) + 6;
+        int whoRoom = textX + textWidth - whoX;
+        if (who != null && whoRoom > smallFm.stringWidth("- ") + 20) {
+            PopupPaint.shadowed(g, PopupPaint.ellipsize("- " + who, smallFm, whoRoom), whoX, captionY,
+                PopupPaint.TEXT_MUTED);
+        }
         g.setFont(PopupPaint.bold());
         int headlineY = top + HEIGHT - 8 - boldFm.getDescent();
         PopupPaint.shadowed(g, PopupPaint.ellipsize(card.getHeadline(), boldFm, textWidth),

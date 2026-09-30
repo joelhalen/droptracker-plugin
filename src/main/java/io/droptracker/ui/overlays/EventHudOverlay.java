@@ -5,8 +5,6 @@ import io.droptracker.models.EventHudDetail;
 import io.droptracker.models.api.EventState;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.ui.DropTrackerTheme;
-import io.droptracker.ui.overlays.popup.PopupRenderer;
-import io.droptracker.ui.overlays.popup.PopupRenderers;
 import io.droptracker.util.RemoteImageCache;
 import io.droptracker.util.ValueFormat;
 import net.runelite.client.game.ItemManager;
@@ -27,7 +25,6 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -40,10 +37,8 @@ import java.util.List;
  * task shows honors the user's tracked-task pick (Events tab) before the
  * server's focus choice.
  *
- * While this HUD paints, incoming event pop-ups render as compact nudges
- * anchored directly beneath the card (following wherever the user dragged
- * it), and the stand-alone {@link EventToastOverlay} stands down — the user
- * positions one object, never two.
+ * Pop-ups are not drawn here: with this display type they show as showcase
+ * panels in {@link EventToastOverlay}, which is movable on its own.
  */
 @Singleton
 public class EventHudOverlay extends Overlay {
@@ -65,17 +60,14 @@ public class EventHudOverlay extends Overlay {
     private final EventNotificationService service;
     private final ItemManager itemManager;
     private final RemoteImageCache remoteImages;
-    private final PopupRenderers renderers;
 
     @Inject
     public EventHudOverlay(DropTrackerConfig config, EventNotificationService service,
-                           ItemManager itemManager, RemoteImageCache remoteImages,
-                           PopupRenderers renderers) {
+                           ItemManager itemManager, RemoteImageCache remoteImages) {
         this.config = config;
         this.service = service;
         this.itemManager = itemManager;
         this.remoteImages = remoteImages;
-        this.renderers = renderers;
         setPosition(OverlayPosition.TOP_LEFT);
         setResizable(false);
     }
@@ -231,41 +223,7 @@ public class EventHudOverlay extends Overlay {
                 y + smallFm.getAscent(), DropTrackerTheme.TEXT);
         }
 
-        // This frame painted: own the pop-up queue (EventToastOverlay stands
-        // down) and render it as nudges hanging off the card's bottom edge.
-        service.markHudRendered();
-        int totalHeight = height;
-        if (config.eventDisplayMode().popupsEnabled()) {
-            totalHeight = renderNudges(graphics, height);
-        }
-        return new Dimension(WIDTH, totalHeight);
-    }
-
-    /* ===================== pop-up nudges ===================== */
-
-    /** Draws the pending toasts below the HUD (starting at {@code hudHeight})
-     *  in each one's nudge style; returns the new total height. */
-    private int renderNudges(Graphics2D g, int hudHeight) {
-        long now = System.currentTimeMillis();
-        int y = hudHeight;
-        int shown = 0;
-        Iterator<EventNotificationService.Toast> iterator = service.getToasts().iterator();
-        while (iterator.hasNext()) {
-            EventNotificationService.Toast toast = iterator.next();
-            if (toast.expired(now)) {
-                iterator.remove();
-                continue;
-            }
-            PopupRenderer renderer = renderers.nudge(toast.getNudgeStyle() != null
-                ? toast.getNudgeStyle() : config.eventNudgeStyle());
-            if (shown >= renderer.maxVisible()) {
-                continue;
-            }
-            y += renderer.gap();
-            y += renderer.draw(g, toast, 0, y, WIDTH, now);
-            shown++;
-        }
-        return y;
+        return new Dimension(WIDTH, height);
     }
 
     /* ===================== painting helpers ===================== */

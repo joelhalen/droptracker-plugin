@@ -5,11 +5,15 @@ import lombok.Getter;
 import javax.annotation.Nullable;
 
 /**
- * The structured half of an event pop-up. The classic card only ever needed
- * a title and a sentence; the showcase-style layouts lay the same news out in
- * parts (a small caption, a big headline, two "label: value" stat corners and
- * a progress line), so the renderer that composes the sentence fills these in
+ * The structured half of an event pop-up. The chat line is one sentence; the
+ * pop-ups lay the same news out in parts (a small caption, a big headline,
+ * up to four "label: value" stats around the icon, a progress line and a
+ * corner note), so the renderer that composes the sentence fills these in
  * too. Every string is already sanitized by the time it lands here.
+ *
+ * <p>Stats sit in the showcase's corners: left and right on the first row,
+ * left2 and right2 under them. Setters skip null values, so a card can be
+ * built in one expression from optional server fields.
  */
 @Getter
 public class EventPopupCard {
@@ -44,6 +48,20 @@ public class EventPopupCard {
     private String rightLabel;
     @Nullable
     private String rightValue;
+    @Nullable
+    private String left2Label;
+    @Nullable
+    private String left2Value;
+    @Nullable
+    private String right2Label;
+    @Nullable
+    private String right2Value;
+    /** Small corner note, e.g. "2d 4h left"; null when there is none. */
+    @Nullable
+    private String note;
+    /** Remote icon path ({@code /img/}-relative) when there is no item sprite. */
+    @Nullable
+    private String iconPath;
     /** Progress toward the task target; both null when there is none. */
     @Nullable
     private Long have;
@@ -75,6 +93,62 @@ public class EventPopupCard {
             this.rightValue = value;
         }
         return this;
+    }
+
+    public EventPopupCard left2(String label, @Nullable String value) {
+        if (value != null) {
+            this.left2Label = label;
+            this.left2Value = value;
+        }
+        return this;
+    }
+
+    public EventPopupCard right2(String label, @Nullable String value) {
+        if (value != null) {
+            this.right2Label = label;
+            this.right2Value = value;
+        }
+        return this;
+    }
+
+    /** Fills the first empty stat slot (left, right, left2, right2). */
+    public EventPopupCard extra(String label, @Nullable String value) {
+        if (value == null) {
+            return this;
+        }
+        if (leftValue == null) {
+            return left(label, value);
+        }
+        if (rightValue == null) {
+            return right(label, value);
+        }
+        if (left2Value == null) {
+            return left2(label, value);
+        }
+        if (right2Value == null) {
+            return right2(label, value);
+        }
+        return this;
+    }
+
+    public EventPopupCard note(@Nullable String note) {
+        if (note != null) {
+            this.note = note;
+        }
+        return this;
+    }
+
+    public EventPopupCard iconPath(@Nullable String iconPath) {
+        this.iconPath = iconPath;
+        return this;
+    }
+
+    public boolean hasStats() {
+        return leftValue != null || rightValue != null || left2Value != null || right2Value != null;
+    }
+
+    public boolean hasSecondRow() {
+        return left2Value != null || right2Value != null;
     }
 
     public EventPopupCard progress(@Nullable Long have, @Nullable Long need) {

@@ -2,10 +2,11 @@ package io.droptracker.ui.overlays.popup;
 
 import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.models.EventNudgeStyle;
+import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventPopupCard;
 import io.droptracker.models.EventPopupStyle;
 import io.droptracker.models.api.EventNotification;
+import io.droptracker.models.api.EventState;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.EventNotificationService.Toast;
 import io.droptracker.util.ChatMessageUtil;
@@ -19,6 +20,8 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,7 +49,7 @@ public class PopupRenderersTest {
     @Test
     public void everyKindRendersAStructuredCard() {
         Map<String, Toast> toasts = sampleToasts();
-        assertEquals(10, toasts.size());
+        assertEquals(12, toasts.size());
         for (Map.Entry<String, Toast> entry : toasts.entrySet()) {
             EventPopupCard card = entry.getValue().getCard();
             assertNotNull(entry.getKey() + " has no card", card);
@@ -56,35 +59,52 @@ public class PopupRenderersTest {
         assertEquals(EventPopupCard.Kind.TILE, tile.getKind());
         assertEquals("Bandos set", tile.getHeadline());
         assertEquals("2nd of 5", tile.getRightValue());
+        // Empty corners filled from the event state: points, team, tiles done.
+        assertEquals("+10", tile.getLeft2Value());
+        assertEquals("Iron Eagles", tile.getRight2Value());
+        assertEquals("2d 4h left", tile.getNote());
         EventPopupCard progress = toasts.get("progress").getCard();
         assertEquals(0.4f, progress.fraction(), 0.001f);
         assertEquals("2/5", progress.getRightValue());
+        assertEquals("3", progress.getRight2Value());
+
+        // No item in the envelope: the task's own icon from the event state.
+        Toast kc = toasts.get("kc");
+        assertEquals(null, kc.getIconItemId());
+        assertEquals("npcdb/8061.png", kc.getIconPath());
+        assertEquals("metrics/slayer.png", toasts.get("xp").getIconPath());
+        // Board rolls find the next task by label.
+        assertEquals(Integer.valueOf(19529), toasts.get("board").getIconItemId());
+        assertEquals("25 pts", toasts.get("board").getCard().getLeft2Value());
+        // Team news about your own team shows its icon; the lead card says where you stand.
+        assertEquals(Integer.valueOf(12000), toasts.get("line").getIconItemId());
+        EventPopupCard lead = toasts.get("lead").getCard();
+        assertEquals("In the lead!", lead.getLeftValue());
+        EventPopupCard start = toasts.get("start").getCard();
+        assertEquals("Iron Eagles", start.getLeftValue());
+        assertEquals("5", start.getRightValue());
+        assertEquals("2d 4h", start.getRight2Value());
     }
 
     @Test
     public void everyStylePaintsEveryKindThroughItsAnimation() throws IOException {
-        PopupRenderers renderers = new PopupRenderers(PopupRenderersTest::sprite);
+        PopupRenderers renderers = new PopupRenderers(PopupRenderersTest::sprite, PopupRenderersTest::remote);
         Map<String, Toast> toasts = sampleToasts();
         String galleryDir = System.getenv("POPUP_GALLERY_DIR");
 
         for (EventPopupStyle style : EventPopupStyle.values()) {
             PopupRenderer renderer = renderers.popup(style);
-            paintAll(renderer, "popup-" + style.key(), renderer.preferredWidth(), toasts, galleryDir);
-        }
-        for (EventNudgeStyle style : EventNudgeStyle.values()) {
-            PopupRenderer renderer = renderers.nudge(style);
-            paintAll(renderer, "hud-" + style.key(), 200, toasts, galleryDir);
+            paintAll(renderer, "popup-" + style.name().toLowerCase(), renderer.preferredWidth(), toasts,
+                galleryDir);
         }
     }
 
     @Test
-    public void styleNamesParseLoosely() {
-        assertEquals(EventPopupStyle.SHOWCASE_STONE, EventPopupStyle.parse("Showcase (stone)"));
-        assertEquals(EventPopupStyle.SHOWCASE_STONE, EventPopupStyle.parse("showcase_stone"));
-        assertEquals(EventPopupStyle.RIBBON, EventPopupStyle.parse("4"));
-        assertEquals(EventNudgeStyle.SHOWCASE_MINI, EventNudgeStyle.parse("mini showcase"));
-        assertEquals(null, EventNudgeStyle.parse("9"));
-        assertEquals(EventPopupStyle.CLASSIC, EventPopupStyle.RIBBON.next());
+    public void displayTypePicksTheStyle() {
+        assertEquals(EventPopupStyle.BANNER, EventDisplayMode.POPUP.popupStyle());
+        assertEquals(EventPopupStyle.SHOWCASE, EventDisplayMode.ENHANCED.popupStyle());
+        assertEquals(EventPopupStyle.SHOWCASE, EventPopupStyle.parse("Showcase"));
+        assertEquals(null, EventPopupStyle.parse("stone"));
     }
 
     private void paintAll(PopupRenderer renderer, String name, int width, Map<String, Toast> toasts,
@@ -163,6 +183,22 @@ public class PopupRenderersTest {
         return out;
     }
 
+    /** A server icon from POPUP_SPRITES_DIR/<path> when given, else a stand-in blob. */
+    private static BufferedImage remote(String path) {
+        String dir = System.getenv("POPUP_SPRITES_DIR");
+        if (dir != null) {
+            try {
+                BufferedImage image = ImageIO.read(new File(dir, path));
+                if (image != null) {
+                    return image;
+                }
+            } catch (IOException ignored) {
+                // fall through to the stand-in
+            }
+        }
+        return sprite(-1);
+    }
+
     /** A real sprite from POPUP_SPRITES_DIR when given, else a stand-in blob. */
     private static BufferedImage sprite(int itemId) {
         String dir = System.getenv("POPUP_SPRITES_DIR");
@@ -211,16 +247,21 @@ public class PopupRenderersTest {
                 public void setLastAccountHash(String accountHash) {
                 }
             }, null, new ChatMessageUtil(), null, null, null, null);
+        service.setPreviewHudEntry(sampleEntry(), Long.MAX_VALUE);
         Map<String, String> samples = new LinkedHashMap<>();
         samples.put("tile", "event_completion|high|{\"task_id\":1,\"task_label\":\"Obtain Bandos tassets\","
             + "\"player_name\":\"Zezima\",\"received_item\":\"Bandos tassets\",\"icon_item_id\":11834,"
-            + "\"points\":10,\"cell_idxs\":[6],\"cell_labels\":[\"Bandos set\"],"
+            + "\"points\":10,\"team_name\":\"Iron Eagles\",\"cell_idxs\":[6],\"cell_labels\":[\"Bandos set\"],"
             + "\"tiles_completed\":7,\"team_rank\":2,\"team_count\":5}");
         samples.put("complete", "event_completion|normal|{\"task_id\":2,\"task_label\":\"Obtain a Dragon warhammer\","
             + "\"player_name\":\"Zezima\",\"received_item\":\"Dragon warhammer\",\"icon_item_id\":13576,\"points\":5}");
         samples.put("progress", "event_task_progress|low|{\"task_id\":3,\"task_label\":\"Obtain 5 Abyssal whips\","
             + "\"player_name\":\"Lynx Titan\",\"received_item\":\"Abyssal whip\",\"icon_item_id\":4151,"
             + "\"progress\":2,\"target\":5}");
+        samples.put("kc", "event_completion|normal|{\"task_id\":41,\"task_label\":\"Kill Vorkath 50 times\","
+            + "\"player_name\":\"Zezima\",\"points\":15,\"team_name\":\"Iron Eagles\"}");
+        samples.put("xp", "event_task_progress|low|{\"task_id\":42,\"task_label\":\"Gain 2M Slayer XP\","
+            + "\"player_name\":\"Lynx Titan\",\"progress\":1300000,\"target\":2000000}");
         samples.put("lead", "event_lead_change|high|{\"team_name\":\"Iron Eagles\",\"team_score\":1240}");
         samples.put("line", "event_line|high|{\"team_name\":\"Iron Eagles\",\"bonus_points\":25}");
         samples.put("blackout", "event_blackout|high|{\"team_name\":\"Iron Eagles\",\"bonus_points\":100}");
@@ -240,10 +281,26 @@ public class PopupRenderersTest {
                 EventNotification.class);
             service.getToasts().clear();
             // A tile folding two more updates exercises the "+N more" badges too.
-            assertTrue(sample.getKey(), service.previewNotification(n, null, null,
+            assertTrue(sample.getKey(), service.previewNotification(n, null,
                 "tile".equals(sample.getKey()) ? 2 : 0));
-            toasts.put(sample.getKey(), service.getToasts().getFirst().pinned(null, null, now));
+            toasts.put(sample.getKey(), service.getToasts().getFirst().pinned(null, now));
         }
         return toasts;
+    }
+
+    /** The /event_state entry the samples' event (id 7) reads its context from. */
+    private EventState.Entry sampleEntry() {
+        String endsAt = LocalDateTime.now(ZoneOffset.UTC).plusDays(2).plusHours(4).plusMinutes(1)
+            .withNano(0).toString();
+        return gson.fromJson("{\"event\":{\"id\":7,\"name\":\"Autumn Bingo\",\"kind\":\"bingo\","
+            + "\"has_bingo\":true,\"ends_at\":\"" + endsAt + "\"},"
+            + "\"team\":{\"id\":3,\"name\":\"Iron Eagles\",\"icon_item_id\":12000,\"score\":1240,"
+            + "\"rank\":1,\"team_count\":5},"
+            + "\"tasks_completed\":7,\"tasks_total\":25,"
+            + "\"tasks\":[{\"id\":41,\"label\":\"Kill Vorkath 50 times\",\"points\":15,"
+            + "\"icon_path\":\"npcdb/8061.png\"},"
+            + "{\"id\":42,\"label\":\"Gain 2M Slayer XP\",\"points\":20,\"icon_path\":\"metrics/slayer.png\"},"
+            + "{\"id\":43,\"label\":\"Obtain any Zenyte jewel\",\"points\":25,\"icon_item_id\":19529}]}",
+            EventState.Entry.class);
     }
 }

@@ -4,42 +4,34 @@ import javax.annotation.Nullable;
 import java.util.Locale;
 
 /**
- * Look of the stand-alone event pop-ups ("Chat + text pop-ups" display type).
- * Hidden config (eventPopupStyle) while the candidates are play-tested with
- * {@code ::dtpopup}; CLASSIC is the pre-6.0.13 card.
+ * Look of the on-screen event pop-ups. Not a setting of its own: the
+ * "Display type" picks it ({@link EventDisplayMode#popupStyle()}), so
+ * "Chat + text pop-ups" gets the slim banner and "Enhanced display" the
+ * showcase panel. {@code ::dtpopup demo} pins one per preview.
  */
 public enum EventPopupStyle {
-    CLASSIC("Classic", "the original small card"),
-    SHOWCASE("Showcase", "big colour-coded panel, framed icon hanging off the bottom"),
-    SHOWCASE_STONE("Showcase (stone)", "the showcase layout on a game-interface stone panel"),
-    RIBBON("Ribbon", "slim banner that slides in, with a countdown line");
+    SHOWCASE("Showcase"),
+    BANNER("Banner");
 
     private final String label;
-    private final String blurb;
 
-    EventPopupStyle(String label, String blurb) {
+    EventPopupStyle(String label) {
         this.label = label;
-        this.blurb = blurb;
     }
 
-    public String blurb() {
-        return blurb;
-    }
-
-    /** The command-line name, e.g. "showcase_stone". */
-    public String key() {
-        return name().toLowerCase(Locale.ROOT);
-    }
-
-    public EventPopupStyle next() {
-        EventPopupStyle[] all = values();
-        return all[(ordinal() + 1) % all.length];
-    }
-
-    /** Matches a key ("ribbon"), a label or a 1-based number; null if none. */
+    /** "showcase" / "banner", or null. */
     @Nullable
-    public static EventPopupStyle parse(String raw) {
-        return StyleNames.parse(values(), raw);
+    public static EventPopupStyle parse(@Nullable String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String wanted = raw.trim().toLowerCase(Locale.ROOT);
+        for (EventPopupStyle style : values()) {
+            if (style.name().toLowerCase(Locale.ROOT).equals(wanted)) {
+                return style;
+            }
+        }
+        return null;
     }
 
     @Override

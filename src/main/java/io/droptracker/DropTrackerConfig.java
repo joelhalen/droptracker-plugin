@@ -2,8 +2,6 @@ package io.droptracker;
 
 import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventHudDetail;
-import io.droptracker.models.EventNudgeStyle;
-import io.droptracker.models.EventPopupStyle;
 import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.TeamIndicatorStyle;
 import net.runelite.client.config.Config;
@@ -341,9 +339,10 @@ public interface DropTrackerConfig extends Config {
         name = "Display type",
         description = "<html>How event notifications appear:<br />"
             + "<b>Chat messages only</b> - lines in your chatbox.<br />"
-            + "<b>Chat + text pop-ups</b> - also shows brief on-screen pop-ups.<br />"
-            + "<b>Enhanced display (HUD)</b> - also shows a movable overlay with your<br />"
-            + "current task, progress and team standing (hold Alt to drag it).</html>",
+            + "<b>Chat + text pop-ups</b> - also shows a slim banner for each update.<br />"
+            + "<b>Enhanced display (HUD)</b> - larger showcase pop-ups, plus a movable<br />"
+            + "overlay with your current task, progress and team standing<br />"
+            + "(hold Alt to drag either one).</html>",
         position = 2,
         section = eventSection
     )
@@ -575,30 +574,6 @@ public interface DropTrackerConfig extends Config {
     )
     default boolean eventImportantPopupsOnly() {
         return false;
-    }
-
-    /**
-     * Pop-up layout candidates, hidden while they are play-tested: switched
-     * with {@code ::dtpopup style} / {@code ::dtpopup hud}, not the panel.
-     */
-    @ConfigItem(
-        keyName = "eventPopupStyle",
-        name = "Pop-up style",
-        description = "Layout of the on-screen event pop-ups (try them with ::dtpopup).",
-        hidden = true
-    )
-    default EventPopupStyle eventPopupStyle() {
-        return EventPopupStyle.CLASSIC;
-    }
-
-    @ConfigItem(
-        keyName = "eventNudgeStyle",
-        name = "HUD pop-up style",
-        description = "Layout of the pop-ups under the Enhanced display HUD (try them with ::dtpopup).",
-        hidden = true
-    )
-    default EventNudgeStyle eventNudgeStyle() {
-        return EventNudgeStyle.CLASSIC;
     }
 
     @ConfigItem(

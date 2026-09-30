@@ -9,6 +9,7 @@ import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.events.CommandExecuted;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
@@ -159,6 +160,29 @@ public class ChatMessageUtil {
     public void sendEventChatMessage(String eventName, String teamName,
                                      String tag, String accentHex,
                                      String emphasis, String messageContent) {
+        // The chatbox style is game state (a varbit), readable only on the
+        // client thread; callers arrive from the notification poller.
+        clientThread.invokeLater(() -> chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CONSOLE)
+                        .runeLiteFormattedMessage(formatEventLine(eventName, teamName, tag, accentHex,
+                                emphasis, messageContent, opaqueChatbox()))
+                        .build()
+        ));
+    }
+
+    /**
+     * True for the parchment chatbox: Fixed mode, or Resizable with the
+     * "Transparent chatbox" option off. Same test RuneLite uses to pick its
+     * opaque or transparent chat colours. Client thread only.
+     */
+    private boolean opaqueChatbox() {
+        return !(client.isResized() && client.getVarbitValue(VarbitID.CHATBOX_TRANSPARENCY) == 1);
+    }
+
+    /** The event line's RuneLite-formatted text; see {@link #sendEventChatMessage}. */
+    static String formatEventLine(String eventName, String teamName, String tag, String accentHex,
+                                  String emphasis, String messageContent, boolean opaque) {
         ChatMessageBuilder messageBuilder = new ChatMessageBuilder();
         messageBuilder.append(ChatColorType.HIGHLIGHT)
                 .append("[")
@@ -180,18 +204,83 @@ public class ChatMessageUtil {
             }
             messageBuilder.append(ChatColorType.NORMAL).append(messageContent);
         } else {
-            Color bright = ColorUtil.colorLerp(accent, Color.WHITE, 0.45);
+            Color body = chatAccent(accent, opaque);
+            Color strong = chatEmphasis(accent, opaque);
             if (tag != null && !tag.isEmpty()) {
-                messageBuilder.append(bright, tag).append(" ");
+                messageBuilder.append(strong, tag).append(" ");
             }
-            appendEmphasized(messageBuilder, messageContent, emphasis, accent, bright);
+            appendEmphasized(messageBuilder, messageContent, emphasis, body, strong);
         }
-        chatMessageManager.queue(
-                QueuedMessage.builder()
-                        .type(ChatMessageType.CONSOLE)
-                        .runeLiteFormattedMessage(messageBuilder.build())
-                        .build()
-        );
+        return messageBuilder.build();
+    }
+
+    /* ---------------- chatbox contrast ---------------- */
+
+    /**
+     * Relative luminance ceilings for text on the opaque chatbox. Its
+     * parchment sits near luminance 0.49, so 0.07 keeps a body line at about
+     * 4.5:1 (WCAG AA) and 0.035 lifts the tag and item name clearly above it.
+     */
+    private static final double OPAQUE_BODY_LUMINANCE = 0.07;
+    private static final double OPAQUE_STRONG_LUMINANCE = 0.035;
+    /** Floor for the transparent chatbox, where text is shadowed over the game
+     *  world: dim greys and deep reds disappear against busy scenery. */
+    private static final double TRANSPARENT_MIN_LUMINANCE = 0.30;
+
+    /** The accent as the body colour for this chatbox: the same hue, darkened
+     *  to read on parchment, or lifted to read over the game world. */
+    static Color chatAccent(Color accent, boolean opaque) {
+        return opaque
+                ? withMaxLuminance(accent, OPAQUE_BODY_LUMINANCE)
+                : withMinLuminance(accent, TRANSPARENT_MIN_LUMINANCE);
+    }
+
+    /** The tag / item-name colour: a step darker than the body on parchment,
+     *  a step brighter over the game world. */
+    static Color chatEmphasis(Color accent, boolean opaque) {
+        return opaque
+                ? withMaxLuminance(accent, OPAQUE_STRONG_LUMINANCE)
+                : ColorUtil.colorLerp(chatAccent(accent, false), Color.WHITE, 0.45);
+    }
+
+    /** WCAG relative luminance of an sRGB colour. */
+    static double luminance(Color c) {
+        return 0.2126 * linear(c.getRed()) + 0.7152 * linear(c.getGreen()) + 0.0722 * linear(c.getBlue());
+    }
+
+    private static double linear(int channel) {
+        double v = channel / 255.0;
+        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+
+    /**
+     * Darkens the colour (hue kept) until it is at most {@code max} luminance.
+     * Coloured accents are made fully saturated first: a pastel only darkened
+     * turns to mud (gold goes olive), while a deep saturated shade still reads
+     * as its colour on parchment. Greys stay grey.
+     */
+    private static Color withMaxLuminance(Color c, double max) {
+        if (luminance(c) <= max) {
+            return c;
+        }
+        float[] hsb = Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
+        float saturation = hsb[1] < 0.3f ? hsb[1] : Math.max(hsb[1], 0.95f);
+        for (float brightness = hsb[2]; brightness > 0f; brightness -= 0.01f) {
+            Color out = Color.getHSBColor(hsb[0], saturation, brightness);
+            if (luminance(out) <= max) {
+                return out;
+            }
+        }
+        return Color.BLACK;
+    }
+
+    /** Blends toward white until the colour reaches {@code min} luminance. */
+    private static Color withMinLuminance(Color c, double min) {
+        Color out = c;
+        for (int i = 1; i <= 10 && luminance(out) < min; i++) {
+            out = ColorUtil.colorLerp(c, Color.WHITE, i * 0.08);
+        }
+        return out;
     }
 
     /** Body in {@code accent}, with the first occurrence of {@code emphasis}

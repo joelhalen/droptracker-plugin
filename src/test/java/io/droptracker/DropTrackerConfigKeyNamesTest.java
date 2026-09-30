@@ -47,8 +47,6 @@ public class DropTrackerConfigKeyNamesTest {
         // Retired from the UI, kept so existing values still apply
         "trackExperience", "trackTrawling", "hideWhispers",
         "sendLoadoutWithPbs", "eventImportantPopupsOnly", "pollUpdates",
-        // Hidden while play-tested (::dtpopup switches them)
-        "eventPopupStyle", "eventNudgeStyle",
         // Internal state
         "pinnedEventId", "lastVersionNotified", "lastAccountName",
         "customApiEndpoint", "lastAccountHash"

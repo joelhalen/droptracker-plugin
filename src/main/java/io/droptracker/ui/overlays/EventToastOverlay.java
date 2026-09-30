@@ -19,14 +19,10 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Transient event pop-ups ("Chat + text pop-ups" / "Enhanced display"):
- * cards stacked top-center, each painted by the renderer for its style (the
- * configured {@code eventPopupStyle}, or the one a {@code ::dtpopup} preview
- * pinned), fading out at the end of their priority-dependent lifetime.
- *
- * Stands down while the Enhanced Display HUD is painting: the HUD then draws
- * the same queue as nudges anchored beneath itself (one movable object for
- * the user, not two), and this overlay resumes the moment the HUD stops.
+ * Transient event pop-ups, stacked top-center: slim banners for "Chat + text
+ * pop-ups", showcase panels for "Enhanced display" (or whichever style a
+ * {@code ::dtpopup} preview pinned), fading out at the end of their
+ * priority-dependent lifetime. Movable like any overlay (hold Alt to drag).
  */
 @Singleton
 public class EventToastOverlay extends Overlay {
@@ -50,9 +46,6 @@ public class EventToastOverlay extends Overlay {
             service.getToasts().clear();
             return null;
         }
-        if (service.hudOwnsToasts()) {
-            return null; // the HUD is rendering the queue as nudges beneath itself
-        }
         long now = System.currentTimeMillis();
         List<Toast> visible = new ArrayList<>();
         List<PopupRenderer> painters = new ArrayList<>();
@@ -65,7 +58,7 @@ public class EventToastOverlay extends Overlay {
                 continue;
             }
             PopupRenderer renderer = renderers.popup(toast.getPopupStyle() != null
-                ? toast.getPopupStyle() : config.eventPopupStyle());
+                ? toast.getPopupStyle() : config.eventDisplayMode().popupStyle());
             if (visible.size() < renderer.maxVisible()) {
                 visible.add(toast);
                 painters.add(renderer);

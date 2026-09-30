@@ -5,7 +5,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.EventDisplayMode;
-import io.droptracker.models.EventNudgeStyle;
 import io.droptracker.models.EventPopupCard;
 import io.droptracker.models.EventPopupStyle;
 import io.droptracker.models.api.EventNotification;
@@ -29,8 +28,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
- * {@code ::dtpopup}: fake event pop-ups on demand, so the layout candidates
- * can be judged in a real client without a live event. Samples are ordinary
+ * {@code ::dtpopup}: fake event pop-ups on demand, so the layouts can be
+ * judged in a real client without a live event. Samples are ordinary
  * notification envelopes pushed through the real renderer, so they read
  * exactly as the live ones would; only the chat line, the filters and the
  * dedupe are skipped. Nothing is sent to the server.
@@ -39,9 +38,7 @@ import java.util.function.Supplier;
  *   ::dtpopup                   usage + current styles
  *   ::dtpopup test [kind]       one sample pop-up (kinds: see KINDS)
  *   ::dtpopup all               every kind, one after another
- *   ::dtpopup demo [kind]       the same pop-up in every style, in turn
- *   ::dtpopup style [name|next] pick the stand-alone pop-up style
- *   ::dtpopup hud [name|next]   pick the style under the HUD
+ *   ::dtpopup demo [kind]       the same pop-up as a showcase, then a banner
  *   ::dtpopup mode [chat|popup|hud]  switch the event display type
  * </pre>
  */
@@ -56,6 +53,9 @@ public class EventPopupPreview {
     private static final int PREVIEW_EVENT_ID = -4242;
     private static final String PREVIEW_EVENT = "Autumn Bingo";
     private static final String PREVIEW_TEAM = "Iron Eagles";
+    /** Sample tasks whose icons come from the sample event, not the envelope. */
+    private static final int PREVIEW_KC_TASK = 9101;
+    private static final int PREVIEW_XP_TASK = 9102;
 
     private final DropTrackerConfig config;
     private final ConfigManager configManager;
@@ -81,6 +81,14 @@ public class EventPopupPreview {
         kinds.put("tile", this::tileSample);
         kinds.put("complete", this::completeSample);
         kinds.put("progress", this::progressSample);
+        kinds.put("kc", () -> envelope("event_completion", "normal", data()
+            .put("task_id", PREVIEW_KC_TASK).put("player_name", "Zezima")
+            .put("task_label", "Kill Vorkath 50 times").put("points", 15)
+            .put("team_name", PREVIEW_TEAM).json));
+        kinds.put("xp", () -> envelope("event_task_progress", "low", data()
+            .put("task_id", PREVIEW_XP_TASK).put("player_name", "Lynx Titan")
+            .put("task_label", "Gain 2M Slayer XP").put("progress", 1_300_000)
+            .put("target", 2_000_000).put("milestone_pct", 50).json));
         kinds.put("lead", () -> envelope("event_lead_change", "high", data()
             .put("team_name", PREVIEW_TEAM).put("team_score", 1240).json));
         kinds.put("line", () -> envelope("event_line", "high", data()
@@ -113,14 +121,6 @@ public class EventPopupPreview {
             case "demo":
                 demo(arg != null ? arg.toLowerCase(Locale.ROOT) : "tile");
                 break;
-            case "style":
-            case "popup":
-                setPopupStyle(arg);
-                break;
-            case "hud":
-            case "nudge":
-                setNudgeStyle(arg);
-                break;
             case "mode":
                 setMode(arg);
                 break;
@@ -140,10 +140,9 @@ public class EventPopupPreview {
     private void help() {
         EventDisplayMode mode = config.eventDisplayMode();
         say("Pop-up preview. Display type: " + mode
-            + ". Pop-up style: " + config.eventPopupStyle()
-            + ". HUD style: " + config.eventNudgeStyle() + ".");
-        say("::dtpopup demo - the same pop-up in every style. ::dtpopup test [kind], ::dtpopup all.");
-        say("::dtpopup style [name|next], ::dtpopup hud [name|next], ::dtpopup mode [chat|popup|hud].");
+            + (mode.popupsEnabled() ? " (" + mode.popupStyle() + " pop-ups)." : "."));
+        say("::dtpopup demo - the same pop-up as a showcase, then a banner. ::dtpopup test [kind], ::dtpopup all.");
+        say("::dtpopup mode [chat|popup|hud] - popup shows banners, hud shows showcases.");
         say("Kinds: " + String.join(", ", kinds.keySet()) + ".");
     }
 
@@ -156,7 +155,7 @@ public class EventPopupPreview {
             return;
         }
         cancelScheduled();
-        show(kind, null, null);
+        show(kind, null);
     }
 
     private void playAll() {
@@ -167,15 +166,12 @@ public class EventPopupPreview {
         say("Playing every kind of pop-up (" + kinds.size() + "), in your current style.");
         long delay = 0;
         for (String kind : kinds.keySet()) {
-            schedule(() -> show(kind, null, null), delay);
+            schedule(() -> show(kind, null), delay);
             delay += ALL_STEP_MS;
         }
     }
 
-    /**
-     * One kind of pop-up in each style for the current display type, one at
-     * a time, each introduced in chat with the command that keeps it.
-     */
+    /** One kind of pop-up in each style, one at a time, each introduced in chat. */
     private void demo(String kind) {
         if (!kinds.containsKey(kind)) {
             say("Unknown kind '" + kind + "'. Kinds: " + String.join(", ", kinds.keySet()) + ".");
@@ -186,78 +182,14 @@ public class EventPopupPreview {
         }
         cancelScheduled();
         long delay = 0;
-        if (config.eventDisplayMode().hudEnabled()) {
-            EventNudgeStyle[] styles = EventNudgeStyle.values();
-            say("Showing each of the " + styles.length + " HUD pop-up styles, "
-                + DEMO_STEP_MS / 1000 + "s apart.");
-            for (EventNudgeStyle style : styles) {
-                schedule(() -> {
-                    service.getToasts().clear();
-                    say("HUD style " + (style.ordinal() + 1) + "/" + styles.length + ": "
-                        + style + " - " + style.blurb() + ". Keep it: ::dtpopup hud " + style.key());
-                    show(kind, null, style);
-                }, delay);
-                delay += DEMO_STEP_MS;
-            }
-        } else {
-            EventPopupStyle[] styles = EventPopupStyle.values();
-            say("Showing each of the " + styles.length + " pop-up styles, "
-                + DEMO_STEP_MS / 1000 + "s apart.");
-            for (EventPopupStyle style : styles) {
-                schedule(() -> {
-                    service.getToasts().clear();
-                    say("Style " + (style.ordinal() + 1) + "/" + styles.length + ": "
-                        + style + " - " + style.blurb() + ". Keep it: ::dtpopup style " + style.key());
-                    show(kind, style, null);
-                }, delay);
-                delay += DEMO_STEP_MS;
-            }
-        }
-    }
-
-    private void setPopupStyle(@Nullable String arg) {
-        if (arg == null) {
-            say("Pop-up styles: " + listStyles(EventPopupStyle.values(), config.eventPopupStyle())
-                + ". Pick one with ::dtpopup style <name>.");
-            return;
-        }
-        EventPopupStyle style = "next".equalsIgnoreCase(arg)
-            ? config.eventPopupStyle().next() : EventPopupStyle.parse(arg);
-        if (style == null) {
-            say("No pop-up style '" + arg + "'. Styles: "
-                + listStyles(EventPopupStyle.values(), config.eventPopupStyle()) + ".");
-            return;
-        }
-        configManager.setConfiguration(DropTrackerConfig.GROUP, "eventPopupStyle", style);
-        say("Pop-up style is now " + style + " (" + style.blurb() + ").");
-        if (config.eventDisplayMode().hudEnabled()) {
-            say("You're on the HUD display type, which uses the HUD style. ::dtpopup mode popup to see this one.");
-        } else if (ready()) {
-            cancelScheduled();
-            show("tile", style, null);
-        }
-    }
-
-    private void setNudgeStyle(@Nullable String arg) {
-        if (arg == null) {
-            say("HUD pop-up styles: " + listStyles(EventNudgeStyle.values(), config.eventNudgeStyle())
-                + ". Pick one with ::dtpopup hud <name>.");
-            return;
-        }
-        EventNudgeStyle style = "next".equalsIgnoreCase(arg)
-            ? config.eventNudgeStyle().next() : EventNudgeStyle.parse(arg);
-        if (style == null) {
-            say("No HUD style '" + arg + "'. Styles: "
-                + listStyles(EventNudgeStyle.values(), config.eventNudgeStyle()) + ".");
-            return;
-        }
-        configManager.setConfiguration(DropTrackerConfig.GROUP, "eventNudgeStyle", style);
-        say("HUD pop-up style is now " + style + " (" + style.blurb() + ").");
-        if (!config.eventDisplayMode().hudEnabled()) {
-            say("It shows under the Enhanced display HUD. ::dtpopup mode hud to see it.");
-        } else if (ready()) {
-            cancelScheduled();
-            show("tile", null, style);
+        for (EventPopupStyle style : EventPopupStyle.values()) {
+            schedule(() -> {
+                service.getToasts().clear();
+                say(style + " pop-up (" + (style == EventPopupStyle.SHOWCASE
+                    ? "Enhanced display" : "Chat + text pop-ups") + ").");
+                show(kind, style);
+            }, delay);
+            delay += DEMO_STEP_MS;
         }
     }
 
@@ -288,7 +220,7 @@ public class EventPopupPreview {
         say("Display type is now " + mode + ".");
         if (mode.popupsEnabled() && ready()) {
             cancelScheduled();
-            show("tile", null, null);
+            show("tile", null);
         }
     }
 
@@ -307,11 +239,11 @@ public class EventPopupPreview {
         return true;
     }
 
-    private void show(String kind, @Nullable EventPopupStyle popup, @Nullable EventNudgeStyle nudge) {
-        if (config.eventDisplayMode().hudEnabled() && !service.hasLiveHudEntry()) {
-            // The HUD only paints with an event to show; lend it a sample one.
-            service.setPreviewHudEntry(previewHudEntry(), System.currentTimeMillis() + PREVIEW_HUD_MS);
-        }
+    private void show(String kind, @Nullable EventPopupStyle popup) {
+        // Lend the HUD a sample event (it only paints with one to show, and a
+        // live event still wins); the samples' pop-ups read their extra
+        // details from it too.
+        service.setPreviewHudEntry(previewHudEntry(), System.currentTimeMillis() + PREVIEW_HUD_MS);
         if ("digest".equals(kind)) {
             EventPopupCard card = new EventPopupCard(EventPopupCard.Kind.DIGEST,
                 "While you were away", PREVIEW_EVENT)
@@ -319,11 +251,11 @@ public class EventPopupPreview {
             service.previewToast(new Toast("While you were away",
                 "4 tasks completed (+23 pts), 1 bingo line, " + PREVIEW_TEAM + " took the lead.",
                 20997, System.currentTimeMillis(), EventNotification.Priority.HIGH, null,
-                card, 0, popup, nudge));
+                card, 0, popup));
             return;
         }
         EventNotification n = gson.fromJson(kinds.get(kind).get(), EventNotification.class);
-        boolean shown = service.previewNotification(n, popup, nudge, "more".equals(kind) ? 2 : 0);
+        boolean shown = service.previewNotification(n, popup, "more".equals(kind) ? 2 : 0);
         if (!shown) {
             say("That kind is muted by your settings (Task progress notifications is off).");
         }
@@ -346,15 +278,6 @@ public class EventPopupPreview {
 
     private void say(String message) {
         chat.sendChatMessage(message);
-    }
-
-    private static <E extends Enum<E>> String listStyles(E[] values, E current) {
-        List<String> names = new ArrayList<>(values.length);
-        for (E value : values) {
-            String key = value.name().toLowerCase(Locale.ROOT);
-            names.add((value.ordinal() + 1) + ". " + key + (value == current ? " (current)" : ""));
-        }
-        return String.join(", ", names);
     }
 
     /* ===================== samples ===================== */
@@ -428,9 +351,11 @@ public class EventPopupPreview {
     private EventState.Entry previewHudEntry() {
         JsonObject event = new JsonObject();
         event.addProperty("id", PREVIEW_EVENT_ID);
-        event.addProperty("name", PREVIEW_EVENT + " (preview)");
+        event.addProperty("name", PREVIEW_EVENT);
         event.addProperty("kind", "bingo");
         event.addProperty("has_bingo", true);
+        event.addProperty("ends_at", java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)
+            .plusDays(2).plusHours(4).plusMinutes(1).withNano(0).toString());
         JsonObject team = new JsonObject();
         team.addProperty("id", 1);
         team.addProperty("name", PREVIEW_TEAM);
@@ -444,12 +369,32 @@ public class EventPopupPreview {
         focus.addProperty("have", 2);
         focus.addProperty("need", 5);
         focus.addProperty("icon_item_id", 4151);
+        JsonArray tasks = new JsonArray();
+        tasks.add(previewTask(PREVIEW_KC_TASK, "Kill Vorkath 50 times", 15, null, "npcdb/8061.png"));
+        tasks.add(previewTask(PREVIEW_XP_TASK, "Gain 2M Slayer XP", 20, null, "metrics/slayer.png"));
+        tasks.add(previewTask(9103, "Obtain any Zenyte jewel", 25, 19529, null));
         JsonObject entry = new JsonObject();
         entry.add("event", event);
         entry.add("team", team);
         entry.add("focus_task", focus);
+        entry.add("tasks", tasks);
         entry.addProperty("tasks_completed", 7);
         entry.addProperty("tasks_total", 25);
         return gson.fromJson(entry, EventState.Entry.class);
+    }
+
+    private static JsonObject previewTask(int id, String label, int points,
+                                          @Nullable Integer iconItemId, @Nullable String iconPath) {
+        JsonObject task = new JsonObject();
+        task.addProperty("id", id);
+        task.addProperty("label", label);
+        task.addProperty("points", points);
+        if (iconItemId != null) {
+            task.addProperty("icon_item_id", iconItemId);
+        }
+        if (iconPath != null) {
+            task.addProperty("icon_path", iconPath);
+        }
+        return task;
     }
 }
