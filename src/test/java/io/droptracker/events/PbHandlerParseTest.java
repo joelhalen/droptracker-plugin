@@ -13,10 +13,55 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Tests for the chat-message regex patterns in {@link PbHandler}, exposed via
- * package-private {@code @VisibleForTesting} accessors.
+ * Tests for chat-message parsing and submitted time formatting in {@link PbHandler}.
  */
 public class PbHandlerParseTest {
+
+    @Test
+    public void nonPreciseTimesUseTheLastTickWithinTheDisplayedSecond() {
+        PbHandler handler = new PbHandler();
+        String[][] cases = {
+            {"0:42", "00:42.60"},
+            {"0:43", "00:43.80"},
+            {"0:44", "00:44.40"},
+            {"0:59", "00:59.40"},
+            {"1:00", "01:00.60"},
+            {"28:14", "28:14.40"},
+            {"59:59", "59:59.40"},
+            {"1:00:00", "01:00:00.60"}
+        };
+        for (String[] example : cases) {
+            assertEquals(example[0], example[1],
+                handler.formatTime(PbHandler.parseTime(example[0]), false));
+        }
+    }
+
+    @Test
+    public void nonPreciseCurrentAndBestTimesBothKeepTheirConservativeFractions() {
+        Matcher m = timeMatcherFor("Fight duration: 0:43. Personal best: 0:42");
+        PbHandler handler = new PbHandler();
+        assertEquals("00:43.80", handler.formatTime(PbHandler.parseTime(m.group("duration")), false));
+        assertEquals("00:42.60", handler.formatTime(PbHandler.parseTime(m.group("pbtime")), false));
+    }
+
+    @Test
+    public void preciseTimesKeepTheirReportedFractions() {
+        PbHandler handler = new PbHandler();
+        assertEquals("00:43.20", handler.formatTime(PbHandler.parseTime("0:43.20"), true));
+        assertEquals("00:43.00", handler.formatTime(PbHandler.parseTime("0:43.00"), true));
+        assertEquals("28:14.40", handler.formatTime(PbHandler.parseTime("28:14.40"), true));
+        assertEquals("01:00:00.00", handler.formatTime(PbHandler.parseTime("1:00:00.00"), true));
+    }
+
+    @Test
+    public void zeroAndMissingTimesRemainZero() {
+        PbHandler handler = new PbHandler();
+        assertEquals("00:00", handler.formatTime(Duration.ZERO, false));
+        assertEquals("00:00", handler.formatTime(null, false));
+        assertEquals("00:00", handler.formatTime(PbHandler.parseTime("N/A"), false));
+        assertEquals("00:00.00", handler.formatTime(Duration.ZERO, true));
+        assertEquals("00:00.00", handler.formatTime(null, true));
+    }
 
     // --- BOSS_COUNT_PATTERN ---
 
