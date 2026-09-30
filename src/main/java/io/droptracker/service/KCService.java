@@ -271,6 +271,7 @@ public class KCService {
     @VisibleForTesting
     static String cleanBossName(String boss) {
         if ("The Gauntlet".equalsIgnoreCase(boss)) return "gauntlet";
+        if ("The Corrupted Gauntlet".equalsIgnoreCase(boss) || NpcUtilities.CG_BOSS.equalsIgnoreCase(boss)) return "corrupted gauntlet";
         if ("The Leviathan".equalsIgnoreCase(boss)) return "leviathan";
         if ("The Whisperer".equalsIgnoreCase(boss)) return "whisperer";
         if (boss.startsWith("Barrows")) return "barrows chests";
@@ -289,7 +290,7 @@ public class KCService {
                 return "player_" + sourceName;
             default:
                 if ("The Gauntlet".equals(sourceName)) return NpcUtilities.GAUNTLET_BOSS;
-                if (NpcUtilities.CG_NAME.equals(sourceName)) return NpcUtilities.CG_BOSS;
+                if (NpcUtilities.CG_NAME.equals(sourceName) || "The Corrupted Gauntlet".equals(sourceName)) return NpcUtilities.CG_BOSS;
                 return sourceName;
         }
     }

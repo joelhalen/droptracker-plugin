@@ -15,6 +15,9 @@ public class KCServiceKeyTest {
     @Test
     public void cleanBossNameStripsTheArticleForSpecialBosses() {
         assertEquals("gauntlet", KCService.cleanBossName("The Gauntlet"));
+        assertEquals("corrupted gauntlet", KCService.cleanBossName("The Corrupted Gauntlet"));
+        assertEquals("corrupted gauntlet", KCService.cleanBossName("Corrupted Gauntlet"));
+        assertEquals("corrupted gauntlet", KCService.cleanBossName("Corrupted Hunllef"));
         assertEquals("leviathan", KCService.cleanBossName("The Leviathan"));
         assertEquals("whisperer", KCService.cleanBossName("The Whisperer"));
     }
@@ -48,6 +51,8 @@ public class KCServiceKeyTest {
     public void cacheKeyRemapsGauntletVariantsToBossNames() {
         assertEquals("Crystalline Hunllef", KCService.getCacheKey(LootRecordType.NPC, "The Gauntlet"));
         assertEquals("Corrupted Hunllef", KCService.getCacheKey(LootRecordType.NPC, "Corrupted Gauntlet"));
+        assertEquals("Corrupted Hunllef", KCService.getCacheKey(LootRecordType.NPC, "The Corrupted Gauntlet"));
+        assertEquals("Corrupted Hunllef", KCService.getCacheKey(LootRecordType.EVENT, "The Corrupted Gauntlet"));
     }
 
     @Test
