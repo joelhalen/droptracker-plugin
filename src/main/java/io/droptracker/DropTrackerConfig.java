@@ -188,8 +188,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "relayClanChat",
             name = "Relay clan chat to Discord",
-            description = "<html>Mirror your clan chat into your group's configured Discord bridge channel.<br />"
-                    + "Only takes effect for groups that enabled the clan chat bridge on droptracker.io.</html>",
+            description = "<html>Mirror your clan chat, including its broadcasts, into your group's configured<br />"
+                    + "Discord bridge channel. Only takes effect for groups that enabled the clan chat<br />"
+                    + "bridge on droptracker.io.</html>",
             position = 14,
             section = trackingSection
     )

@@ -21,6 +21,8 @@ import net.runelite.client.util.Text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +58,9 @@ public class ClanRelayService {
     /** Backstop so a pathological chat flood can't grow the queue unbounded. */
     private static final int MAX_QUEUED_LINES = 200;
     private static final int MAX_MESSAGE_CHARS = 250;
+
+    /** A chat icon tag in a sender name, e.g. {@code <img=2>} for an ironman. */
+    private static final Pattern ICON_TAG = Pattern.compile("<img=(\\d+)>");
 
     private final Client client;
     private final DropTrackerConfig config;
@@ -102,12 +107,52 @@ public class ClanRelayService {
         return config.useApi() && config.receiveDiscordChat() && currentClanName != null;
     }
 
-    /** A CLAN_MESSAGE system broadcast (already tag-sanitized by the caller). */
+    /**
+     * A CLAN_MESSAGE system broadcast (already tag-sanitized by the caller).
+     *
+     * <p>Relayed when EITHER toggle is on. The Discord bridge mirrors the whole
+     * chat box, and broadcasts only reach the server through this path, so a
+     * clan whose relayers enabled just the chat bridge used to get player
+     * speech and never a single drop, pet or level-up. Lines sent only for the
+     * bridge carry {@code bridge_only} so the server mirrors them without
+     * feeding broadcast tracking, which this member did not opt into.</p>
+     */
     public void onClanBroadcast(String message) {
-        if (!config.useApi() || !config.relayClanBroadcasts()) {
+        if (!config.useApi()) {
             return;
         }
-        queueLine(new PendingLine(SubmissionType.CLAN_BROADCAST, null, message));
+        boolean tracking = config.relayClanBroadcasts();
+        if (!tracking && !config.relayClanChat()) {
+            return;
+        }
+        PendingLine line = new PendingLine(SubmissionType.CLAN_BROADCAST, null, message);
+        line.bridgeOnly = !tracking;
+        queueLine(line);
+    }
+
+    /**
+     * The game mode a chat line's sender badge shows, as the server's wire
+     * string ({@code utils/account_types.py}). The game draws the badge as an
+     * icon tag in the name, so this covers every clanmate, plugin or not.
+     * No badge reads as {@code normal}.
+     */
+    static String accountTypeFromName(String rawName) {
+        if (rawName == null) {
+            return null;
+        }
+        Matcher m = ICON_TAG.matcher(rawName);
+        while (m.find()) {
+            switch (Integer.parseInt(m.group(1))) {
+                case 2: return "ironman";                   // IconID.IRONMAN
+                case 3: return "ultimate_ironman";          // IconID.ULTIMATE_IRONMAN
+                case 10: return "hardcore_ironman";         // IconID.HARDCORE_IRONMAN
+                case 41: return "group_ironman";            // IconID.GROUP_IRONMAN
+                case 42: return "hardcore_group_ironman";   // IconID.HARDCORE_GROUP_IRONMAN
+                case 43: return "unranked_group_ironman";   // IconID.UNRANKED_GROUP_IRONMAN
+                default: break; // moderator crowns, league icons, ...
+            }
+        }
+        return "normal";
     }
 
     /**
@@ -131,7 +176,9 @@ public class ClanRelayService {
         if (ChatMessageUtil.isDiscordBridgeSender(sender)) {
             return;
         }
-        queueLine(new PendingLine(SubmissionType.CLAN_CHAT, sender.trim(), message));
+        PendingLine line = new PendingLine(SubmissionType.CLAN_CHAT, sender.trim(), message);
+        line.accountType = accountTypeFromName(senderName);
+        queueLine(line);
     }
 
     private void queueLine(PendingLine line) {
@@ -217,6 +264,12 @@ public class ClanRelayService {
             if (line.sender != null) {
                 embed.addField("sender", line.sender, true);
             }
+            if (line.accountType != null) {
+                embed.addField("account_type", line.accountType, true);
+            }
+            if (line.bridgeOnly) {
+                embed.addField("bridge_only", "true", true);
+            }
             embed.addField("player_name", relayerName, true);
             embed.addField("acc_hash", String.valueOf(client.getAccountHash()), true);
             embed.addField("p_v", plugin.pluginVersion != null ? plugin.pluginVersion : "unknown", true);
@@ -233,6 +286,8 @@ public class ClanRelayService {
         private final String sender;
         private String clanName;
         private String message;
+        private String accountType;
+        private boolean bridgeOnly;
 
         private PendingLine(SubmissionType type, String sender, String message) {
             this.type = type;
