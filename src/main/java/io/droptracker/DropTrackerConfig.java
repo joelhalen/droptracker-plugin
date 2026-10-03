@@ -172,30 +172,23 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    /*
+     * Replaces relayClanBroadcasts + relayClanChat (both default off) with one
+     * setting under a NEW keyName, so every player starts on the new default.
+     * Nothing is relayed unless one of the player's own groups set up their
+     * current clan on droptracker.io (see ClanRelayService#relayTargets).
+     */
     @ConfigItem(
-            keyName = "relayClanBroadcasts",
-            name = "Clan Broadcasts",
-            description = "<html>Send your clan's broadcast messages (drops, pets, collection log slots) to the<br />"
-                    + "DropTracker so clanmates WITHOUT the plugin can be tracked by your group.<br />"
-                    + "One relaying member covers the whole clan; duplicates are handled server-side.</html>",
+            keyName = "clanChatSync",
+            name = "Clan chat sync",
+            description = "<html>Sync your clan chat and its broadcasts with your group's Discord.<br />"
+                    + "Only active while you are in a clan that one of your groups has set up on<br />"
+                    + "droptracker.io. Otherwise nothing is sent.</html>",
             position = 13,
             section = trackingSection
     )
-    default boolean relayClanBroadcasts() {
-        return false;
-    }
-
-    @ConfigItem(
-            keyName = "relayClanChat",
-            name = "Relay clan chat to Discord",
-            description = "<html>Mirror your clan chat, including its broadcasts, into your group's configured<br />"
-                    + "Discord bridge channel. Only takes effect for groups that enabled the clan chat<br />"
-                    + "bridge on droptracker.io.</html>",
-            position = 14,
-            section = trackingSection
-    )
-    default boolean relayClanChat() {
-        return false;
+    default boolean clanChatSync() {
+        return true;
     }
 
     // ==================== Screenshots ====================
@@ -299,8 +292,10 @@ public interface DropTrackerConfig extends Config {
         return true;
     }
 
+    /* Renamed from imageCompressionThresholdKb (6.0.18) so every player is
+     * reset to the 1500 KB default. */
     @ConfigItem(
-        keyName = "imageCompressionThresholdKb",
+        keyName = "screenshotCompressionKb",
         name = "Compression threshold (KB)",
         description = "<html>Maximum screenshot size (in KB) before JPEG compression is applied.<br>"
             + "Screenshots smaller than this threshold are sent as lossless PNG.<br>"
@@ -467,7 +462,8 @@ public interface DropTrackerConfig extends Config {
             keyName = "receiveDiscordChat",
             name = "Show Discord messages in game",
             description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
-                    + "clan chat box (visible only to you; nothing is sent to the game server).</html>",
+                    + "clan chat box (visible only to you; nothing is sent to the game server).<br />"
+                    + "Needs Clan chat sync.</html>",
             position = 4,
             section = advancedSection
     )

@@ -11,6 +11,7 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
+import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.PlayerIdentity;
@@ -21,6 +22,7 @@ import net.runelite.client.util.Text;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -37,6 +39,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>{@code CLAN_CHAT} player lines as {@code clan_chat} submissions — the
  *       game→Discord half of the two-way chat bridge.</li>
  * </ul>
+ *
+ * On by default (Clan chat sync), but nothing leaves the client unless one
+ * of the player's own groups has set up the clan they are in — see
+ * {@link #clanOptedIn(boolean)}. The server enforces the same rule twice more.
  *
  * The plugin stays a dumb pipe on purpose: no game-message parsing happens
  * client-side, so pattern fixes never wait on a plugin-hub review. Lines are
@@ -104,30 +110,72 @@ public class ClanRelayService {
 
     /** Whether the Discord→game direction should be live (poll + display). */
     public boolean discordChatActive() {
-        return config.useApi() && config.receiveDiscordChat() && currentClanName != null;
+        return config.useApi() && config.clanChatSync() && config.receiveDiscordChat()
+            && clanOptedIn(true);
+    }
+
+    /**
+     * The server's clan comparison key ({@code utils/clan_broadcasts.clan_slug}):
+     * markup stripped, '-', '_' and non-breaking spaces folded to a space,
+     * whitespace collapsed, lowercased.
+     */
+    static String clanSlug(String clanName) {
+        if (clanName == null) {
+            return "";
+        }
+        String s = Text.removeTags(clanName)
+            .replace('\u00A0', ' ').replace('-', ' ').replace('_', ' ')
+            .trim().replaceAll("\\s+", " ");
+        return s.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Whether one of the player's OWN groups has set up the clan they are in.
+     *
+     * <p>This is the privacy line for a setting that is on by default: a
+     * player whose groups don't use the clan features, or who isn't in a
+     * clan, sends nothing at all. Chat lines need a group running the Discord
+     * bridge; broadcasts also go to a group that only tracks them. The group
+     * list refreshes every couple of minutes, so a group switching a feature
+     * on or off is picked up without a relog (the server drops anything that
+     * arrives in between).</p>
+     */
+    boolean clanOptedIn(boolean chatLine) {
+        return clanOptedIn(currentClanName, api.getGroupConfigs(), chatLine);
+    }
+
+    static boolean clanOptedIn(String clan, List<GroupConfig> configs, boolean chatLine) {
+        if (clan == null) {
+            return false;
+        }
+        if (configs == null || configs.isEmpty()) {
+            return false;
+        }
+        String slug = clanSlug(clan);
+        if (slug.isEmpty()) {
+            return false;
+        }
+        for (GroupConfig group : configs) {
+            if (group == null || !slug.equals(group.getClanChatSlug())) {
+                continue;
+            }
+            if (group.isClanChatBridge() || (!chatLine && group.isClanBroadcastTracking())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
      * A CLAN_MESSAGE system broadcast (already tag-sanitized by the caller).
-     *
-     * <p>Relayed when EITHER toggle is on. The Discord bridge mirrors the whole
-     * chat box, and broadcasts only reach the server through this path, so a
-     * clan whose relayers enabled just the chat bridge used to get player
-     * speech and never a single drop, pet or level-up. Lines sent only for the
-     * bridge carry {@code bridge_only} so the server mirrors them without
-     * feeding broadcast tracking, which this member did not opt into.</p>
+     * Broadcasts feed both the Discord bridge (they are part of the chat box)
+     * and broadcast tracking, under the one Clan chat sync setting.
      */
     public void onClanBroadcast(String message) {
-        if (!config.useApi()) {
+        if (!config.useApi() || !config.clanChatSync()) {
             return;
         }
-        boolean tracking = config.relayClanBroadcasts();
-        if (!tracking && !config.relayClanChat()) {
-            return;
-        }
-        PendingLine line = new PendingLine(SubmissionType.CLAN_BROADCAST, null, message);
-        line.bridgeOnly = !tracking;
-        queueLine(line);
+        queueLine(new PendingLine(SubmissionType.CLAN_BROADCAST, null, message));
     }
 
     /**
@@ -166,7 +214,7 @@ public class ClanRelayService {
      * ChatMessageUtil#DISCORD_SENDER_MARKER} stop here.</p>
      */
     public void onClanChat(String senderName, String message) {
-        if (!config.useApi() || !config.relayClanChat()) {
+        if (!config.useApi() || !config.clanChatSync()) {
             return;
         }
         String sender = senderName != null ? Text.removeTags(Text.toJagexName(senderName)) : null;
@@ -184,6 +232,9 @@ public class ClanRelayService {
     private void queueLine(PendingLine line) {
         refreshClanNameFromClient();
         if (currentClanName == null || line.message == null || line.message.trim().isEmpty()) {
+            return;
+        }
+        if (!clanOptedIn(line.type == SubmissionType.CLAN_CHAT)) {
             return;
         }
         if (queue.size() >= MAX_QUEUED_LINES) {
@@ -267,9 +318,6 @@ public class ClanRelayService {
             if (line.accountType != null) {
                 embed.addField("account_type", line.accountType, true);
             }
-            if (line.bridgeOnly) {
-                embed.addField("bridge_only", "true", true);
-            }
             embed.addField("player_name", relayerName, true);
             embed.addField("acc_hash", String.valueOf(client.getAccountHash()), true);
             embed.addField("p_v", plugin.pluginVersion != null ? plugin.pluginVersion : "unknown", true);
@@ -287,7 +335,6 @@ public class ClanRelayService {
         private String clanName;
         private String message;
         private String accountType;
-        private boolean bridgeOnly;
 
         private PendingLine(SubmissionType type, String sender, String message) {
             this.type = type;
