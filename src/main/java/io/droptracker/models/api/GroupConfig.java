@@ -57,6 +57,16 @@ public class GroupConfig {
     @SerializedName("active_event")
     private boolean activeEvent;
 
+    /* Clan chat relay opt-in (server: utils/clan_relay_gate.py). The plugin
+     * relays its clan's chat only when a group's slug matches the clan it is
+     * in: chat lines need the bridge, broadcasts need the bridge or tracking. */
+    @SerializedName("clan_chat_bridge")
+    private boolean clanChatBridge;
+    @SerializedName("clan_broadcast_tracking")
+    private boolean clanBroadcastTracking;
+    @SerializedName("clan_chat_slug")
+    private String clanChatSlug;
+
     /* Variables that we'll modify after init */
     @Setter
     private int lastUpdateUnix;
