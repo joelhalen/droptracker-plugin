@@ -182,8 +182,8 @@ public interface DropTrackerConfig extends Config {
             keyName = "clanChatSync",
             name = "Clan chat sync",
             description = "<html>Sync your clan chat and its broadcasts with your group's Discord.<br />"
-                    + "Only active while you are in a clan that one of your groups has set up on<br />"
-                    + "droptracker.io. Otherwise nothing is sent.</html>",
+                    + "Only active while you are in a clan that has been set up on droptracker.io.<br />"
+                    + "Otherwise nothing is sent. Works with or without the API.</html>",
             position = 13,
             section = trackingSection
     )

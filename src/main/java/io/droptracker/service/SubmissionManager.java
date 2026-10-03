@@ -250,15 +250,11 @@ public class SubmissionManager {
                 return;
             case CLAN_BROADCAST:
             case CLAN_CHAT:
-                // Clan relay payloads are raw chat text: API-only by contract.
-                // They must NEVER ride the Discord-webhook fallback transport,
-                // so hard-stop here even though ClanRelayService already gates
-                // on useApi. No screenshot, no group qualification, no UI
-                // submission tracking — the server owns everything downstream.
-                if (!config.useApi()) {
-                    debugLogEventFlow("skipped", type, "useApi=false; clan relay is API-only");
-                    return;
-                }
+                // Clan relay payloads ride whichever transport the player
+                // uses (API or our Discord webhooks; the webhook bot reads
+                // them server-side). ClanRelayService only queues lines from
+                // an opted-in clan. No screenshot, no group qualification, no
+                // UI submission tracking: the server owns everything downstream.
                 debugLogEventFlow("send", type, "clan relay; direct send");
                 sendWebhookDirect(webhook, null, null);
                 return;

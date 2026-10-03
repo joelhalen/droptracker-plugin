@@ -1059,6 +1059,36 @@ public class DropTrackerApi {
         return fetchItemIdList(DropTrackerUrls.content("server_loot_npc_ids.txt"), "server-loot-npcs");
     }
 
+    /**
+     * Clans opted into clan chat relaying, as {@code hash -> "b"|"t"|"bt"}
+     * (server: utils/clan_relay_gate.published_clan_list). Webhook-only
+     * clients use it in place of their group configs, which need the API.
+     * <p>
+     * Deliberately NOT gated on {@link DropTrackerConfig#useApi()}: it is a
+     * static file on GitHub Pages, like the server-loot npc list. Returns null
+     * on any failure so the caller keeps whatever it had.
+     */
+    public Map<String, String> fetchClanChatClans() {
+        HttpUrl url = DropTrackerUrls.content("clan_chat_clans.txt");
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = panelHttpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                return null;
+            }
+            Map<String, String> clans = new HashMap<>();
+            for (String line : response.body().string().split("\\n")) {
+                int colon = line.indexOf(':');
+                if (colon > 0) {
+                    clans.put(line.substring(0, colon).trim(), line.substring(colon + 1).trim());
+                }
+            }
+            return clans;
+        } catch (Exception e) {
+            DebugLogger.log("[DropTrackerApi][clan-chat-clans] failed to load; reason=" + e.getMessage());
+            return null;
+        }
+    }
+
     private ArrayList<Integer> fetchItemIdList(HttpUrl url, String tag) {
         String valued;
         /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */

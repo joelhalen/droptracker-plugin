@@ -8,7 +8,9 @@ import com.google.gson.Gson;
 import io.droptracker.models.api.GroupConfig;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 
 /**
@@ -63,5 +65,29 @@ public class ClanRelayOptInTest {
         GroupConfig legacy = new Gson().fromJson("{\"group_id\":\"1\"}", GroupConfig.class);
         assertFalse(ClanRelayService.clanOptedIn("Any Clan",
             Collections.singletonList(legacy), false));
+    }
+
+    // ── webhook-only clients: the published list ──────────────────────────
+
+    @Test
+    public void publishedHashMatchesTheServer() {
+        // utils/clan_relay_gate.published_hash("realists") on the server.
+        assertEquals("9929627de8a8e5c6", ClanRelayService.publishedHash("realists"));
+    }
+
+    @Test
+    public void publishedListGatesLikeTheGroupCheck() {
+        Map<String, String> published = new HashMap<>();
+        published.put(ClanRelayService.publishedHash("the best clan"), "b");
+        published.put(ClanRelayService.publishedHash("trackers"), "t");
+        assertTrue(ClanRelayService.clanInPublishedList("The_Best Clan", published, true));
+        assertTrue(ClanRelayService.clanInPublishedList("The Best Clan", published, false));
+        assertFalse(ClanRelayService.clanInPublishedList("Trackers", published, true));
+        assertTrue(ClanRelayService.clanInPublishedList("Trackers", published, false));
+        assertFalse(ClanRelayService.clanInPublishedList("Strangers", published, false));
+        assertFalse(ClanRelayService.clanInPublishedList(null, published, false));
+        // Not fetched yet, or the server published "none".
+        assertFalse(ClanRelayService.clanInPublishedList("The Best Clan", null, false));
+        assertFalse(ClanRelayService.clanInPublishedList("The Best Clan", new HashMap<>(), false));
     }
 }

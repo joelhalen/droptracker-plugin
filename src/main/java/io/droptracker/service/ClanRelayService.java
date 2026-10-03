@@ -23,6 +23,10 @@ import net.runelite.client.util.Text;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -31,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Relays clan chat to the DropTracker API for the clan features:
+ * Relays clan chat to the DropTracker for the clan features:
  * <ul>
  *   <li>{@code CLAN_MESSAGE} system broadcasts ("X received a drop: ...") as
  *       {@code clan_broadcast} submissions — server-side parsing tracks
@@ -40,9 +44,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       game→Discord half of the two-way chat bridge.</li>
  * </ul>
  *
- * On by default (Clan chat sync), but nothing leaves the client unless one
- * of the player's own groups has set up the clan they are in — see
- * {@link #clanOptedIn(boolean)}. The server enforces the same rule twice more.
+ * On by default (Clan chat sync), but nothing leaves the client unless the
+ * clan the player is in has been set up on droptracker.io — see
+ * {@link #clanOptedIn(boolean)}. The server enforces the same rule again.
  *
  * The plugin stays a dumb pipe on purpose: no game-message parsing happens
  * client-side, so pattern fixes never wait on a plugin-hub review. Lines are
@@ -51,9 +55,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * RELAYER and dedupes across multiple relaying clanmates, so this can be
  * enabled by any number of members safely.
  *
- * API-only by contract: raw chat text must never ride the Discord-webhook
- * fallback transport. Both the queue methods here and the
- * {@link SubmissionManager} dispatch cases enforce it.
+ * Rides whichever transport the player uses: the API, or our Discord
+ * webhooks, which the server's webhook bot reads. Only the Discord→game
+ * direction needs the API, because it polls our server for lines.
  */
 @Slf4j
 @Singleton
@@ -86,6 +90,18 @@ public class ClanRelayService {
      */
     private volatile String currentClanName = null;
 
+    /** How long the published opted-in clan list is trusted before a refetch. */
+    private static final long PUBLISHED_CLANS_TTL_MS = TimeUnit.MINUTES.toMillis(10);
+
+    /**
+     * Opted-in clans from GitHub Pages ({@code hash -> "b"|"t"|"bt"}), the gate
+     * for webhook-only clients. Null until the first successful fetch, and
+     * then nothing is relayed.
+     */
+    private volatile Map<String, String> publishedClans = null;
+    private volatile long publishedClansFetchedAt = 0L;
+    private final AtomicBoolean publishedClansLoading = new AtomicBoolean(false);
+
     @Inject
     public ClanRelayService(Client client, DropTrackerConfig config, DropTrackerApi api,
                             DropTrackerPlugin plugin, SubmissionManager submissionManager,
@@ -108,7 +124,11 @@ public class ClanRelayService {
         return currentClanName;
     }
 
-    /** Whether the Discord→game direction should be live (poll + display). */
+    /**
+     * Whether the Discord→game direction should be live (poll + display).
+     * The one part that still needs the API: Discord lines reach the client
+     * by polling our server, which a webhook-only client never contacts.
+     */
     public boolean discordChatActive() {
         return config.useApi() && config.clanChatSync() && config.receiveDiscordChat()
             && clanOptedIn(true);
@@ -141,7 +161,72 @@ public class ClanRelayService {
      * arrives in between).</p>
      */
     boolean clanOptedIn(boolean chatLine) {
-        return clanOptedIn(currentClanName, api.getGroupConfigs(), chatLine);
+        if (config.useApi()) {
+            return clanOptedIn(currentClanName, api.getGroupConfigs(), chatLine);
+        }
+        // Webhook-only: the group configs need the API, which this client may
+        // not contact. Check the clan against the published list instead.
+        refreshPublishedClansIfStale();
+        return clanInPublishedList(currentClanName, publishedClans, chatLine);
+    }
+
+    /**
+     * Whether the published list opts this clan in. Same rule as the group
+     * check: chat needs a bridging group ({@code b}); broadcasts also go to a
+     * tracking-only one ({@code t}).
+     */
+    static boolean clanInPublishedList(String clan, Map<String, String> published, boolean chatLine) {
+        if (clan == null || published == null || published.isEmpty()) {
+            return false;
+        }
+        String slug = clanSlug(clan);
+        if (slug.isEmpty()) {
+            return false;
+        }
+        String mode = published.get(publishedHash(slug));
+        if (mode == null) {
+            return false;
+        }
+        return mode.contains("b") || (!chatLine && mode.contains("t"));
+    }
+
+    /** First 16 hex chars of sha256(slug) (server: clan_relay_gate.published_hash). */
+    static String publishedHash(String slug) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                .digest(slug.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format("%02x", digest[i]));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            return "";
+        }
+    }
+
+    /** Refetch the published list off-thread when it is missing or stale. */
+    private void refreshPublishedClansIfStale() {
+        long now = System.currentTimeMillis();
+        if (publishedClans != null && now - publishedClansFetchedAt < PUBLISHED_CLANS_TTL_MS) {
+            return;
+        }
+        // A failed fetch retries no sooner than a minute later.
+        if (now - publishedClansFetchedAt < TimeUnit.MINUTES.toMillis(1)
+            || !publishedClansLoading.compareAndSet(false, true)) {
+            return;
+        }
+        publishedClansFetchedAt = now;
+        executor.execute(() -> {
+            try {
+                Map<String, String> fetched = api.fetchClanChatClans();
+                if (fetched != null) {
+                    publishedClans = fetched;
+                }
+            } finally {
+                publishedClansLoading.set(false);
+            }
+        });
     }
 
     static boolean clanOptedIn(String clan, List<GroupConfig> configs, boolean chatLine) {
@@ -172,7 +257,7 @@ public class ClanRelayService {
      * and broadcast tracking, under the one Clan chat sync setting.
      */
     public void onClanBroadcast(String message) {
-        if (!config.useApi() || !config.clanChatSync()) {
+        if (!config.clanChatSync()) {
             return;
         }
         queueLine(new PendingLine(SubmissionType.CLAN_BROADCAST, null, message));
@@ -214,7 +299,7 @@ public class ClanRelayService {
      * ChatMessageUtil#DISCORD_SENDER_MARKER} stop here.</p>
      */
     public void onClanChat(String senderName, String message) {
-        if (!config.useApi() || !config.clanChatSync()) {
+        if (!config.clanChatSync()) {
             return;
         }
         String sender = senderName != null ? Text.removeTags(Text.toJagexName(senderName)) : null;
