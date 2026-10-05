@@ -435,7 +435,9 @@ public class EventNotificationService {
                 remainder.add(n);
                 continue;
             }
-            if (!config.receiveDiscordChat()) {
+            // Same gate as polling for them: sync on, Discord lines wanted, and
+            // still in a clan one of the player's groups bridges.
+            if (!clanRelayService.discordChatActive()) {
                 continue;
             }
             EventNotification.Data data = n.getData();

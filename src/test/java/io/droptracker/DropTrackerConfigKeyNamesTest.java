@@ -34,13 +34,13 @@ public class DropTrackerConfigKeyNamesTest {
         // Screenshots
         "screenshots", "screenshotValue", "screenshotUntradeables",
         "minLevelToScreenshot", "privacyMode", "compressImages",
-        "imageCompressionThresholdKb",
+        "screenshotCompressionKb",
         // Events
         "eventNotifications", "eventDisplayMode", "eventTaskProgressNotifications",
         "eventHudDetail", "eventTeamIndicators", "eventTeamIndicatorColorNames",
         "eventTeamIndicatorsPublicChat",
         // Clan Chat
-        "relayClanBroadcasts", "relayClanChat", "receiveDiscordChat",
+        "clanChatSync", "receiveDiscordChat",
         // Advanced
         "useApi", "receiveInGameMessages", "dropConfirmations", "syncAccountState",
         "uploadCharacterModel", "showSidePanel", "debugLogging",
