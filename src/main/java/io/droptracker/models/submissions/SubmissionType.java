@@ -16,5 +16,6 @@ public enum SubmissionType {
     DIARY,
     SLAYER_TASK,
     CLAN_BROADCAST,
-    CLAN_CHAT
+    CLAN_CHAT,
+    CONFIG_SNAPSHOT
 }

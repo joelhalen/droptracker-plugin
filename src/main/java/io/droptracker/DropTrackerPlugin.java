@@ -47,6 +47,7 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.UrlManager;
 import io.droptracker.events.CaHandler;
 import io.droptracker.events.ClogHandler;
+import io.droptracker.events.ConfigSnapshotHandler;
 import io.droptracker.events.DeathHandler;
 import io.droptracker.events.DiaryHandler;
 import io.droptracker.events.DropHandler;
@@ -73,6 +74,7 @@ import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.ScreenshotPrivacyService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
+import io.droptracker.service.EventPopupPreview;
 import io.droptracker.ui.overlays.EventHudOverlay;
 import io.droptracker.ui.overlays.EventToastOverlay;
 import io.droptracker.util.ChatMessageUtil;
@@ -146,6 +148,8 @@ public class DropTrackerPlugin extends Plugin {
 	public TrawlingHandler trawlingHandler;
 	@Inject
 	public SlayerHandler slayerHandler;
+	@Inject
+	private ConfigSnapshotHandler configSnapshotHandler;
 
 	@Inject
 	public ChatMessageUtil chatMessageUtil;
@@ -192,6 +196,9 @@ public class DropTrackerPlugin extends Plugin {
 	private EventTeamIndicatorService eventTeamIndicatorService;
 	@Inject
 	private EventToastOverlay eventToastOverlay;
+
+	@Inject
+	private EventPopupPreview eventPopupPreview;
 	@Inject
 	private EventHudOverlay eventHudOverlay;
 	@Inject
@@ -231,7 +238,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.0.15";
+	public String pluginVersion = "6.0.16";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -404,11 +411,13 @@ public class DropTrackerPlugin extends Plugin {
 		kcService.reset();
 		petHandler.reset();
 		slayerHandler.reset();
+		configSnapshotHandler.reset();
 		loginWarningsShown = false;
 	}
 
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
+		configSnapshotHandler.onConfigChanged(configChanged.getGroup(), configChanged.getKey());
 		if (configChanged.getGroup().equalsIgnoreCase(DropTrackerConfig.GROUP)) {
 			if (configChanged.getKey().equals("useApi")) {
 				// Recreate the side panel which will reset the callback
@@ -457,6 +466,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted command) {
 		chatMessageUtil.onCommandExecuted(command);
+		if (EventPopupPreview.COMMAND.equalsIgnoreCase(command.getCommand())) {
+			eventPopupPreview.onCommand(command.getArguments());
+		}
 	}
 
 	@Subscribe
@@ -760,6 +772,7 @@ public class DropTrackerPlugin extends Plugin {
 		// A login or hop re-sends the slayer varps, so a count reading zero
 		// then is not a finished task.
 		slayerHandler.onGameStateChanged(newState);
+		configSnapshotHandler.onGameStateChanged(newState);
 
 		// Clear per-session handler state so a partially-coalesced PB, pet or
 		// collection-log popup from before a logout/hop can't fire stale

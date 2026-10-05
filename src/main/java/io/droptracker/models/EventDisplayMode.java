@@ -24,4 +24,10 @@ public enum EventDisplayMode {
     public boolean hudEnabled() {
         return this == ENHANCED;
     }
+
+    /** The pop-up layout this display type uses: the showcase panel with the
+     *  HUD, the slim banner otherwise. */
+    public EventPopupStyle popupStyle() {
+        return this == ENHANCED ? EventPopupStyle.SHOWCASE : EventPopupStyle.BANNER;
+    }
 }

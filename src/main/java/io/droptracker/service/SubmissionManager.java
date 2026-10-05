@@ -262,6 +262,12 @@ public class SubmissionManager {
                 debugLogEventFlow("send", type, "clan relay; direct send");
                 sendWebhookDirect(webhook, null, null);
                 return;
+            case CONFIG_SNAPSHOT:
+                // Debug record of the player's settings (ConfigSnapshotHandler):
+                // no screenshot, no group qualification, no side-panel entry.
+                debugLogEventFlow("send", type, "config snapshot; direct send");
+                sendWebhookDirect(webhook, null, null);
+                return;
             case ADVENTURE_LOG:
                 // No extra processing needed
                 break;

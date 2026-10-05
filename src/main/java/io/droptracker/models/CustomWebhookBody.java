@@ -20,6 +20,9 @@ public class CustomWebhookBody
 	public static class Embed
 	{
 		public String title = "";
+		/** Free text under the title; null leaves it out. Only the config
+		 *  snapshot uses it, for a payload too big for embed fields. */
+		public String description = null;
 		UrlEmbed image = null;
 		final Author author = DropTracker;
 		final List<Field> fields = new ArrayList<>();

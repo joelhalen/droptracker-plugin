@@ -2,6 +2,8 @@ package io.droptracker.service;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.models.EventPopupCard;
+import io.droptracker.models.EventPopupStyle;
 import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventState;
 import io.droptracker.util.ChatMessageUtil;
@@ -17,6 +19,11 @@ import okhttp3.Call;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -167,23 +174,6 @@ public class EventNotificationService {
      * refreshing, with nothing in the log to say why.
      */
     private final List<Runnable> stateUpdatedListeners = new CopyOnWriteArrayList<>();
-
-    /**
-     * Stamped by EventHudOverlay each frame it paints. While fresh, the HUD
-     * renders pop-ups as nudges anchored beneath itself and the stand-alone
-     * toast overlay stays quiet — exactly one owner draws the queue, and the
-     * user only ever positions the HUD.
-     */
-    private volatile long hudRenderedAtMs = 0;
-
-    public void markHudRendered() {
-        hudRenderedAtMs = System.currentTimeMillis();
-    }
-
-    /** True while the HUD painted within the last second. */
-    public boolean hudOwnsToasts() {
-        return System.currentTimeMillis() - hudRenderedAtMs < 1000;
-    }
 
     @Inject
     public EventNotificationService(DropTrackerConfig config, DropTrackerApi api,
@@ -565,7 +555,11 @@ public class EventNotificationService {
     public EventState.Entry hudEntry() {
         EventState state = eventState;
         if (state == null || state.getEvents() == null || state.getEvents().isEmpty()) {
-            return null;
+            // No live event: a ::dtpopup preview may lend the HUD a sample
+            // one for a minute, so the attached styles can be tried anywhere.
+            EventState.Entry preview = previewHudEntry;
+            return preview != null && System.currentTimeMillis() < previewHudUntilMs
+                ? preview : null;
         }
         int pinned = config.pinnedEventId();
         if (pinned > 0) {
@@ -576,6 +570,46 @@ public class EventNotificationService {
             }
         }
         return state.getEvents().get(0);
+    }
+
+    /* ===================== ::dtpopup previews ===================== */
+
+    @Nullable
+    private volatile EventState.Entry previewHudEntry;
+    private volatile long previewHudUntilMs = 0;
+
+    /** Lends the HUD a sample event until {@code untilMs}, while no real event is live. */
+    public void setPreviewHudEntry(@Nullable EventState.Entry entry, long untilMs) {
+        previewHudEntry = entry;
+        previewHudUntilMs = untilMs;
+    }
+
+    /**
+     * Renders a sample envelope through the real renderer and queues its
+     * pop-up straight away: no chat line, no "important only" filter, no
+     * dedupe. False when the envelope renders no pop-up (unknown type, or
+     * muted by the user's settings).
+     */
+    public boolean previewNotification(EventNotification n, @Nullable EventPopupStyle popup,
+                                       int moreCount) {
+        Rendered rendered = render(n);
+        if (rendered == null || !rendered.toastEligible) {
+            return false;
+        }
+        Toast toast = rendered.toToast(System.currentTimeMillis());
+        if (moreCount > 0) {
+            toast = toast.withMore(moreCount);
+        }
+        previewToast(toast.pinned(popup, System.currentTimeMillis()));
+        return true;
+    }
+
+    /** Queues a ready-made preview pop-up, bypassing every filter. */
+    public void previewToast(Toast toast) {
+        toasts.addLast(toast);
+        while (toasts.size() > MAX_TOASTS_QUEUED) {
+            toasts.pollFirst();
+        }
     }
 
     /* ===================== tracked-task override ===================== */
@@ -754,9 +788,7 @@ public class EventNotificationService {
                 chatLines.add(rendered);
             }
             if (rendered.toastEligible) {
-                groupToasts.add(new Toast(rendered.title, rendered.text,
-                    rendered.iconItemId, System.currentTimeMillis(),
-                    rendered.priority, rendered.dedupeKey));
+                groupToasts.add(rendered.toToast(System.currentTimeMillis()));
             }
         }
 
@@ -793,11 +825,7 @@ public class EventNotificationService {
             }
         }
         int folded = candidates.size() - 1;
-        offerToast(folded == 0 ? lead
-            : new Toast(lead.getTitle(),
-                lead.getBody() + " (+" + folded + " more)",
-                lead.getIconItemId(), lead.getCreatedAt(),
-                lead.getPriority(), lead.getDedupeKey()));
+        offerToast(folded == 0 ? lead : lead.withMore(folded));
     }
 
     /**
@@ -1083,8 +1111,12 @@ public class EventNotificationService {
         String body = summary.isEmpty() ? closing : String.join(", ", summary) + ".";
         // The digest is a once-per-session headline: HIGH so "important only"
         // never swallows the one card that explains what you missed.
+        EventPopupCard card = new EventPopupCard(EventPopupCard.Kind.DIGEST,
+            "While you were away", eventName != null ? eventName : "Your event")
+            .detail(body);
         return new Toast("While you were away", body, toastIcon,
-            System.currentTimeMillis(), EventNotification.Priority.HIGH, null);
+            System.currentTimeMillis(), EventNotification.Priority.HIGH, null,
+            card, 0, null);
     }
 
     /** One indented line of a catch-up digest, with its accent colour. */
@@ -1137,6 +1169,8 @@ public class EventNotificationService {
         boolean toastEligible = true;
         /** (event, task, type); null opts out of the cross-batch pop-up dedupe. */
         String dedupeKey;
+        /** Structured parts for the showcase-style pop-up layouts. */
+        EventPopupCard card;
 
         Rendered(String title, String text) {
             this.title = title;
@@ -1168,6 +1202,16 @@ public class EventNotificationService {
             this.toastEligible = false;
             return this;
         }
+
+        Rendered card(EventPopupCard card) {
+            this.card = card;
+            return this;
+        }
+
+        Toast toToast(long now) {
+            return new Toast(title, text, iconItemId, now, priority, dedupeKey,
+                card, 0, null);
+        }
     }
 
     /**
@@ -1188,7 +1232,235 @@ public class EventNotificationService {
             rendered.priority = n.priorityTier();
         }
         rendered.dedupeKey = dedupeKey(n);
+        if (rendered.card != null) {
+            enrich(n, rendered);
+        }
         return rendered;
+    }
+
+    /* ===================== pop-up context ===================== */
+
+    /**
+     * Fills a pop-up card's empty corners from the local {@code /event_state}
+     * snapshot: the team, its standing and score, tasks done, what the task
+     * is worth and the time left. Also finds a picture when the envelope named
+     * no item: the task's own icon (an NPC, a skill or its item), or the
+     * team's icon for team news. Only adds; never rewrites what the envelope
+     * said, and adds nothing when the event is not in the snapshot.
+     */
+    private void enrich(EventNotification n, Rendered rendered) {
+        EventPopupCard card = rendered.card;
+        Integer eventId = n.getEvent() != null ? n.getEvent().getId() : null;
+        EventState.Entry entry = stateEntry(eventId);
+        EventNotification.Data data = n.getData() != null ? n.getData() : new EventNotification.Data();
+        EventState.TeamInfo own = entry != null ? entry.getTeam() : null;
+        String ownName = own != null ? clean(own.getName()) : null;
+        String team = clean(data.getTeamName());
+        boolean aboutOwnTeam = own != null && (data.getTeamId() != null
+            ? data.getTeamId() == own.getId()
+            : team == null || team.equalsIgnoreCase(ownName));
+        EventState.TaskInfo task = entry != null
+            ? taskFor(entry, card.getKind() == EventPopupCard.Kind.BOARD ? null : data.getTaskId(),
+                clean(data.getNextTaskLabel()))
+            : null;
+
+        /* ---- picture ---- */
+        if (rendered.iconItemId == null || rendered.iconItemId <= 0) {
+            if (task != null && task.getIconItemId() != null && task.getIconItemId() > 0) {
+                rendered.iconItemId = task.getIconItemId();
+            } else if (task != null && task.getIconPath() != null) {
+                card.iconPath(task.getIconPath());
+            } else if (entry != null && entry.getFocusTask() != null && data.getTaskId() != null
+                    && entry.getFocusTask().getId() == data.getTaskId()) {
+                EventState.FocusTask focus = entry.getFocusTask();
+                if (focus.getIconItemId() != null && focus.getIconItemId() > 0) {
+                    rendered.iconItemId = focus.getIconItemId();
+                } else {
+                    card.iconPath(focus.getIconPath());
+                }
+            } else if (aboutOwnTeam && teamNews(card.getKind())) {
+                if (own.getIconItemId() != null && own.getIconItemId() > 0) {
+                    rendered.iconItemId = own.getIconItemId();
+                } else {
+                    card.iconPath(own.getIconPath());
+                }
+            }
+        }
+
+        /* ---- the corner note: time left ---- */
+        String timeLeft = entry != null && entry.getEvent() != null
+            ? timeLeft(entry.getEvent().getEndsAt()) : null;
+        if (card.getKind() != EventPopupCard.Kind.ENDED
+                && card.getKind() != EventPopupCard.Kind.STARTED
+                && card.getKind() != EventPopupCard.Kind.DIGEST
+                && timeLeft != null) {
+            card.note(timeLeft + " left");
+        }
+
+        /* ---- empty corners ---- */
+        String ownScore = own != null ? ValueFormat.abbrev(own.getScore()) + " pts" : null;
+        String ownStanding = own != null && own.getRank() != null && own.getRank() > 0 && own.getTeamCount() > 1
+            ? ordinal(own.getRank()) + " of " + own.getTeamCount() : null;
+        String tasksDone = entry != null && entry.getTasksTotal() > 0
+            ? entry.getTasksCompleted() + " / " + entry.getTasksTotal() : null;
+        String worth = task != null && task.getPoints() > 0
+            ? ValueFormat.abbrev(task.getPoints()) + " pts" : null;
+        switch (card.getKind()) {
+            case COMPLETE:
+            case TILE:
+                if (card.getRightLabel() != null && !card.getRightLabel().startsWith("Points")
+                        && data.getPoints() != null && data.getPoints() > 0) {
+                    card.extra("Points:", "+" + ValueFormat.abbrev(data.getPoints()));
+                }
+                card.extra("Team:", team != null ? team : ownName);
+                card.extra(entry != null && entry.getEvent() != null && entry.getEvent().isHasBingo()
+                    ? "Tiles done:" : "Tasks done:", tasksDone);
+                card.extra("Team score:", data.getTeamScore() != null
+                    ? ValueFormat.abbrev(data.getTeamScore()) + " pts" : aboutOwnTeam ? ownScore : null);
+                break;
+            case PROGRESS:
+                card.extra("Team:", team != null ? team : ownName);
+                card.extra("Worth:", worth);
+                if (data.getProgress() != null && data.getTarget() != null
+                        && data.getTarget() > data.getProgress()) {
+                    card.extra("Still needed:", ValueFormat.abbrev(data.getTarget() - data.getProgress()));
+                }
+                break;
+            case LEAD:
+                if (own != null) {
+                    boolean weLead = aboutOwnTeam;
+                    card.left("Your team:", weLead ? "In the lead!" : ownStanding);
+                    if (!weLead && data.getTeamScore() != null && own.getScore() < data.getTeamScore()) {
+                        card.left2("Behind by:",
+                            ValueFormat.abbrev(data.getTeamScore() - own.getScore()) + " pts");
+                    } else if (!weLead) {
+                        card.left2("Your score:", ownScore);
+                    }
+                }
+                break;
+            case LINE:
+            case BLACKOUT:
+                card.extra("Standing:", shortStanding(data) != null ? shortStanding(data)
+                    : aboutOwnTeam ? ownStanding : null);
+                if (aboutOwnTeam) {
+                    card.extra("Team score:", ownScore);
+                    card.extra("Tiles done:", tasksDone);
+                }
+                break;
+            case STARTED:
+                card.extra("Your team:", ownName);
+                card.extra("Teams:", own != null && own.getTeamCount() > 1
+                    ? String.valueOf(own.getTeamCount()) : null);
+                card.extra("Tasks:", entry != null && entry.getTasksTotal() > 0
+                    ? String.valueOf(entry.getTasksTotal()) : null);
+                card.extra("Ends in:", timeLeft);
+                break;
+            case ENDED:
+                card.extra("Your team:", ownName);
+                card.extra("Final place:", ownStanding);
+                card.extra("Score:", ownScore);
+                card.extra("Tasks done:", tasksDone);
+                break;
+            case BOARD:
+                card.extra("Worth:", worth);
+                card.extra("Coins:", data.getCoinBalance() != null
+                    ? ValueFormat.abbrev(data.getCoinBalance()) : null);
+                break;
+            case ROLL:
+                card.extra("Your team:", ownName);
+                card.extra("Coin balance:", data.getCoinBalance() != null
+                    ? ValueFormat.abbrev(data.getCoinBalance()) : null);
+                card.extra("Standing:", ownStanding);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** The snapshot entry for an event (or the ::dtpopup sample's), or null. */
+    @Nullable
+    private EventState.Entry stateEntry(@Nullable Integer eventId) {
+        if (eventId == null) {
+            return null;
+        }
+        EventState state = eventState;
+        if (state != null && state.getEvents() != null) {
+            for (EventState.Entry entry : state.getEvents()) {
+                if (entry.getEvent() != null && entry.getEvent().getId() == eventId) {
+                    return entry;
+                }
+            }
+        }
+        EventState.Entry preview = previewHudEntry;
+        return preview != null && preview.getEvent() != null && preview.getEvent().getId() == eventId
+            ? preview : null;
+    }
+
+    /** The task an envelope is about: by id, else (board rolls) by the next task's label. */
+    @Nullable
+    private static EventState.TaskInfo taskFor(EventState.Entry entry, @Nullable Integer taskId,
+                                               @Nullable String label) {
+        if (entry.getTasks() == null) {
+            return null;
+        }
+        if (taskId != null) {
+            for (EventState.TaskInfo task : entry.getTasks()) {
+                if (task.getId() == taskId) {
+                    return task;
+                }
+            }
+        }
+        if (label != null) {
+            for (EventState.TaskInfo task : entry.getTasks()) {
+                if (label.equalsIgnoreCase(clean(task.getLabel()))) {
+                    return task;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Kinds that are about a team rather than a task, so the team's icon fits. */
+    private static boolean teamNews(EventPopupCard.Kind kind) {
+        switch (kind) {
+            case LEAD:
+            case LINE:
+            case BLACKOUT:
+            case STARTED:
+            case ENDED:
+            case ROLL:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** "2d 4h" / "3h 12m" / "5m" until the server's UTC ISO timestamp; null
+     *  when absent, unparseable or already past. */
+    @Nullable
+    static String timeLeft(@Nullable String endsAtIso) {
+        if (endsAtIso == null || endsAtIso.isEmpty()) {
+            return null;
+        }
+        try {
+            Instant ends = LocalDateTime.parse(endsAtIso).toInstant(ZoneOffset.UTC);
+            Duration left = Duration.between(Instant.now(), ends);
+            if (left.isNegative() || left.isZero()) {
+                return null;
+            }
+            long days = left.toDays();
+            long hours = left.toHours() % 24;
+            long minutes = left.toMinutes() % 60;
+            if (days > 0) {
+                return days + "d " + hours + "h";
+            }
+            if (hours > 0) {
+                return hours + "h " + minutes + "m";
+            }
+            return Math.max(minutes, 1) + "m";
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     /** Pop-up identity across batches: the same task ticking the same way. */
@@ -1255,10 +1527,26 @@ public class EventNotificationService {
                     // drop that never happened.
                     text.append(" (manual award)");
                 }
+                EventPopupCard card = new EventPopupCard(
+                    filledTile ? EventPopupCard.Kind.TILE : EventPopupCard.Kind.COMPLETE,
+                    filledTile ? "Tile complete" : "Task complete",
+                    !cells.isEmpty() ? cells.get(0) : orUnknown(task))
+                    .detail(item != null ? item + qtySuffix(data)
+                        : !cells.isEmpty() ? task : eventName)
+                    .left(item != null ? "Obtained by:" : "Completed by:", who)
+                    .right(filledTile && shortStanding(data) != null ? "Standing:" : "Points:",
+                        filledTile && shortStanding(data) != null ? shortStanding(data)
+                            : data.getPoints() != null && data.getPoints() > 0
+                                ? "+" + ValueFormat.abbrev(data.getPoints()) : null)
+                    .progress(data.getProgress(), data.getTarget());
+                if ("manual".equals(data.getSourceType()) && card.getRightValue() == null) {
+                    card.right("Credit:", "Manual");
+                }
                 return new Rendered(filledTile ? "Tile complete!" : "Task complete!",
                     text.toString())
                     .tag(filledTile ? "TILE COMPLETE" : "COMPLETE",
                         filledTile ? HEX_TILE : HEX_COMPLETE)
+                    .card(card)
                     .emphasis(item)
                     .icon(data.getIconItemId())
                     .priority(filledTile ? EventNotification.Priority.HIGH
@@ -1287,8 +1575,19 @@ public class EventNotificationService {
                     ? who + " received " + item + qtySuffix(data)
                         + ", progressing " + orUnknown(task) + progress
                     : who + " progressed " + orUnknown(task) + progress;
+                EventPopupCard progressCard = new EventPopupCard(EventPopupCard.Kind.PROGRESS,
+                    "Task progress", orUnknown(task))
+                    .detail(item != null ? item + qtySuffix(data) : eventName)
+                    .left(item != null ? "Obtained by:" : "Progressed by:", who)
+                    .right("Progress:", progress.isEmpty() ? null
+                        : progress.substring(2, progress.length() - 1))
+                    .progress(data.getProgress(), data.getTarget());
+                if (data.getProgress() == null && data.getMilestonePct() != null) {
+                    progressCard.progress((long) data.getMilestonePct(), 100L);
+                }
                 return new Rendered("Task progress", text)
                     .tag("PROGRESS", HEX_MUTED)
+                    .card(progressCard)
                     .icon(data.getIconItemId())
                     .priority(EventNotification.Priority.LOW);
             }
@@ -1300,6 +1599,10 @@ public class EventNotificationService {
                     leader + " took the lead" + score
                         + (eventName != null ? " in " + eventName : "") + "!")
                     .tag("LEAD CHANGE", HEX_LEAD)
+                    .card(new EventPopupCard(EventPopupCard.Kind.LEAD, "New leader", leader)
+                        .detail(eventName)
+                        .right("Score:", data.getTeamScore() != null
+                            ? ValueFormat.abbrev(data.getTeamScore()) + " pts" : null))
                     .emphasis(team)
                     .priority(EventNotification.Priority.HIGH);
             }
@@ -1307,12 +1610,18 @@ public class EventNotificationService {
                 return new Rendered("Event started",
                     (eventName != null ? eventName : "Your event") + " has started!")
                     .tag("EVENT STARTED", HEX_ACTION)
+                    .card(new EventPopupCard(EventPopupCard.Kind.STARTED, "Event started",
+                        eventName != null ? eventName : "Your event")
+                        .detail("Good luck, and have fun!"))
                     .emphasis(eventName)
                     .priority(EventNotification.Priority.HIGH);
             case "event_ended":
                 return new Rendered("Event ended",
                     (eventName != null ? eventName : "Your event") + " has ended.")
                     .tag("EVENT ENDED", HEX_INFO)
+                    .card(new EventPopupCard(EventPopupCard.Kind.ENDED, "Event ended",
+                        eventName != null ? eventName : "Your event")
+                        .detail("Thanks for playing!"))
                     .emphasis(eventName)
                     .priority(EventNotification.Priority.HIGH);
             case "event_line": {
@@ -1321,6 +1630,10 @@ public class EventNotificationService {
                     ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
                 return new Rendered("Bingo line!", who + " completed a line" + bonus + "!")
                     .tag("BINGO LINE", HEX_LINE)
+                    .card(new EventPopupCard(EventPopupCard.Kind.LINE, "Bingo line", who)
+                        .detail(eventName)
+                        .right("Bonus:", data.getBonusPoints() != null
+                            ? "+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts" : null))
                     .emphasis(team)
                     .priority(EventNotification.Priority.HIGH);
             }
@@ -1330,6 +1643,10 @@ public class EventNotificationService {
                     ? " (+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts)" : "";
                 return new Rendered("Blackout!", who + " blacked out the board" + bonus + "!")
                     .tag("BLACKOUT", HEX_BLACKOUT)
+                    .card(new EventPopupCard(EventPopupCard.Kind.BLACKOUT, "Blackout!", who)
+                        .detail("The whole board is complete")
+                        .right("Bonus:", data.getBonusPoints() != null
+                            ? "+" + ValueFormat.abbrev(data.getBonusPoints()) + " pts" : null))
                     .emphasis(team)
                     .priority(EventNotification.Priority.HIGH);
             }
@@ -1345,8 +1662,18 @@ public class EventNotificationService {
                 if (data.getNextTaskLabel() != null) {
                     text.append(": ").append(clean(data.getNextTaskLabel()));
                 }
+                String nextTask = clean(data.getNextTaskLabel());
                 return new Rendered("Board roll", text.toString())
                     .tag("BOARD", HEX_INFO)
+                    .card(new EventPopupCard(EventPopupCard.Kind.BOARD, "Board roll",
+                        nextTask != null ? nextTask
+                            : data.getTileTo() != null ? "Tile " + data.getTileTo() : "Moved on")
+                        .detail(eventName)
+                        .left("Rolled by:", who)
+                        .right("Rolled:", data.getDiceStr() != null
+                            ? clean(data.getDiceStr(), 24)
+                                + (data.getTileTo() != null ? " > " + data.getTileTo() : "")
+                            : data.getTileTo() != null ? "Tile " + data.getTileTo() : null))
                     .priority(EventNotification.Priority.NORMAL);
             }
             case "event_board_roll_prompt":
@@ -1355,6 +1682,11 @@ public class EventNotificationService {
                         + (data.getCoinsAwarded() != null && data.getCoinsAwarded() > 0
                             ? " (+" + ValueFormat.abbrev(data.getCoinsAwarded()) + " coins)" : ""))
                     .tag("YOUR TURN", HEX_ACTION)
+                    .card(new EventPopupCard(EventPopupCard.Kind.ROLL, "Your turn",
+                        "Roll the dice!")
+                        .detail(eventName)
+                        .right("Coins:", data.getCoinsAwarded() != null && data.getCoinsAwarded() > 0
+                            ? "+" + ValueFormat.abbrev(data.getCoinsAwarded()) : null))
                     .priority(EventNotification.Priority.HIGH);
             case "submission_notice": {
                 // Legacy server-text channel: sanitized plain chat only, gated
@@ -1402,6 +1734,20 @@ public class EventNotificationService {
             parts.add(ordinal(data.getTeamRank()) + " of " + data.getTeamCount());
         }
         return parts.isEmpty() ? null : String.join(", ", parts);
+    }
+
+    /** The standing in a few characters for a pop-up stat corner: "2nd of 5",
+     *  else "7 tiles"; null when the server sent neither. */
+    @Nullable
+    private static String shortStanding(EventNotification.Data data) {
+        if (data.getTeamRank() != null && data.getTeamRank() > 0
+                && data.getTeamCount() != null && data.getTeamCount() > 0) {
+            return ordinal(data.getTeamRank()) + " of " + data.getTeamCount();
+        }
+        if (data.getTilesCompleted() != null && data.getTilesCompleted() > 0) {
+            return plural(data.getTilesCompleted(), "tile");
+        }
+        return null;
     }
 
     private static String ordinal(int n) {
@@ -1462,6 +1808,14 @@ public class EventNotificationService {
         /** (event, task, type) for the cross-batch dedupe; null = always show. */
         @Nullable
         private final String dedupeKey;
+        /** Structured parts for the showcase-style layouts; null = text only. */
+        @Nullable
+        private final EventPopupCard card;
+        /** Other updates folded into this card ("+N more"). */
+        private final int moreCount;
+        /** ::dtpopup previews pin a style; null = the display type's. */
+        @Nullable
+        private final EventPopupStyle popupStyle;
 
         public Toast(String title, String body, @Nullable Integer iconItemId, long createdAt) {
             this(title, body, iconItemId, createdAt, EventNotification.Priority.NORMAL, null);
@@ -1469,12 +1823,40 @@ public class EventNotificationService {
 
         public Toast(String title, String body, @Nullable Integer iconItemId, long createdAt,
                      EventNotification.Priority priority, @Nullable String dedupeKey) {
+            this(title, body, iconItemId, createdAt, priority, dedupeKey, null, 0, null);
+        }
+
+        public Toast(String title, String body, @Nullable Integer iconItemId, long createdAt,
+                     EventNotification.Priority priority, @Nullable String dedupeKey,
+                     @Nullable EventPopupCard card, int moreCount,
+                     @Nullable EventPopupStyle popupStyle) {
             this.title = title;
             this.body = body;
             this.iconItemId = iconItemId;
             this.createdAt = createdAt;
             this.priority = priority != null ? priority : EventNotification.Priority.NORMAL;
             this.dedupeKey = dedupeKey;
+            this.card = card;
+            this.moreCount = moreCount;
+            this.popupStyle = popupStyle;
+        }
+
+        /** This card headlining {@code more} folded updates. */
+        Toast withMore(int more) {
+            return new Toast(title, body + " (+" + more + " more)", iconItemId, createdAt,
+                priority, dedupeKey, card, more, popupStyle);
+        }
+
+        /** A copy pinned to the given style and restarted at {@code now}. */
+        public Toast pinned(@Nullable EventPopupStyle popup, long now) {
+            return new Toast(title, body, iconItemId, now, priority, dedupeKey, card,
+                moreCount, popup);
+        }
+
+        /** The server icon path to draw when there is no item sprite. */
+        @Nullable
+        public String getIconPath() {
+            return card != null ? card.getIconPath() : null;
         }
 
         public long lifetimeMs() {
