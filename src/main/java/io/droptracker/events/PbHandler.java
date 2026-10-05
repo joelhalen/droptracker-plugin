@@ -556,8 +556,10 @@ public class PbHandler extends BaseEventHandler {
             log.debug("Skipping kill time submission: no resolvable player name");
             return;
         }
-        String formattedTime = formatTime(data.time, isPreciseTiming(client));
-        String formattedBestTime = formatTime(data.bestTime, isPreciseTiming(client));
+        // Read once so the flag and both formatted times always agree.
+        boolean precise = isPreciseTiming(client);
+        String formattedTime = formatTime(data.time, precise);
+        String formattedBestTime = formatTime(data.bestTime, precise);
         
         CustomWebhookBody webhook = createWebhookBody(player + " has killed a boss:");
         CustomWebhookBody.Embed embed = createEmbed(player + " has killed a boss:", "npc_kill");
@@ -566,6 +568,11 @@ public class PbHandler extends BaseEventHandler {
         fieldData.put("boss_name", data.boss);
         fieldData.put("kill_time", formattedTime != null ? formattedTime : "N/A");
         fieldData.put("best_time", formattedBestTime != null ? formattedBestTime : "N/A");
+        // With precise timing off the game prints whole seconds, rounded to the
+        // nearest one. The times are sent exactly as shown; the server credits
+        // them with the slowest game tick they could stand for and marks them
+        // approximate, so it needs to know which kind it was given.
+        fieldData.put("precise_timing", precise);
         fieldData.put("is_pb", data.isPersonalBest);
         fieldData.put("team_size", data.teamSize != null ? data.teamSize : "Solo");
         fieldData.put("killcount", data.count);
