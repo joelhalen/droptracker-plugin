@@ -83,6 +83,30 @@ public class PbHandler extends BaseEventHandler {
         Pattern.CASE_INSENSITIVE
     );
 
+    /**
+     * One completed Doom of Mokhaiotl delve level, e.g.
+     * {@code Delve level: 3 duration: 1:23. Personal best: 1:05} or
+     * {@code Delve level: 8+ (9) duration: 1:27 (new personal best)}. Every
+     * level past 8 shares the game's single "8+" personal best; the level
+     * actually completed is only in the parentheses. The level-start
+     * announcement ({@code Delve level: 8+ (9)}) has no time and never gets
+     * this far.
+     */
+    private static final Pattern DELVE_LEVEL_PATTERN = Pattern.compile(
+        "Delve level:\\s*(?<level>\\d+)(?<deep>\\+)?(?:\\s*\\((?<actual>\\d+)\\))?"
+    );
+
+    /**
+     * The whole run to the bottom of the fixed levels, e.g.
+     * {@code Delve level 1 - 8 duration: 12:05. Personal best: 11:56}. Tracked
+     * as the boss itself. Note: no colon after "level".
+     */
+    private static final Pattern DELVE_TOTAL_PATTERN = Pattern.compile(
+        "Delve level\\s+\\d+\\s*-\\s*\\d+\\s+duration"
+    );
+
+    private static final String DOOM = "Doom of Mokhaiotl";
+
     @VisibleForTesting
     static Pattern bossCountPattern() {
         return BOSS_COUNT_PATTERN;
@@ -128,9 +152,16 @@ public class PbHandler extends BaseEventHandler {
         final boolean isPersonalBest;
         final String teamSize;
         final String gameMessage;
+        /* Doom of Mokhaiotl only: the delve level this time completed. */
+        final Integer delveLevel;
 
         KillData(String boss, Integer count, Duration time, Duration bestTime, 
                 boolean isPersonalBest, String teamSize, String gameMessage) {
+            this(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage, null);
+        }
+
+        KillData(String boss, Integer count, Duration time, Duration bestTime,
+                boolean isPersonalBest, String teamSize, String gameMessage, Integer delveLevel) {
             this.boss = boss;
             this.count = count;
             this.time = time;
@@ -138,6 +169,7 @@ public class PbHandler extends BaseEventHandler {
             this.isPersonalBest = isPersonalBest;
             this.teamSize = teamSize;
             this.gameMessage = gameMessage;
+            this.delveLevel = delveLevel;
         }
 
         boolean isValid() {
@@ -158,7 +190,22 @@ public class PbHandler extends BaseEventHandler {
 
     public void onGameMessage(String message) {
         if (!isEnabled()) return;
-        parseMessage(message).ifPresent(this::updateKillData);
+        parseMessage(message).ifPresent(data -> {
+            if (isDelveLine(data)) {
+                // A delve line is a whole kill on its own. The level 8 split
+                // and the "1 - 8" total arrive in the same tick, and merging
+                // them let the total overwrite the split, so level 8 was never
+                // sent.
+                processKill(data);
+            } else {
+                updateKillData(data);
+            }
+        });
+    }
+
+    private static boolean isDelveLine(KillData data) {
+        return data.boss != null && data.boss.startsWith(DOOM)
+            && data.time != null && !data.time.isZero();
     }
 
     public void onFriendsChatNotification(String message) {
@@ -327,7 +374,7 @@ public class PbHandler extends BaseEventHandler {
                 teamSize = extractTeamSize(message, bossName);
             }
             return Optional.of(new KillData(bossName, null, time, bestTime, 
-                isPersonalBest, teamSize, message));
+                isPersonalBest, teamSize, message, delveLevel(message)));
                 
         } catch (Exception e) {
             log.error("Error parsing time data: {}", e.getMessage());
@@ -365,13 +412,43 @@ public class PbHandler extends BaseEventHandler {
         return null;
     }
 
-    private String extractDelveBoss(String message) {
-        Pattern delvePattern = Pattern.compile("Delve level: (\\S+)");
-        Matcher matcher = delvePattern.matcher(message);
-        if (matcher.find()) {
-            return "Doom of Mokhaiotl (Level:" + matcher.group(1).trim() + ")";
+    /**
+     * The board a delve line belongs to: {@code Doom of Mokhaiotl (Level:3)},
+     * the shared {@code (Level:8+)} past level 8, or the boss itself for the
+     * "1 - 8" total.
+     */
+    @VisibleForTesting
+    static String extractDelveBoss(String message) {
+        if (DELVE_TOTAL_PATTERN.matcher(message).find()) {
+            return DOOM;
         }
-        return "Doom of Mokhaiotl";
+        Matcher matcher = DELVE_LEVEL_PATTERN.matcher(message);
+        if (matcher.find()) {
+            String deep = matcher.group("deep") != null ? "+" : "";
+            return DOOM + " (Level:" + matcher.group("level") + deep + ")";
+        }
+        return DOOM;
+    }
+
+    /**
+     * The delve level a line completed: the number itself up to 8, the one in
+     * parentheses past it. Null for the "1 - 8" total and anything else.
+     */
+    @VisibleForTesting
+    static Integer delveLevel(String message) {
+        if (message == null || DELVE_TOTAL_PATTERN.matcher(message).find()) {
+            return null;
+        }
+        Matcher matcher = DELVE_LEVEL_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+        String level = matcher.group("deep") != null ? matcher.group("actual") : matcher.group("level");
+        try {
+            return level != null ? Integer.parseInt(level) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private String extractTeamSize(String message, String bossName) {
@@ -492,6 +569,9 @@ public class PbHandler extends BaseEventHandler {
         fieldData.put("is_pb", data.isPersonalBest);
         fieldData.put("team_size", data.teamSize != null ? data.teamSize : "Solo");
         fieldData.put("killcount", data.count);
+        if (data.delveLevel != null) {
+            fieldData.put("delve_level", data.delveLevel);
+        }
 
         // Loadout at the moment of the kill. Captured here because this runs on
         // the client thread immediately after the kill is recognised - by the
