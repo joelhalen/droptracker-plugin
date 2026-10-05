@@ -28,6 +28,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
+ * DEV ONLY, not registered in release builds (see
+ * DropTrackerPlugin#onCommandExecuted to switch it back on).
+ *
  * {@code ::dtpopup}: fake event pop-ups on demand, so the layouts can be
  * judged in a real client without a live event. Samples are ordinary
  * notification envelopes pushed through the real renderer, so they read

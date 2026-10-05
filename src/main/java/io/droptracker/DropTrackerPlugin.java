@@ -74,7 +74,7 @@ import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.ScreenshotPrivacyService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.service.EventPopupPreview;
+// import io.droptracker.service.EventPopupPreview; // dev-only ::dtpopup, see onCommandExecuted
 import io.droptracker.ui.overlays.EventHudOverlay;
 import io.droptracker.ui.overlays.EventToastOverlay;
 import io.droptracker.util.ChatMessageUtil;
@@ -197,8 +197,9 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private EventToastOverlay eventToastOverlay;
 
-	@Inject
-	private EventPopupPreview eventPopupPreview;
+	// Dev-only ::dtpopup preview, not shipped to players. See onCommandExecuted.
+	// @Inject
+	// private EventPopupPreview eventPopupPreview;
 	@Inject
 	private EventHudOverlay eventHudOverlay;
 	@Inject
@@ -466,9 +467,12 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted command) {
 		chatMessageUtil.onCommandExecuted(command);
-		if (EventPopupPreview.COMMAND.equalsIgnoreCase(command.getCommand())) {
-			eventPopupPreview.onCommand(command.getArguments());
-		}
+		// ::dtpopup (EventPopupPreview) shows sample event pop-ups for testing
+		// layouts. It is switched off for release builds; uncomment these lines,
+		// the field and the import above to use it locally.
+		// if (EventPopupPreview.COMMAND.equalsIgnoreCase(command.getCommand())) {
+		// 	eventPopupPreview.onCommand(command.getArguments());
+		// }
 	}
 
 	@Subscribe
