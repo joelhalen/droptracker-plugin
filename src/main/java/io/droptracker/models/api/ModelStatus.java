@@ -18,7 +18,6 @@ import com.google.gson.annotations.SerializedName;
  */
 public class ModelStatus {
 
-    @SerializedName("accepted")
     private boolean accepted;
 
     @SerializedName("has_model")

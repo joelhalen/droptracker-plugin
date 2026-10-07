@@ -116,102 +116,52 @@ public class RecentSubmission {
         return null;
     }
 
-    // Generic method to get all data entries of a specific type
-    
-
-    // Personal Best related methods
-    public String getPbTime() {
-        if (!submissionType.equalsIgnoreCase("pb")) {
+    /** The {@code key} of the first {@code dataType} entry, as text, when this is a {@code type} submission. */
+    private String dataText(String type, String dataType, String key) {
+        if (!submissionType.equalsIgnoreCase(type)) {
             return null;
         }
-        
-        Object timeValue = getDataValueByTypeAndKey("best_time", "time");
-        return timeValue != null ? timeValue.toString() : null;
+        Object value = getDataValueByTypeAndKey(dataType, key);
+        return value != null ? value.toString() : null;
     }
 
-    
-    // Drop related methods
-    public String getDropItemName() {
-        if (!submissionType.equalsIgnoreCase("drop")) {
-            return null;
+    /** JSON numbers arrive as Double, and ids sometimes as text like "4151.0". */
+    private static Integer toInt(Object value, Integer fallback) {
+        if (value == null) {
+            return fallback;
         }
-        
-        Object itemName = getDataValueByTypeAndKey("item", "name");
-        return itemName != null ? itemName.toString() : null;
+        try {
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
+            return Integer.valueOf(value.toString().replaceAll("\\.0*$", ""));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    public String getPbTime() {
+        return dataText("pb", "best_time", "time");
+    }
+
+    public String getDropItemName() {
+        return dataText("drop", "item", "name");
     }
 
     public Integer getDropItemId() {
-        if (!submissionType.equalsIgnoreCase("drop")) {
-            return null;
-        }
-        
-        Object itemId = getDataValueByTypeAndKey("item", "id");
-        if (itemId != null) {
-            try {
-                // Handle both Integer and Double/Float types from JSON
-                if (itemId instanceof Number) {
-                    return ((Number) itemId).intValue();
-                }
-                return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-        return null;
+        return submissionType.equalsIgnoreCase("drop") ? toInt(getDataValueByTypeAndKey("item", "id"), null) : null;
     }
 
+    /** Defaults to 1: the API often leaves quantity out. */
     public Integer getDropQuantity() {
-        if (!submissionType.equalsIgnoreCase("drop")) {
-            return null;
-        }
-        
-        Object quantity = getDataValueByTypeAndKey("item", "quantity");
-        if (quantity != null) {
-            try {
-                // Handle both Integer and Double/Float types from JSON
-                if (quantity instanceof Number) {
-                    return ((Number) quantity).intValue();
-                }
-                return Integer.valueOf(quantity.toString().replaceAll("\\.0*$", ""));
-            } catch (NumberFormatException e) {
-                return 1; // Default to 1 if parsing fails
-            }
-        }
-        // Default to 1 if quantity field is missing (as it appears to be in your API)
-        return 1;
+        return submissionType.equalsIgnoreCase("drop") ? toInt(getDataValueByTypeAndKey("item", "quantity"), 1) : null;
     }
 
-    // Collection Log related methods
     public String getClogItemName() {
-        if (!submissionType.equalsIgnoreCase("clog")) {
-            return null;
-        }
-        
-        Object itemName = getDataValueByTypeAndKey("clog_item", "name");
-        return itemName != null ? itemName.toString() : null;
+        return dataText("clog", "clog_item", "name");
     }
 
     public Integer getClogItemId() {
-        if (!submissionType.equalsIgnoreCase("clog")) {
-            return null;
-        }
-        
-        Object itemId = getDataValueByTypeAndKey("clog_item", "id");
-        if (itemId != null) {
-            try {
-                // Handle both Integer and Double/Float types from JSON
-                if (itemId instanceof Number) {
-                    return ((Number) itemId).intValue();
-                }
-                return Integer.valueOf(itemId.toString().replaceAll("\\.0*$", ""));
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    public boolean isDrop() {
-        return submissionType != null && submissionType.equalsIgnoreCase("drop");
+        return submissionType.equalsIgnoreCase("clog") ? toInt(getDataValueByTypeAndKey("clog_item", "id"), null) : null;
     }
 }

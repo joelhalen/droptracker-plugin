@@ -14,7 +14,6 @@ import java.util.List;
  */
 @Getter
 public class EventState {
-    @SerializedName("events")
     private List<Entry> events;
 
     /**
@@ -28,9 +27,7 @@ public class EventState {
 
     @Getter
     public static class Entry {
-        @SerializedName("event")
         private EventInfo event;
-        @SerializedName("team")
         private TeamInfo team;
         @SerializedName("focus_task")
         @Nullable
@@ -43,16 +40,12 @@ public class EventState {
         private int tasksCompleted;
         @SerializedName("tasks_total")
         private int tasksTotal;
-        @SerializedName("board")
         private BoardInfo board;
-        @SerializedName("standings")
         private List<Standing> standings;
         /** Full team task list (picker + tooltips); null from older servers. */
-        @SerializedName("tasks")
         @Nullable
         private List<TaskInfo> tasks;
         /** Own-team roster (capped server-side); null from older servers. */
-        @SerializedName("members")
         @Nullable
         private List<Member> members;
         @SerializedName("members_total")
@@ -80,11 +73,8 @@ public class EventState {
 
     @Getter
     public static class EventInfo {
-        @SerializedName("id")
         private int id;
-        @SerializedName("name")
         private String name;
-        @SerializedName("kind")
         private String kind;
         @SerializedName("has_bingo")
         private boolean hasBingo;
@@ -95,11 +85,8 @@ public class EventState {
 
     @Getter
     public static class TeamInfo {
-        @SerializedName("id")
         private int id;
-        @SerializedName("name")
         private String name;
-        @SerializedName("color")
         @Nullable
         private String color;
         @SerializedName("icon_item_id")
@@ -108,9 +95,7 @@ public class EventState {
         @SerializedName("icon_path")
         @Nullable
         private String iconPath;
-        @SerializedName("score")
         private int score;
-        @SerializedName("rank")
         @Nullable
         private Integer rank;
         @SerializedName("team_count")
@@ -119,13 +104,9 @@ public class EventState {
 
     @Getter
     public static class FocusTask {
-        @SerializedName("id")
         private int id;
-        @SerializedName("label")
         private String label;
-        @SerializedName("have")
         private long have;
-        @SerializedName("need")
         private long need;
         @SerializedName("icon_item_id")
         @Nullable
@@ -134,7 +115,6 @@ public class EventState {
         @Nullable
         private String iconPath;
         /** "board" | "inferred" | "team_progress" | "first_task" */
-        @SerializedName("source")
         private String source;
     }
 
@@ -142,20 +122,13 @@ public class EventState {
      *  server-composed explanation shown in tooltips. */
     @Getter
     public static class TaskInfo {
-        @SerializedName("id")
         private int id;
-        @SerializedName("label")
         private String label;
-        @SerializedName("type")
         private String type;
         /** Points awarded on completion (0 = event doesn't use points). */
-        @SerializedName("points")
         private int points;
-        @SerializedName("have")
         private long have;
-        @SerializedName("need")
         private long need;
-        @SerializedName("completed")
         private boolean completed;
         @SerializedName("icon_item_id")
         @Nullable
@@ -164,17 +137,13 @@ public class EventState {
         @Nullable
         private String iconPath;
         /** Tile badge in the legacy board style ("KC TARGET", "FULL SET"...). */
-        @SerializedName("badge")
         @Nullable
         private String badge;
         /** Short value string ("100.00M GP", "sub 1:45"). */
-        @SerializedName("value")
         @Nullable
         private String value;
-        @SerializedName("description")
         @Nullable
         private String description;
-        @SerializedName("requirements")
         @Nullable
         private List<Requirement> requirements;
     }
@@ -183,18 +152,14 @@ public class EventState {
      *  ({name, quantity?, points?, obtained?, icon_item_id?, icon_path?}). */
     @Getter
     public static class Requirement {
-        @SerializedName("name")
         private String name;
-        @SerializedName("quantity")
         @Nullable
         private Integer quantity;
-        @SerializedName("points")
         @Nullable
         private Integer points;
         /** True when the team has banked this item and re-receiving it can
          *  no longer advance the task (all_of/assembly) — rendered struck
          *  through. Absent on point/any_of tasks where re-receives count. */
-        @SerializedName("obtained")
         @Nullable
         private Boolean obtained;
         /** Optional server-authoritative item sprite id for this requirement;
@@ -212,13 +177,11 @@ public class EventState {
     public static class Member {
         @SerializedName("player_id")
         private int playerId;
-        @SerializedName("name")
         private String name;
     }
 
     @Getter
     public static class BoardInfo {
-        @SerializedName("available")
         private boolean available;
         @SerializedName("team_id")
         private int teamId;
@@ -228,13 +191,9 @@ public class EventState {
     public static class Standing {
         @SerializedName("team_id")
         private int teamId;
-        @SerializedName("name")
         private String name;
-        @SerializedName("score")
         private int score;
-        @SerializedName("rank")
         private int rank;
-        @SerializedName("color")
         @Nullable
         private String color;
     }

@@ -9,6 +9,8 @@ import io.droptracker.models.api.EventState;
 import io.droptracker.util.ChatMessageUtil;
 import io.droptracker.util.DebugLogger;
 import io.droptracker.util.ValueFormat;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -717,6 +719,7 @@ public class EventNotificationService {
     }
 
     /** Unified view of the headlined task, from either source. */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static class DisplayTask {
         public final int id;
         public final String label;
@@ -728,18 +731,6 @@ public class EventNotificationService {
         public final String iconPath;
         /** true = the user's manual pick; false = server-chosen focus. */
         public final boolean tracked;
-
-        DisplayTask(int id, String label, long have, long need,
-                    @Nullable Integer iconItemId, @Nullable String iconPath,
-                    boolean tracked) {
-            this.id = id;
-            this.label = label;
-            this.have = have;
-            this.need = need;
-            this.iconItemId = iconItemId;
-            this.iconPath = iconPath;
-            this.tracked = tracked;
-        }
     }
 
     /* ===================== batch rendering ===================== */
@@ -750,14 +741,6 @@ public class EventNotificationService {
      * seam the notification tests drive.
      */
     void renderBatch(List<EventNotification> batch, boolean catchUp) {
-        if (catchUp) {
-            processCatchUpBatch(batch);
-        } else {
-            processBatch(batch);
-        }
-    }
-
-    private void processBatch(List<EventNotification> batch) {
         // Group per event id (0 = event-less, e.g. submission notices).
         Map<Integer, List<EventNotification>> byEvent = new LinkedHashMap<>();
         for (EventNotification n : batch) {
@@ -767,7 +750,15 @@ public class EventNotificationService {
         }
         List<Toast> candidates = new ArrayList<>();
         for (Map.Entry<Integer, List<EventNotification>> group : byEvent.entrySet()) {
-            candidates.addAll(renderEventGroup(group.getValue()));
+            if (!catchUp || group.getKey() == 0) {
+                candidates.addAll(renderEventGroup(group.getValue()));
+            } else {
+                // Digest the backlog per event; event-less notices render normally.
+                Toast digest = summarizeEventGroup(group.getValue());
+                if (digest != null) {
+                    candidates.add(digest);
+                }
+            }
         }
         queueBatchToasts(candidates);
     }
@@ -943,28 +934,6 @@ public class EventNotificationService {
         return false;
     }
 
-    /** Digest the backlog per event; event-less notices render normally. */
-    private void processCatchUpBatch(List<EventNotification> batch) {
-        Map<Integer, List<EventNotification>> byEvent = new LinkedHashMap<>();
-        for (EventNotification n : batch) {
-            int eventId = n.getEvent() != null && n.getEvent().getId() != null
-                ? n.getEvent().getId() : 0;
-            byEvent.computeIfAbsent(eventId, k -> new ArrayList<>()).add(n);
-        }
-        List<Toast> candidates = new ArrayList<>();
-        for (Map.Entry<Integer, List<EventNotification>> group : byEvent.entrySet()) {
-            if (group.getKey() == 0) {
-                candidates.addAll(renderEventGroup(group.getValue()));
-            } else {
-                Toast digest = summarizeEventGroup(group.getValue());
-                if (digest != null) {
-                    candidates.add(digest);
-                }
-            }
-        }
-        queueBatchToasts(candidates);
-    }
-
     /**
      * One event's backlog as a short digest: a "While you were away:" header
      * followed by indented tallies ("4 tasks completed (+23 pts)"), the
@@ -1122,14 +1091,10 @@ public class EventNotificationService {
     }
 
     /** One indented line of a catch-up digest, with its accent colour. */
+    @AllArgsConstructor
     private static class DigestLine {
         final String text;
         final String hex;
-
-        DigestLine(String text, String hex) {
-            this.text = text;
-            this.hex = hex;
-        }
     }
 
     private static String plural(int count, String noun) {
@@ -1609,23 +1574,11 @@ public class EventNotificationService {
                     .priority(EventNotification.Priority.HIGH);
             }
             case "event_started":
-                return new Rendered("Event started",
-                    (eventName != null ? eventName : "Your event") + " has started!")
-                    .tag("EVENT STARTED", HEX_ACTION)
-                    .card(new EventPopupCard(EventPopupCard.Kind.STARTED, "Event started",
-                        eventName != null ? eventName : "Your event")
-                        .detail("Good luck, and have fun!"))
-                    .emphasis(eventName)
-                    .priority(EventNotification.Priority.HIGH);
+                return bookend(eventName, EventPopupCard.Kind.STARTED, "Event started", " has started!",
+                    "EVENT STARTED", HEX_ACTION, "Good luck, and have fun!");
             case "event_ended":
-                return new Rendered("Event ended",
-                    (eventName != null ? eventName : "Your event") + " has ended.")
-                    .tag("EVENT ENDED", HEX_INFO)
-                    .card(new EventPopupCard(EventPopupCard.Kind.ENDED, "Event ended",
-                        eventName != null ? eventName : "Your event")
-                        .detail("Thanks for playing!"))
-                    .emphasis(eventName)
-                    .priority(EventNotification.Priority.HIGH);
+                return bookend(eventName, EventPopupCard.Kind.ENDED, "Event ended", " has ended.",
+                    "EVENT ENDED", HEX_INFO, "Thanks for playing!");
             case "event_line": {
                 String who = team != null ? team : "Your team";
                 String bonus = data.getBonusPoints() != null
@@ -1702,6 +1655,17 @@ public class EventNotificationService {
                 DebugLogger.log("[EventNotifications] dropping unknown type=" + type);
                 return null;
         }
+    }
+
+    /** The "event started" / "event ended" notices, which differ only in wording. */
+    private static Rendered bookend(@Nullable String eventName, EventPopupCard.Kind kind, String title,
+                                    String suffix, String tag, String hex, String detail) {
+        String name = eventName != null ? eventName : "Your event";
+        return new Rendered(title, name + suffix)
+            .tag(tag, hex)
+            .card(new EventPopupCard(kind, title, name).detail(detail))
+            .emphasis(eventName)
+            .priority(EventNotification.Priority.HIGH);
     }
 
     private static String orUnknown(String value) {

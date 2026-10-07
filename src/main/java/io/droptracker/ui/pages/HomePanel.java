@@ -40,9 +40,7 @@ public class HomePanel {
     }
 
     public JPanel create() {
-        homePanel = new JPanel();
-        homePanel.setLayout(new BoxLayout(homePanel, BoxLayout.Y_AXIS));
-        homePanel.setBackground(DropTrackerTheme.SURFACE_0);
+        homePanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         homePanel.setBorder(new EmptyBorder(5, 0, 5, 0));
 
         // Set maximum width to prevent expansion
@@ -51,7 +49,7 @@ public class HomePanel {
         // When the API is disabled, lead with a call-to-action explaining what it unlocks.
         if (!config.useApi()) {
             homePanel.add(createApiCtaCard());
-            homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+            homePanel.add(DropTrackerTheme.gap(8));
         }
 
         final JPanel welcomeMessagePanel = PanelElements.createCollapsiblePanel("Welcome to the DropTracker", PanelElements.getLatestWelcomeContent(api), true);
@@ -59,7 +57,7 @@ public class HomePanel {
         final JPanel patchNotesPanel = PanelElements.createCollapsiblePanel("News / Updates", PanelElements.getLatestUpdateContent(config, api), false);
 
         homePanel.add(welcomeMessagePanel);
-        homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        homePanel.add(DropTrackerTheme.gap(8));
 
         // Global lootboard button row — a 1-cell grid so the button fills the
         // panel's full width instead of hugging its text.
@@ -80,9 +78,9 @@ public class HomePanel {
         // Initialize player button (will add if config is available)
         updatePlayerButton();
 
-        homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        homePanel.add(DropTrackerTheme.gap(8));
         homePanel.add(patchNotesPanel);
-        homePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        homePanel.add(DropTrackerTheme.gap(8));
         homePanel.add(createQuickLinks());
         // Collect leftover vertical space here instead of stretching the cards.
         homePanel.add(Box.createVerticalGlue());
@@ -96,16 +94,12 @@ public class HomePanel {
      * works without it.
      */
     private JPanel createApiCtaCard() {
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel card = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         card.setBorder(DropTrackerTheme.accentCardBorder(10, 10, 10, 10));
         card.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 170));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel title = new JLabel("Unlock the full DropTracker");
-        title.setFont(FontManager.getRunescapeBoldFont());
-        title.setForeground(DropTrackerTheme.GOLD);
+        JLabel title = DropTrackerTheme.label("Unlock the full DropTracker", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JTextArea body = new JTextArea(
@@ -139,9 +133,7 @@ public class HomePanel {
 
     /** 2x2 grid of quick links: wiki, discord, suggestions, bug reports. */
     private JPanel createQuickLinks() {
-        JPanel quickAccessPanel = new JPanel();
-        quickAccessPanel.setLayout(new BoxLayout(quickAccessPanel, BoxLayout.Y_AXIS));
-        quickAccessPanel.setBackground(DropTrackerTheme.SURFACE_0);
+        JPanel quickAccessPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         quickAccessPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel topButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
@@ -156,7 +148,7 @@ public class HomePanel {
         bottomButtonRow.add(linkButton("Report a Bug", DropTrackerUrls.web("forums", "bug-reports").toString()));
 
         quickAccessPanel.add(topButtonRow);
-        quickAccessPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        quickAccessPanel.add(DropTrackerTheme.gap(8));
         quickAccessPanel.add(bottomButtonRow);
 
         quickAccessPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 68));

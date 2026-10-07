@@ -135,9 +135,7 @@ public class EventsPanel {
 
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(DropTrackerTheme.SURFACE_0);
-        JLabel title = new JLabel("Your events");
-        title.setFont(FontManager.getRunescapeBoldFont());
-        title.setForeground(DropTrackerTheme.GOLD);
+        JLabel title = DropTrackerTheme.label("Your events", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         header.add(title, BorderLayout.WEST);
         JButton refresh = new JButton("Refresh");
         DropTrackerTheme.styleButton(refresh);
@@ -226,7 +224,7 @@ public class EventsPanel {
                 ? hudEntry.getEvent().getId() : -1;
             for (EventState.Entry entry : entries) {
                 listPanel.add(eventCard(entry, multiple, hudEventId));
-                listPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+                listPanel.add(DropTrackerTheme.gap(8));
             }
         }
         listPanel.add(Box.createVerticalGlue());
@@ -268,9 +266,7 @@ public class EventsPanel {
 
         card.add(cardHeader(entry, showHudPick, onHud));
 
-        JPanel body = new JPanel();
-        body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
-        body.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel body = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         body.setBorder(new EmptyBorder(8, 8, 8, 8));
         body.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -361,13 +357,9 @@ public class EventsPanel {
             new EmptyBorder(6, 8, 6, 8)));
         header.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JPanel titleCol = new JPanel();
-        titleCol.setLayout(new BoxLayout(titleCol, BoxLayout.Y_AXIS));
-        titleCol.setBackground(DropTrackerTheme.SURFACE_2);
+        JPanel titleCol = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
 
-        JLabel name = new JLabel(entry.getEvent().getName());
-        name.setFont(FontManager.getRunescapeBoldFont());
-        name.setForeground(DropTrackerTheme.GOLD);
+        JLabel name = DropTrackerTheme.label(entry.getEvent().getName(), FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         name.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(name);
 
@@ -376,9 +368,7 @@ public class EventsPanel {
         if (endsIn != null) {
             sub += "  ·  " + endsIn;
         }
-        JLabel subLabel = new JLabel(sub);
-        subLabel.setFont(FontManager.getRunescapeSmallFont());
-        subLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel subLabel = DropTrackerTheme.label(sub, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(subLabel);
 
@@ -411,9 +401,7 @@ public class EventsPanel {
     /** The highlighted "working toward" block with icon + progress bar. */
     private JPanel trackedTaskBox(EventState.Entry entry,
                                   EventNotificationService.DisplayTask task) {
-        JPanel box = new JPanel();
-        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-        box.setBackground(DropTrackerTheme.SURFACE_2);
+        JPanel box = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
         box.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(DropTrackerTheme.SURFACE_3, 1),
             new EmptyBorder(6, 6, 6, 6)));
@@ -431,9 +419,7 @@ public class EventsPanel {
         caption.setForeground(task.tracked ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
         head.add(caption, BorderLayout.WEST);
         if (task.tracked) {
-            JLabel reset = new JLabel("unpin ×");
-            reset.setFont(FontManager.getRunescapeSmallFont());
-            reset.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel reset = DropTrackerTheme.label("unpin ×", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             reset.setToolTipText(pins > 1
                 ? "Unpin this task and track the next pin instead"
                 : "Unpin this task and let the server pick again");
@@ -463,9 +449,7 @@ public class EventsPanel {
         applyTaskIcon(icon, task.iconItemId, task.iconPath, 24);
         row.add(icon, BorderLayout.WEST);
 
-        JLabel label = new JLabel("<html>" + escape(task.label) + "</html>");
-        label.setFont(FontManager.getRunescapeSmallFont());
-        label.setForeground(DropTrackerTheme.TEXT);
+        JLabel label = DropTrackerTheme.label("<html>" + escape(task.label) + "</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
         row.add(label, BorderLayout.CENTER);
         box.add(row);
 
@@ -526,14 +510,10 @@ public class EventsPanel {
      *  full-colour with a green tick when the team has banked it or dimmed
      *  when still needed (the same obtained flag the tooltip strikes through). */
     private JComponent requirementStrip(List<EventState.Requirement> requirements) {
-        JPanel wrap = new JPanel();
-        wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
-        wrap.setBackground(DropTrackerTheme.SURFACE_2);
+        JPanel wrap = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
         wrap.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel caption = new JLabel("Required items");
-        caption.setFont(FontManager.getRunescapeSmallFont());
-        caption.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel caption = DropTrackerTheme.label("Required items", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         caption.setAlignmentX(Component.LEFT_ALIGNMENT);
         wrap.add(caption);
         wrap.add(vgap(3));
@@ -704,9 +684,7 @@ public class EventsPanel {
     private JPanel taskListPanel(EventState.Entry entry, List<EventState.TaskInfo> tasks,
                                  @Nullable EventNotificationService.DisplayTask display,
                                  boolean pickable) {
-        JPanel list = new JPanel();
-        list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
-        list.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel list = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         list.setAlignmentX(Component.LEFT_ALIGNMENT);
         int displayedId = display != null ? display.id : -1;
         if (!pickable) {
@@ -789,9 +767,7 @@ public class EventsPanel {
             ? PanelElements.getExpandedIcon() : PanelElements.getCollapsedIcon());
         row.add(chevron, BorderLayout.WEST);
 
-        JLabel label = new JLabel(count + " hidden");
-        label.setFont(FontManager.getRunescapeSmallFont());
-        label.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel label = DropTrackerTheme.label(count + " hidden", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         row.add(label, BorderLayout.CENTER);
 
         row.addMouseListener(new MouseAdapter() {
@@ -802,9 +778,7 @@ public class EventsPanel {
             }
         });
 
-        JLabel unhideAll = new JLabel("unhide all");
-        unhideAll.setFont(FontManager.getRunescapeSmallFont());
-        unhideAll.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel unhideAll = DropTrackerTheme.label("unhide all", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         unhideAll.setToolTipText("Show every hidden task again");
         unhideAll.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         unhideAll.addMouseListener(new MouseAdapter() {
@@ -943,9 +917,7 @@ public class EventsPanel {
     /** Small clickable control in a task row. Sans-serif on purpose: the
      *  RuneScape bitmap fonts have no symbol coverage to fall back on. */
     private static JLabel controlGlyph(String text, Color color, String tooltip, Runnable action) {
-        JLabel glyph = new JLabel(text);
-        glyph.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
-        glyph.setForeground(color);
+        JLabel glyph = DropTrackerTheme.label(text, new Font(Font.SANS_SERIF, Font.BOLD, 11), color);
         return wireControlGlyph(glyph, tooltip, action,
             () -> glyph.setForeground(DropTrackerTheme.GOLD_BRIGHT),
             () -> glyph.setForeground(color));
@@ -1058,9 +1030,7 @@ public class EventsPanel {
             rowPanel.setBackground(rowBg);
             rowPanel.setBorder(new EmptyBorder(3, 5, 3, 4));
 
-            JLabel rank = new JLabel(String.valueOf(standing.getRank()));
-            rank.setFont(FontManager.getRunescapeSmallFont());
-            rank.setForeground(own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
+            JLabel rank = DropTrackerTheme.label(String.valueOf(standing.getRank()), FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
             rank.setPreferredSize(new Dimension(16, 16));
             rowPanel.add(rank, BorderLayout.WEST);
 
@@ -1073,17 +1043,13 @@ public class EventsPanel {
             swatch.setBackground(parseColor(standing.getColor(), DropTrackerTheme.STONE));
             swatch.setPreferredSize(new Dimension(8, 8));
             nameCol.add(swatch, BorderLayout.WEST);
-            JLabel name = new JLabel(truncate(standing.getName(), 18) + (own ? " (you)" : ""));
-            name.setFont(own ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont());
-            name.setForeground(own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT);
+            JLabel name = DropTrackerTheme.label(truncate(standing.getName(), 18) + (own ? " (you)" : ""), own ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT);
             nameCol.add(name, BorderLayout.CENTER);
             rowPanel.add(nameCol, BorderLayout.CENTER);
 
             JPanel eastCol = new JPanel(new BorderLayout(5, 0));
             eastCol.setBackground(rowBg);
-            JLabel score = new JLabel(ValueFormat.commas(standing.getScore()));
-            score.setFont(FontManager.getRunescapeSmallFont());
-            score.setForeground(own ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT_MUTED);
+            JLabel score = DropTrackerTheme.label(ValueFormat.commas(standing.getScore()), FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT_MUTED);
             score.setToolTipText(standing.getScore() + " points");
             eastCol.add(score, BorderLayout.CENTER);
 
@@ -1176,9 +1142,7 @@ public class EventsPanel {
      */
     private JPanel section(String key, String title, JComponent body, boolean defaultCollapsed) {
         boolean startCollapsed = sectionCollapsed.getOrDefault(key, defaultCollapsed);
-        JPanel wrap = new JPanel();
-        wrap.setLayout(new BoxLayout(wrap, BoxLayout.Y_AXIS));
-        wrap.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel wrap = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         wrap.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel head = new JPanel(new BorderLayout()) {
@@ -1194,9 +1158,7 @@ public class EventsPanel {
             new EmptyBorder(0, 0, 3, 0)));
         head.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel titleLabel = DropTrackerTheme.label(title, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
         head.add(titleLabel, BorderLayout.WEST);
 
         JLabel chevron = new JLabel(startCollapsed

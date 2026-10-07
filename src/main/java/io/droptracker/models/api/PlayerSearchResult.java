@@ -16,7 +16,6 @@ public class PlayerSearchResult {
     @SerializedName("droptracker_player_id")
     private Integer dropTrackerPlayerId;
     
-    @SerializedName("registered")
     private boolean registered;
     
     @SerializedName("total_loot")
@@ -26,7 +25,6 @@ public class PlayerSearchResult {
     private int globalRank;
     
     
-    @SerializedName("groups")
     private List<PlayerGroup> groups;
     
     @SerializedName("recent_submissions")
@@ -38,7 +36,6 @@ public class PlayerSearchResult {
     @SerializedName("player_stats")  
     private PlayerStats playerStats;
 
-    @SerializedName("points")
     private int points;
     
     // Raw JSON data for any additional fields not explicitly mapped
@@ -61,7 +58,6 @@ public class PlayerSearchResult {
         @SerializedName("best_drop_value")
         private long bestDropValue;
         
-        @SerializedName("rank")
         private Integer rank;
     }
 
@@ -82,28 +78,21 @@ public class PlayerSearchResult {
 
     @Data
     public static class TopNpc {
-        @SerializedName("name")
         private String name;
         
-        @SerializedName("rank")
         private Integer rank;
         
-        @SerializedName("loot")
         private String loot;
     }
 
     @Data
     public static class PlayerGroup {
-        @SerializedName("name")
         private String name;
         
-        @SerializedName("id")
         private Integer id;
         
-        @SerializedName("loot")
         private String loot;
         
-        @SerializedName("members")
         private Integer members;
     }
 }

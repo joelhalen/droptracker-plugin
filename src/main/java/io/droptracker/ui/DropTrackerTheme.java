@@ -4,12 +4,17 @@ import io.droptracker.ui.components.PanelIcons;
 import net.runelite.client.ui.FontManager;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.LayoutManager;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -72,6 +77,27 @@ public final class DropTrackerTheme {
         panel.setBackground(SURFACE_1);
         panel.setBorder(cardBorder());
         return panel;
+    }
+
+    /** A vertical BoxLayout panel on the given background. */
+    public static JPanel vbox(Color background) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(background);
+        return panel;
+    }
+
+    /** A label in the given font and colour. */
+    public static JLabel label(String text, Font font, Color color) {
+        JLabel label = new JLabel(text);
+        label.setFont(font);
+        label.setForeground(color);
+        return label;
+    }
+
+    /** A fixed vertical gap (a rigid area: unlike a strut it never stretches sideways). */
+    public static Component gap(int height) {
+        return Box.createRigidArea(new Dimension(0, height));
     }
 
     /** Applies the standard themed button look (SURFACE_2 body, gold-bright hover). */

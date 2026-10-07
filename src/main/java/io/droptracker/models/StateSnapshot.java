@@ -42,7 +42,6 @@ public class StateSnapshot {
 	private String manifestVersion;
 
 	/** What triggered this sync — "login", "interval", "clog", "manual". */
-	@SerializedName("source")
 	private String source;
 
 	/** Plugin version, matching the {@code p_v} field on submissions. */
@@ -57,11 +56,9 @@ public class StateSnapshot {
 	private Integer combatLevel;
 
 	/** Skill name -> total experience. */
-	@SerializedName("skills")
 	private Map<String, Integer> skills = new HashMap<>();
 
 	/** Quest id -> 0 not started, 1 in progress, 2 finished. */
-	@SerializedName("quests")
 	private Map<Integer, Integer> quests = new HashMap<>();
 
 	/** Varp id -> raw 32-bit value holding combat achievement completion bits. */
@@ -73,7 +70,6 @@ public class StateSnapshot {
 	private List<DiaryTier> diaryTiers = new ArrayList<>();
 
 	/** Collection log item id -> quantity. Additive; see the class note. */
-	@SerializedName("items")
 	private Map<Integer, Integer> items = new HashMap<>();
 
 	/**
@@ -102,7 +98,6 @@ public class StateSnapshot {
 		private final int areaId;
 
 		/** 0 easy, 1 medium, 2 hard, 3 elite. */
-		@SerializedName("tier")
 		private final int tier;
 
 		@SerializedName("completed")

@@ -14,7 +14,6 @@ public class TopPlayersResult {
         @SerializedName("player_name")
         String playerName;
         
-        @SerializedName("rank")
         Integer rank;
         
         @SerializedName("total_loot")

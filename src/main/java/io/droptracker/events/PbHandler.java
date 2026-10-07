@@ -36,17 +36,20 @@ public class PbHandler extends BaseEventHandler {
     static final int MAX_BAD_TICKS = 10;
     private static final long DUPLICATE_THRESHOLD = 5000;
 
-    private static final Pattern BOSS_COUNT_PATTERN = Pattern.compile(
+    @VisibleForTesting
+    static final Pattern BOSS_COUNT_PATTERN = Pattern.compile(
         "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)", 
         Pattern.CASE_INSENSITIVE
     );
     
-    private static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
+    @VisibleForTesting
+    static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
         "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is:?[ \\t]*(?<value>[\\d,]+)",
         Pattern.CASE_INSENSITIVE
     );
     
-    private static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
+    @VisibleForTesting
+    static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
         "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*)?(?<pbIndicator>\\(new personal best\\))?",
         Pattern.CASE_INSENSITIVE
     );
@@ -59,7 +62,8 @@ public class PbHandler extends BaseEventHandler {
      * submitted as a 16-player one, splitting the board away from the same
      * raid's adventure-log and clan-broadcast copies (suggestion #153).
      */
-    private static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
+    @VisibleForTesting
+    static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
         "Team size:\\s*(?<size>\\d+\\s*-\\s*\\d+|\\d+\\s*\\+|\\d+|Solo)\\s*(?:players?)?",
         Pattern.CASE_INSENSITIVE
     );
@@ -106,26 +110,6 @@ public class PbHandler extends BaseEventHandler {
     );
 
     private static final String DOOM = "Doom of Mokhaiotl";
-
-    @VisibleForTesting
-    static Pattern bossCountPattern() {
-        return BOSS_COUNT_PATTERN;
-    }
-
-    @VisibleForTesting
-    static Pattern secondaryBossPattern() {
-        return SECONDARY_BOSS_PATTERN;
-    }
-
-    @VisibleForTesting
-    static Pattern timeWithPbPattern() {
-        return TIME_WITH_PB_PATTERN;
-    }
-
-    @VisibleForTesting
-    static Pattern teamSizePattern() {
-        return TEAM_SIZE_PATTERN;
-    }
 
     @Inject
     protected NearbyPlayerTracker nearbyPlayerTracker;
@@ -269,30 +253,28 @@ public class PbHandler extends BaseEventHandler {
     private Optional<Pair<String, Integer>> parseBossCount(String message) {
         Matcher primary = BOSS_COUNT_PATTERN.matcher(message);
         if (primary.find()) {
-            String boss = parsePrimaryBoss(primary.group("key"), primary.group("type"));
-            if (boss != null) {
-                try {
-                    int count = Integer.parseInt(primary.group("value").replace(",", ""));
-                    return Optional.of(Pair.of(boss, count));
-                } catch (NumberFormatException e) {
-                    log.debug("Failed to parse kill count: {}", primary.group("value"));
-                }
+            Optional<Pair<String, Integer>> count = bossCount(parsePrimaryBoss(primary.group("key"), primary.group("type")), primary);
+            if (count.isPresent()) {
+                return count;
             }
         }
 
         Matcher secondary = SECONDARY_BOSS_PATTERN.matcher(message);
         if (secondary.find()) {
-            String boss = parseSecondaryBoss(secondary.group("key"));
-            if (boss != null) {
-                try {
-                    int count = Integer.parseInt(secondary.group("value").replace(",", ""));
-                    return Optional.of(Pair.of(boss, count));
-                } catch (NumberFormatException e) {
-                    log.debug("Failed to parse kill count: {}", secondary.group("value"));
-                }
-            }
+            return bossCount(parseSecondaryBoss(secondary.group("key")), secondary);
         }
 
+        return Optional.empty();
+    }
+
+    private static Optional<Pair<String, Integer>> bossCount(String boss, Matcher matcher) {
+        if (boss != null) {
+            try {
+                return Optional.of(Pair.of(boss, Integer.parseInt(matcher.group("value").replace(",", ""))));
+            } catch (NumberFormatException e) {
+                log.debug("Failed to parse kill count: {}", matcher.group("value"));
+            }
+        }
         return Optional.empty();
     }
 
@@ -707,11 +689,8 @@ public class PbHandler extends BaseEventHandler {
     // === TEAM SIZE METHODS ===
     @SuppressWarnings("deprecation")
     private String getTobTeamSize() {
-        int varbitSize = Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB1), 1) +
-                Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB2), 1) +
-                Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB3), 1) +
-                Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB4), 1) +
-                Math.min(client.getVarbitValue(Varbits.THEATRE_OF_BLOOD_ORB5), 1);
+        int varbitSize = occupied(Varbits.THEATRE_OF_BLOOD_ORB1, Varbits.THEATRE_OF_BLOOD_ORB2,
+                Varbits.THEATRE_OF_BLOOD_ORB3, Varbits.THEATRE_OF_BLOOD_ORB4, Varbits.THEATRE_OF_BLOOD_ORB5);
         return formatRaidTeamSize(
             nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOB) : 0,
             varbitSize);
@@ -719,14 +698,9 @@ public class PbHandler extends BaseEventHandler {
 
     @SuppressWarnings("deprecation")
     private String getToaTeamSize() {
-        int varbitSize = Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_0_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_1_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_2_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_3_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_4_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
-                Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
+        int varbitSize = occupied(Varbits.TOA_MEMBER_0_HEALTH, Varbits.TOA_MEMBER_1_HEALTH,
+                Varbits.TOA_MEMBER_2_HEALTH, Varbits.TOA_MEMBER_3_HEALTH, Varbits.TOA_MEMBER_4_HEALTH,
+                Varbits.TOA_MEMBER_5_HEALTH, Varbits.TOA_MEMBER_6_HEALTH, Varbits.TOA_MEMBER_7_HEALTH);
         return formatRaidTeamSize(
             nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOA) : 0,
             varbitSize);
@@ -737,6 +711,16 @@ public class PbHandler extends BaseEventHandler {
      * orbs clear at completion, collapsing group raids to "Solo". The varbit
      * read remains the fallback when no roster was accumulated.
      */
+    /** How many of the given party-slot varbits are filled. */
+    @SuppressWarnings("deprecation")
+    private int occupied(int... varbits) {
+        int filled = 0;
+        for (int varbit : varbits) {
+            filled += Math.min(client.getVarbitValue(varbit), 1);
+        }
+        return filled;
+    }
+
     @VisibleForTesting
     static String formatRaidTeamSize(int rosterSize, int varbitSize) {
         int teamSize = Math.max(rosterSize, varbitSize);

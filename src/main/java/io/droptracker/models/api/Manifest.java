@@ -66,7 +66,6 @@ public class Manifest {
 	private static final Type INT_LIST = new TypeToken<List<Integer>>() {}.getType();
 
 	/** Content hash of the served sections; changes whenever any payload does. */
-	@SerializedName("version")
 	private String version;
 
 	@SerializedName("combat_achievement_varps")
@@ -75,7 +74,6 @@ public class Manifest {
 	@SerializedName("quest_ids")
 	private List<Integer> questIds;
 
-	@SerializedName("sync")
 	private SyncSettings sync;
 
 	@SerializedName("team_indicators")
@@ -146,7 +144,6 @@ public class Manifest {
 
 	@Data
 	public static class SyncSettings {
-		@SerializedName("enabled")
 		private Boolean enabled;
 
 		@SerializedName("interval_minutes")
@@ -188,7 +185,6 @@ public class Manifest {
 	/** Server-side controls for the clan-chat event team badges (web103a). */
 	@Data
 	public static class TeamIndicatorSettings {
-		@SerializedName("enabled")
 		private Boolean enabled;
 
 		@SerializedName("max_roster_age_minutes")

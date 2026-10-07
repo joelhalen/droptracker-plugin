@@ -144,8 +144,7 @@ public class SubmissionManager {
                 debugLogEventFlow("received", type, "non-drop entrypoint invoked for DROP type; ignoring");
                 break;
             case KILL_TIME:
-                if (!config.pbEmbeds()) {
-                    debugLogEventFlow("skipped", type, "pbEmbeds=false");
+                if (!embedsOn(config.pbEmbeds(), type, "pbEmbeds")) {
                     return;
                 }
                 // Raid completion times are raid data: attach the
@@ -172,22 +171,19 @@ public class SubmissionManager {
                 }
                 break;
             case COLLECTION_LOG:
-                if (!config.clogEmbeds()) {
-                    debugLogEventFlow("skipped", type, "clogEmbeds=false");
+                if (!embedsOn(config.clogEmbeds(), type, "clogEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case COMBAT_ACHIEVEMENT:
-                if (!config.caEmbeds()) {
-                    debugLogEventFlow("skipped", type, "caEmbeds=false");
+                if (!embedsOn(config.caEmbeds(), type, "caEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case LEVEL_UP:
-                if (!config.levelEmbed()) {
-                    debugLogEventFlow("skipped", type, "levelEmbed=false");
+                if (!embedsOn(config.levelEmbed(), type, "levelEmbed")) {
                     return;
                 }
                 // Honor the "Minimum Level to Screenshot" option: only capture
@@ -198,49 +194,43 @@ public class SubmissionManager {
                 }
                 break;
             case QUEST_COMPLETION:
-                if (!config.questsEmbed()) {
-                    debugLogEventFlow("skipped", type, "questsEmbed=false");
+                if (!embedsOn(config.questsEmbed(), type, "questsEmbed")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case PET:
-                if (!config.petEmbeds()) {
-                    debugLogEventFlow("skipped", type, "petEmbeds=false");
+                if (!embedsOn(config.petEmbeds(), type, "petEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case DEATH:
-                if (!config.deathEmbeds()) {
-                    debugLogEventFlow("skipped", type, "deathEmbeds=false");
+                if (!embedsOn(config.deathEmbeds(), type, "deathEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case DIARY:
-                if (!config.diaryEmbeds()) {
-                    debugLogEventFlow("skipped", type, "diaryEmbeds=false");
+                if (!embedsOn(config.diaryEmbeds(), type, "diaryEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case SLAYER_TASK:
-                if (!config.slayerEmbeds()) {
-                    debugLogEventFlow("skipped", type, "slayerEmbeds=false");
+                if (!embedsOn(config.slayerEmbeds(), type, "slayerEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case EXPERIENCE:
                 // No screenshots for experience events
                 break;
             case EXPERIENCE_MILESTONE:
-                if (!config.xpMilestoneEmbeds()) {
-                    debugLogEventFlow("skipped", type, "xpMilestoneEmbeds=false");
+                if (!embedsOn(config.xpMilestoneEmbeds(), type, "xpMilestoneEmbeds")) {
                     return;
                 }
-                if (config.screenshots()) requiredScreenshot = true;
+                requiredScreenshot = config.screenshots();
                 break;
             case EXPERIENCE_UPDATE:
                 // Background XP snapshot for event tracking: no screenshot,
@@ -288,6 +278,14 @@ public class SubmissionManager {
      * the "Minimum Level to Screenshot" config option. Returns 0 when no
      * level fields are present.
      */
+    /** Whether a type's embeds are switched on; logs the skip when they are not. */
+    private boolean embedsOn(boolean enabled, SubmissionType type, String setting) {
+        if (!enabled) {
+            debugLogEventFlow("skipped", type, setting + "=false");
+        }
+        return enabled;
+    }
+
     private int maxNewLevelIn(CustomWebhookBody webhook) {
         int max = 0;
         if (webhook == null || webhook.getEmbeds() == null) {
@@ -315,8 +313,7 @@ public class SubmissionManager {
             debugLogEventFlow("skipped", SubmissionType.DROP, "player_name missing; submission has no identity");
             return;
         }
-        if (!config.lootEmbeds()) {
-            debugLogEventFlow("skipped", SubmissionType.DROP, "lootEmbeds=false");
+        if (!embedsOn(config.lootEmbeds(), SubmissionType.DROP, "lootEmbeds")) {
             return;
         }
 
@@ -616,7 +613,7 @@ public class SubmissionManager {
     private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission) {
         String worldTypeName = getWorldTypeName();
 
-        debugLogEventFlow("send", submission != null ? submission.getType() : null,
+        debugLogFlow("send", submission,
                 "attempting direct send; world_type=" + worldTypeName + ", hasScreenshot=" + (screenshot != null)
                         + ", " + summarizeSubmission(submission));
 
@@ -625,8 +622,7 @@ public class SubmissionManager {
             if (screenshot != null) {
                 submission.setScreenshotData(screenshot);
             }
-            notifyUpdateCallback();
-            schedulePersistence();
+            submissionsChanged();
         }
 
         // Inject world_type into every embed so the server can distinguish main-game vs. temporary world submissions
@@ -656,16 +652,16 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomEndpoint();
-                debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
+                debugLogFlow("dispatch", submission,
                         "using random webhook endpoint (API disabled); attempt=" + attempt);
             } catch (Exception e) {
-                debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                debugLogFlow("failed", submission,
                         "failed to resolve webhook endpoint: " + e.getMessage());
                 return;
             }
         } else {
             url = HttpUrl.parse(api.getApiUrl() + "/webhook");
-            debugLogEventFlow("dispatch", submission != null ? submission.getType() : null,
+            debugLogFlow("dispatch", submission,
                     "using API webhook endpoint; attempt=" + attempt + ", url=" + url);
         }
         // Both branches build on a hardcoded base, so this is defence in depth rather
@@ -673,7 +669,7 @@ public class SubmissionManager {
         if (url == null || !urlManager.isValidDiscordWebhookUrl(url)) {
             String host = url == null ? "(unparseable)" : url.host();
             log.debug("Invalid or malformed webhook URL for host: {}", host);
-            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+            debugLogFlow("failed", submission,
                     "invalid webhook host: " + host);
             return;
         }
@@ -686,7 +682,7 @@ public class SubmissionManager {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                debugLogEventFlow("retry", submission != null ? submission.getType() : null,
+                debugLogFlow("retry", submission,
                         "network failure on attempt=" + attempt + ": " + e.getMessage());
                 scheduleRetryOrFail(webhook, screenshot, submission, attempt, e);
             }
@@ -720,16 +716,15 @@ public class SubmissionManager {
 
                     if (!response.isSuccessful()) {
                         int code = response.code();
-                        debugLogEventFlow("response", submission != null ? submission.getType() : null,
+                        debugLogFlow("response", submission,
                                 "unsuccessful HTTP response code=" + code + ", message=" + response.message() + ", attempt=" + attempt);
 
                         if (code == 400 || code == 401 || code == 403) {
                             if (submission != null) {
                                 submission.markAsFailed("HTTP " + code);
-                                notifyUpdateCallback();
-                                schedulePersistence();
+                                submissionsChanged();
                             }
-                            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+                            debugLogFlow("failed", submission,
                                     "terminal HTTP failure code=" + code + "; no retry");
                             return;
                         }
@@ -751,10 +746,9 @@ public class SubmissionManager {
                     // Success
                     if (submission != null) {
                         submission.markAsSuccess();
-                        notifyUpdateCallback();
-                        schedulePersistence();
+                        submissionsChanged();
                     }
-                    debugLogEventFlow("response", submission != null ? submission.getType() : null,
+                    debugLogFlow("response", submission,
                             "success HTTP response; attempt=" + attempt + ", " + summarizeSubmission(submission));
 
                     // Check if the API has already processed this submission
@@ -764,8 +758,7 @@ public class SubmissionManager {
                                 boolean processed = api.checkSubmissionProcessed(submission.getUuid());
                                 if (processed) {
                                     submission.markAsProcessed();
-                                    notifyUpdateCallback();
-                                    schedulePersistence();
+                                    submissionsChanged();
                                     debugLogEventFlow("processed", submission.getType(),
                                             "API check confirmed processed; uuid=" + submission.getUuid());
                                 }
@@ -786,23 +779,21 @@ public class SubmissionManager {
             long delay = BASE_RETRY_DELAY_MS * (1L << Math.min(attempt, 16));
             if (submission != null) {
                 submission.markAsRetrying();
-                notifyUpdateCallback();
-                schedulePersistence();
+                submissionsChanged();
             }
             executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1, submission), delay, TimeUnit.MILLISECONDS);
             log.debug("Scheduled webhook retry in {} ms (attempt {}/{})", delay, attempt + 1, maxAttempts);
-            debugLogEventFlow("retry", submission != null ? submission.getType() : null,
+            debugLogFlow("retry", submission,
                     "scheduled retry in " + delay + "ms (nextAttempt=" + (attempt + 1) + "/" + maxAttempts + ")"
                             + (e != null && e.getMessage() != null ? ", reason=" + e.getMessage() : ""));
         } else {
             if (submission != null) {
                 String reason = e != null && e.getMessage() != null ? e.getMessage() : "Retry limit reached";
                 submission.markAsFailed(reason);
-                notifyUpdateCallback();
-                schedulePersistence();
+                submissionsChanged();
             }
             log.warn("Exhausted retry attempts when sending webhook");
-            debugLogEventFlow("failed", submission != null ? submission.getType() : null,
+            debugLogFlow("failed", submission,
                     "retry limit exhausted after " + maxAttempts + " attempts"
                             + (e != null && e.getMessage() != null ? ", lastError=" + e.getMessage() : ""));
         }
@@ -833,7 +824,7 @@ public class SubmissionManager {
         // photographed before their own drop message (issue #48).
         String source = extractSourceName(webhook);
         if (NpcUtilities.needsDeferredScreenshot(source)) {
-            debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+            debugLogFlow("capture", submission,
                     "deferring screenshot one game tick; source=" + source);
             deferredCaptures.add(() -> captureNow(webhook, submission, privacyMode));
             return;
@@ -849,7 +840,7 @@ public class SubmissionManager {
      * @param privacyMode What to hide from the frame before it is captured
      */
     private void captureNow(CustomWebhookBody webhook, ValidSubmission submission, PrivacyMode privacyMode) {
-        debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+        debugLogFlow("capture", submission,
                 "capturing screenshot; privacyMode=" + privacyMode.name());
 
         screenshotPrivacy.capture(privacyMode, bufferedImage -> {
@@ -860,7 +851,7 @@ public class SubmissionManager {
                     // No frame could be captured with the player's privacy mode
                     // applied. Send the submission without proof rather than lose
                     // it — an unhidden frame is never the fallback.
-                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                    debugLogFlow("capture", submission,
                             "screenshot unavailable; sending without an image");
                     sendWebhookDirect(webhook, null, submission);
                     return;
@@ -871,11 +862,11 @@ public class SubmissionManager {
                     imageBytes = encodeForUpload(bufferedImage);
                 } catch (IOException e) {
                     log.error("Error converting image to byte array", e);
-                    debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                    debugLogFlow("capture", submission,
                             "screenshot conversion failed: " + e.getMessage());
                 }
 
-                debugLogEventFlow("capture", submission != null ? submission.getType() : null,
+                debugLogFlow("capture", submission,
                         "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
                 sendWebhookDirect(webhook, imageBytes, submission);
             });
@@ -901,12 +892,12 @@ public class SubmissionManager {
             int thresholdBytes = config.compressImages()
                 ? config.imageCompressionThresholdKb() * 1024
                 : Integer.MAX_VALUE;
-            byte[] pngBytes = convertImageToPngBytes(bufferedImage);
+            byte[] pngBytes = encodeImage(bufferedImage, "png");
             byte[] imageBytes = thresholdBytes > 0 && pngBytes.length <= thresholdBytes
                 // PNG is within the threshold — send lossless
                 ? pngBytes
                 // PNG exceeds threshold (or threshold is 0) — compress to JPEG
-                : convertImageToJpegBytes(bufferedImage);
+                : encodeImage(bufferedImage, "jpeg");
 
             lastEncodedImage = bufferedImage;
             lastEncodedBytes = imageBytes;
@@ -914,15 +905,9 @@ public class SubmissionManager {
         }
     }
 
-    private static byte[] convertImageToJpegBytes(BufferedImage bufferedImage) throws IOException {
+    private static byte[] encodeImage(BufferedImage bufferedImage, String format) throws IOException {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ImageIO.write(bufferedImage, "jpeg", byteArrayOutputStream);
-        return byteArrayOutputStream.toByteArray();
-    }
-
-    private static byte[] convertImageToPngBytes(BufferedImage bufferedImage) throws IOException {
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        ImageIO.write(bufferedImage, "png", byteArrayOutputStream);
+        ImageIO.write(bufferedImage, format, byteArrayOutputStream);
         return byteArrayOutputStream.toByteArray();
     }
 
@@ -960,8 +945,7 @@ public class SubmissionManager {
             }
         }
         validSubmissions.add(validSubmission);
-        notifyUpdateCallback();
-        schedulePersistence();
+        submissionsChanged();
     }
 
     /**
@@ -973,8 +957,7 @@ public class SubmissionManager {
             return;
         }
         validSubmission.markAsRetrying();
-        notifyUpdateCallback();
-        schedulePersistence();
+        submissionsChanged();
         // Use stored screenshot data if available
         byte[] screenshot = validSubmission.getScreenshotData();
         sendWebhookWithRetry(validSubmission.getOriginalWebhook(), screenshot, 0, validSubmission);
@@ -985,8 +968,7 @@ public class SubmissionManager {
      */
     public void removeSubmission(ValidSubmission validSubmission) {
         validSubmissions.remove(validSubmission);
-        notifyUpdateCallback();
-        schedulePersistence();
+        submissionsChanged();
     }
 
     // ========== Statistics (derived from list) ==========
@@ -1095,8 +1077,7 @@ public class SubmissionManager {
                 }
 
                 if (changed) {
-                    notifyUpdateCallback();
-                    schedulePersistence();
+                    submissionsChanged();
                 }
             } catch (Exception e) {
                 log.debug("Error while checking pending statuses: {}", e.getMessage());
@@ -1139,8 +1120,7 @@ public class SubmissionManager {
         }
 
         if (!validSubmissions.isEmpty()) {
-            notifyUpdateCallback();
-            schedulePersistence();
+            submissionsChanged();
         }
     }
 
@@ -1288,10 +1268,19 @@ public class SubmissionManager {
         return false;
     }
 
+    private void submissionsChanged() {
+        notifyUpdateCallback();
+        schedulePersistence();
+    }
+
     private void notifyUpdateCallback() {
         if (updatesEnabled && updateCallback != null) {
             updateCallback.onSubmissionsUpdated();
         }
+    }
+
+    private void debugLogFlow(String stage, ValidSubmission submission, String message) {
+        debugLogEventFlow(stage, submission != null ? submission.getType() : null, message);
     }
 
     private void debugLogEventFlow(String stage, SubmissionType type, String message) {
@@ -1315,16 +1304,13 @@ public class SubmissionManager {
 
     @Getter
     private static class ApiResponse {
-        @SerializedName("notice")
         private String notice;
 
         @SerializedName("rank_update")
         private String rankUpdate;
 
-        @SerializedName("status")
         private String status;
 
-        @SerializedName("processed")
         private Boolean processed;
 
         @SerializedName("submission_id")

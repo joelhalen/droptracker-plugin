@@ -28,9 +28,8 @@ import java.util.Map;
  * vertex colour multiplied by the texel, which is exactly what glTF's base
  * colour factor, base colour texture and COLOR_0 attribute multiply out to.
  * <p>
- * Textures are either embedded in the file, which makes a single self contained
- * model that any glTF viewer will open, or referenced by URL so they can be
- * served once from a CDN and shared across every profile.
+ * Textures are embedded in the file, which makes a single self contained
+ * model that any glTF viewer will open.
  */
 public final class GlbWriter {
     private static final int GLB_MAGIC = 0x46546C67; // "glTF"
@@ -60,47 +59,11 @@ public final class GlbWriter {
     /** UNSIGNED_SHORT indices stop here; 65535 is reserved as a restart value. */
     private static final int MAX_SHORT_INDEX = 65535;
 
-    /** How the file should refer to its textures. */
-    public static final class Options {
-        private boolean embedTextures = true;
-        private String textureUrlTemplate;
-        private String modelName = "model";
-        private Map<String, Object> extras;
-
-        /** Embed texture PNGs in the file. Self contained but not shared between models. */
-        public Options embedTextures() {
-            this.embedTextures = true;
-            this.textureUrlTemplate = null;
-            return this;
-        }
-
-        /**
-         * Reference textures by URL instead of embedding them. The template
-         * takes the texture id, e.g. {@code https://cdn.example.com/texture/%d.png}.
-         */
-        public Options textureUrls(@NonNull String template) {
-            this.embedTextures = false;
-            this.textureUrlTemplate = template;
-            return this;
-        }
-
-        public Options modelName(@NonNull String modelName) {
-            this.modelName = modelName;
-            return this;
-        }
-
-        /** Arbitrary metadata to attach to the glTF asset. */
-        public Options extras(@Nullable Map<String, Object> extras) {
-            this.extras = extras;
-            return this;
-        }
-    }
-
     private GlbWriter() {
     }
 
     public static byte[] write(@NonNull MeshData mesh, @NonNull TextureLookup textures,
-                               @NonNull Options options) throws IOException {
+                               @NonNull String modelName, @Nullable Map<String, Object> extras) throws IOException {
         if (mesh.isEmpty()) {
             throw new IOException("Refusing to write an empty model");
         }
@@ -166,8 +129,7 @@ public final class GlbWriter {
             // A texture whose pixels could not be read still contributes its
             // average colour to the material, so the surface degrades to a flat
             // approximation instead of the bare grey the lightness alone gives.
-            final boolean hasImage = texture != null
-                    && (options.embedTextures ? texture.getPng() != null : true);
+            final boolean hasImage = texture != null && texture.getPng() != null;
 
             final JsonObject attributes = new JsonObject();
             attributes.addProperty("POSITION", positionAccessor);
@@ -192,7 +154,7 @@ public final class GlbWriter {
                 Integer existing = textureIndexById.get(texture.getId());
                 if (existing == null) {
                     gltfTextures.add(buildTexture(images.size()));
-                    images.add(buildImage(texture, options, bufferViews, bin));
+                    images.add(buildImage(texture, bufferViews, bin));
                     existing = gltfTextures.size() - 1;
                     textureIndexById.put(texture.getId(), existing);
                 }
@@ -204,19 +166,19 @@ public final class GlbWriter {
 
         final JsonObject mesh0 = new JsonObject();
         mesh0.add("primitives", primitives);
-        mesh0.addProperty("name", options.modelName);
+        mesh0.addProperty("name", modelName);
 
         final float scale = 1f / UNITS_PER_METRE;
         final JsonObject node0 = new JsonObject();
         node0.addProperty("mesh", 0);
-        node0.addProperty("name", options.modelName);
+        node0.addProperty("name", modelName);
         node0.add("scale", jsonArray(scale, scale, scale));
 
         final JsonObject asset = new JsonObject();
         asset.addProperty("version", "2.0");
         asset.addProperty("generator", "RuneProfile");
-        if (options.extras != null && !options.extras.isEmpty()) {
-            asset.add("extras", extrasToJson(options.extras));
+        if (extras != null && !extras.isEmpty()) {
+            asset.add("extras", extrasToJson(extras));
         }
 
         final JsonObject gltf = new JsonObject();
@@ -358,16 +320,12 @@ public final class GlbWriter {
         return texture;
     }
 
-    private static JsonObject buildImage(GameTextures.TextureData texture, Options options,
+    private static JsonObject buildImage(GameTextures.TextureData texture,
                                          JsonArray bufferViews, BinaryChunk bin) throws IOException {
         final JsonObject image = new JsonObject();
         image.addProperty("name", "texture-" + texture.getId());
-        if (options.embedTextures) {
-            image.addProperty("bufferView", addBufferView(bufferViews, bin, texture.getPng(), -1, 0));
-            image.addProperty("mimeType", "image/png");
-        } else {
-            image.addProperty("uri", String.format(options.textureUrlTemplate, texture.getId()));
-        }
+        image.addProperty("bufferView", addBufferView(bufferViews, bin, texture.getPng(), -1, 0));
+        image.addProperty("mimeType", "image/png");
         return image;
     }
 

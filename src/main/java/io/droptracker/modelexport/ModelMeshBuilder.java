@@ -10,6 +10,7 @@ import lombok.NonNull;
 import net.runelite.api.Model;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -302,23 +303,6 @@ public final class ModelMeshBuilder {
             }
             return translucent == other.translucent ? 0 : (translucent ? 1 : -1);
         }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof FaceGroup)) {
-                return false;
-            }
-            final FaceGroup other = (FaceGroup) o;
-            return textureId == other.textureId && translucent == other.translucent;
-        }
-
-        @Override
-        public int hashCode() {
-            return textureId * 2 + (translucent ? 1 : 0);
-        }
     }
 
     /**
@@ -404,41 +388,14 @@ public final class ModelMeshBuilder {
                         new ArrayList<>(), origin, origin);
             }
             return new MeshData(
-                    trim(positions, vertexCount * 3),
-                    trim(colors, vertexCount * 4),
-                    priorities == null ? null : trim(priorities, vertexCount),
-                    uvs == null ? null : trim(uvs, vertexCount * 2),
-                    trim(indices, indexCount),
+                    Arrays.copyOf(positions, vertexCount * 3),
+                    Arrays.copyOf(colors, vertexCount * 4),
+                    priorities == null ? null : Arrays.copyOf(priorities, vertexCount),
+                    uvs == null ? null : Arrays.copyOf(uvs, vertexCount * 2),
+                    Arrays.copyOf(indices, indexCount),
                     primitives,
                     min,
                     max);
-        }
-
-        private static float[] trim(float[] source, int length) {
-            if (source.length == length) {
-                return source;
-            }
-            final float[] trimmed = new float[length];
-            System.arraycopy(source, 0, trimmed, 0, length);
-            return trimmed;
-        }
-
-        private static byte[] trim(byte[] source, int length) {
-            if (source.length == length) {
-                return source;
-            }
-            final byte[] trimmed = new byte[length];
-            System.arraycopy(source, 0, trimmed, 0, length);
-            return trimmed;
-        }
-
-        private static int[] trim(int[] source, int length) {
-            if (source.length == length) {
-                return source;
-            }
-            final int[] trimmed = new int[length];
-            System.arraycopy(source, 0, trimmed, 0, length);
-            return trimmed;
         }
     }
 

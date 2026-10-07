@@ -5,7 +5,6 @@ import io.droptracker.api.DropTrackerApi;
 import io.droptracker.api.DropTrackerUrls;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.api.TopGroupResult;
-import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.DropTrackerPanel;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.StateViews;
@@ -14,7 +13,6 @@ import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 import javax.annotation.Nullable;
 
@@ -26,30 +24,17 @@ import okhttp3.ResponseBody;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-public class GroupPanel {
-    private final Client client;
-    private final DropTrackerConfig config;
+public class GroupPanel extends SearchPage {
     private final DropTrackerPanel panel;
-    private final DropTrackerApi api;
-    private final ItemManager itemManager;
     private final OkHttpClient httpClient;
 
     private int currentGroupId = 2; // Track group ID instead of URL
-
-    // UI components that we need to update
-    private JPanel contentPanel;
-    private JTextField searchField;
-
-    // Add field for tracking leaderboard placeholder
-    private JPanel leaderboardPlaceholder;
 
     /**
      * Name of the group currently shown in the detail view. Used to make sure a
@@ -58,10 +43,7 @@ public class GroupPanel {
     private String activeDetailGroupName;
 
     public GroupPanel(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, DropTrackerPanel panel, OkHttpClient httpClient) {
-        this.client = client;
-        this.config = config;
-        this.api = api;
-        this.itemManager = itemManager;
+        super(client, config, api, itemManager);
         this.panel = panel;
         // Redirects off: group icons load from a hardcoded base, and following a
         // redirect would let the response choose the host instead.
@@ -72,97 +54,35 @@ public class GroupPanel {
     }
 
     public JPanel create() {
-        var mainPanel = new JPanel();
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBackground(DropTrackerTheme.SURFACE_0);
-
-        // Header section with title and search using LeaderboardComponents
-        LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
-                "DropTracker - Groups",
-                "Search for a group",
-                () -> performGroupSearch("")
-        );
-        searchField = headerResult.searchField;
-
-        // Content panel that will change based on state - fix alignment
-        contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        contentPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Show default state
-        showDefaultState();
-
-        // Add components to main panel - match PlayerStatsPanel structure
-        mainPanel.add(headerResult.panel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        mainPanel.add(contentPanel);
-        mainPanel.add(Box.createVerticalGlue());
-
-        return mainPanel;
+        return create("DropTracker - Groups", "Search for a group", () -> performGroupSearch(""));
     }
 
-
-    private void showDefaultState() {
+    @Override
+    protected void showDefaultState() {
         activeDetailGroupName = null;
-        contentPanel.removeAll();
 
-        // Create center panel for the button
-        JPanel defaultPanel = new JPanel();
-        defaultPanel.setLayout(new BoxLayout(defaultPanel, BoxLayout.Y_AXIS));
-        defaultPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        // Instructions text
-        JLabel instructionLabel = new JLabel("Search for a group by name above");
-        instructionLabel.setFont(FontManager.getRunescapeFont());
-        instructionLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
-        instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        instructionLabel.setHorizontalAlignment(JLabel.CENTER);
-
-
-        JButton createGroupButton = PanelElements.createExternalLinkButton("Create a Group", "Click to visit the group creation documentation", false, this::openCreateGroupPage);
-
-        JButton groupPageButton = PanelElements.createExternalLinkButton("View All Groups", "Click to visit the group page", true, this::openGroupPage);
-
-
-        // Panel for first button - centered horizontally
-        JPanel createButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        createButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        createButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        createButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        createButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
-        createButtonPanel.add(createGroupButton);
-
-        // Panel for second button - centered horizontally
-        JPanel groupButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        groupButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        groupButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        groupButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        groupButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
-        groupButtonPanel.add(groupPageButton);
-
-        defaultPanel.add(instructionLabel);
-        defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        JPanel defaultPanel = defaultPanel();
+        defaultPanel.add(instructions("Search for a group by name above"));
+        defaultPanel.add(DropTrackerTheme.gap(5));
 
         if (config.useApi()) {
-            // Create placeholder for leaderboard using LeaderboardComponents
             leaderboardPlaceholder = StateViews.loading("Loading top groups…");
             defaultPanel.add(leaderboardPlaceholder);
-            defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-            // Start loading data
-            obtainLeaderboardData();
+            defaultPanel.add(DropTrackerTheme.gap(10));
+            LeaderboardComponents.loadLeaderboardAsync(leaderboardPlaceholder, () -> {
+                try {
+                    return api.getTopGroups();
+                } catch (Exception e) {
+                    return null;
+                }
+            }, this::showLeaderboard);
         }
 
-        defaultPanel.add(createButtonPanel);
-        defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-        defaultPanel.add(groupButtonPanel);
+        defaultPanel.add(buttonRow(PanelElements.createExternalLinkButton("Create a Group", "Click to visit the group creation documentation", false, this::openCreateGroupPage), 0));
+        defaultPanel.add(DropTrackerTheme.gap(5));
+        defaultPanel.add(buttonRow(PanelElements.createExternalLinkButton("View All Groups", "Click to visit the group page", true, this::openGroupPage), 0));
         defaultPanel.add(Box.createVerticalGlue());
-
-        contentPanel.add(defaultPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        show(defaultPanel);
     }
 
     private JPanel showLeaderboard(TopGroupResult leaderboardData) {
@@ -198,98 +118,29 @@ public class GroupPanel {
         );
     }
 
-    private void obtainLeaderboardData() {
-        LeaderboardComponents.loadLeaderboardAsync(
-                leaderboardPlaceholder,
-                () -> {
-                    try {
-                        return api.getTopGroups();
-                    } catch (Exception e) {
-                        return null;
-                    }
-                },
-                this::showLeaderboard
-        );
-    }
-
     public void performGroupSearch(String directQuery) {
-        String searchQuery;
-        if (directQuery.equalsIgnoreCase("")) {
-            searchQuery = searchField.getText().trim();
-        } else {
-            searchQuery = directQuery;
-        }
+        String searchQuery = directQuery.equalsIgnoreCase("") ? searchField.getText().trim() : directQuery;
 
         if (searchQuery.isEmpty()) {
             JOptionPane.showMessageDialog(contentPanel, "Please enter a group name to search for.");
             return;
         }
 
-
-        // Show loading message
-        showLoadingState();
-
-        // Perform search in background. Keep the failure cause so the user can
-        // tell "group doesn't exist" apart from "the API call failed".
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return new SearchOutcome(api.searchGroup(searchQuery), null);
-            } catch (Exception e) {
-                return new SearchOutcome(null, e);
+        runSearch("Searching for group…", () -> api.searchGroup(searchQuery), result -> {
+            showGroupDetails(result, false);
+            // Load the lootboard image when group is found
+            if (result.getGroupDropTrackerId() != null) {
+                currentGroupId = result.getGroupDropTrackerId();
+                PanelElements.loadLootboardForGroup(currentGroupId);
             }
-        }).thenAccept(outcome -> {
-            SwingUtilities.invokeLater(() -> {
-                if (outcome.result != null) {
-                    showGroupDetails(outcome.result);
-                    // Load the lootboard image when group is found
-                    if (outcome.result.getGroupDropTrackerId() != null) {
-                        currentGroupId = outcome.result.getGroupDropTrackerId();
-                        PanelElements.loadLootboardForGroup(currentGroupId);
-                    }
-                    PanelElements.cachedGroupName = outcome.result.getGroupName();
-                } else if (outcome.error == null || isNotFound(outcome.error)) {
-                    showSearchError("Group '" + searchQuery + "' was not found.");
-                } else {
-                    showSearchError("Search failed — the DropTracker API could not be reached. Please try again.");
-                }
-            });
-        });
+            PanelElements.cachedGroupName = result.getGroupName();
+        }, "Group '" + searchQuery + "' was not found.");
     }
 
-    private static boolean isNotFound(Exception e) {
-        String message = e.getMessage();
-        return message != null && message.contains("status: 404");
-    }
-
-    private static class SearchOutcome {
-        final GroupSearchResult result;
-        final Exception error;
-
-        SearchOutcome(GroupSearchResult result, Exception error) {
-            this.result = result;
-            this.error = error;
-        }
-    }
-
-    private void showLoadingState() {
-        contentPanel.removeAll();
-        contentPanel.add(StateViews.loading("Searching for group…"));
-        contentPanel.revalidate();
-        contentPanel.repaint();
-    }
-
-    private void showSearchError(String message) {
+    @Override
+    protected void showSearchError(String message) {
         activeDetailGroupName = null;
-        contentPanel.removeAll();
-
-        JPanel errorPanel = StateViews.error(message, "Back to Search", () -> {
-            searchField.setText("");
-            showDefaultState();
-        });
-
-        contentPanel.add(errorPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        super.showSearchError(message);
     }
 
     /**
@@ -338,12 +189,8 @@ public class GroupPanel {
                 PanelElements.loadLootboardForGroup(currentGroupId);
             }
             PanelElements.cachedGroupName = full.getGroupName();
-            showGroupDetails(full);
+            showGroupDetails(full, false);
         }));
-    }
-
-    private void showGroupDetails(GroupSearchResult groupResult) {
-        showGroupDetails(groupResult, false);
     }
 
     /**
@@ -353,20 +200,6 @@ public class GroupPanel {
      */
     private void showGroupDetails(GroupSearchResult groupResult, boolean partial) {
         activeDetailGroupName = groupResult.getGroupName();
-        contentPanel.removeAll();
-
-        // Match PlayerStatsPanel structure exactly - no custom borders
-        JPanel groupInfoPanel = new JPanel();
-        groupInfoPanel.setLayout(new BoxLayout(groupInfoPanel, BoxLayout.Y_AXIS));
-        groupInfoPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        groupInfoPanel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
-
-        // Group header panel - exactly like playerHeaderPanel with clear button
-        JPanel groupHeaderPanel = new JPanel(new BorderLayout(10, 0));
-        groupHeaderPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        groupHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
-        groupHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
-        groupHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         // Group icon
         BufferedImage placeholderImg = new BufferedImage(50, 50, BufferedImage.TYPE_INT_ARGB);
@@ -377,46 +210,17 @@ public class GroupPanel {
         groupIcon.setMinimumSize(new Dimension(50, 50));
         loadGroupIcon(groupIcon, groupResult.getGroupImagePath());
 
-        // Group name and description
-        JPanel groupNamePanel = new JPanel();
-        groupNamePanel.setLayout(new BoxLayout(groupNamePanel, BoxLayout.Y_AXIS));
-        groupNamePanel.setBackground(DropTrackerTheme.SURFACE_1);
-
-        JLabel groupNameLabel = new JLabel(groupResult.getGroupName());
-        groupNameLabel.setFont(FontManager.getRunescapeBoldFont());
-        groupNameLabel.setForeground(DropTrackerTheme.TEXT);
-        groupNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel groupNamePanel = nameColumn(groupResult.getGroupName());
 
         String description = groupResult.getGroupDescription() != null
             ? groupResult.getGroupDescription()
             : (partial ? "Loading details…" : "");
         // Escaped: Swing resolves <img src> in HTML labels, so an unescaped server
         // description is an outbound request to a host of the server's choosing.
-        JLabel groupDescLabel = new JLabel("<html>" + PanelElements.escapeHtml(description) + "</html>");
-        groupDescLabel.setFont(FontManager.getRunescapeSmallFont());
-        groupDescLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel groupDescLabel = DropTrackerTheme.label("<html>" + PanelElements.escapeHtml(description) + "</html>",
+            FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         groupDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        groupNamePanel.add(groupNameLabel);
         groupNamePanel.add(groupDescLabel);
-
-        // Clear button for closing the search result
-        JButton clearButton = LeaderboardComponents.createClearButton(() -> {
-            searchField.setText("");
-            showDefaultState();
-        });
-
-        groupHeaderPanel.add(groupIcon, BorderLayout.WEST);
-        groupHeaderPanel.add(groupNamePanel, BorderLayout.CENTER);
-        groupHeaderPanel.add(clearButton, BorderLayout.EAST);
-
-        // Stats panel - exactly like playerStatsPanel
-        JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
-        statsPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0)); // Same as playerStatsPanel
-        statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 100));
-        statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
-        statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         GroupSearchResult.GroupStats groupStats = groupResult.getGroupStats();
         String memberText = groupStats != null ? String.valueOf(groupStats.getTotalMembers()) : "—";
@@ -424,9 +228,6 @@ public class GroupPanel {
         String lootText = (groupStats != null && groupStats.getMonthlyLoot() != null) ? groupStats.getMonthlyLoot() + " GP" : "—";
         String topPlayer = groupResult.getGroupTopPlayer();
 
-        JPanel membersBox = PanelElements.createStatBox("Members", memberText);
-        JPanel rankBox = PanelElements.createStatBox("Global Rank", rankText);
-        JPanel lootBox = PanelElements.createStatBox("Monthly Loot", lootText);
         JPanel topPlayerBox = PanelElements.createStatBox("Top Player", topPlayer != null ? topPlayer : "—");
         if (topPlayer != null && !topPlayer.trim().isEmpty()) {
             topPlayerBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -438,53 +239,28 @@ public class GroupPanel {
                 }
             });
         }
+        JPanel statsPanel = statsGrid(
+            PanelElements.createStatBox("Members", memberText),
+            PanelElements.createStatBox("Global Rank", rankText),
+            PanelElements.createStatBox("Monthly Loot", lootText),
+            topPlayerBox);
 
-        statsPanel.add(membersBox);
-        statsPanel.add(rankBox);
-        statsPanel.add(lootBox);
-        statsPanel.add(topPlayerBox);
-
-        // Action buttons - exactly like actionPanel
-        JPanel actionPanel = new JPanel();
-        actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        actionPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
-        actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
-        actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel actionPanel = actionRow();
 
         // The API sends an invite code, not a link: the discord.gg host is ours to decide.
         final HttpUrl inviteUrl = DropTrackerUrls.discordInvite(groupResult.getDiscordInviteCode());
         if (inviteUrl != null) {
-            JButton joinButton = new JButton("Discord");
-            DropTrackerTheme.styleButton(joinButton);
-            joinButton.setMargin(new Insets(0, 5, 0, 5));
+            JButton joinButton = actionButton("Discord");
             joinButton.addActionListener(e -> LinkBrowser.browse(inviteUrl.toString()));
             actionPanel.add(joinButton);
         }
 
-        JButton viewLootboardButton = PanelElements.createLootboardButton("View Lootboard", "Click to view the lootboard", () -> PanelElements.showLootboardForGroup(client, currentGroupId));
-        actionPanel.add(viewLootboardButton);
+        actionPanel.add(PanelElements.createLootboardButton("View Lootboard", "Click to view the lootboard", () -> PanelElements.showLootboardForGroup(client, currentGroupId)));
 
-        // Add components exactly like PlayerStatsPanel
-        groupInfoPanel.add(groupHeaderPanel);
-        groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        groupInfoPanel.add(statsPanel);
-        groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        // Get recent submission data to draw
-        List<RecentSubmission> recentSubmissions = groupResult.getGroupRecentSubmissions();
-        if (recentSubmissions != null && !recentSubmissions.isEmpty()) {
-            groupInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, true));
-        } else if (partial) {
-            groupInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("Loading recent activity…"));
-        } else {
-            groupInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("No recent submissions available"));
-        }
-        groupInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        groupInfoPanel.add(actionPanel);
-
-        contentPanel.add(groupInfoPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        showCard(detailHeader(groupIcon, groupNamePanel), statsPanel,
+            recent(groupResult.getGroupRecentSubmissions(), true,
+                partial ? "Loading recent activity…" : "No recent submissions available"),
+            actionPanel);
     }
 
     private void openGroupPage() {

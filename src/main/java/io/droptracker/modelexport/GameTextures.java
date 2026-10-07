@@ -6,6 +6,9 @@
  */
 package io.droptracker.modelexport;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -39,48 +42,22 @@ public final class GameTextures {
     private static final float TEXTURE_ANIM_UNIT = 1f / 128f;
 
     /** One texture, ready to embed or upload. */
+    @Getter
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static final class TextureData {
         private final int id;
-        private final byte[] png;
-        private final int averageColor;
-        private final float scrollU;
-        private final float scrollV;
-
-        TextureData(int id, @Nullable byte[] png, int averageColor, float scrollU, float scrollV) {
-            this.id = id;
-            this.png = png;
-            this.averageColor = averageColor;
-            this.scrollU = scrollU;
-            this.scrollV = scrollV;
-        }
-
-        public int getId() {
-            return id;
-        }
-
         /** Null if the pixels could not be encoded; fall back to {@link #getAverageColor()}. */
         @Nullable
-        public byte[] getPng() {
-            return png;
-        }
-
+        private final byte[] png;
         /**
          * Packed RGB mean of the non transparent texels. Used as a flat stand in
          * when the image itself is unavailable, which is what the old PLY
          * exporter did for every textured face.
          */
-        public int getAverageColor() {
-            return averageColor;
-        }
-
+        private final int averageColor;
         /** UV units per second, 0 when the texture does not animate. */
-        public float getScrollU() {
-            return scrollU;
-        }
-
-        public float getScrollV() {
-            return scrollV;
-        }
+        private final float scrollU;
+        private final float scrollV;
 
         public boolean isAnimated() {
             return scrollU != 0f || scrollV != 0f;

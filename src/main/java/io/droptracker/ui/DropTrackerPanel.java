@@ -38,10 +38,9 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
-import java.util.Map;
 
 @Slf4j
-public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.PanelDataLoadedCallback {
+public class DropTrackerPanel extends PluginPanel {
 
 	private static final ImageIcon LOGO_GIF;
 
@@ -210,9 +209,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 	 * connection dot + label, plus the refresh affordance.
 	 */
 	private JPanel buildHeader() {
-		JPanel header = new JPanel();
-		header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
-		header.setBackground(DropTrackerTheme.SURFACE_1);
+		JPanel header = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
 		header.setBorder(BorderFactory.createCompoundBorder(
 			BorderFactory.createMatteBorder(0, 0, 1, 0, DropTrackerTheme.SURFACE_3),
 			new EmptyBorder(6, 8, 6, 8)));
@@ -225,18 +222,12 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		JLabel logoLabel = new JLabel(LOGO_GIF);
 		topRow.add(logoLabel, BorderLayout.WEST);
 
-		JPanel titleCol = new JPanel();
-		titleCol.setLayout(new BoxLayout(titleCol, BoxLayout.Y_AXIS));
-		titleCol.setBackground(DropTrackerTheme.SURFACE_1);
+		JPanel titleCol = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
 
-		JLabel titleLabel = new JLabel("DropTracker");
-		titleLabel.setFont(FontManager.getRunescapeBoldFont());
-		titleLabel.setForeground(DropTrackerTheme.TEXT);
+		JLabel titleLabel = DropTrackerTheme.label("DropTracker", FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
 		titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		JLabel versionLabel = new JLabel("v" + plugin.pluginVersion);
-		versionLabel.setFont(FontManager.getRunescapeSmallFont());
-		versionLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+		JLabel versionLabel = DropTrackerTheme.label("v" + plugin.pluginVersion, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
 		versionLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		titleCol.add(Box.createVerticalGlue());
@@ -267,7 +258,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		topRow.add(refreshWrap, BorderLayout.EAST);
 
 		header.add(topRow);
-		header.add(Box.createRigidArea(new Dimension(0, 4)));
+		header.add(DropTrackerTheme.gap(4));
 
 		// Row 2: tracked account + connection status on one compact line
 		JPanel statusRow = new JPanel(new BorderLayout(4, 0));
@@ -292,9 +283,7 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 		JPanel connectionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));
 		connectionPanel.setBackground(DropTrackerTheme.SURFACE_1);
 		statusDotLabel = DropTrackerTheme.statusDot(DropTrackerTheme.STONE);
-		statusTextLabel = new JLabel("…");
-		statusTextLabel.setFont(FontManager.getRunescapeSmallFont());
-		statusTextLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+		statusTextLabel = DropTrackerTheme.label("…", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
 		connectionPanel.add(statusDotLabel);
 		connectionPanel.add(statusTextLabel);
 		statusRow.add(connectionPanel, BorderLayout.EAST);
@@ -404,11 +393,5 @@ public class DropTrackerPanel extends PluginPanel implements DropTrackerApi.Pane
 			headerPanel.revalidate();
 			headerPanel.repaint();
 		}
-	}
-
-	@Override
-	public void onDataLoaded(Map<String, Object> data) {
-		updatePlayerPanel();
-		updateGroupPanel("");
 	}
 }

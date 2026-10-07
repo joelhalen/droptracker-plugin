@@ -3,7 +3,6 @@ package io.droptracker.ui.components;
 import lombok.extern.slf4j.Slf4j;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.BasicStroke;
 import java.awt.Component;
 import java.awt.Container;
@@ -14,8 +13,6 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.concurrent.CompletableFuture;
 
-import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -43,13 +40,9 @@ public class LeaderboardComponents {
         headerPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
         headerPanel.setMinimumSize(new Dimension(PluginPanel.PANEL_WIDTH, 90));
         
-        JPanel titleAndSearchPanel = new JPanel();
-        titleAndSearchPanel.setLayout(new BoxLayout(titleAndSearchPanel, BoxLayout.Y_AXIS));
-        titleAndSearchPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel titleAndSearchPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel titleLabel = DropTrackerTheme.label(title, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         titleLabel.setHorizontalAlignment(JLabel.CENTER);
         titleLabel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
@@ -88,7 +81,7 @@ public class LeaderboardComponents {
         searchPanel.add(searchButton, BorderLayout.EAST);
         
         titleAndSearchPanel.add(titleLabel);
-        titleAndSearchPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        titleAndSearchPanel.add(DropTrackerTheme.gap(10));
         titleAndSearchPanel.add(searchPanel);
         
         headerPanel.add(titleAndSearchPanel, BorderLayout.CENTER);
@@ -102,30 +95,22 @@ public class LeaderboardComponents {
     public static <T> JPanel createLeaderboardTable(String title, String nameColumnHeader, 
             List<T> data, LeaderboardItemRenderer<T> renderer) {
         
-        JPanel leaderboardPanel = new JPanel();
-        leaderboardPanel.setLayout(new BoxLayout(leaderboardPanel, BoxLayout.Y_AXIS));
-        leaderboardPanel.setBackground(DropTrackerTheme.SURFACE_0);
+        JPanel leaderboardPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         leaderboardPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         // Title for the leaderboard
-        JLabel leaderboardTitle = new JLabel(title);
-        leaderboardTitle.setFont(FontManager.getRunescapeBoldFont());
-        leaderboardTitle.setForeground(DropTrackerTheme.TEXT);
+        JLabel leaderboardTitle = DropTrackerTheme.label(title, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
         leaderboardTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
         leaderboardTitle.setHorizontalAlignment(JLabel.CENTER);
         
-        JPanel tableContainer = new JPanel();
-        tableContainer.setLayout(new BoxLayout(tableContainer, BoxLayout.Y_AXIS));
-        tableContainer.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel tableContainer = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         tableContainer.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
         tableContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
         tableContainer.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 200));
         
         JPanel headerRow = createTableHeader(nameColumnHeader);
         
-        JPanel dataContainer = new JPanel();
-        dataContainer.setLayout(new BoxLayout(dataContainer, BoxLayout.Y_AXIS));
-        dataContainer.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel dataContainer = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         dataContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
         
         if (data != null && !data.isEmpty()) {
@@ -137,15 +122,13 @@ public class LeaderboardComponents {
                 dataContainer.add(dataRow);
                 
                 if (displayRank < Math.min(5, data.size())) {
-                    dataContainer.add(Box.createRigidArea(new Dimension(0, 3)));
+                    dataContainer.add(DropTrackerTheme.gap(3));
                 }
                 displayRank++;
             }
         } else {
             // No data fallback
-            JLabel noDataLabel = new JLabel("No leaderboard data available");
-            noDataLabel.setFont(FontManager.getRunescapeSmallFont());
-            noDataLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel noDataLabel = DropTrackerTheme.label("No leaderboard data available", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             noDataLabel.setHorizontalAlignment(JLabel.CENTER);
             noDataLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             dataContainer.add(noDataLabel);
@@ -153,11 +136,11 @@ public class LeaderboardComponents {
         
         // Assemble the table
         tableContainer.add(headerRow);
-        tableContainer.add(Box.createRigidArea(new Dimension(0, 5)));
+        tableContainer.add(DropTrackerTheme.gap(5));
         tableContainer.add(dataContainer);
         
         leaderboardPanel.add(leaderboardTitle);
-        leaderboardPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        leaderboardPanel.add(DropTrackerTheme.gap(10));
         leaderboardPanel.add(tableContainer);
         
         return leaderboardPanel;
@@ -172,23 +155,17 @@ public class LeaderboardComponents {
         headerRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
         headerRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
         
-        JLabel rankHeader = new JLabel("Rank");
-        rankHeader.setFont(FontManager.getRunescapeBoldFont());
-        rankHeader.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel rankHeader = DropTrackerTheme.label("Rank", FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT_MUTED);
         rankHeader.setHorizontalAlignment(JLabel.LEFT);
         rankHeader.setPreferredSize(new Dimension(40, 25));
         
         JPanel nameAndLootHeader = new JPanel(new BorderLayout(10, 0));
         nameAndLootHeader.setBackground(DropTrackerTheme.SURFACE_1);
         
-        JLabel nameHeader = new JLabel(nameColumnHeader);
-        nameHeader.setFont(FontManager.getRunescapeBoldFont());
-        nameHeader.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel nameHeader = DropTrackerTheme.label(nameColumnHeader, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT_MUTED);
         nameHeader.setHorizontalAlignment(JLabel.LEFT);
         
-        JLabel lootHeader = new JLabel("Loot");
-        lootHeader.setFont(FontManager.getRunescapeBoldFont());
-        lootHeader.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel lootHeader = DropTrackerTheme.label("Loot", FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT_MUTED);
         lootHeader.setHorizontalAlignment(JLabel.RIGHT);
         lootHeader.setPreferredSize(new Dimension(50, 25));
         
@@ -214,9 +191,7 @@ public class LeaderboardComponents {
         Integer apiRank = renderer.getRank(item);
         int rankToShow = (apiRank != null) ? apiRank : displayRank;
         
-        JLabel rankLabel = new JLabel("#" + rankToShow);
-        rankLabel.setFont(FontManager.getRunescapeSmallFont());
-        rankLabel.setForeground(rankToShow <= 3 ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
+        JLabel rankLabel = DropTrackerTheme.label("#" + rankToShow, FontManager.getRunescapeSmallFont(), rankToShow <= 3 ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
         rankLabel.setHorizontalAlignment(JLabel.LEFT);
         rankLabel.setPreferredSize(new Dimension(40, 25));
         
@@ -251,9 +226,7 @@ public class LeaderboardComponents {
         
         // Loot value
         String lootValue = renderer.getLootValue(item);
-        JLabel lootLabel = new JLabel(lootValue);
-        lootLabel.setFont(FontManager.getRunescapeSmallFont());
-        lootLabel.setForeground(DropTrackerTheme.GOLD);
+        JLabel lootLabel = DropTrackerTheme.label(lootValue, FontManager.getRunescapeSmallFont(), DropTrackerTheme.GOLD);
         lootLabel.setHorizontalAlignment(JLabel.RIGHT);
         lootLabel.setPreferredSize(new Dimension(50, 25));
         

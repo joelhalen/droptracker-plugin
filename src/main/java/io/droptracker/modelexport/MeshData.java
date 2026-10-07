@@ -6,6 +6,10 @@
  */
 package io.droptracker.modelexport;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -32,6 +36,7 @@ import java.util.List;
  * Coordinates are already in glTF's space: Y up, right handed, still in game
  * units (roughly 128 per tile), with index order wound counter clockwise.
  */
+@Getter
 public final class MeshData {
     /** Texture id used by {@link Primitive#getTextureId()} for untextured triangles. */
     public static final int NO_TEXTURE = -1;
@@ -40,50 +45,41 @@ public final class MeshData {
      * One run of triangles sharing a texture. {@code indexOffset} and
      * {@code indexCount} address {@link MeshData#getIndices()}.
      */
+    @Getter
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static final class Primitive {
         private final int textureId;
         private final int indexOffset;
         private final int indexCount;
-        private final boolean translucent;
-
-        Primitive(int textureId, int indexOffset, int indexCount, boolean translucent) {
-            this.textureId = textureId;
-            this.indexOffset = indexOffset;
-            this.indexCount = indexCount;
-            this.translucent = translucent;
-        }
-
-        public int getTextureId() {
-            return textureId;
-        }
-
-        public int getIndexOffset() {
-            return indexOffset;
-        }
-
-        public int getIndexCount() {
-            return indexCount;
-        }
-
         /** True when any triangle in the run is partially transparent. */
-        public boolean isTranslucent() {
-            return translucent;
-        }
-
-
-
+        private final boolean translucent;
 
         public boolean isTextured() {
             return textureId != NO_TEXTURE;
         }
     }
 
+    /** Three floats per vertex. */
     private final float[] positions;
+    /** Four unsigned bytes per vertex, RGBA. */
     private final byte[] colors;
+    /**
+     * One float per vertex: the game's face render priority, or null when the
+     * model has none.
+     * <p>
+     * Per vertex rather than per primitive because a renderer needs it on
+     * translucent geometry too, and translucent faces have to share one mesh so
+     * their triangles can be sorted against each other. Carrying it on the
+     * material would force a split that transparency cannot afford, and would
+     * silently apply to opaque geometry only - which reorders opaque against
+     * translucent and puts an arm through a crystal shield.
+     */
     private final float[] priorities;
+    /** Two floats per vertex, or null when no primitive is textured. */
     private final float[] uvs;
     private final int[] indices;
     private final List<Primitive> primitives;
+    /** Per axis minimum of {@link #getPositions()}; glTF requires it on the position accessor. */
     private final float[] min;
     private final float[] max;
 
@@ -99,55 +95,8 @@ public final class MeshData {
         this.max = max;
     }
 
-    /** Three floats per vertex. */
-    public float[] getPositions() {
-        return positions;
-    }
-
-    /** Four unsigned bytes per vertex, RGBA. */
-    public byte[] getColors() {
-        return colors;
-    }
-
-    /** Two floats per vertex, or null when no primitive is textured. */
-    public float[] getUvs() {
-        return uvs;
-    }
-
-    /**
-     * One float per vertex: the game's face render priority, or null when the
-     * model has none.
-     * <p>
-     * Per vertex rather than per primitive because a renderer needs it on
-     * translucent geometry too, and translucent faces have to share one mesh so
-     * their triangles can be sorted against each other. Carrying it on the
-     * material would force a split that transparency cannot afford, and would
-     * silently apply to opaque geometry only - which reorders opaque against
-     * translucent and puts an arm through a crystal shield.
-     */
-    public float[] getPriorities() {
-        return priorities;
-    }
-
-    public int[] getIndices() {
-        return indices;
-    }
-
-    public List<Primitive> getPrimitives() {
-        return primitives;
-    }
-
     public int getVertexCount() {
         return positions.length / 3;
-    }
-
-    /** Per axis minimum of {@link #getPositions()}; glTF requires it on the position accessor. */
-    public float[] getMin() {
-        return min;
-    }
-
-    public float[] getMax() {
-        return max;
     }
 
     public boolean isEmpty() {

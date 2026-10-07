@@ -60,9 +60,7 @@ public class ActivityPanel {
     }
 
     public JPanel create() {
-        activityRoot = new JPanel();
-        activityRoot.setLayout(new BoxLayout(activityRoot, BoxLayout.Y_AXIS));
-        activityRoot.setBackground(DropTrackerTheme.SURFACE_0);
+        activityRoot = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         activityRoot.setBorder(new EmptyBorder(5, 0, 5, 0));
 
         statsCard = buildStatsCard();
@@ -70,9 +68,9 @@ public class ActivityPanel {
         JPanel configCard = buildGroupConfigCard();
 
         activityRoot.add(statsCard);
-        activityRoot.add(Box.createRigidArea(new Dimension(0, 6)));
+        activityRoot.add(DropTrackerTheme.gap(6));
         activityRoot.add(feedCard);
-        activityRoot.add(Box.createRigidArea(new Dimension(0, 6)));
+        activityRoot.add(DropTrackerTheme.gap(6));
         activityRoot.add(configCard);
         activityRoot.add(Box.createVerticalGlue());
 
@@ -100,9 +98,7 @@ public class ActivityPanel {
     /* ===================== Session stats ===================== */
 
     private JPanel buildStatsCard() {
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel card = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         card.setBorder(DropTrackerTheme.cardBorder(8, 8, 8, 8));
         card.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 70));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -114,12 +110,10 @@ public class ActivityPanel {
     private void rebuildStatsCard(JPanel card) {
         card.removeAll();
 
-        JLabel title = new JLabel("This Session");
-        title.setFont(FontManager.getRunescapeBoldFont());
-        title.setForeground(DropTrackerTheme.TEXT);
+        JLabel title = DropTrackerTheme.label("This Session", FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         card.add(title);
-        card.add(Box.createRigidArea(new Dimension(0, 4)));
+        card.add(DropTrackerTheme.gap(4));
 
         int sent = submissionManager.getTotalSubmissions();
         int processed = submissionManager.getNotificationsSent();
@@ -134,11 +128,9 @@ public class ActivityPanel {
         row.setToolTipText("Submissions that qualified for notifications in your groups this session");
         card.add(row);
 
-        JLabel gpLabel = new JLabel("Session loot: " + formatValue(submissionManager.getTotalValue()) + " GP");
-        gpLabel.setFont(FontManager.getRunescapeSmallFont());
-        gpLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel gpLabel = DropTrackerTheme.label("Session loot: " + formatValue(submissionManager.getTotalValue()) + " GP", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         gpLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        card.add(Box.createRigidArea(new Dimension(0, 3)));
+        card.add(DropTrackerTheme.gap(3));
         card.add(gpLabel);
 
         card.revalidate();
@@ -149,13 +141,9 @@ public class ActivityPanel {
         JPanel stat = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
         stat.setBackground(DropTrackerTheme.SURFACE_1);
 
-        JLabel labelComponent = new JLabel(label);
-        labelComponent.setFont(FontManager.getRunescapeSmallFont());
-        labelComponent.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel labelComponent = DropTrackerTheme.label(label, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
 
-        JLabel valueComponent = new JLabel(value);
-        valueComponent.setFont(FontManager.getRunescapeSmallFont());
-        valueComponent.setForeground(valueColor);
+        JLabel valueComponent = DropTrackerTheme.label(value, FontManager.getRunescapeSmallFont(), valueColor);
 
         stat.add(labelComponent);
         stat.add(valueComponent);
@@ -174,23 +162,17 @@ public class ActivityPanel {
     /* ===================== Submission feed ===================== */
 
     private JPanel buildFeedCard() {
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel card = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         card.setBorder(DropTrackerTheme.cardBorder(8, 8, 8, 8));
         card.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 320));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel title = new JLabel("Submission Feed");
-        title.setFont(FontManager.getRunescapeBoldFont());
-        title.setForeground(DropTrackerTheme.TEXT);
+        JLabel title = DropTrackerTheme.label("Submission Feed", FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
         card.add(title);
-        card.add(Box.createRigidArea(new Dimension(0, 4)));
+        card.add(DropTrackerTheme.gap(4));
 
-        feedListPanel = new JPanel();
-        feedListPanel.setLayout(new BoxLayout(feedListPanel, BoxLayout.Y_AXIS));
-        feedListPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        feedListPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
 
         JScrollPane scrollPane = new JScrollPane(feedListPanel);
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -219,12 +201,10 @@ public class ActivityPanel {
             Collections.reverse(newestFirst);
             for (ValidSubmission submission : newestFirst) {
                 feedListPanel.add(createFeedRow(submission));
-                feedListPanel.add(Box.createRigidArea(new Dimension(0, 3)));
+                feedListPanel.add(DropTrackerTheme.gap(3));
             }
         } else {
-            JLabel emptyLabel = new JLabel("<html>Qualifying drops and achievements will appear here as you receive them. Failed sends can be retried.</html>");
-            emptyLabel.setFont(FontManager.getRunescapeSmallFont());
-            emptyLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel emptyLabel = DropTrackerTheme.label("<html>Qualifying drops and achievements will appear here as you receive them. Failed sends can be retried.</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             emptyLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
             feedListPanel.add(emptyLabel);
         }
@@ -241,22 +221,16 @@ public class ActivityPanel {
         row.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 42));
 
         // Type indicator
-        JLabel typeLabel = new JLabel(submission.getTypeShortLabel());
-        typeLabel.setFont(FontManager.getRunescapeSmallFont());
-        typeLabel.setForeground(typeColor(submission.getTypeShortLabel()));
+        JLabel typeLabel = DropTrackerTheme.label(submission.getTypeShortLabel(), FontManager.getRunescapeSmallFont(), typeColor(submission.getTypeShortLabel()));
         typeLabel.setHorizontalAlignment(SwingConstants.CENTER);
         typeLabel.setPreferredSize(new Dimension(32, 32));
         row.add(typeLabel, BorderLayout.WEST);
 
         // Name + timestamp
-        JPanel textPanel = new JPanel();
-        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
-        textPanel.setBackground(DropTrackerTheme.SURFACE_2);
+        JPanel textPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
 
         String displayText = submission.getDisplayText();
-        JLabel nameLabel = new JLabel(displayText.length() > 24 ? displayText.substring(0, 21) + "..." : displayText);
-        nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel nameLabel = DropTrackerTheme.label(displayText.length() > 24 ? displayText.substring(0, 21) + "..." : displayText, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
         nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JPanel metaRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
@@ -265,9 +239,7 @@ public class ActivityPanel {
 
         String timestamp = formatReceivedTime(submission.getTimeReceived());
         if (timestamp != null) {
-            JLabel timeLabel = new JLabel(timestamp);
-            timeLabel.setFont(FontManager.getRunescapeSmallFont());
-            timeLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel timeLabel = DropTrackerTheme.label(timestamp, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             metaRow.add(timeLabel);
         }
         metaRow.add(statusChip(submission.getStatus()));
@@ -417,14 +389,10 @@ public class ActivityPanel {
     /* ===================== Group config summary ===================== */
 
     private JPanel buildGroupConfigCard() {
-        JPanel wrapperPanel = new JPanel();
-        wrapperPanel.setLayout(new BoxLayout(wrapperPanel, BoxLayout.Y_AXIS));
-        wrapperPanel.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel wrapperPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         wrapperPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 20, 400));
 
-        JPanel groupsContainer = new JPanel();
-        groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
-        groupsContainer.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel groupsContainer = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
 
         // Built empty here; refreshGroupConfigs() populates it from the in-memory list.
         buildGroupConfigPanels(groupsContainer, null);
@@ -446,9 +414,7 @@ public class ActivityPanel {
     }
 
     private JPanel createMainCollapsiblePanel(String title, JPanel content) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel panel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         panel.setBorder(DropTrackerTheme.cardBorder(8, 8, 8, 8));
 
         panel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 200));
@@ -458,9 +424,7 @@ public class ActivityPanel {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel titleLabel = DropTrackerTheme.label(title, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
 
         final ImageIcon expandedIcon = PanelElements.getExpandedIcon();
         final ImageIcon collapsedIcon = PanelElements.getCollapsedIcon();
@@ -523,18 +487,14 @@ public class ActivityPanel {
                 boolean isCollapsed = groupExpandStates.getOrDefault(groupKey, true);
                 JPanel collapsibleGroup = createCompactCollapsiblePanel(groupTitle, groupContentPanel, groupKey, isCollapsed);
                 parentPanel.add(collapsibleGroup);
-                parentPanel.add(Box.createRigidArea(new Dimension(0, 2)));
+                parentPanel.add(DropTrackerTheme.gap(2));
             }
         } else {
-            JPanel emptyPanel = new JPanel();
-            emptyPanel.setLayout(new BoxLayout(emptyPanel, BoxLayout.Y_AXIS));
-            emptyPanel.setBackground(DropTrackerTheme.SURFACE_1);
+            JPanel emptyPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
             emptyPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
             emptyPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 30));
 
-            JLabel noConfigsLabel = new JLabel("No group configurations loaded.");
-            noConfigsLabel.setFont(FontManager.getRunescapeSmallFont());
-            noConfigsLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel noConfigsLabel = DropTrackerTheme.label("No group configurations loaded.", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             noConfigsLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
             emptyPanel.add(Box.createVerticalGlue());
             emptyPanel.add(noConfigsLabel);
@@ -545,9 +505,7 @@ public class ActivityPanel {
     }
 
     private JPanel createCompactCollapsiblePanel(String title, JPanel content, String groupKey, boolean isCollapsed) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel panel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         panel.setBorder(new EmptyBorder(2, 5, 2, 5));
         panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 130));
 
@@ -556,9 +514,7 @@ public class ActivityPanel {
         headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18));
         headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 18));
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeSmallFont());
-        titleLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel titleLabel = DropTrackerTheme.label(title, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
 
         final ImageIcon expandedIcon = PanelElements.getExpandedIcon();
         final ImageIcon collapsedIcon = PanelElements.getCollapsedIcon();
@@ -626,9 +582,7 @@ public class ActivityPanel {
     }
 
     private JPanel createGroupConfigPanel(GroupConfig groupConfig) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel panel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         panel.setBorder(new EmptyBorder(2, 5, 2, 5));
 
         JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
@@ -636,13 +590,11 @@ public class ActivityPanel {
         headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18));
         headerPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 70, 18));
 
-        JLabel notificationsLabel = new JLabel("Notifications:");
-        notificationsLabel.setFont(FontManager.getRunescapeSmallFont());
-        notificationsLabel.setForeground(DropTrackerTheme.TEXT);
+        JLabel notificationsLabel = DropTrackerTheme.label("Notifications:", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
         headerPanel.add(notificationsLabel);
 
         panel.add(headerPanel);
-        panel.add(Box.createRigidArea(new Dimension(0, 2)));
+        panel.add(DropTrackerTheme.gap(2));
 
         panel.add(createConfigRow("Drops", groupConfig.isSendDrops(), "Min: " + groupConfig.getMinimumDropValue()));
         panel.add(createConfigRow("CAs", groupConfig.isSendCAs(), "Min Tier: " + groupConfig.getMinimumCATier()));
@@ -664,20 +616,14 @@ public class ActivityPanel {
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 18));
         row.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 70, 18));
 
-        JLabel nameLabel = new JLabel(label + ":");
-        nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel nameLabel = DropTrackerTheme.label(label + ":", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         row.add(nameLabel);
 
-        JLabel statusLabel = new JLabel(enabled ? "On" : "Off");
-        statusLabel.setFont(FontManager.getRunescapeSmallFont());
-        statusLabel.setForeground(enabled ? DropTrackerTheme.GREEN : DropTrackerTheme.RED);
+        JLabel statusLabel = DropTrackerTheme.label(enabled ? "On" : "Off", FontManager.getRunescapeSmallFont(), enabled ? DropTrackerTheme.GREEN : DropTrackerTheme.RED);
         row.add(statusLabel);
 
         if (details != null && !details.isEmpty()) {
-            JLabel detailsLabel = new JLabel("(" + details + ")");
-            detailsLabel.setFont(FontManager.getRunescapeSmallFont());
-            detailsLabel.setForeground(DropTrackerTheme.STONE);
+            JLabel detailsLabel = DropTrackerTheme.label("(" + details + ")", FontManager.getRunescapeSmallFont(), DropTrackerTheme.STONE);
             row.add(detailsLabel);
         }
 

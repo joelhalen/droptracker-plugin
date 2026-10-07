@@ -8,7 +8,6 @@ import lombok.Data;
 /// Defines the top groups as returned by the API when the panel initially loads, or when the user refreshes the group page
 @Data
 public class TopGroupResult {
-    @SerializedName("groups")
     private List<TopGroup> groups;
 
     /// Nested class for individual group data
@@ -20,7 +19,6 @@ public class TopGroupResult {
         @SerializedName("total_loot")
         private String totalLoot;
         
-        @SerializedName("rank")
         private Integer rank;
         
         @SerializedName("group_id")

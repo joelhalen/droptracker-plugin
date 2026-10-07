@@ -4,7 +4,6 @@ import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.client.ui.FontManager;
 
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -32,12 +31,10 @@ public final class StateViews {
 
     /** Error message with a retry (or back) button. */
     public static JPanel error(String message, String buttonText, Runnable retryAction) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(DropTrackerTheme.SURFACE_0);
+        JPanel panel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         panel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        panel.add(Box.createRigidArea(new Dimension(0, 20)));
+        panel.add(DropTrackerTheme.gap(20));
 
         JLabel errorLabel = new JLabel("<html><div style='text-align:center;'>" + message + "</div></html>");
         errorLabel.setFont(FontManager.getRunescapeSmallFont());
@@ -47,7 +44,7 @@ public final class StateViews {
         panel.add(errorLabel);
 
         if (retryAction != null) {
-            panel.add(Box.createRigidArea(new Dimension(0, 12)));
+            panel.add(DropTrackerTheme.gap(12));
             JButton retryButton = new JButton(buttonText != null ? buttonText : "Retry");
             DropTrackerTheme.styleButton(retryButton);
             retryButton.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -60,9 +57,7 @@ public final class StateViews {
     }
 
     private static JPanel centeredLabelPanel(String text, java.awt.Color color, int topGap) {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(DropTrackerTheme.SURFACE_0);
+        JPanel panel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         panel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         panel.add(Box.createRigidArea(new Dimension(0, topGap)));

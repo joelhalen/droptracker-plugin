@@ -18,13 +18,9 @@ import java.util.Locale;
  */
 @Getter
 public class EventNotification {
-    @SerializedName("id")
     private String id;
-    @SerializedName("type")
     private String type;
-    @SerializedName("ts")
     private long ts;
-    @SerializedName("event")
     @Nullable
     private EventRef event;
     /**
@@ -32,10 +28,8 @@ public class EventNotification {
      * versionless envelope. Older servers omit it entirely — read it through
      * {@link #priorityTier()}, never raw.
      */
-    @SerializedName("priority")
     @Nullable
     private String priority;
-    @SerializedName("data")
     private Data data;
 
     /**
@@ -74,9 +68,7 @@ public class EventNotification {
 
     @Getter
     public static class EventRef {
-        @SerializedName("id")
         private Integer id;
-        @SerializedName("name")
         private String name;
     }
 
@@ -96,13 +88,10 @@ public class EventNotification {
         private String teamName;
         @SerializedName("player_name")
         private String playerName;
-        @SerializedName("points")
         private Integer points;
         @SerializedName("team_score")
         private Integer teamScore;
-        @SerializedName("progress")
         private Long progress;
-        @SerializedName("target")
         private Long target;
         @SerializedName("milestone_pct")
         private Integer milestonePct;
@@ -137,7 +126,6 @@ public class EventNotification {
         /** How the credit was earned: "drop", "manual", "collection_log"... */
         @SerializedName("source_type")
         private String sourceType;
-        @SerializedName("line")
         private String line;
         @SerializedName("dice_str")
         private String diceStr;
@@ -150,10 +138,8 @@ public class EventNotification {
         @SerializedName("coin_balance")
         private Integer coinBalance;
         /** submission_notice only: server-supplied plain text. */
-        @SerializedName("message")
         private String message;
         // clan_chat_message (Discord→game bridge): who spoke in Discord.
-        @SerializedName("sender")
         private String sender;
     }
 }

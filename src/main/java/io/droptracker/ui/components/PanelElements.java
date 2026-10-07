@@ -157,23 +157,7 @@ public class PanelElements {
 
     // Method to load lootboard for a specific group ID
     public static void loadLootboardForGroup(int groupId) {
-        // Check if we already have this group cached
-        if (isLootboardCacheValid(groupId)) {
-            return;
-        }
-
-        HttpUrl imageUrl = lootboardUrl(groupId);
-        if (imageUrl == null) {
-            return;
-        }
-
-        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
-            SwingUtilities.invokeLater(() -> {
-                cachedLootboardImage = image;
-                cachedGroupId = groupId;
-                cachedLootboardAtMs = System.currentTimeMillis();
-            });
-        });
+        loadLootboardForGroup(groupId, null);
     }
 
     /**
@@ -257,14 +241,49 @@ public class PanelElements {
         return container;
     }
 
+    private static JDialog imageDialog(JFrame parentFrame, String title) {
+        JDialog imageDialog = new JDialog(parentFrame, title, false);
+        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        return imageDialog;
+    }
+
+    /** Fills a fresh image dialog with a click-to-close loading message. */
+    private static JLabel showLoading(JDialog imageDialog, JFrame parentFrame, String text) {
+        JLabel loadingLabel = DropTrackerTheme.label(text, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
+        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
+        loadingLabel.setVerticalAlignment(JLabel.CENTER);
+        loadingLabel.setPreferredSize(new Dimension(400, 300));
+        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
+        loadingLabel.setOpaque(true);
+        addCloseListener(loadingLabel, imageDialog);
+
+        imageDialog.add(loadingLabel);
+        imageDialog.pack();
+        imageDialog.setLocationRelativeTo(parentFrame);
+        return loadingLabel;
+    }
+
+    /** Swaps the loading message for the image, or turns it into {@code failure}. */
+    private static void showLoaded(JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame,
+                                   @Nullable BufferedImage image, String failure) {
+        if (image != null) {
+            imageDialog.getContentPane().removeAll();
+            displayImageInDialog(imageDialog, image, parentFrame);
+        } else {
+            loadingLabel.setText(failure);
+            loadingLabel.setForeground(DropTrackerTheme.RED);
+        }
+        imageDialog.revalidate();
+        imageDialog.repaint();
+    }
+
     // Method to show lootboard popup for a specific group ID
     public static void showLootboardForGroup(Client client, int groupId) {
         if (cachedGroupName == null) {
             cachedGroupName = "All Players";
         }
         final JFrame parentFrame = getParentFrame(client);
-        JDialog imageDialog = new JDialog(parentFrame, cachedGroupName + " - Lootboard", false);
-        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        JDialog imageDialog = imageDialog(parentFrame, cachedGroupName + " - Lootboard");
 
         // Check if we already have the right group cached
         if (isLootboardCacheValid(groupId)) {
@@ -275,37 +294,11 @@ public class PanelElements {
             return;
         }
 
-        // Show loading dialog first
-        JLabel loadingLabel = new JLabel("Loading group " + groupId + " lootboard...");
-        loadingLabel.setForeground(DropTrackerTheme.TEXT);
-        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        loadingLabel.setVerticalAlignment(JLabel.CENTER);
-        loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
-        loadingLabel.setOpaque(true);
-
-        // Add click to close
-        addCloseListener(loadingLabel, imageDialog);
-
-        imageDialog.add(loadingLabel);
-        imageDialog.pack();
-        imageDialog.setLocationRelativeTo(parentFrame);
+        JLabel loadingLabel = showLoading(imageDialog, parentFrame, "Loading group " + groupId + " lootboard...");
 
         // Start loading BEFORE showing the dialog to avoid modality blocking
-        loadLootboardForGroup(groupId, () -> {
-            if (cachedLootboardImage != null) {
-                imageDialog.getContentPane().removeAll();
-                displayImageInDialog(imageDialog, cachedLootboardImage, parentFrame);
-                imageDialog.revalidate();
-                imageDialog.repaint();
-            } else {
-                loadingLabel.setText("Failed to load group " + groupId + " lootboard");
-                loadingLabel.setForeground(DropTrackerTheme.RED);
-                imageDialog.revalidate();
-                imageDialog.repaint();
-            }
-        });
+        loadLootboardForGroup(groupId, () -> showLoaded(imageDialog, loadingLabel, parentFrame,
+            cachedLootboardImage, "Failed to load group " + groupId + " lootboard"));
 
         imageDialog.setVisible(true);
     }
@@ -317,55 +310,19 @@ public class PanelElements {
      * tab for server-rendered board images.
      */
     public static void showRemoteImage(Client client, String title, @Nullable HttpUrl imageUrl) {
-        final JFrame parentFrame = getParentFrame(client);
-        JDialog imageDialog = new JDialog(parentFrame, title, false);
-        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-
-        JLabel loadingLabel = new JLabel("Loading " + title + "...");
-        loadingLabel.setForeground(DropTrackerTheme.TEXT);
-        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        loadingLabel.setVerticalAlignment(JLabel.CENTER);
-        loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
-        loadingLabel.setOpaque(true);
-        addCloseListener(loadingLabel, imageDialog);
-
-        imageDialog.add(loadingLabel);
-        imageDialog.pack();
-        imageDialog.setLocationRelativeTo(parentFrame);
-        loadUrlImage(imageUrl, imageDialog, loadingLabel, parentFrame, title);
-        imageDialog.setVisible(true);
+        showUrlImage(client, title, "Loading " + title + "...", imageUrl);
     }
 
     // Method to show submission image popup
-    public static void showSubmissionImage(Client client, String submissionType, @Nullable HttpUrl submissionImageUrl, String tooltip) {
+    public static void showSubmissionImage(Client client, String submissionType, @Nullable HttpUrl submissionImageUrl) {
+        showUrlImage(client, getSubmissionDialogTitle(submissionType), "Loading " + submissionType + " image...", submissionImageUrl);
+    }
+
+    private static void showUrlImage(Client client, String title, String loadingText, @Nullable HttpUrl imageUrl) {
         final JFrame parentFrame = getParentFrame(client);
-        String dialogTitle = getSubmissionDialogTitle(submissionType);
-        JDialog imageDialog = new JDialog(parentFrame, dialogTitle, false);
-        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-
-        // Show loading dialog first
-        JLabel loadingLabel = new JLabel("Loading " + submissionType + " image...");
-        loadingLabel.setForeground(DropTrackerTheme.TEXT);
-        loadingLabel.setFont(FontManager.getRunescapeBoldFont());
-        loadingLabel.setHorizontalAlignment(JLabel.CENTER);
-        loadingLabel.setVerticalAlignment(JLabel.CENTER);
-        loadingLabel.setPreferredSize(new Dimension(400, 300));
-        loadingLabel.setBackground(DropTrackerTheme.SURFACE_1);
-        loadingLabel.setOpaque(true);
-
-        // Add click to close
-        addCloseListener(loadingLabel, imageDialog);
-
-        imageDialog.add(loadingLabel);
-        imageDialog.pack();
-        imageDialog.setLocationRelativeTo(parentFrame);
-
-        // Load image from submission URL (similar to lootboard loading)
-        loadUrlImage(submissionImageUrl, imageDialog, loadingLabel, parentFrame, tooltip);
-
-        // Show the modal dialog
+        JDialog imageDialog = imageDialog(parentFrame, title);
+        JLabel loadingLabel = showLoading(imageDialog, parentFrame, loadingText);
+        loadUrlImage(imageUrl, imageDialog, loadingLabel, parentFrame);
         imageDialog.setVisible(true);
     }
 
@@ -383,28 +340,16 @@ public class PanelElements {
     }
 
 
-    private static void loadUrlImage(@Nullable HttpUrl imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame, String tooltip) {
+    private static void loadUrlImage(@Nullable HttpUrl imageUrl, JDialog imageDialog, JLabel loadingLabel, JFrame parentFrame) {
         if (imageUrl == null) {
             loadingLabel.setText("No image URL available");
             loadingLabel.setForeground(DropTrackerTheme.RED);
             return;
         }
 
-        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image -> {
-            SwingUtilities.invokeLater(() -> {
-                if (image != null) {
-                    imageDialog.getContentPane().removeAll();
-                    displayImageInDialog(imageDialog, image, parentFrame);
-                    imageDialog.revalidate();
-                    imageDialog.repaint();
-                } else {
-                    loadingLabel.setText("Failed to load image... (likely a bug on our end)");
-                    loadingLabel.setForeground(DropTrackerTheme.RED);
-                    imageDialog.revalidate();
-                    imageDialog.repaint();
-                }
-            });
-        });
+        CompletableFuture.supplyAsync(() -> fetchImage(imageUrl)).thenAccept(image ->
+            SwingUtilities.invokeLater(() -> showLoaded(imageDialog, loadingLabel, parentFrame, image,
+                "Failed to load image... (likely a bug on our end)")));
     }
 
     /**
@@ -412,19 +357,13 @@ public class PanelElements {
      * Sized by the surrounding grid; intended for 2-column stat grids.
      */
     public static JPanel createStatBox(String label, String value) {
-        JPanel box = new JPanel();
-        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-        box.setBackground(DropTrackerTheme.SURFACE_2);
+        JPanel box = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
         box.setBorder(DropTrackerTheme.cardBorder(5, 5, 5, 5));
 
-        JLabel nameLabel = new JLabel(label);
-        nameLabel.setFont(FontManager.getRunescapeSmallFont());
-        nameLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel nameLabel = DropTrackerTheme.label(label, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         nameLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        JLabel valueLabel = new JLabel(value);
-        valueLabel.setFont(FontManager.getRunescapeBoldFont());
-        valueLabel.setForeground(DropTrackerTheme.GOLD);
+        JLabel valueLabel = DropTrackerTheme.label(value, FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         box.add(nameLabel);
@@ -434,8 +373,7 @@ public class PanelElements {
     }
 
     public static JPanel getLatestWelcomeContent(DropTrackerApi api) {
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BorderLayout());
+        JPanel contentPanel = new JPanel(new BorderLayout());
         contentPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         // Start with default welcome text
@@ -455,8 +393,7 @@ public class PanelElements {
     }
 
     public static JPanel getLatestUpdateContent(DropTrackerConfig config, DropTrackerApi api) {
-        JPanel contentPanel = new JPanel();
-        contentPanel.setLayout(new BorderLayout());
+        JPanel contentPanel = new JPanel(new BorderLayout());
         contentPanel.setBackground(DropTrackerTheme.SURFACE_1);
 
         String defaultUpdateText = "- Implemented support for tracking Personal Bests from a POH adventure log.\n\n" +
@@ -532,9 +469,7 @@ public class PanelElements {
         headerPanel.setBorder(new EmptyBorder(6, 8, 6, 8));
         headerPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(FontManager.getRunescapeBoldFont());
-        titleLabel.setForeground(isUnderlined ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
+        JLabel titleLabel = DropTrackerTheme.label(title, FontManager.getRunescapeBoldFont(), isUnderlined ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
 
         JLabel toggleIcon = new JLabel(EXPANDED_ICON);
 
@@ -629,13 +564,7 @@ public class PanelElements {
         final int containerHeight = withTitle ? 150 : 100;
 
         // Main container with title and submissions
-        JPanel container = new JPanel();
-        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.setBackground(DropTrackerTheme.SURFACE_1);
-        container.setBorder(new EmptyBorder(10, 0, 10, 0));
-        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, containerHeight));
-        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, containerHeight));
-        container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
+        JPanel container = submissionsContainer(containerHeight);
 
         // Title panel to ensure centering
         JPanel titlePanel = new JPanel();
@@ -644,26 +573,11 @@ public class PanelElements {
         titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50)); // Increased from 20 to 50
         titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 50));
 
-        JLabel title = new JLabel("Recent Submissions");
-        title.setFont(FontManager.getRunescapeSmallFont());
-        title.setForeground(DropTrackerTheme.TEXT);
+        JLabel title = DropTrackerTheme.label("Recent Submissions", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
         title.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the title
 
-        // Create a text area that looks like a label but handles wrapping better
-        JTextArea titleDesc = new JTextArea("Clicking an icon opens a screenshot, if available.");
-        titleDesc.setForeground(DropTrackerTheme.TEXT_MUTED);
-        titleDesc.setFont(FontManager.getRunescapeSmallFont());
-        titleDesc.setBackground(titlePanel.getBackground());
-        titleDesc.setEditable(false);
-        titleDesc.setWrapStyleWord(true);
-        titleDesc.setLineWrap(true);
-        titleDesc.setBorder(null);
-        titleDesc.setOpaque(false);
-        titleDesc.setColumns(20);
-        titleDesc.setAlignmentX(Component.CENTER_ALIGNMENT); // Center the description
-
         titlePanel.add(title);
-        titlePanel.add(Box.createRigidArea(new Dimension(0, 3)));
+        titlePanel.add(DropTrackerTheme.gap(3));
 
         // Alternative: Single HTML label combining warning and text
         JLabel combinedLabel = new JLabel("<html><div style='text-align: center;'><font color='orange'>!</font> <font color='#C0C0C0'>Clicking an icon opens a screenshot, if available.</font></div></html>");
@@ -672,13 +586,10 @@ public class PanelElements {
         combinedLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         titlePanel.add(combinedLabel);
-        titlePanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        titlePanel.add(DropTrackerTheme.gap(8));
 
         // Submissions panel - use FlowLayout wrapper to center the GridBagLayout
-        JPanel submissionWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        submissionWrapper.setBackground(DropTrackerTheme.SURFACE_1);
-        submissionWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80)); // Keep same
-        submissionWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
+        JPanel submissionWrapper = centeredRow(80);
 
         JPanel panel = new JPanel();
         panel.setLayout(new GridBagLayout());
@@ -690,7 +601,7 @@ public class PanelElements {
         // Add components to container
         if (withTitle) {
             container.add(titlePanel);
-            container.add(Box.createRigidArea(new Dimension(0, 5))); // Small gap between title and submissions
+            container.add(DropTrackerTheme.gap(5)); // Small gap between title and submissions
         }
         container.add(submissionWrapper);
 
@@ -703,40 +614,40 @@ public class PanelElements {
      * {@link #createRecentSubmissionPanel} so the layout doesn't jump when data arrives.
      */
     public static JPanel createRecentSubmissionsPlaceholder(String message) {
-        JPanel container = new JPanel();
-        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.setBackground(DropTrackerTheme.SURFACE_1);
-        container.setBorder(new EmptyBorder(10, 0, 10, 0));
-        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
-        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 120));
-        container.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel container = submissionsContainer(120);
 
-        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        titlePanel.setBackground(DropTrackerTheme.SURFACE_1);
-        titlePanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
-        titlePanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 20));
+        JPanel titlePanel = centeredRow(20);
+        titlePanel.add(DropTrackerTheme.label("Recent Submissions", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT));
 
-        JLabel title = new JLabel("Recent Submissions");
-        title.setFont(FontManager.getRunescapeSmallFont());
-        title.setForeground(DropTrackerTheme.TEXT);
-        titlePanel.add(title);
+        JPanel contentWrapper = centeredRow(80);
 
-        JPanel contentWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        contentWrapper.setBackground(DropTrackerTheme.SURFACE_1);
-        contentWrapper.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-        contentWrapper.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 80));
-
-        JLabel messageLabel = new JLabel(message);
-        messageLabel.setFont(FontManager.getRunescapeSmallFont());
-        messageLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel messageLabel = DropTrackerTheme.label(message, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         messageLabel.setHorizontalAlignment(JLabel.CENTER);
         contentWrapper.add(messageLabel);
 
         container.add(titlePanel);
-        container.add(Box.createRigidArea(new Dimension(0, 5)));
+        container.add(DropTrackerTheme.gap(5));
         container.add(contentWrapper);
 
         return container;
+    }
+
+    private static JPanel submissionsContainer(int height) {
+        JPanel container = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
+        container.setBorder(new EmptyBorder(10, 0, 10, 0));
+        container.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, height));
+        container.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, height));
+        container.setAlignmentX(Component.LEFT_ALIGNMENT); // Keep consistent with parent
+        return container;
+    }
+
+    /** A fixed-height, panel-wide row that centers what it holds. */
+    private static JPanel centeredRow(int height) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        row.setBackground(DropTrackerTheme.SURFACE_1);
+        row.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, height));
+        row.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, height));
+        return row;
     }
 
     private static JPanel updateValidSubmissionPanel(JPanel panel, List<RecentSubmission> recentSubmissions, ItemManager itemManager, Client client, boolean forGroup) {
@@ -771,66 +682,16 @@ public class PanelElements {
                     Integer quantity = submission.getDropQuantity();
 
                     if (itemId != null && quantity != null && itemManager != null) {
-                        final AsyncBufferedImage originalImage = itemManager.getImage(itemId, quantity, quantity > 1);
-                        final float alpha = (quantity > 0 ? 1.0f : 0.5f);
-
-                        // Create a scaled version of the image for initial display
-                        BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-                        BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
-                        final JLabel dropContainer = PanelElements.createStyledIconContainer(effects);
-                        dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
-                        dropContainer.setIcon(new ImageIcon(opaque));
-                        iconContainer = dropContainer;
-
-                        // onLoaded runs on the client thread (and re-posts there when
-                        // the sprite is already loaded): scale and relayout on the EDT.
-                        originalImage.onLoaded(() -> SwingUtilities.invokeLater(() -> {
-                            // Scale the loaded image to 28x28
-                            Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
-                            BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-                            Graphics g = scaledBuffered.getGraphics();
-                            g.drawImage(scaled, 0, 0, null);
-                            g.dispose(); // Clean up graphics resources
-
-                            BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
-                            dropContainer.setIcon(new ImageIcon(finalImage));
-                            dropContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
-                            dropContainer.revalidate();
-                            dropContainer.repaint();
-                        }));
+                        iconContainer = itemIcon(itemManager.getImage(itemId, quantity, quantity > 1),
+                            quantity > 0 ? 1.0f : 0.5f, effects, submission, forGroup, true);
                     }
                 } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
                     // Handle collection log items
                     Integer itemId = submission.getClogItemId();
 
                     if (itemId != null && itemManager != null) {
-                        final AsyncBufferedImage originalImage = itemManager.getImage(itemId, 1, false);
-                        final float alpha = 1.0f;
-
-                        // Create a scaled version of the image for initial display
-                        BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-                        BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
-
-                        final JLabel clogContainer = PanelElements.createStyledIconContainer(effects);
-                        clogContainer.setToolTipText(buildSubmissionTooltip(submission, forGroup));
-                        clogContainer.setIcon(new ImageIcon(opaque));
-                        iconContainer = clogContainer;
-
-                        // onLoaded runs on the client thread (and re-posts there when
-                        // the sprite is already loaded): scale and relayout on the EDT.
-                        originalImage.onLoaded(() -> SwingUtilities.invokeLater(() -> {
-                            // Scale the loaded image to 28x28
-                            Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
-                            BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
-                            Graphics g = scaledBuffered.getGraphics();
-                            g.drawImage(scaled, 0, 0, null);
-                            g.dispose(); // Clean up graphics resources
-
-                            BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
-                            clogContainer.setIcon(new ImageIcon(finalImage));
-                            clogContainer.revalidate();
-                            clogContainer.repaint();
-                        }));
+                        iconContainer = itemIcon(itemManager.getImage(itemId, 1, false),
+                            1.0f, effects, submission, forGroup, false);
                     }
                 } else {
                     // Personal bests, and event completions credited by any
@@ -876,12 +737,11 @@ public class PanelElements {
                         // Capture submission data for the click listener
                         final String submissionTypeForListener = submission.getSubmissionType();
                         final HttpUrl submissionImageUrlForListener = submission.submissionImageUrl();
-                        final String tooltipForListener = buildSubmissionTooltip(submission, forGroup);
                         // Add hover effect and click listener
                         iconContainer.addMouseListener(new MouseAdapter() {
                             @Override
                             public void mouseClicked(MouseEvent e) {
-                                PanelElements.showSubmissionImage(client, submissionTypeForListener, submissionImageUrlForListener, tooltipForListener);
+                                PanelElements.showSubmissionImage(client, submissionTypeForListener, submissionImageUrlForListener);
                             }
                         });
                     }
@@ -904,9 +764,7 @@ public class PanelElements {
 
         // If no icons were added, show a message
         if (successfullyAdded == 0) {
-            JLabel debugLabel = new JLabel("No recent submissions to display");
-            debugLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
-            debugLabel.setFont(FontManager.getRunescapeSmallFont());
+            JLabel debugLabel = DropTrackerTheme.label("No recent submissions to display", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             c.gridx = 0;
             c.gridy = 0;
             c.gridwidth = ITEMS_PER_ROW;
@@ -919,50 +777,63 @@ public class PanelElements {
         return panel;
     }
 
+    /**
+     * A 28px item icon that starts blank and fills in once the sprite loads.
+     * {@code retip} rebuilds the tooltip then, refreshing its "time ago".
+     */
+    private static JLabel itemIcon(AsyncBufferedImage originalImage, float alpha, boolean effects,
+                                   RecentSubmission submission, boolean forGroup, boolean retip) {
+        // Create a scaled version of the image for initial display
+        BufferedImage scaledImage = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage opaque = ImageUtil.alphaOffset(scaledImage, alpha);
+        final JLabel container = PanelElements.createStyledIconContainer(effects);
+        container.setToolTipText(buildSubmissionTooltip(submission, forGroup));
+        container.setIcon(new ImageIcon(opaque));
+
+        // onLoaded runs on the client thread (and re-posts there when
+        // the sprite is already loaded): scale and relayout on the EDT.
+        originalImage.onLoaded(() -> SwingUtilities.invokeLater(() -> {
+            // Scale the loaded image to 28x28
+            Image scaled = originalImage.getScaledInstance(28, 28, Image.SCALE_SMOOTH);
+            BufferedImage scaledBuffered = new BufferedImage(28, 28, BufferedImage.TYPE_INT_ARGB);
+            Graphics g = scaledBuffered.getGraphics();
+            g.drawImage(scaled, 0, 0, null);
+            g.dispose(); // Clean up graphics resources
+
+            BufferedImage finalImage = ImageUtil.alphaOffset(scaledBuffered, alpha);
+            container.setIcon(new ImageIcon(finalImage));
+            if (retip) {
+                container.setToolTipText(buildSubmissionTooltip(submission, forGroup));
+            }
+            container.revalidate();
+            container.repaint();
+        }));
+        return container;
+    }
+
     public static String buildSubmissionTooltip(RecentSubmission submission, boolean forGroup) {
         try {
             String tooltip = "<html><p style='font-size:10px;'>";
-            if (forGroup) {
-                if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-                    String pbTime = sanitizeTxt(submission.getPbTime());
-                    tooltip += "<b>" + pbTime + "</b> at " + sanitizeTxt(submission.getSourceName()) + "<br>" +
-                            sanitizeTxt(submission.getPlayerName()) + " - new personal best!<br><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-                    String itemName = sanitizeTxt(submission.getDropItemName());
-                    tooltip += "<b>" + itemName + "</b><br>" +
-                            sanitizeTxt(submission.getPlayerName()) + "<br>" +
-                            "from: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-                    String itemName = sanitizeTxt(submission.getClogItemName());
-                    tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
-                            "<b>" + itemName + "</b><br>" +
-                            "<i>from: " + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else {
-                    tooltip += genericSubmissionTooltip(submission);
-                }
+            if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
+                String pbTime = sanitizeTxt(submission.getPbTime());
+                tooltip += "<b>" + pbTime + "</b> at " + sanitizeTxt(submission.getSourceName()) + "<br>" +
+                        sanitizeTxt(submission.getPlayerName()) + " - new personal best!<br><br>" +
+                        "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
+            } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
+                String itemName = sanitizeTxt(submission.getDropItemName());
+                tooltip += "<b>" + itemName + "</b><br>" +
+                        sanitizeTxt(submission.getPlayerName()) + "<br>" +
+                        "from: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
+                        "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
+            } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
+                String itemName = sanitizeTxt(submission.getClogItemName());
+                // Group tooltips also name where the item came from.
+                tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
+                        "<b>" + itemName + "</b><br>" +
+                        (forGroup ? "<i>from: " + sanitizeTxt(submission.getSourceName()) + "</i><br>" : "") +
+                        "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
             } else {
-                if (submission.getSubmissionType().equalsIgnoreCase("pb")) {
-                    String pbTime = sanitizeTxt(submission.getPbTime());
-                    tooltip += "<b>" + pbTime + "</b> at " + sanitizeTxt(submission.getSourceName()) + "<br>" +
-                            sanitizeTxt(submission.getPlayerName()) + " - new personal best!<br><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else if (submission.getSubmissionType().equalsIgnoreCase("drop")) {
-                    String itemName = sanitizeTxt(submission.getDropItemName());
-                    tooltip += "<b>" + itemName + "</b><br>" +
-                            sanitizeTxt(submission.getPlayerName()) + "<br>" +
-                            "from: <i>" + sanitizeTxt(submission.getSourceName()) + "</i><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else if (submission.getSubmissionType().equalsIgnoreCase("clog")) {
-                    String itemName = sanitizeTxt(submission.getClogItemName());
-                    tooltip += sanitizeTxt(submission.getPlayerName()) + " - New Collection Log:<br>" +
-                            "<b>" + itemName + "</b><br>" +
-                            "<i>" + sanitizeTxt(submission.timeSinceReceived()) + "</i>";
-                } else {
-                    tooltip += genericSubmissionTooltip(submission);
-                }
+                tooltip += genericSubmissionTooltip(submission);
             }
             tooltip += "</p></html>";
             return tooltip;

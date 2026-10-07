@@ -125,21 +125,19 @@ public class DeathMessageEditor extends JPanel {
         setBackground(DropTrackerTheme.SURFACE_0);
         setBorder(new EmptyBorder(10, 12, 10, 12));
 
-        JLabel title = new JLabel("Your death message");
-        title.setFont(FontManager.getRunescapeBoldFont());
-        title.setForeground(DropTrackerTheme.GOLD);
+        JLabel title = DropTrackerTheme.label("Your death message", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         add(row(title));
 
         add(row(wrapped(
             "Write what your clan sees when you die. One of your messages is picked at random for each death, "
                 + "in every clan whose leaders let members write their own. You can also edit these on the "
                 + "DropTracker website or with /settings in Discord.")));
-        add(Box.createRigidArea(new Dimension(0, 6)));
+        add(DropTrackerTheme.gap(6));
 
         groupsLabel.setFont(FontManager.getRunescapeSmallFont());
         groupsLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
         add(row(groupsLabel));
-        add(Box.createRigidArea(new Dimension(0, 6)));
+        add(DropTrackerTheme.gap(6));
 
         JPanel rows = new JPanel(new GridLayout(DeathMessageRules.MAX_MESSAGES, 1, 0, 4));
         rows.setBackground(DropTrackerTheme.SURFACE_0);
@@ -177,23 +175,21 @@ public class DeathMessageEditor extends JPanel {
         }
         lastFocused = fields.get(0);
         add(row(rows));
-        add(Box.createRigidArea(new Dimension(0, 6)));
+        add(DropTrackerTheme.gap(6));
 
-        JLabel tokensTitle = new JLabel("Click a placeholder to add it:");
-        tokensTitle.setFont(FontManager.getRunescapeSmallFont());
-        tokensTitle.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel tokensTitle = DropTrackerTheme.label("Click a placeholder to add it:", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         add(row(tokensTitle));
         tokenPanel.setBackground(DropTrackerTheme.SURFACE_0);
         setTokens(DeathMessageRules.TOKENS);
         add(row(tokenPanel));
-        add(Box.createRigidArea(new Dimension(0, 6)));
+        add(DropTrackerTheme.gap(6));
 
         previewLabel.setFont(FontManager.getRunescapeSmallFont());
         previewLabel.setForeground(DropTrackerTheme.TEXT);
         add(row(previewLabel));
         statusLabel.setFont(FontManager.getRunescapeSmallFont());
         add(row(statusLabel));
-        add(Box.createRigidArea(new Dimension(0, 8)));
+        add(DropTrackerTheme.gap(8));
 
         JPanel buttons = new JPanel(new BorderLayout());
         buttons.setBackground(DropTrackerTheme.SURFACE_0);

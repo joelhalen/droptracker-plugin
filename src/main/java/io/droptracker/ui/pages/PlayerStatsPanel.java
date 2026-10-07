@@ -6,7 +6,6 @@ import io.droptracker.DropTrackerPlugin;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.PlayerSearchResult;
 import io.droptracker.models.api.TopPlayersResult;
-import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.service.PlayerModelService;
 import io.droptracker.ui.components.LeaderboardComponents;
 import io.droptracker.ui.components.StateViews;
@@ -15,156 +14,69 @@ import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
-public class PlayerStatsPanel {
-    private final Client client;
-    private final DropTrackerConfig config;
-    private final DropTrackerApi api;
+public class PlayerStatsPanel extends SearchPage {
     private final DropTrackerPlugin plugin;
-    private final ItemManager itemManager;
     private final PlayerModelService playerModelService;
 
-    // UI components that we need to update
-    private JPanel contentPanel;
-    private JTextField searchField;
-    private JPanel leaderboardPlaceholder;
-
     public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, PlayerModelService playerModelService) {
-        this.client = client;
+        super(client, config, api, itemManager);
         this.plugin = plugin;
-        this.config = config;
-        this.api = api;
-        this.itemManager = itemManager;
         this.playerModelService = playerModelService;
     }
 
     public JPanel create() {
-        var mainPanel = new JPanel();
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBackground(DropTrackerTheme.SURFACE_0);
-
-        // Header section with title and search using LeaderboardComponents
-        LeaderboardComponents.HeaderResult headerResult = LeaderboardComponents.createHeaderPanel(
-                "DropTracker - Players",
-                "Search for a player",
-                () -> performPlayerSearch("")
-        );
-        searchField = headerResult.searchField;
-
-        // Content panel that will change based on state
-        contentPanel = new JPanel();
-        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        contentPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        contentPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Show default state
-        showDefaultState();
-
-        // Add components to main panel - match GroupPanel structure
-        mainPanel.add(headerResult.panel);
-        mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        mainPanel.add(contentPanel);
-        mainPanel.add(Box.createVerticalGlue());
-
-        return mainPanel;
+        return create("DropTracker - Players", "Search for a player", () -> performPlayerSearch(""));
     }
 
-    private void showDefaultState() {
-        contentPanel.removeAll();
-
-        // Create center panel for instructions and leaderboard
-        JPanel defaultPanel = new JPanel();
-        defaultPanel.setLayout(new BoxLayout(defaultPanel, BoxLayout.Y_AXIS));
-        defaultPanel.setBackground(DropTrackerTheme.SURFACE_0);
-        defaultPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        // Add some spacing
-        defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
-
-        // Instructions text
-        JLabel instructionLabel = new JLabel("Search for a player by name above");
-        instructionLabel.setFont(FontManager.getRunescapeFont());
-        instructionLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
-        instructionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        instructionLabel.setHorizontalAlignment(JLabel.CENTER);
-
-        defaultPanel.add(instructionLabel);
-        defaultPanel.add(Box.createRigidArea(new Dimension(0, 5)));
+    @Override
+    protected void showDefaultState() {
+        JPanel defaultPanel = defaultPanel();
+        defaultPanel.add(DropTrackerTheme.gap(5));
+        defaultPanel.add(instructions("Search for a player by name above"));
+        defaultPanel.add(DropTrackerTheme.gap(5));
 
         // Get current player and add button if logged in
-        String playerName = (config.lastAccountName() != null) ? config.lastAccountName() : null;
+        String playerName = config.lastAccountName();
 
         if (playerName != null && !"Not logged in".equals(playerName)) {
             // Button to view current player stats
-            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-            buttonPanel.setBackground(DropTrackerTheme.SURFACE_0);
-            buttonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-            buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-            buttonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
-
             JButton viewStatsButton = new JButton("View My Stats (" + playerName + ")");
             DropTrackerTheme.styleButton(viewStatsButton);
             viewStatsButton.setPreferredSize(new Dimension(200, 30));
             viewStatsButton.setToolTipText("View your DropTracker statistics");
             viewStatsButton.addActionListener(e -> performPlayerSearch(playerName));
-
-            buttonPanel.add(viewStatsButton);
-            defaultPanel.add(buttonPanel);
+            defaultPanel.add(buttonRow(viewStatsButton, 5));
 
             if (config.useApi()) {
-                JPanel modelButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-                modelButtonPanel.setBackground(DropTrackerTheme.SURFACE_0);
-                modelButtonPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
-                modelButtonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-                modelButtonPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
-                modelButtonPanel.add(createSendModelButton());
-                defaultPanel.add(modelButtonPanel);
+                defaultPanel.add(buttonRow(createSendModelButton(), 5));
             }
-            defaultPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+            defaultPanel.add(DropTrackerTheme.gap(10));
         }
 
         if (config.useApi()) {
-            // Create placeholder for leaderboard (same pattern as GroupPanel)
             leaderboardPlaceholder = StateViews.loading("Loading top players…");
             defaultPanel.add(leaderboardPlaceholder);
-
-            // Start loading data
-            obtainPlayerLeaderboardData();
+            LeaderboardComponents.loadLeaderboardAsync(leaderboardPlaceholder, () -> {
+                try {
+                    return api.getTopPlayers();
+                } catch (Exception e) {
+                    return null;
+                }
+            }, this::showPlayerLeaderboard);
         }
 
         defaultPanel.add(Box.createVerticalGlue());
-
-        contentPanel.add(defaultPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        show(defaultPanel);
     }
 
-    // New method to obtain player leaderboard data (similar to GroupPanel)
-    private void obtainPlayerLeaderboardData() {
-        LeaderboardComponents.loadLeaderboardAsync(
-                leaderboardPlaceholder,
-                () -> {
-                    try {
-                        return api.getTopPlayers();
-                    } catch (Exception e) {
-                        return null;
-                    }
-                },
-                this::showPlayerLeaderboard
-        );
-    }
-
-    // New method to show player leaderboard using LeaderboardComponents
     private JPanel showPlayerLeaderboard(TopPlayersResult leaderboardData) {
         return LeaderboardComponents.createLeaderboardTable(
                 "Top Players",
@@ -201,188 +113,72 @@ public class PlayerStatsPanel {
         if (searchQuery.isEmpty()) {
             if (searchField != null && searchField.getText() != null && !searchField.getText().isEmpty()) {
                 toSearch = searchField.getText().trim();
+            } else if (plugin.getLocalPlayerName() != null && !plugin.getLocalPlayerName().isEmpty()) {
+                toSearch = plugin.getLocalPlayerName();
             } else {
-                if (plugin.getLocalPlayerName() != null && !plugin.getLocalPlayerName().isEmpty()) {
-                    toSearch = plugin.getLocalPlayerName();
-                } else {
-                    return;
-                }
+                return;
             }
         } else {
             toSearch = searchQuery;
         }
 
-
-        // Show loading message
-        contentPanel.removeAll();
-        contentPanel.add(StateViews.loading("Searching for player…"));
-        contentPanel.revalidate();
-        contentPanel.repaint();
-
-        // Perform search in background. Keep the failure cause so the user can
-        // tell "player doesn't exist" apart from "the API call failed".
-        CompletableFuture.supplyAsync(() -> {
-            try {
-                return new SearchOutcome(api.lookupPlayer(toSearch), null);
-            } catch (Exception e) {
-                return new SearchOutcome(null, e);
-            }
-        }).thenAccept(outcome -> {
-            SwingUtilities.invokeLater(() -> {
-                if (outcome.result != null) {
-                    showPlayerDetails(outcome.result);
-                } else if (outcome.error == null || isNotFound(outcome.error)) {
-                    showSearchError("Player '" + toSearch + "' was not found.");
-                } else {
-                    showSearchError("Search failed — the DropTracker API could not be reached. Please try again.");
-                }
-            });
-        });
-    }
-
-    private static boolean isNotFound(Exception e) {
-        String message = e.getMessage();
-        return message != null && message.contains("status: 404");
-    }
-
-    private static class SearchOutcome {
-        final PlayerSearchResult result;
-        final Exception error;
-
-        SearchOutcome(PlayerSearchResult result, Exception error) {
-            this.result = result;
-            this.error = error;
-        }
-    }
-
-    private void showSearchError(String message) {
-        contentPanel.removeAll();
-
-        JPanel errorPanel = StateViews.error(message, "Back to Search", () -> {
-            searchField.setText("");
-            showDefaultState();
-        });
-
-        contentPanel.add(errorPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        runSearch("Searching for player…", () -> api.lookupPlayer(toSearch), this::showPlayerDetails,
+            "Player '" + toSearch + "' was not found.");
     }
 
     private void showPlayerDetails(PlayerSearchResult playerResult) {
-        contentPanel.removeAll();
-
-        // Match GroupPanel structure exactly
-        JPanel playerInfoPanel = new JPanel();
-        playerInfoPanel.setLayout(new BoxLayout(playerInfoPanel, BoxLayout.Y_AXIS));
-        playerInfoPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        playerInfoPanel.setBorder(DropTrackerTheme.cardBorder(10, 10, 10, 10));
-
-        // Player header panel - like groupHeaderPanel
-        JPanel playerHeaderPanel = new JPanel(new BorderLayout(10, 0));
-        playerHeaderPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        playerHeaderPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
-        playerHeaderPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 60));
-        playerHeaderPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Player name and description
-        JPanel playerNamePanel = new JPanel();
-        playerNamePanel.setLayout(new BoxLayout(playerNamePanel, BoxLayout.Y_AXIS));
-        playerNamePanel.setBackground(DropTrackerTheme.SURFACE_1);
-
-        JLabel playerNameLabel = new JLabel(playerResult.getPlayerName());
-        playerNameLabel.setFont(FontManager.getRunescapeBoldFont());
-        playerNameLabel.setForeground(DropTrackerTheme.TEXT);
-        playerNameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel playerNamePanel = nameColumn(playerResult.getPlayerName());
 
         String statusText = playerResult.isRegistered() ? "Registered Player" : "Not registered!";
-        JLabel playerDescLabel = new JLabel(statusText);
-        playerDescLabel.setFont(FontManager.getRunescapeSmallFont());
-        playerDescLabel.setForeground(playerResult.isRegistered() ? DropTrackerTheme.GREEN : DropTrackerTheme.EMBER);
+        JLabel playerDescLabel = DropTrackerTheme.label(statusText, FontManager.getRunescapeSmallFont(),
+            playerResult.isRegistered() ? DropTrackerTheme.GREEN : DropTrackerTheme.EMBER);
         playerDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         if (!playerResult.isRegistered()) {
             playerDescLabel.setToolTipText("<html>This account has not been claimed on DropTracker.<br/>"
                 + "Claim your in-game name in our Discord to register.</html>");
         }
 
-        playerNamePanel.add(playerNameLabel);
-        playerNamePanel.add(Box.createRigidArea(new Dimension(0, 5)));
+        playerNamePanel.add(DropTrackerTheme.gap(5));
         playerNamePanel.add(playerDescLabel);
 
         // Add groups information if available
         if (playerResult.getGroups() != null && !playerResult.getGroups().isEmpty()) {
-            JPanel groupsPanel = createGroupsPanel(playerResult.getGroups());
-            playerNamePanel.add(groupsPanel);
+            playerNamePanel.add(createGroupsPanel(playerResult.getGroups()));
         }
 
-        // Clear button for closing the search result
-        JButton clearButton = LeaderboardComponents.createClearButton(() -> {
-            searchField.setText("");
-            showDefaultState();
-        });
-
-        playerHeaderPanel.add(playerNamePanel, BorderLayout.CENTER);
-        playerHeaderPanel.add(clearButton, BorderLayout.EAST);
-
-        // Stats panel - exactly like GroupPanel statsPanel
-        JPanel statsPanel = new JPanel(new GridLayout(2, 2, 5, 5));
-        statsPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        statsPanel.setBorder(new EmptyBorder(10, 0, 10, 0));
-        statsPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 100));
-        statsPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 100));
-        statsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        // Format numbers nicely
-        String globalRankFormatted = "#" + playerResult.getGlobalRank();
-
-        // Format top NPC information
-
-        JPanel totalLootBox = PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP");
-        JPanel globalRankBox = PanelElements.createStatBox("Global Rank", globalRankFormatted);
         JPanel playerPointsBox = PanelElements.createStatBox("Lifetime Points", playerResult.getPoints() + " pts");
+        JPanel statsPanel = statsGrid(
+            PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP"),
+            PanelElements.createStatBox("Global Rank", "#" + playerResult.getGlobalRank()),
+            playerPointsBox);
 
-        statsPanel.add(totalLootBox);
-        statsPanel.add(globalRankBox);
-        statsPanel.add(playerPointsBox);
-
-        playerPointsBox.addMouseListener(new java.awt.event.MouseAdapter() {
+        playerPointsBox.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(java.awt.event.MouseEvent e) {
+            public void mouseClicked(MouseEvent e) {
                 LinkBrowser.browse(DropTrackerUrls.web("wiki", "points").toString());
             }
 
             @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
+            public void mouseEntered(MouseEvent e) {
                 playerPointsBox.setBackground(DropTrackerTheme.SURFACE_3);
                 playerPointsBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
 
             @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
+            public void mouseExited(MouseEvent e) {
                 playerPointsBox.setBackground(DropTrackerTheme.SURFACE_2);
                 playerPointsBox.setCursor(Cursor.getDefaultCursor());
             }
         });
         playerPointsBox.setToolTipText("View more info about points (click to open wiki)");
 
-        // Action buttons - exactly like GroupPanel actionPanel
-        JPanel actionPanel = new JPanel();
-        actionPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 10, 0));
-        actionPanel.setBackground(DropTrackerTheme.SURFACE_1);
-        actionPanel.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
-        actionPanel.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 40));
-        actionPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel actionPanel = actionRow();
 
-        JButton refreshButton = new JButton("Refresh Stats");
-        DropTrackerTheme.styleButton(refreshButton);
-        refreshButton.setMargin(new Insets(0, 5, 0, 5));
-        refreshButton.addActionListener(e -> {
-            performPlayerSearch(playerResult.getPlayerName());
-        });
+        JButton refreshButton = actionButton("Refresh Stats");
+        refreshButton.addActionListener(e -> performPlayerSearch(playerResult.getPlayerName()));
 
-        JButton viewProfileButton = new JButton("View Profile");
+        JButton viewProfileButton = actionButton("View Profile");
         viewProfileButton.setIcon(PanelElements.getExternalLinkIcon());
-        DropTrackerTheme.styleButton(viewProfileButton);
-        viewProfileButton.setMargin(new Insets(0, 5, 0, 5));
         viewProfileButton.addActionListener(e -> {
             if (playerResult.getDropTrackerPlayerId() != null) {
                 LinkBrowser.browse(DropTrackerUrls.web("players", String.valueOf(playerResult.getDropTrackerPlayerId()), "view").toString());
@@ -394,26 +190,8 @@ public class PlayerStatsPanel {
         actionPanel.add(refreshButton);
         actionPanel.add(viewProfileButton);
 
-        // Add components exactly like GroupPanel
-        playerInfoPanel.add(playerHeaderPanel);
-        playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        playerInfoPanel.add(statsPanel);
-        playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // Add recent submissions panel if available
-        if (playerResult.getRecentSubmissions() != null && !playerResult.getRecentSubmissions().isEmpty()) {
-            List<RecentSubmission> recentSubmissions = playerResult.getRecentSubmissions();
-            playerInfoPanel.add(PanelElements.createRecentSubmissionPanel(recentSubmissions, itemManager, client, false));
-        } else {
-            playerInfoPanel.add(PanelElements.createRecentSubmissionsPlaceholder("No recent submissions available"));
-        }
-        playerInfoPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        playerInfoPanel.add(actionPanel);
-
-        contentPanel.add(playerInfoPanel);
-        contentPanel.revalidate();
-        contentPanel.repaint();
+        showCard(detailHeader(null, playerNamePanel), statsPanel,
+            recent(playerResult.getRecentSubmissions(), false, "No recent submissions available"), actionPanel);
     }
 
     /**
@@ -453,15 +231,10 @@ public class PlayerStatsPanel {
             return new JPanel(); // Return empty panel if no groups
         }
 
-        JPanel groupsContainer = new JPanel();
-        groupsContainer.setLayout(new BoxLayout(groupsContainer, BoxLayout.Y_AXIS));
-        groupsContainer.setBackground(DropTrackerTheme.SURFACE_1);
+        JPanel groupsContainer = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         groupsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Groups header
-        JLabel groupsHeaderLabel = new JLabel("Groups:");
-        groupsHeaderLabel.setFont(FontManager.getRunescapeSmallFont());
-        groupsHeaderLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+        JLabel groupsHeaderLabel = DropTrackerTheme.label("Groups:", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         groupsHeaderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         groupsContainer.add(groupsHeaderLabel);
 
@@ -473,9 +246,7 @@ public class PlayerStatsPanel {
                 groupText.append(" (").append(group.getMembers()).append(" members)");
             }
 
-            JLabel groupLabel = new JLabel(groupText.toString());
-            groupLabel.setFont(FontManager.getRunescapeSmallFont());
-            groupLabel.setForeground(DropTrackerTheme.TEXT_MUTED);
+            JLabel groupLabel = DropTrackerTheme.label(groupText.toString(), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             groupLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
             groupsContainer.add(groupLabel);

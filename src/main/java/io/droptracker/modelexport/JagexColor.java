@@ -30,9 +30,6 @@ import java.awt.*;
 // Additions made for calculating average of 3 colors
 public final class JagexColor
 {
-	public static final double BRIGHTNESS_MAX = .6;
-	public static final double BRIGHTNESS_HIGH = .7;
-	public static final double BRIGHTNESS_LOW = .8;
 	public static final double BRIGHTNESS_MIN = .9;
 
 	private static final double HUE_OFFSET = (.5 / 64.D);
@@ -40,33 +37,6 @@ public final class JagexColor
 
 	private JagexColor()
 	{
-	}
-
-	// take 3 Jagex HSL colors and make a single RGB color to represent them
-	public static Color HSLtoRGBAvg(int hsl1, int hsl2, int hsl3)
-	{
-		Color c1 = new Color(HSLtoRGB((short) hsl1, BRIGHTNESS_MIN));
-		Color c2 = new Color(HSLtoRGB((short) hsl2, BRIGHTNESS_MIN));
-		Color c3 = new Color(HSLtoRGB((short) hsl3, BRIGHTNESS_MIN));
-
-		// compute color average using squares
-		// uses squared approach from https://sighack.com/post/averaging-rgb-colors-the-right-way
-		int r = c1.getRed()*c1.getRed() + c2.getRed()*c2.getRed() + c3.getRed()*c3.getRed();
-		int g = c1.getGreen()*c1.getGreen() + c2.getGreen()*c2.getGreen() + c3.getGreen()*c3.getGreen();
-		int b = c1.getBlue()*c1.getBlue() + c2.getBlue()*c2.getBlue() + c3.getBlue()*c3.getBlue();
-
-		r = (int) Math.round(Math.sqrt((double) r / 3.0d));
-		g = (int) Math.round(Math.sqrt((double) g / 3.0d));
-		b = (int) Math.round(Math.sqrt((double) b / 3.0d));
-
-		return new Color(r, g, b);
-	}
-
-	public static short packHSL(int hue, int saturation, int luminance)
-	{
-		return (short) ((short) (hue & 63) << 10
-				| (short) (saturation & 7) << 7
-				| (short) (luminance & 127));
 	}
 
 	public static int unpackHue(short hsl)
@@ -82,11 +52,6 @@ public final class JagexColor
 	public static int unpackLuminance(short hsl)
 	{
 		return hsl & 127;
-	}
-
-	public static String formatHSL(short hsl)
-	{
-		return String.format("%02Xh%Xs%02Xl", unpackHue(hsl), unpackSaturation(hsl), unpackLuminance(hsl));
 	}
 
 	public static int HSLtoRGB(short hsl, double brightness)

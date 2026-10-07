@@ -21,7 +21,6 @@ import java.util.Map;
  */
 @Getter
 public class EventRoster {
-    @SerializedName("events")
     @Nullable
     private List<Entry> events;
 
@@ -32,7 +31,6 @@ public class EventRoster {
         @SerializedName("roster_version")
         @Nullable
         private String rosterVersion;
-        @SerializedName("teams")
         @Nullable
         private List<Team> teams;
         /**
@@ -41,28 +39,23 @@ public class EventRoster {
          * spaces. Chat senders are put through the matching client-side
          * normalizer before lookup — never compare a raw name.
          */
-        @SerializedName("members")
         @Nullable
         private Map<String, List<String>> members;
         @SerializedName("members_total")
         private int membersTotal;
         /** True when teams or names were capped; the map is then partial. */
-        @SerializedName("truncated")
         private boolean truncated;
     }
 
     @Getter
     public static class Team {
-        @SerializedName("id")
         private int id;
-        @SerializedName("name")
         private String name;
         /** Short label printed beside a teammate's name, e.g. "RR". */
         @SerializedName("short_tag")
         @Nullable
         private String shortTag;
         /** Admin-set accent, "#rrggbb", or null. */
-        @SerializedName("color")
         @Nullable
         private String color;
         /**
@@ -70,7 +63,6 @@ public class EventRoster {
          * emoji, so this is carried for parity/diagnostics only — the sprite is
          * drawn from {@link #orbColor}.
          */
-        @SerializedName("orb")
         @Nullable
         private String orb;
         /** That circle's own fill, so the in-game badge matches Discord. */

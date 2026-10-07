@@ -9,6 +9,8 @@ import io.droptracker.DropTrackerPlugin;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.api.GroupSearchResult;
 import io.droptracker.models.StateSnapshot;
+import io.droptracker.models.api.EventRoster;
+import io.droptracker.models.api.EventState;
 import io.droptracker.models.api.Manifest;
 import io.droptracker.models.api.ModelStatus;
 import io.droptracker.models.api.PlayerSearchResult;
@@ -24,15 +26,19 @@ import javax.annotation.Nullable;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.swing.SwingUtilities;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Slf4j
 @Singleton
@@ -126,6 +132,40 @@ public class DropTrackerApi {
                 .build();
     }
 
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+    /** Records a completed round-trip with the API. */
+    private void touch() {
+        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+    }
+
+    /** {@code getApiUrl() + path} as a URL, or null when that doesn't parse. */
+    @Nullable
+    private HttpUrl apiUrl(String path) {
+        return HttpUrl.parse(getApiUrl() + path);
+    }
+
+    private static Request getRequest(HttpUrl url) {
+        return new Request.Builder().url(url).build();
+    }
+
+    private Request postJson(HttpUrl url, Object body) {
+        return new Request.Builder().url(url).post(RequestBody.create(JSON, gson.toJson(body))).build();
+    }
+
+    /** An API URL carrying the player_name/acc_hash identity params, or null. */
+    @Nullable
+    private HttpUrl.Builder playerUrl(String path, String playerName, long accountHash) {
+        HttpUrl base = apiUrl(path);
+        return base == null ? null : base.newBuilder()
+            .addQueryParameter("player_name", playerName)
+            .addQueryParameter("acc_hash", String.valueOf(accountHash));
+    }
+
+    private boolean canIdentify(String playerName, long accountHash) {
+        return config.useApi() && playerName != null && !playerName.isEmpty() && accountHash != -1L;
+    }
+
     /**
      * Set a callback to be invoked when group configs are successfully loaded.
      */
@@ -140,7 +180,6 @@ public class DropTrackerApi {
      * everything the side panel needs to boot in a single round-trip.
      */
     public static class PanelData {
-        @SerializedName("configs")
         public List<GroupConfig> configs;
         @SerializedName("player_found")
         public Boolean playerFound;
@@ -148,11 +187,8 @@ public class DropTrackerApi {
         public TopGroupResult topGroups;
         @SerializedName("top_players")
         public TopPlayersResult topPlayers;
-        @SerializedName("welcome")
         public String welcome;
-        @SerializedName("news")
         public String news;
-        @SerializedName("version")
         public VersionInfo version;
     }
 
@@ -175,7 +211,7 @@ public class DropTrackerApi {
                 return null;
             }
         }
-        HttpUrl base = HttpUrl.parse(getApiUrl() + "/panel_data");
+        HttpUrl base = apiUrl("/panel_data");
         if (base == null) {
             return null;
         }
@@ -187,9 +223,8 @@ public class DropTrackerApi {
             urlBuilder.addQueryParameter("acc_hash", String.valueOf(accountHash));
         }
 
-        Request request = new Request.Builder().url(urlBuilder.build()).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try (Response response = panelHttpClient.newCall(getRequest(urlBuilder.build())).execute()) {
+            touch();
             if (!response.isSuccessful() || response.body() == null) {
                 return recordPanelDataFailure("HTTP " + response.code());
             }
@@ -288,14 +323,7 @@ public class DropTrackerApi {
                 if (panelData != null) {
                     if (panelData.configs != null && !Boolean.FALSE.equals(panelData.playerFound)) {
                         groupConfigs = new ArrayList<>(panelData.configs);
-                        lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
-                        if (onGroupConfigsLoadedCallback != null) {
-                            try {
-                                onGroupConfigsLoadedCallback.run();
-                            } catch (Exception callbackEx) {
-                                log.debug("Error in group config loaded callback: " + callbackEx.getMessage());
-                            }
-                        }
+                        groupConfigsLoaded();
                     } else {
                         // Unknown player: same as the old /load_config 404 - leave
                         // lastGroupConfigUpdateUnix unset so the retry schedule applies.
@@ -305,20 +333,13 @@ public class DropTrackerApi {
                 }
 
                 // Fallback: the legacy per-purpose /load_config endpoint.
-                String apiUrl = getApiUrl();
-                HttpUrl baseUrl = HttpUrl.parse(apiUrl + "/load_config");
-                if (baseUrl == null) {
+                HttpUrl.Builder url = playerUrl("/load_config", playerName, accountHash);
+                if (url == null) {
                     return;
                 }
-                HttpUrl url = baseUrl.newBuilder()
-                    .addQueryParameter("player_name", playerName)
-                    .addQueryParameter("acc_hash", String.valueOf(accountHash))
-                    .build();
-                
-                Request request = new Request.Builder().url(url).build();
 
-                try (Response response = panelHttpClient.newCall(request).execute()) {
-                    lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+                try (Response response = panelHttpClient.newCall(getRequest(url.build())).execute()) {
+                    touch();
 
                     if (!response.isSuccessful()) {
                         throw new IOException("API request failed with status: " + response.code());
@@ -336,18 +357,7 @@ public class DropTrackerApi {
                     if (parsedConfigs != null) {
                         groupConfigs = parsedConfigs;
                     }
-                    
-                    lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
-                    
-                    // Notify listeners that group configs are now available
-                    if (onGroupConfigsLoadedCallback != null) {
-                        try {
-                            onGroupConfigsLoadedCallback.run();
-                        } catch (Exception callbackEx) {
-                            log.debug("Error in group config loaded callback: " + callbackEx.getMessage());
-                        }
-                    }
-                    
+                    groupConfigsLoaded();
                 } catch (IOException e) {
                     log.debug("Couldn't load group config in side panel (IOException) " + e);
                 } catch (JsonSyntaxException e) {
@@ -363,6 +373,18 @@ public class DropTrackerApi {
             isLoadingGroupConfigs = false;
             return null;
         });
+    }
+
+    /** Stamps a successful config load and notifies the listener, if any. */
+    private void groupConfigsLoaded() {
+        lastGroupConfigUpdateUnix = (int) (System.currentTimeMillis() / 1000);
+        if (onGroupConfigsLoadedCallback != null) {
+            try {
+                onGroupConfigsLoadedCallback.run();
+            } catch (Exception callbackEx) {
+                log.debug("Error in group config loaded callback: " + callbackEx.getMessage());
+            }
+        }
     }
 
     /**
@@ -410,9 +432,8 @@ public class DropTrackerApi {
      * never call on the EDT.
      */
     private <T> T getJson(HttpUrl url, Class<T> type) throws IOException {
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try (Response response = panelHttpClient.newCall(getRequest(url)).execute()) {
+            touch();
             if (!response.isSuccessful()) {
                 throw new IOException("API request to " + url + " failed with status: " + response.code());
             }
@@ -447,7 +468,7 @@ public class DropTrackerApi {
         if (!config.useApi()) {
             return null;
         }
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "/manifest");
+        HttpUrl url = apiUrl("/manifest");
         if (url == null) {
             return null;
         }
@@ -456,7 +477,7 @@ public class DropTrackerApi {
                 .cacheControl(CacheControl.FORCE_NETWORK)
                 .build();
         try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            touch();
             if (!response.isSuccessful()) {
                 log.debug("Manifest request failed with status {}", response.code());
                 return null;
@@ -492,15 +513,12 @@ public class DropTrackerApi {
         if (!config.useApi() || snapshot == null) {
             return false;
         }
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "/state/sync");
+        HttpUrl url = apiUrl("/state/sync");
         if (url == null) {
             return false;
         }
-        RequestBody body = RequestBody.create(
-                MediaType.parse("application/json; charset=utf-8"), gson.toJson(snapshot));
-        Request request = new Request.Builder().url(url).post(body).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try (Response response = panelHttpClient.newCall(postJson(url, snapshot)).execute()) {
+            touch();
             if (!response.isSuccessful()) {
                 log.debug("State sync rejected with status {}", response.code());
                 return false;
@@ -535,7 +553,7 @@ public class DropTrackerApi {
         if (!config.useApi() || model == null || model.length == 0) {
             return false;
         }
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "/player/model");
+        HttpUrl url = apiUrl("/player/model");
         if (url == null) {
             return false;
         }
@@ -555,7 +573,7 @@ public class DropTrackerApi {
 
         Request request = new Request.Builder().url(url).post(body.build()).build();
         try (Response response = httpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+            touch();
             if (!response.isSuccessful()) {
                 log.debug("Model upload rejected with status {}", response.code());
                 return false;
@@ -586,7 +604,7 @@ public class DropTrackerApi {
         if (!config.useApi() || fingerprint == null || fingerprint.isEmpty()) {
             return null;
         }
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "/player/model/check");
+        HttpUrl url = apiUrl("/player/model/check");
         if (url == null) {
             return null;
         }
@@ -595,13 +613,8 @@ public class DropTrackerApi {
         body.put("acc_hash", String.valueOf(client.getAccountHash()));
         body.put("fingerprint", fingerprint);
 
-        Request request = new Request.Builder()
-                .url(url)
-                .post(RequestBody.create(
-                        MediaType.parse("application/json; charset=utf-8"), gson.toJson(body)))
-                .build();
-        try (Response response = httpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try (Response response = httpClient.newCall(postJson(url, body)).execute()) {
+            touch();
             // 202 is the server saying it does not know this account — a real
             // answer, and the one case where sending the model is pointless.
             if (!response.isSuccessful() && response.code() != 202) {
@@ -617,35 +630,33 @@ public class DropTrackerApi {
     }
 
     public TopGroupResult getTopGroups() {
-        if (!config.useApi()) {
-            return null;
-        }
-        // Prefer the aggregate snapshot; one /panel_data request serves both top lists.
-        PanelData panelData = getPanelDataFreshOrFetch();
-        if (panelData != null && panelData.topGroups != null && panelData.topGroups.getGroups() != null) {
-            return panelData.topGroups;
-        }
-        try {
-            return getJson(HttpUrl.parse(getApiUrl() + "/top_groups"), TopGroupResult.class);
-        } catch (IOException e) {
-            log.debug("Couldn't get top groups (IOException) " + e);
-            return null;
-        }
+        return topList(p -> p.topGroups != null && p.topGroups.getGroups() != null ? p.topGroups : null,
+            "/top_groups", TopGroupResult.class, "groups");
     }
 
     public TopPlayersResult getTopPlayers() {
+        return topList(p -> p.topPlayers != null && p.topPlayers.getPlayers() != null ? p.topPlayers : null,
+            "/top_players", TopPlayersResult.class, "players");
+    }
+
+    /**
+     * A top list from the aggregate snapshot (one /panel_data request serves
+     * both), else from its own endpoint. {@code fromPanel} returns null when
+     * the snapshot lacks the list.
+     */
+    private <T> T topList(Function<PanelData, T> fromPanel, String path, Class<T> type, String what) {
         if (!config.useApi()) {
             return null;
         }
-        // Prefer the aggregate snapshot; one /panel_data request serves both top lists.
         PanelData panelData = getPanelDataFreshOrFetch();
-        if (panelData != null && panelData.topPlayers != null && panelData.topPlayers.getPlayers() != null) {
-            return panelData.topPlayers;
+        T cached = panelData != null ? fromPanel.apply(panelData) : null;
+        if (cached != null) {
+            return cached;
         }
         try {
-            return getJson(HttpUrl.parse(getApiUrl() + "/top_players"), TopPlayersResult.class);
+            return getJson(apiUrl(path), type);
         } catch (IOException e) {
-            log.debug("Couldn't get top players (IOException) " + e);
+            log.debug("Couldn't get top " + what + " (IOException) " + e);
             return null;
         }
     }
@@ -654,38 +665,25 @@ public class DropTrackerApi {
      * Sends a request to the API to search for a group and returns the GroupSearchResult.
      */
     public GroupSearchResult searchGroup(String groupName) throws IOException {
-        if (!config.useApi()) {
-            return null;
-        }
-
-        HttpUrl baseUrl = HttpUrl.parse(getApiUrl() + "/group_search");
-        if (baseUrl == null) {
-            throw new IllegalArgumentException("Invalid URL");
-        }
-        HttpUrl url = baseUrl.newBuilder()
-            .addQueryParameter("name", groupName)
-            .build();
-
-        return getJson(url, GroupSearchResult.class);
+        return search("/group_search", groupName, GroupSearchResult.class);
     }
 
     /**
      * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
      */
     public PlayerSearchResult lookupPlayer(String playerName) throws IOException {
+        return search("/player_search", playerName, PlayerSearchResult.class);
+    }
+
+    private <T> T search(String path, String name, Class<T> type) throws IOException {
         if (!config.useApi()) {
             return null;
         }
-
-        HttpUrl baseUrl = HttpUrl.parse(getApiUrl() + "/player_search");
+        HttpUrl baseUrl = apiUrl(path);
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
-        HttpUrl url = baseUrl.newBuilder()
-            .addQueryParameter("name", playerName)
-            .build();
-
-        return getJson(url, PlayerSearchResult.class);
+        return getJson(baseUrl.newBuilder().addQueryParameter("name", name).build(), type);
     }
 
     public String getApiUrl() {
@@ -718,7 +716,6 @@ public class DropTrackerApi {
         public String latestVersion;
         @SerializedName("minimum_version")
         public String minimumVersion;
-        @SerializedName("message")
         public String message;
     }
 
@@ -745,8 +742,7 @@ public class DropTrackerApi {
         if (url == null) {
             return null;
         }
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
+        try (Response response = panelHttpClient.newCall(getRequest(url)).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
                 return null;
             }
@@ -768,23 +764,14 @@ public class DropTrackerApi {
             return false;
         }
 
-        String apiUrl = getApiUrl();
-        HttpUrl url = HttpUrl.parse(apiUrl + "/check");
+        HttpUrl url = apiUrl("/check");
         if (url == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
 
-        String jsonBody = gson.toJson(java.util.Collections.singletonMap("uuid", uuid));
-        RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonBody);
+        try (Response response = httpClient.newCall(postJson(url, Collections.singletonMap("uuid", uuid))).execute()) {
+            touch();
 
-        Request request = new Request.Builder()
-            .url(url)
-            .post(body)
-            .build();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-            
             if (!response.isSuccessful()) {
                 return false;
             }
@@ -797,7 +784,7 @@ public class DropTrackerApi {
             try {
                 // Response is expected to contain at least { processed: boolean } for the given uuid
                 @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> map = gson.fromJson(responseData, java.util.Map.class);
+                Map<String, Object> map = gson.fromJson(responseData, Map.class);
                 Object processedVal = map != null ? map.get("processed") : null;
                 
                 if (processedVal instanceof Boolean) {
@@ -820,17 +807,13 @@ public class DropTrackerApi {
 
     /** One entry in the batch POST /check response. */
     private static class CheckResultEntry {
-        @SerializedName("uuid")
         String uuid;
-        @SerializedName("processed")
         Boolean processed;
-        @SerializedName("status")
         String status;
     }
 
     /** Response shape of the batch POST /check form. */
     private static class BatchCheckResponse {
-        @SerializedName("results")
         List<CheckResultEntry> results;
     }
 
@@ -846,27 +829,20 @@ public class DropTrackerApi {
      */
     public Map<String, Boolean> checkSubmissionsProcessed(List<String> uuids) throws IOException {
         if (!config.useApi() || uuids == null || uuids.isEmpty()) {
-            return java.util.Collections.emptyMap();
+            return Collections.emptyMap();
         }
 
         List<String> capped = uuids.size() > CHECK_BATCH_LIMIT
             ? new ArrayList<>(uuids.subList(0, CHECK_BATCH_LIMIT))
             : uuids;
 
-        HttpUrl url = HttpUrl.parse(getApiUrl() + "/check");
+        HttpUrl url = apiUrl("/check");
         if (url == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
 
-        String jsonBody = gson.toJson(java.util.Collections.singletonMap("uuids", capped));
-        RequestBody body = RequestBody.create(MediaType.parse("application/json; charset=utf-8"), jsonBody);
-        Request request = new Request.Builder()
-            .url(url)
-            .post(body)
-            .build();
-
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        try (Response response = panelHttpClient.newCall(postJson(url, Collections.singletonMap("uuids", capped))).execute()) {
+            touch();
 
             if (!response.isSuccessful()) {
                 throw new IOException("Batch /check failed with status: " + response.code());
@@ -886,7 +862,7 @@ public class DropTrackerApi {
                 throw new IOException("Batch /check response missing results");
             }
 
-            Map<String, Boolean> results = new java.util.HashMap<>();
+            Map<String, Boolean> results = new HashMap<>();
             for (CheckResultEntry entry : parsed.results) {
                 if (entry == null || entry.uuid == null) {
                     continue;
@@ -921,85 +897,48 @@ public class DropTrackerApi {
      * Asynchronously fetches the latest welcome string to avoid blocking the EDT.
      * @param callback Function to call with the result when ready
      */
-    public void getLatestWelcomeString(java.util.function.Consumer<String> callback) {
-        HttpUrl endpoint;
-        if (config.useApi()) {
-            // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
-            // the periodic /panel_data refresh keeps it current.
-            PanelData panelData = getCachedPanelData();
-            if (panelData != null && panelData.welcome != null && !panelData.welcome.isEmpty()) {
-                final String welcome = panelData.welcome;
-                javax.swing.SwingUtilities.invokeLater(() -> callback.accept(welcome));
-                return;
-            }
-            endpoint = HttpUrl.parse(getApiUrl() + "/latest_welcome");
-        } else {
-            endpoint = DropTrackerUrls.content("welcome.txt");
-        }
-        if (endpoint == null) {
-            javax.swing.SwingUtilities.invokeLater(() -> callback.accept(WELCOME_FALLBACK));
-            return;
-        }
-
-        Request request = new Request.Builder().url(endpoint).build();
-        panelHttpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                // Run callback on EDT to update UI safely
-                javax.swing.SwingUtilities.invokeLater(() ->
-                    callback.accept(WELCOME_FALLBACK));
-            }
-
-            @Override
-            public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
-                try (Response autoCloseResponse = response; ResponseBody responseBody = response.body()) {
-                    String result = WELCOME_FALLBACK;
-                    if (response.isSuccessful() && responseBody != null) {
-                        String body = responseBody.string();
-                        if (!looksLikeHtml(body)) {
-                            result = body;
-                        }
-                    }
-
-                    // Run callback on EDT to update UI safely
-                    final String finalResult = result;
-                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(finalResult));
-                }
-            }
-        });
+    public void getLatestWelcomeString(Consumer<String> callback) {
+        fetchPanelText(p -> p.welcome, "/latest_welcome", "welcome.txt", WELCOME_FALLBACK, callback);
     }
 
     /**
      * Asynchronously fetches the latest update string to avoid blocking the EDT.
      * @param callback Function to call with the result when ready
      */
-    public void getLatestUpdateString(java.util.function.Consumer<String> callback) {
+    public void getLatestUpdateString(Consumer<String> callback) {
+        fetchPanelText(p -> p.news, "/latest_news", "news.txt", NEWS_FALLBACK, callback);
+    }
+
+    /**
+     * Welcome/news text: from the aggregate snapshot when it has some
+     * (cache-only, EDT-safe; the periodic /panel_data refresh keeps it
+     * current), else from the API endpoint, or the GitHub Pages file when the
+     * API is off. The callback always runs on the EDT, with {@code fallback}
+     * on any failure.
+     */
+    private void fetchPanelText(Function<PanelData, String> fromPanel, String apiPath, String contentFile,
+                                String fallback, Consumer<String> callback) {
         HttpUrl endpoint;
         if (config.useApi()) {
-            // Serve from the aggregate snapshot when available (cache-only, EDT-safe);
-            // the periodic /panel_data refresh keeps it current.
             PanelData panelData = getCachedPanelData();
-            if (panelData != null && panelData.news != null && !panelData.news.isEmpty()) {
-                final String news = panelData.news;
-                javax.swing.SwingUtilities.invokeLater(() -> callback.accept(news));
+            String cached = panelData != null ? fromPanel.apply(panelData) : null;
+            if (cached != null && !cached.isEmpty()) {
+                SwingUtilities.invokeLater(() -> callback.accept(cached));
                 return;
             }
-            endpoint = HttpUrl.parse(getApiUrl() + "/latest_news");
+            endpoint = apiUrl(apiPath);
         } else {
-            endpoint = DropTrackerUrls.content("news.txt");
+            endpoint = DropTrackerUrls.content(contentFile);
         }
         if (endpoint == null) {
-            javax.swing.SwingUtilities.invokeLater(() -> callback.accept(NEWS_FALLBACK));
+            SwingUtilities.invokeLater(() -> callback.accept(fallback));
             return;
         }
 
-        Request request = new Request.Builder().url(endpoint).build();
-        panelHttpClient.newCall(request).enqueue(new Callback() {
+        panelHttpClient.newCall(getRequest(endpoint)).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                // Run callback on EDT to update UI safely
-                javax.swing.SwingUtilities.invokeLater(() ->
-                    callback.accept(NEWS_FALLBACK));
+                SwingUtilities.invokeLater(() -> callback.accept(fallback));
             }
 
             @Override
@@ -1008,17 +947,15 @@ public class DropTrackerApi {
                     // Never render the response body on failure: error pages from
                     // Cloudflare or the web server are full HTML documents, and this
                     // used to paste them into the News panel verbatim.
-                    String result = NEWS_FALLBACK;
+                    String result = fallback;
                     if (response.isSuccessful() && responseBody != null) {
                         String body = responseBody.string();
                         if (!looksLikeHtml(body)) {
                             result = body;
                         }
                     }
-
-                    // Run callback on EDT to update UI safely
                     final String finalResult = result;
-                    javax.swing.SwingUtilities.invokeLater(() -> callback.accept(finalResult));
+                    SwingUtilities.invokeLater(() -> callback.accept(finalResult));
                 }
             }
         });
@@ -1069,9 +1006,7 @@ public class DropTrackerApi {
      * on any failure so the caller keeps whatever it had.
      */
     public Map<String, String> fetchClanChatClans() {
-        HttpUrl url = DropTrackerUrls.content("clan_chat_clans.txt");
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
+        try (Response response = panelHttpClient.newCall(getRequest(DropTrackerUrls.content("clan_chat_clans.txt"))).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
                 return null;
             }
@@ -1090,51 +1025,38 @@ public class DropTrackerApi {
     }
 
     private ArrayList<Integer> fetchItemIdList(HttpUrl url, String tag) {
-        String valued;
         /* Only use github pages URL, as our API is sometimes not responding fast enough currently... */
-        try {
-            Request request = new Request.Builder().url(url).build();
-            try (Response response = panelHttpClient.newCall(request).execute()) {
-                lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-                if (!response.isSuccessful()) {
-                    throw new IOException("API request failed with status: " + response.code());
-                }
-                ResponseBody responseBody = response.body();
-                if (responseBody == null) {
-                    throw new IOException("Empty response body");
-                } else {
-                    valued = responseBody.string();
-                    String[] valuedList = valued.split(",");
-                    ArrayList<Integer> itemIdList = new ArrayList<>();
-                    for (String itemIdString : valuedList) {
-                        try {
-                            String idStripped = itemIdString.replace("\"", "").replace("[", "").replace("]", "");
-                            int itemId = Integer.parseInt(idStripped.trim());
-                            itemIdList.add(itemId);
-                        } catch (NumberFormatException e) {
-                            // Handle cases where a part of the string isn't a valid integer
-                            DebugLogger.log("[DropTrackerApi][" + tag + "] skipped invalid itemId token=" + itemIdString);
-                        }
-                    }
-                    DebugLogger.log("[DropTrackerApi][" + tag + "] loaded itemId count=" + itemIdList.size());
-                    return itemIdList;
+        try (Response response = panelHttpClient.newCall(getRequest(url)).execute()) {
+            touch();
+            if (!response.isSuccessful()) {
+                throw new IOException("API request failed with status: " + response.code());
+            }
+            ResponseBody responseBody = response.body();
+            if (responseBody == null) {
+                throw new IOException("Empty response body");
+            }
+            ArrayList<Integer> itemIdList = new ArrayList<>();
+            for (String itemIdString : responseBody.string().split(",")) {
+                try {
+                    String idStripped = itemIdString.replace("\"", "").replace("[", "").replace("]", "");
+                    itemIdList.add(Integer.parseInt(idStripped.trim()));
+                } catch (NumberFormatException e) {
+                    // Handle cases where a part of the string isn't a valid integer
+                    DebugLogger.log("[DropTrackerApi][" + tag + "] skipped invalid itemId token=" + itemIdString);
                 }
             }
+            DebugLogger.log("[DropTrackerApi][" + tag + "] loaded itemId count=" + itemIdList.size());
+            return itemIdList;
         } catch (IOException e) {
             DebugLogger.log("[DropTrackerApi][" + tag + "] failed to load from GitHub; reason=" + e.getMessage());
             return null;
         }
     }
 
-    public interface PanelDataLoadedCallback {
-        void onDataLoaded(Map<String, Object> data);
-    }
-
     /* ============== Event notifications + HUD state (P2) ============== */
 
     /** Response of GET /notifications. */
     public static class NotificationsResponse {
-        @SerializedName("notifications")
         public List<io.droptracker.models.api.EventNotification> notifications;
         @SerializedName("active_event")
         public Boolean activeEvent;
@@ -1155,37 +1077,28 @@ public class DropTrackerApi {
      * Returns null when the API is disabled or the identity/URL is unusable.
      * Long-poll calls must go through {@link Call#enqueue} — never block a
      * shared executor thread waiting out the hold.
-     */
-    @Nullable
-    public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds) {
-        return newNotificationsCall(playerName, accountHash, waitSeconds, null);
-    }
-
-    /**
+     *
      * ``clanName`` (optional) is the chat-bridge presence heartbeat: polling
      * with it tells the server this plugin is online in that clan, which is
      * what Discord→game fan-out delivers against.
      */
+    @Nullable
     public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds, String clanName) {
-        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+        if (!canIdentify(playerName, accountHash)) {
             return null;
         }
-        HttpUrl base = HttpUrl.parse(getApiUrl() + "/notifications");
-        if (base == null) {
+        HttpUrl.Builder url = playerUrl("/notifications", playerName, accountHash);
+        if (url == null) {
             return null;
         }
-        HttpUrl.Builder url = base.newBuilder()
-            .addQueryParameter("player_name", playerName)
-            .addQueryParameter("acc_hash", String.valueOf(accountHash));
         if (waitSeconds > 0) {
             url.addQueryParameter("wait", String.valueOf(waitSeconds));
         }
         if (clanName != null && !clanName.isEmpty()) {
             url.addQueryParameter("clan", clanName);
         }
-        Request request = new Request.Builder().url(url.build()).build();
         OkHttpClient callClient = waitSeconds > 0 ? longPollHttpClient : panelHttpClient;
-        return callClient.newCall(request);
+        return callClient.newCall(getRequest(url.build()));
     }
 
     /**
@@ -1194,7 +1107,7 @@ public class DropTrackerApi {
      */
     @Nullable
     public NotificationsResponse parseNotificationsResponse(Response response) {
-        lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        touch();
         try {
             ResponseBody body = response.body();
             if (!response.isSuccessful() || body == null) {
@@ -1208,57 +1121,18 @@ public class DropTrackerApi {
     }
 
     /**
-     * Drains the player's event-notification inbox with a plain (non-held)
-     * request. Returns null on any failure (network, non-200, malformed
-     * body). Blocking — never call on the EDT or the client thread.
-     */
-    @Nullable
-    public NotificationsResponse fetchNotifications(String playerName, long accountHash) {
-        Call call = newNotificationsCall(playerName, accountHash, 0);
-        if (call == null) {
-            return null;
-        }
-        try (Response response = call.execute()) {
-            return parseNotificationsResponse(response);
-        } catch (IOException e) {
-            log.debug("/notifications fetch failed: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
      * Fetches the HUD / Events-tab state for every active event the player
      * is in. Returns null on any failure. Blocking — off-EDT only.
+     *
+     * Sends {@code badges}: this build badges chat lines as they are drawn and
+     * never renames a MessageNode. Builds before it (6.0.3-6.0.8) renamed
+     * nodes, which hid friends' PMs, so the server can withhold
+     * roster_version, and with it every badge, from any client that does not
+     * send this.
      */
     @Nullable
-    public io.droptracker.models.api.EventState fetchEventState(String playerName, long accountHash) {
-        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
-            return null;
-        }
-        HttpUrl base = HttpUrl.parse(getApiUrl() + "/event_state");
-        if (base == null) {
-            return null;
-        }
-        HttpUrl url = base.newBuilder()
-            .addQueryParameter("player_name", playerName)
-            .addQueryParameter("acc_hash", String.valueOf(accountHash))
-            // This build badges chat lines as they are drawn and never renames
-            // a MessageNode. Builds before it (6.0.3-6.0.8) renamed nodes, which
-            // hid friends' PMs, so the server can withhold roster_version, and
-            // with it every badge, from any client that does not send this.
-            .addQueryParameter("badges", String.valueOf(TEAM_BADGE_RENDERER))
-            .build();
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
-            if (!response.isSuccessful() || response.body() == null) {
-                return null;
-            }
-            return gson.fromJson(response.body().string(), io.droptracker.models.api.EventState.class);
-        } catch (IOException | JsonSyntaxException e) {
-            log.debug("/event_state fetch failed: {}", e.getMessage());
-            return null;
-        }
+    public EventState fetchEventState(String playerName, long accountHash) {
+        return fetchForPlayer("/event_state", playerName, accountHash, true, EventState.class);
     }
 
     /**
@@ -1269,27 +1143,30 @@ public class DropTrackerApi {
      * Called only when /event_state's roster_version changes, never on a timer
      * — this carries a whole event's membership, unlike the state poll.
      */
-    public io.droptracker.models.api.EventRoster fetchEventRoster(String playerName, long accountHash) {
-        if (!config.useApi() || playerName == null || playerName.isEmpty() || accountHash == -1L) {
+    public EventRoster fetchEventRoster(String playerName, long accountHash) {
+        return fetchForPlayer("/event_roster", playerName, accountHash, false, EventRoster.class);
+    }
+
+    @Nullable
+    private <T> T fetchForPlayer(String path, String playerName, long accountHash, boolean badges, Class<T> type) {
+        if (!canIdentify(playerName, accountHash)) {
             return null;
         }
-        HttpUrl base = HttpUrl.parse(getApiUrl() + "/event_roster");
-        if (base == null) {
+        HttpUrl.Builder url = playerUrl(path, playerName, accountHash);
+        if (url == null) {
             return null;
         }
-        HttpUrl url = base.newBuilder()
-            .addQueryParameter("player_name", playerName)
-            .addQueryParameter("acc_hash", String.valueOf(accountHash))
-            .build();
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = panelHttpClient.newCall(request).execute()) {
-            lastCommunicationTime = (int) (System.currentTimeMillis() / 1000);
+        if (badges) {
+            url.addQueryParameter("badges", String.valueOf(TEAM_BADGE_RENDERER));
+        }
+        try (Response response = panelHttpClient.newCall(getRequest(url.build())).execute()) {
+            touch();
             if (!response.isSuccessful() || response.body() == null) {
                 return null;
             }
-            return gson.fromJson(response.body().string(), io.droptracker.models.api.EventRoster.class);
+            return gson.fromJson(response.body().string(), type);
         } catch (IOException | JsonSyntaxException e) {
-            log.debug("/event_roster fetch failed: {}", e.getMessage());
+            log.debug(path + " fetch failed: {}", e.getMessage());
             return null;
         }
     }
@@ -1300,13 +1177,10 @@ public class DropTrackerApi {
      * roster-gated (private events stay hidden without them).
      */
     public HttpUrl eventBoardImageUrl(int eventId, Integer teamId, String playerName, long accountHash) {
-        HttpUrl base = HttpUrl.parse(getApiUrl() + "/events/" + eventId + "/board.png");
-        if (base == null) {
+        HttpUrl.Builder builder = playerUrl("/events/" + eventId + "/board.png", playerName, accountHash);
+        if (builder == null) {
             return null;
         }
-        HttpUrl.Builder builder = base.newBuilder()
-            .addQueryParameter("player_name", playerName)
-            .addQueryParameter("acc_hash", String.valueOf(accountHash));
         if (teamId != null) {
             builder.addQueryParameter("team_id", String.valueOf(teamId));
         }

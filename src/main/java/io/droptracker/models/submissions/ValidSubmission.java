@@ -1,6 +1,5 @@
 package io.droptracker.models.submissions;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -269,33 +268,5 @@ public class ValidSubmission {
             name = "Unknown";
         }
         return getTypeLabel() + ": " + name;
-    }
-
-    /**
-     * Get the time since this submission was received, as a human-readable string
-     */
-    public String getTimeSinceReceived() {
-        if (timeReceived == null) {
-            return "Unknown";
-        }
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-            LocalDateTime receivedDate = LocalDateTime.parse(timeReceived, formatter);
-            LocalDateTime now = LocalDateTime.now();
-            
-            Duration duration = Duration.between(receivedDate, now);
-            
-            if (duration.toDays() > 0) {
-                return duration.toDays() + " days ago";
-            } else if (duration.toHours() > 0) {
-                return duration.toHours() + " hours ago"; 
-            } else if (duration.toMinutes() > 0) {
-                return duration.toMinutes() + " minutes ago";
-            } else {
-                return "Just now";
-            }
-        } catch (Exception e) {
-            return "Unknown";
-        }
     }
 }
