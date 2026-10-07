@@ -74,7 +74,6 @@ import io.droptracker.service.RaidLootDeduplicator;
 import io.droptracker.service.ScreenshotPrivacyService;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.ui.DropTrackerPanel;
-// import io.droptracker.service.EventPopupPreview; // dev-only ::dtpopup, see onCommandExecuted
 import io.droptracker.ui.overlays.EventHudOverlay;
 import io.droptracker.ui.overlays.EventToastOverlay;
 import io.droptracker.util.ChatMessageUtil;
@@ -197,9 +196,6 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private EventToastOverlay eventToastOverlay;
 
-	// Dev-only ::dtpopup preview, not shipped to players. See onCommandExecuted.
-	// @Inject
-	// private EventPopupPreview eventPopupPreview;
 	@Inject
 	private EventHudOverlay eventHudOverlay;
 	@Inject
@@ -239,7 +235,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.0";
+	public String pluginVersion = "6.1.1";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -467,12 +463,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted command) {
 		chatMessageUtil.onCommandExecuted(command);
-		// ::dtpopup (EventPopupPreview) shows sample event pop-ups for testing
-		// layouts. It is switched off for release builds; uncomment these lines,
-		// the field and the import above to use it locally.
-		// if (EventPopupPreview.COMMAND.equalsIgnoreCase(command.getCommand())) {
-		// 	eventPopupPreview.onCommand(command.getArguments());
-		// }
+		// ::dtpopup sample pop-ups live in src/test (EventPopupPreview) so they
+		// don't ship; to use them, move the class back and route the command here.
 	}
 
 	@Subscribe
