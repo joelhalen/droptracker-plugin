@@ -1,43 +1,26 @@
 package io.droptracker.ui;
 
-import io.droptracker.api.DropTrackerUrls;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
-import io.droptracker.service.SubmissionManager;
+import io.droptracker.api.*;
+import io.droptracker.*;
+import io.droptracker.service.*;
 
 import javax.inject.Inject;
 import javax.swing.*;
 
-import io.droptracker.api.DropTrackerApi;
-import io.droptracker.service.EventNotificationService;
-import io.droptracker.ui.components.PanelElements;
-import io.droptracker.ui.components.PanelIcons;
-import io.droptracker.ui.pages.ActivityPanel;
-import io.droptracker.ui.pages.EventsPanel;
-import io.droptracker.ui.pages.GroupPanel;
-import io.droptracker.ui.pages.HomePanel;
-import io.droptracker.ui.pages.PlayerStatsPanel;
-import io.droptracker.util.ItemIDSearch;
-import io.droptracker.util.ItemImageCache;
-import io.droptracker.util.RemoteImageCache;
+import io.droptracker.ui.components.*;
+import io.droptracker.ui.pages.*;
+import io.droptracker.util.*;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.client.config.ConfigManager;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.*;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.LinkBrowser;
+import net.runelite.client.util.*;
 import okhttp3.OkHttpClient;
 
 import javax.swing.border.EmptyBorder;
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Image;
+import java.awt.*;
 
 @Slf4j
 public class DropTrackerPanel extends PluginPanel {

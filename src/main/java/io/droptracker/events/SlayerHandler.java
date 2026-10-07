@@ -1,11 +1,7 @@
 package io.droptracker.events;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 
 import javax.annotation.Nullable;
 import javax.inject.Singleton;
@@ -19,9 +15,7 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GameState;
 import net.runelite.api.events.VarbitChanged;
-import net.runelite.api.gameval.DBTableID;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.gameval.*;
 
 /**
  * Slayer task completions, for event goals that count them ("25 tasks, no

@@ -1,16 +1,12 @@
 package io.droptracker.ui.overlays.popup;
 
 import io.droptracker.models.EventPopupStyle;
-import io.droptracker.util.ItemImageCache;
-import io.droptracker.util.RemoteImageCache;
+import io.droptracker.util.*;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import java.awt.image.BufferedImage;
-import java.util.EnumMap;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.function.IntFunction;
+import java.util.*;
+import java.util.function.*;
 
 /** The renderer for each pop-up style; renderers are stateless, so one each. */
 @Singleton

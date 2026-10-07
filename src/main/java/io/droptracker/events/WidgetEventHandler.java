@@ -29,35 +29,25 @@
 package io.droptracker.events;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import com.google.inject.Inject;
-import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.Pet;
+import io.droptracker.models.*;
 import io.droptracker.models.submissions.SubmissionType;
-import net.runelite.api.Client;
-import net.runelite.api.EnumComposition;
-import net.runelite.api.EnumID;
-import net.runelite.api.IndexedSprite;
+import net.runelite.api.*;
 import net.runelite.api.events.*;
-import net.runelite.api.widgets.ComponentID;
-import net.runelite.api.widgets.InterfaceID;
-import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.*;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import io.droptracker.service.SubmissionManager;
 import io.droptracker.util.BossNameRegistry;
-import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.AsyncBufferedImage;
-import net.runelite.client.util.Text;
+import net.runelite.client.util.*;
 import org.apache.commons.text.WordUtils;
 
 import java.awt.image.BufferedImage;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.regex.*;
 import java.util.stream.Collectors;
 
 public class WidgetEventHandler {

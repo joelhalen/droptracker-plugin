@@ -1,15 +1,11 @@
 package io.droptracker.api;
 
-import javax.crypto.Cipher;
-import javax.crypto.Mac;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
+import javax.crypto.*;
+import javax.crypto.spec.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Base64;
+import java.util.*;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

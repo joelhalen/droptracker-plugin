@@ -1,16 +1,14 @@
 package io.droptracker.events;
 
 import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.submissions.CombatAchievement;
-import io.droptracker.models.submissions.SubmissionType;
+import io.droptracker.models.submissions.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.annotations.Varbit;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.regex.*;
 
 
 @Slf4j

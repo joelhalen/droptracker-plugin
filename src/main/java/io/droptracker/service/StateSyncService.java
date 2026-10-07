@@ -1,32 +1,18 @@
 package io.droptracker.service;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
+import io.droptracker.*;
 import io.droptracker.api.DropTrackerApi;
-import io.droptracker.models.AchievementDiaryArea;
-import io.droptracker.models.StateSnapshot;
+import io.droptracker.models.*;
 import io.droptracker.models.api.Manifest;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.Player;
-import net.runelite.api.Quest;
-import net.runelite.api.ScriptID;
-import net.runelite.api.Skill;
-import net.runelite.api.gameval.VarPlayerID;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
 import net.runelite.client.callback.ClientThread;
 
 /**

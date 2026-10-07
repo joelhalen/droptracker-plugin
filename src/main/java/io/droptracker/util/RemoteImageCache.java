@@ -2,23 +2,14 @@ package io.droptracker.util;
 
 import io.droptracker.api.DropTrackerUrls;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 
 import javax.annotation.Nullable;
 import javax.imageio.ImageIO;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import java.awt.image.BufferedImage;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Tiny async cache for server-hosted icons (team pieces, NPC/skill task icons).

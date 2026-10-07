@@ -1,15 +1,10 @@
 package io.droptracker.ui.pages;
 
-import io.droptracker.api.DropTrackerUrls;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
-import io.droptracker.api.DropTrackerApi;
-import io.droptracker.models.api.PlayerSearchResult;
-import io.droptracker.models.api.TopPlayersResult;
+import io.droptracker.api.*;
+import io.droptracker.*;
+import io.droptracker.models.api.*;
 import io.droptracker.service.PlayerModelService;
-import io.droptracker.ui.components.LeaderboardComponents;
-import io.droptracker.ui.components.StateViews;
-import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.components.*;
 import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
@@ -18,8 +13,7 @@ import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.util.List;
 
 public class PlayerStatsPanel extends SearchPage {

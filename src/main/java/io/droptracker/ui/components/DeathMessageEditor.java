@@ -1,36 +1,18 @@
 package io.droptracker.ui.components;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.GridLayout;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.function.LongSupplier;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 import javax.annotation.Nullable;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.BoxLayout;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextArea;
-import javax.swing.JTextField;
+import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import javax.swing.event.*;
 import javax.swing.text.BadLocationException;
 
-import io.droptracker.api.DeathMessageApi;
-import io.droptracker.api.DropTrackerUrls;
+import io.droptracker.api.*;
 import io.droptracker.models.api.DeathMessages;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.util.DeathMessageRules;

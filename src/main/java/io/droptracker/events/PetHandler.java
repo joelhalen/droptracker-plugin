@@ -1,26 +1,20 @@
 package io.droptracker.events;
 
-import lombok.AccessLevel;
-import lombok.Setter;
+import lombok.*;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.http.api.loottracker.LootRecordType;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.regex.*;
 
 import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
-import io.droptracker.models.CustomWebhookBody;
-import io.droptracker.models.Pet;
+import io.droptracker.models.*;
 import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 

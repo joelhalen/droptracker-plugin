@@ -1,10 +1,7 @@
 package io.droptracker.events;
 
 import java.lang.ref.WeakReference;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Predicate;
 
 import javax.annotation.Nullable;
@@ -13,28 +10,15 @@ import javax.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
 import io.droptracker.service.RecentCombatTracker;
-import io.droptracker.util.DeathRegions;
-import io.droptracker.util.DeathValuation;
-import io.droptracker.util.NpcUtilities;
-import io.droptracker.util.RegionNameRegistry;
+import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.NPCComposition;
-import net.runelite.api.ParamID;
-import net.runelite.api.Player;
-import net.runelite.api.WorldType;
-import net.runelite.api.WorldView;
+import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
-import net.runelite.api.events.ActorDeath;
-import net.runelite.api.events.InteractingChanged;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.events.*;
+import net.runelite.api.gameval.*;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.game.ItemManager;
-import net.runelite.client.game.NPCManager;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
+import net.runelite.client.game.*;
+import org.apache.commons.lang3.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 /**

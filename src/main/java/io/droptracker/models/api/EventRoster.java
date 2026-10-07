@@ -4,8 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Response of GET /event_roster: who is on which team, for the clan-chat team

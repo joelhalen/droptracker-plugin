@@ -5,33 +5,23 @@
  */
 package io.droptracker.service;
 
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
+import com.google.inject.*;
+import io.droptracker.*;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
-import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.PlayerIdentity;
+import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.clan.ClanChannel;
 import net.runelite.client.util.Text;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.security.*;
+import java.util.regex.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**

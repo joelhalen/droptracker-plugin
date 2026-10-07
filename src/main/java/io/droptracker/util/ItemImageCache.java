@@ -5,18 +5,11 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.AsyncBufferedImage;
 
 import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import javax.swing.SwingUtilities;
 import java.awt.image.BufferedImage;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.IntFunction;
+import java.util.*;
+import java.util.function.*;
 
 /**
  * Item sprites for the side panel, without leaning on the game thread.

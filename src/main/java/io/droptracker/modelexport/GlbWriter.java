@@ -6,18 +6,14 @@
  */
 package io.droptracker.modelexport;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import lombok.NonNull;
 
 import javax.annotation.Nullable;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+import java.io.*;
+import java.nio.*;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Serialises a {@link MeshData} to a binary glTF (.glb) file.

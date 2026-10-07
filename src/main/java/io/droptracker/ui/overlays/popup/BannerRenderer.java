@@ -3,11 +3,7 @@ package io.droptracker.ui.overlays.popup;
 import io.droptracker.models.EventPopupCard;
 import io.droptracker.service.EventNotificationService.Toast;
 
-import java.awt.Color;
-import java.awt.Composite;
-import java.awt.FontMetrics;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
+import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.Locale;

@@ -3,12 +3,8 @@ package io.droptracker.ui.components;
 import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.client.ui.FontManager;
 
-import javax.swing.Box;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import java.awt.Component;
-import java.awt.Dimension;
+import javax.swing.*;
+import java.awt.*;
 
 /**
  * Shared loading / error / empty state views used across all side panel pages,

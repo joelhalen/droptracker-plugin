@@ -5,10 +5,7 @@ import io.droptracker.models.api.EventState;
 import net.runelite.client.config.ConfigManager;
 
 import javax.annotation.Nullable;
-import java.util.Collection;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Per-event task pins and hides for the Events tab, persisted through

@@ -1,17 +1,11 @@
 package io.droptracker.service;
 
 import java.lang.ref.WeakReference;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 import javax.annotation.Nullable;
 
-import net.runelite.api.Actor;
-import net.runelite.api.NPC;
-import net.runelite.api.NPCComposition;
-import net.runelite.api.Player;
+import net.runelite.api.*;
 import org.apache.commons.lang3.ArrayUtils;
 
 /**

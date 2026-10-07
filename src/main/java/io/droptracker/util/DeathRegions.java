@@ -1,14 +1,11 @@
 package io.droptracker.util;
 
 import net.runelite.api.Client;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.gameval.*;
 import net.runelite.api.widgets.Widget;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Classifies a death location as safe (no items lost) or dangerous.

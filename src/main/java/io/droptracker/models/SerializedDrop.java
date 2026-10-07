@@ -2,9 +2,7 @@ package io.droptracker.models;
 
 /* Author: Dink Plugin */
 
-import lombok.AccessLevel;
-import lombok.Data;
-import lombok.Setter;
+import lombok.*;
 
 /**
  * Contains kill count observed by base runelite loot tracker plugin, stored in profile configuration.

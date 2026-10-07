@@ -4,8 +4,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.Manifest;

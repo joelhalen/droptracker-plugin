@@ -5,21 +5,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.modelexport.GlbExporter;
 import io.droptracker.models.api.ModelStatus;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Actor;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.Model;
-import net.runelite.api.NPC;
-import net.runelite.api.Player;
-import net.runelite.api.PlayerComposition;
+import net.runelite.api.*;
 import net.runelite.client.callback.ClientThread;
 
 /**

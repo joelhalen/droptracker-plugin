@@ -29,56 +29,25 @@ BSD 2-Clause License
 */
 package io.droptracker;
 
-import io.droptracker.api.DropTrackerUrls;
+import io.droptracker.api.*;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.SwingUtilities;
 
-import io.droptracker.api.DropTrackerApi;
-import io.droptracker.api.UrlManager;
-import io.droptracker.events.CaHandler;
-import io.droptracker.events.ClogHandler;
-import io.droptracker.events.ConfigSnapshotHandler;
-import io.droptracker.events.DeathHandler;
-import io.droptracker.events.DiaryHandler;
-import io.droptracker.events.DropHandler;
-import io.droptracker.events.ExperienceHandler;
-import io.droptracker.events.PbHandler;
-import io.droptracker.events.QuestHandler;
-import io.droptracker.events.PetHandler;
-import io.droptracker.events.SlayerHandler;
-import io.droptracker.events.TrawlingHandler;
-import io.droptracker.events.WidgetEventHandler;
+import io.droptracker.events.*;
 import io.droptracker.models.PrivacyMode;
 import io.droptracker.models.submissions.Drop;
-import io.droptracker.service.ClanRelayService;
-import io.droptracker.service.EventNotificationService;
-import io.droptracker.service.EventTeamIndicatorService;
-import io.droptracker.service.KCService;
-import io.droptracker.service.ManifestService;
-import io.droptracker.service.CollectionLogScraper;
-import io.droptracker.service.PlayerModelService;
-import io.droptracker.service.StateSyncScheduler;
-import io.droptracker.service.StateSyncService;
-import io.droptracker.service.NearbyPlayerTracker;
-import io.droptracker.service.RaidLootDeduplicator;
-import io.droptracker.service.ScreenshotPrivacyService;
-import io.droptracker.service.SubmissionManager;
+import io.droptracker.service.*;
 import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.ui.overlays.EventHudOverlay;
-import io.droptracker.ui.overlays.EventToastOverlay;
-import io.droptracker.util.ChatMessageUtil;
-import io.droptracker.util.DebugLogger;
-import io.droptracker.util.VersionUtil;
+import io.droptracker.ui.overlays.*;
+import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
@@ -87,20 +56,14 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.events.NpcLootReceived;
-import net.runelite.client.events.PlayerLootReceived;
-import net.runelite.client.events.ServerNpcLoot;
-import net.runelite.client.plugins.Plugin;
-import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.events.*;
+import net.runelite.client.plugins.*;
 import net.runelite.client.plugins.loottracker.LootReceived;
-import net.runelite.client.ui.ClientToolbar;
-import net.runelite.client.ui.NavigationButton;
+import net.runelite.client.ui.*;
 import net.runelite.client.ui.overlay.OverlayManager;
 
 import net.runelite.client.util.ImageUtil;
 
-import io.droptracker.util.NpcUtilities;
 
 @Slf4j
 @PluginDescriptor(

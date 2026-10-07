@@ -5,8 +5,7 @@ import com.google.gson.annotations.SerializedName;
 import io.droptracker.models.submissions.RecentSubmission;
 import lombok.Data;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Data
 public class PlayerSearchResult {

@@ -1,32 +1,20 @@
 package io.droptracker.api;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import javax.swing.SwingUtilities;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.*;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.api.DeathMessages;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.CacheControl;
-import okhttp3.HttpUrl;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 
 /**
  * Reads and saves the logged-in account's own death messages

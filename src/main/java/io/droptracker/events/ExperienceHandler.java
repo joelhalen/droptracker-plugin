@@ -4,12 +4,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Experience;
-import net.runelite.api.GameState;
-import net.runelite.api.Skill;
-import net.runelite.api.WorldType;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.StatChanged;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.QuantityFormatter;
 import org.jetbrains.annotations.VisibleForTesting;
@@ -18,19 +14,9 @@ import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.api.GroupConfig;
 import io.droptracker.models.submissions.SubmissionType;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumMap;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import javax.inject.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 import static net.runelite.api.Experience.MAX_REAL_LEVEL;
 

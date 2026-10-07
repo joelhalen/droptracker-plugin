@@ -1,36 +1,21 @@
 package io.droptracker.events;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.*;
 
 import javax.inject.Inject;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.*;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.Drop;
-import io.droptracker.service.EventNotificationService;
-import io.droptracker.service.KCService;
-import io.droptracker.util.ItemStacks;
-import io.droptracker.util.NpcUtilities;
+import io.droptracker.service.*;
+import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.NPC;
-import net.runelite.client.events.NpcLootReceived;
-import net.runelite.client.events.PlayerLootReceived;
-import net.runelite.client.events.ServerNpcLoot;
-import net.runelite.client.game.ItemStack;
-import net.runelite.client.game.ItemManager;
+import net.runelite.api.*;
+import net.runelite.client.events.*;
+import net.runelite.client.game.*;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 

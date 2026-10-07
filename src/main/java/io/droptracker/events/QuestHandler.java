@@ -1,10 +1,7 @@
 package io.droptracker.events;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 
 import javax.annotation.Nullable;
 import javax.inject.Singleton;

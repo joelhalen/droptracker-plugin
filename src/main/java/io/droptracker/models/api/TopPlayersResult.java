@@ -2,8 +2,7 @@ package io.droptracker.models.api;
 
 import java.util.List;
 import com.google.gson.annotations.SerializedName;
-import lombok.Data;
-import lombok.Value;
+import lombok.*;
 
 @Data
 public class TopPlayersResult {

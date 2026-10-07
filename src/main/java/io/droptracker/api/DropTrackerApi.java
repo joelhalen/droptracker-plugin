@@ -1,21 +1,11 @@
 package io.droptracker.api;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.*;
 import com.google.gson.annotations.SerializedName;
 
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.DropTrackerPlugin;
-import io.droptracker.models.api.GroupConfig;
-import io.droptracker.models.api.GroupSearchResult;
+import io.droptracker.*;
+import io.droptracker.models.api.*;
 import io.droptracker.models.StateSnapshot;
-import io.droptracker.models.api.EventRoster;
-import io.droptracker.models.api.EventState;
-import io.droptracker.models.api.Manifest;
-import io.droptracker.models.api.ModelStatus;
-import io.droptracker.models.api.PlayerSearchResult;
-import io.droptracker.models.api.TopGroupResult;
-import io.droptracker.models.api.TopPlayersResult;
 import io.droptracker.util.DebugLogger;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
@@ -24,21 +14,12 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import javax.swing.SwingUtilities;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.function.*;
 
 @Slf4j
 @Singleton

@@ -4,21 +4,17 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.DropTrackerTheme;
-import io.droptracker.ui.components.LeaderboardComponents;
-import io.droptracker.ui.components.PanelElements;
-import io.droptracker.ui.components.StateViews;
+import io.droptracker.ui.components.*;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.*;
 
 import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 /**

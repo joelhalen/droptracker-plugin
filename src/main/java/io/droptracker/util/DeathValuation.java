@@ -1,19 +1,13 @@
 package io.droptracker.util;
 
-import net.runelite.api.Client;
-import net.runelite.api.Item;
-import net.runelite.api.ItemContainer;
-import net.runelite.api.Prayer;
-import net.runelite.api.SkullIcon;
+import net.runelite.api.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.game.ItemManager;
 import org.jetbrains.annotations.VisibleForTesting;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  * Values what a death actually cost: the GE value of the items the player

@@ -4,14 +4,7 @@ import io.droptracker.models.EventPopupCard;
 import io.droptracker.models.api.EventNotification;
 import io.droptracker.service.EventNotificationService.Toast;
 
-import java.awt.Color;
-import java.awt.Composite;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.GradientPaint;
-import java.awt.Graphics2D;
-import java.awt.Polygon;
-import java.awt.Shape;
+import java.awt.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import javax.annotation.Nullable;

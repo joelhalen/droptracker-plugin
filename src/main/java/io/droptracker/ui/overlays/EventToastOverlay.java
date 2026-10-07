@@ -3,19 +3,12 @@ package io.droptracker.ui.overlays;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.service.EventNotificationService;
 import io.droptracker.service.EventNotificationService.Toast;
-import io.droptracker.ui.overlays.popup.PopupRenderer;
-import io.droptracker.ui.overlays.popup.PopupRenderers;
-import net.runelite.client.ui.overlay.Overlay;
-import net.runelite.client.ui.overlay.OverlayLayer;
-import net.runelite.client.ui.overlay.OverlayPosition;
+import io.droptracker.ui.overlays.popup.*;
+import net.runelite.client.ui.overlay.*;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.util.ArrayList;
-import java.util.Iterator;
+import javax.inject.*;
+import java.awt.*;
+import java.util.*;
 import java.util.List;
 
 /**

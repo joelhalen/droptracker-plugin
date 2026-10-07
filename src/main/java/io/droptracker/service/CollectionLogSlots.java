@@ -1,20 +1,12 @@
 package io.droptracker.service;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.VisibleForTesting;
-import net.runelite.api.Client;
-import net.runelite.api.EnumComposition;
-import net.runelite.api.GameState;
-import net.runelite.api.ItemComposition;
-import net.runelite.api.StructComposition;
+import net.runelite.api.*;
 import net.runelite.client.game.ItemManager;
 
 /**

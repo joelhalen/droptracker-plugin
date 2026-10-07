@@ -1,18 +1,14 @@
 package io.droptracker.models.submissions;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.annotation.Nullable;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import com.google.gson.annotations.SerializedName;
-import lombok.ToString;
 
 import io.droptracker.api.DropTrackerUrls;
 import okhttp3.HttpUrl;

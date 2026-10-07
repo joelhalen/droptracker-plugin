@@ -1,11 +1,9 @@
 package io.droptracker.ui.components;
 
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
+import java.awt.event.*;
 
 import javax.annotation.Nullable;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
+import javax.swing.*;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DeathMessageApi;

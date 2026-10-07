@@ -7,12 +7,10 @@
 package io.droptracker.modelexport;
 
 import lombok.NonNull;
-import net.runelite.api.Client;
-import net.runelite.api.Model;
+import net.runelite.api.*;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Exports a game {@link Model} as a binary glTF.

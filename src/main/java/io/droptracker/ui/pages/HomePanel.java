@@ -1,16 +1,11 @@
 package io.droptracker.ui.pages;
 
-import io.droptracker.api.DropTrackerUrls;
+import io.droptracker.api.*;
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.api.DeathMessageApi;
-import io.droptracker.api.DropTrackerApi;
-import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.ui.DropTrackerTheme;
-import io.droptracker.ui.components.DeathMessageDialog;
-import io.droptracker.ui.components.PanelElements;
+import io.droptracker.ui.*;
+import io.droptracker.ui.components.*;
 import net.runelite.api.Client;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.*;
 import net.runelite.client.util.LinkBrowser;
 
 import javax.annotation.Nullable;

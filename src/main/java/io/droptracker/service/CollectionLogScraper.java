@@ -1,22 +1,13 @@
 package io.droptracker.service;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 
 import io.droptracker.DropTrackerConfig;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.MenuAction;
-import net.runelite.api.events.GameStateChanged;
-import net.runelite.api.events.GameTick;
-import net.runelite.api.events.ScriptPostFired;
-import net.runelite.api.events.ScriptPreFired;
-import net.runelite.api.events.VarbitChanged;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarbitID;
-import net.runelite.client.eventbus.EventBus;
-import net.runelite.client.eventbus.Subscribe;
+import net.runelite.api.*;
+import net.runelite.api.events.*;
+import net.runelite.api.gameval.*;
+import net.runelite.client.eventbus.*;
 
 /**
  * Reads the player's <em>entire</em> collection log when they open it.

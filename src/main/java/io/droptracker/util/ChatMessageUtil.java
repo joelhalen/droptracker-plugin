@@ -4,18 +4,13 @@ import io.droptracker.api.DropTrackerUrls;
 import com.google.inject.Inject;
 
 import io.droptracker.DropTrackerConfig;
-import net.runelite.client.chat.ChatColorType;
-import net.runelite.client.chat.ChatMessageBuilder;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
+import net.runelite.client.chat.*;
+import net.runelite.api.*;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageManager;
-import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.util.ColorUtil;
-import net.runelite.client.util.LinkBrowser;
+import net.runelite.client.util.*;
 
 import java.awt.*;
 

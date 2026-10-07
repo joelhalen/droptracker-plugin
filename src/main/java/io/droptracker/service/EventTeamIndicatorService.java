@@ -1,48 +1,29 @@
 package io.droptracker.service;
 
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
+import com.google.inject.*;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.TeamIndicatorStyle;
-import io.droptracker.models.api.EventRoster;
-import io.droptracker.models.api.EventState;
-import io.droptracker.models.api.Manifest;
+import io.droptracker.models.api.*;
 import io.droptracker.util.ChatMessageUtil;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.ChatMessageType;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.IndexedSprite;
-import net.runelite.api.MessageNode;
+import net.runelite.api.*;
 import net.runelite.api.events.ScriptCallbackEvent;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.eventbus.EventBus;
-import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.eventbus.*;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.ImageUtil;
-import net.runelite.client.util.Text;
+import net.runelite.client.util.*;
 import org.jetbrains.annotations.VisibleForTesting;
 
 import javax.annotation.Nullable;
-import java.awt.AlphaComposite;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.regex.*;
 
 /**
  * Badges clan-chat lines from players in the same live event with their team

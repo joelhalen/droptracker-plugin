@@ -4,8 +4,7 @@ import io.droptracker.service.EventNotificationService.Toast;
 
 import javax.annotation.Nullable;
 import java.awt.image.BufferedImage;
-import java.util.function.Function;
-import java.util.function.IntFunction;
+import java.util.function.*;
 
 /**
  * The picture for a pop-up: the item sprite when the toast names one (the

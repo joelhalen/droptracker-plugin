@@ -1,13 +1,7 @@
 package io.droptracker;
 
-import io.droptracker.models.EventDisplayMode;
-import io.droptracker.models.EventHudDetail;
-import io.droptracker.models.PrivacyMode;
-import io.droptracker.models.TeamIndicatorStyle;
-import net.runelite.client.config.Config;
-import net.runelite.client.config.ConfigGroup;
-import net.runelite.client.config.ConfigItem;
-import net.runelite.client.config.ConfigSection;
+import io.droptracker.models.*;
+import net.runelite.client.config.*;
 
 /**
  * Four sections: what we track, when we screenshot, events, and everything

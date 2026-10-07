@@ -1,7 +1,6 @@
 package io.droptracker.models;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import io.droptracker.api.DropTrackerUrls;
 import lombok.Data;

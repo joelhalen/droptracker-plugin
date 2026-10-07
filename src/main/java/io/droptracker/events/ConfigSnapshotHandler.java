@@ -1,8 +1,6 @@
 package io.droptracker.events;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+import com.google.gson.*;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
@@ -14,20 +12,12 @@ import net.runelite.client.RuneLiteProperties;
 import net.runelite.client.config.RuneLiteConfig;
 
 import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import javax.inject.*;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.security.*;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.function.*;
 
 /**
  * Sends the player's DropTracker settings to the server, so group leaders and

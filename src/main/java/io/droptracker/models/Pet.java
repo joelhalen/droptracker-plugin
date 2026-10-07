@@ -24,8 +24,7 @@
  */
 package io.droptracker.models;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.*;
 import net.runelite.api.ItemID;
 
 @AllArgsConstructor

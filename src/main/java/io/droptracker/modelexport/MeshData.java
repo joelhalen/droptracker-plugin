@@ -6,12 +6,9 @@
  */
 package io.droptracker.modelexport;
 
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.*;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * A triangle mesh in a form that is independent of both the game's model

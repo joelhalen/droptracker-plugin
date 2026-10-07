@@ -4,8 +4,7 @@ import com.google.gson.annotations.SerializedName;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 /**
  * One typed notification envelope drained from GET /notifications.

@@ -2,28 +2,16 @@ package io.droptracker.ui.components;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.awt.BorderLayout;
-import java.awt.BasicStroke;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.Insets;
+import java.awt.*;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.concurrent.CompletableFuture;
 
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.SwingUtilities;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.StrokeBorder;
+import javax.swing.*;
+import javax.swing.border.*;
 
 import io.droptracker.ui.DropTrackerTheme;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.ui.*;
 
 @Slf4j
 public class LeaderboardComponents {

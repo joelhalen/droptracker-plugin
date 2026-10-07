@@ -1,9 +1,7 @@
 package io.droptracker.events;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;

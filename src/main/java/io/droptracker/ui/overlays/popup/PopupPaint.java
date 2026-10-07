@@ -6,17 +6,10 @@ import io.droptracker.service.EventNotificationService.Toast;
 import net.runelite.client.ui.FontManager;
 
 import javax.annotation.Nullable;
-import java.awt.AlphaComposite;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Shared painting helpers for the pop-up renderers: palette, fonts, easing,

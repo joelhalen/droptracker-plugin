@@ -1,12 +1,7 @@
 package io.droptracker.service;
 
-import net.runelite.api.Client;
-import net.runelite.api.Player;
-import net.runelite.api.Varbits;
-import net.runelite.api.WorldView;
-import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarClientID;
-import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.*;
+import net.runelite.api.gameval.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
@@ -14,16 +9,9 @@ import net.runelite.client.party.PartyService;
 import net.runelite.client.util.Text;
 import io.droptracker.util.DebugLogger;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import javax.inject.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Service for resolving the participants attached to submissions.

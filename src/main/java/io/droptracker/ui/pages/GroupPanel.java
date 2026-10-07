@@ -1,32 +1,22 @@
 package io.droptracker.ui.pages;
 
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.api.DropTrackerApi;
-import io.droptracker.api.DropTrackerUrls;
-import io.droptracker.models.api.GroupSearchResult;
-import io.droptracker.models.api.TopGroupResult;
-import io.droptracker.ui.DropTrackerPanel;
-import io.droptracker.ui.components.LeaderboardComponents;
-import io.droptracker.ui.components.StateViews;
-import io.droptracker.ui.components.PanelElements;
-import io.droptracker.ui.DropTrackerTheme;
+import io.droptracker.api.*;
+import io.droptracker.models.api.*;
+import io.droptracker.ui.*;
+import io.droptracker.ui.components.*;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.LinkBrowser;
 import javax.annotation.Nullable;
 
-import okhttp3.HttpUrl;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.util.concurrent.CompletableFuture;
 

@@ -9,12 +9,7 @@ package io.droptracker.modelexport;
 import lombok.NonNull;
 import net.runelite.api.Model;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Turns a game {@link Model} into a {@link MeshData}, keeping the texture
