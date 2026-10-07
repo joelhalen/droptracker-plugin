@@ -1,5 +1,7 @@
 package io.droptracker.events;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import java.lang.ref.WeakReference;
 import java.util.*;
 import java.util.function.Predicate;
@@ -448,6 +450,7 @@ public class DeathHandler extends BaseEventHandler {
      * the submission is built, so the attribution cannot be an {@link Actor}.
      */
     @VisibleForTesting
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
     static final class Killer {
 
         private final String name;
@@ -455,15 +458,6 @@ public class DeathHandler extends BaseEventHandler {
         private final int combatLevel;
         private final boolean player;
         private final boolean npc;
-
-        private Killer(@Nullable String name, @Nullable Integer npcId, int combatLevel,
-                boolean player, boolean npc) {
-            this.name = name;
-            this.npcId = npcId;
-            this.combatLevel = combatLevel;
-            this.player = player;
-            this.npc = npc;
-        }
 
         static Killer of(Actor actor) {
             if (actor instanceof NPC) {

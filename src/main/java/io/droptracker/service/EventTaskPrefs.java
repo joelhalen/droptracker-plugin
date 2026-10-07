@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.AllArgsConstructor;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.api.EventState;
 import net.runelite.client.config.ConfigManager;
@@ -27,6 +28,7 @@ import java.util.*;
  * reads it to keep a hidden task out of the HUD and to mute its progress
  * chat/pop-ups. Completions are still announced — see that class.
  */
+@AllArgsConstructor
 public class EventTaskPrefs {
     private static final String PINNED_PREFIX = "pinnedTasks_";
     private static final String HIDDEN_PREFIX = "hiddenTasks_";
@@ -35,11 +37,6 @@ public class EventTaskPrefs {
 
     private final ConfigManager configManager;
     private final EventNotificationService service;
-
-    public EventTaskPrefs(ConfigManager configManager, EventNotificationService service) {
-        this.configManager = configManager;
-        this.service = service;
-    }
 
     /** Task ids the user pinned for this event, in pin order. */
     public Set<Integer> pinned(int eventId) {

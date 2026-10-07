@@ -8,6 +8,8 @@
  */
 package io.droptracker.service;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import com.google.common.collect.ImmutableSet;
 import io.droptracker.models.PrivacyMode;
 import java.awt.*;
@@ -54,6 +56,7 @@ import org.jetbrains.annotations.VisibleForTesting;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ScreenshotPrivacyService {
 
     /** Extra rendered frames to wait after hiding before capturing, so the 3D scene finishes growing. */
@@ -180,16 +183,13 @@ public class ScreenshotPrivacyService {
     }
 
     /** One caller waiting for a frame. Client-thread confined. */
+    @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
     private static final class Request {
 
         private final PrivacyMode mode;
         private final Consumer<BufferedImage> consumer;
         private int attempts;
 
-        private Request(PrivacyMode mode, Consumer<BufferedImage> consumer) {
-            this.mode = mode;
-            this.consumer = consumer;
-        }
     }
 
     private final Client client;
@@ -230,19 +230,6 @@ public class ScreenshotPrivacyService {
     private boolean borderSpritesLoaded;
     private SpritePixels lastWindowFrameLeftSprite;
     private SpritePixels lastSidePanelLeftUpperSprite;
-
-    @Inject
-    public ScreenshotPrivacyService(
-        Client client,
-        ClientThread clientThread,
-        DrawManager drawManager,
-        SpriteManager spriteManager
-    ) {
-        this.client = client;
-        this.clientThread = clientThread;
-        this.drawManager = drawManager;
-        this.spriteManager = spriteManager;
-    }
 
     private static Map.Entry<Integer, Integer> entry(int group, int child) {
         return new AbstractMap.SimpleEntry<>(group, child);

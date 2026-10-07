@@ -6,6 +6,8 @@
  */
 package io.droptracker.modelexport;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import net.runelite.api.Model;
 
@@ -278,14 +280,10 @@ public final class ModelMeshBuilder {
      * each other while they share one - so per face data a renderer needs is
      * carried per vertex instead.
      */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     private static final class FaceGroup implements Comparable<FaceGroup> {
         private final int textureId;
         private final boolean translucent;
-
-        FaceGroup(int textureId, boolean translucent) {
-            this.textureId = textureId;
-            this.translucent = translucent;
-        }
 
         boolean isTextured() {
             return textureId != MeshData.NO_TEXTURE;

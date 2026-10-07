@@ -1,5 +1,6 @@
 package io.droptracker.models;
 
+import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
@@ -16,6 +17,7 @@ import javax.annotation.Nullable;
  * built in one expression from optional server fields.
  */
 @Getter
+@RequiredArgsConstructor
 public class EventPopupCard {
     /** What kind of news this is; drives the colour scheme. */
     public enum Kind {
@@ -67,12 +69,6 @@ public class EventPopupCard {
     private Long have;
     @Nullable
     private Long need;
-
-    public EventPopupCard(Kind kind, String caption, String headline) {
-        this.kind = kind;
-        this.caption = caption;
-        this.headline = headline;
-    }
 
     public EventPopupCard detail(@Nullable String detail) {
         this.detail = detail;

@@ -1,5 +1,7 @@
 package io.droptracker.ui.overlays.popup;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import io.droptracker.models.EventPopupCard;
 import io.droptracker.models.api.EventNotification;
 import io.droptracker.service.EventNotificationService.Toast;
@@ -19,6 +21,7 @@ import java.util.List;
  * pops in after it, and big moments get one light sweep across the face.
  * Each kind of news gets its own tinted panel and frame, like rarity tiers.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 class ShowcaseRenderer implements PopupRenderer {
     static final int WIDTH = 330;
     private static final int PAD = 12;
@@ -34,10 +37,6 @@ class ShowcaseRenderer implements PopupRenderer {
     private static final long FADE_MS = 600;
 
     private final PopupIcons icons;
-
-    ShowcaseRenderer(PopupIcons icons) {
-        this.icons = icons;
-    }
 
     @Override
     public int preferredWidth() {

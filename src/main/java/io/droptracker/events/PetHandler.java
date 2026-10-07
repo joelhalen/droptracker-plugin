@@ -246,14 +246,11 @@ public class PetHandler extends BaseEventHandler {
         return Optional.empty();
     }
 
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     private static class ParseResult {
         final String itemName;
         final boolean collectionLog;
 
-        ParseResult(String itemName, boolean collectionLog) {
-            this.itemName = itemName;
-            this.collectionLog = collectionLog;
-        }
     }
 
     /**

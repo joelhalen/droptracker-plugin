@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class EventNotificationService {
     /** Fallback poll cadence for legacy servers that ignore the wait param. */
     static final int POLL_INTERVAL_SECONDS = 10;
@@ -156,21 +157,6 @@ public class EventNotificationService {
      * refreshing, with nothing in the log to say why.
      */
     private final List<Runnable> stateUpdatedListeners = new CopyOnWriteArrayList<>();
-
-    @Inject
-    public EventNotificationService(DropTrackerConfig config, DropTrackerApi api,
-                                    ChatMessageUtil chatMessageUtil, Client client,
-                                    ScheduledExecutorService executor,
-                                    ConfigManager configManager,
-                                    ClanRelayService clanRelayService) {
-        this.config = config;
-        this.api = api;
-        this.chatMessageUtil = chatMessageUtil;
-        this.client = client;
-        this.executor = executor;
-        this.configManager = configManager;
-        this.clanRelayService = clanRelayService;
-    }
 
     /* ===================== lifecycle ===================== */
 
@@ -1100,6 +1086,7 @@ public class EventNotificationService {
     private static final String CATCHUP_INDENT = "  - ";
 
     /** A rendered notification: local text composed from typed fields only. */
+    @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
     private static class Rendered {
         final String title;
         /** Plain body: the pop-up card and the in-batch dedupe key. */
@@ -1118,11 +1105,6 @@ public class EventNotificationService {
         String dedupeKey;
         /** Structured parts for the showcase-style pop-up layouts. */
         EventPopupCard card;
-
-        Rendered(String title, String text) {
-            this.title = title;
-            this.text = text;
-        }
 
         Rendered tag(String tag, String hex) {
             this.chatTag = tag;

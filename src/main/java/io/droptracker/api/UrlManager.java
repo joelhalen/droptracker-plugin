@@ -1,5 +1,7 @@
 package io.droptracker.api;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -78,14 +80,10 @@ public class UrlManager {
 	 * A Discord webhook as the two opaque credentials it actually is. The host is
 	 * never taken from the published list — see {@link #url()}.
 	 */
+	@AllArgsConstructor(access = AccessLevel.PACKAGE)
 	public static final class WebhookEndpoint {
 		private final String id;
 		private final String token;
-
-		WebhookEndpoint(String id, String token) {
-			this.id = id;
-			this.token = token;
-		}
 
 		/** Always under the hardcoded {@link DropTrackerUrls#DISCORD_WEBHOOK} base. */
 		public HttpUrl url() {
@@ -175,36 +173,13 @@ public class UrlManager {
 		}
 		// Attempt to obtain a new list
 		 if (backupEndpoints.isEmpty()) {
-			 LocalDate currentDate = LocalDate.now();
-
-			 // Define formatter for YYYYMMDD pattern
-			 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-
-			 // Format the date as YYYYMMDD string
-			String dateString = currentDate.format(formatter);
+			String dateString = today();
 			HttpUrl url = usingBackups
 					? DropTrackerUrls.content(dateString + ".json")
 					: DropTrackerUrls.content(dateString + "-1.json");
 
-			JsonArray jsonArray = gson.fromJson(httpGetString(url), JsonArray.class);
-
-			for (JsonElement element : jsonArray) {
-				try {
-					String encrypted = element.getAsString();
-					try {
-						WebhookEndpoint endpoint = parseEndpoint(FernetDecrypt.decryptWebhook(encrypted));
-						if (endpoint != null) {
-							backupEndpoints.add(endpoint);
-						} else {
-							log.error("[DropTracker] Decrypted entry is not a webhook credential; skipping");
-						}
-					} catch (Exception e) {
-						log.error("Decryption failed: {}", e.getMessage());
-					}
-				} catch (Exception e) {
-					log.error("Error processing element: {}", e.getMessage());
-				}
-			}
+			decryptInto(gson.fromJson(httpGetString(url), JsonArray.class), backupEndpoints,
+				"[DropTracker] Decrypted entry is not a webhook credential; skipping");
 			if (!backupEndpoints.isEmpty()) {
 				// COPY the freshly fetched list, then clear the backing one.
 				// Assigning the reference made both fields the same ArrayList,
@@ -237,13 +212,7 @@ public class UrlManager {
 		try {
 			if (endpoints.isEmpty()) {
 
-				LocalDate currentDate = LocalDate.now();
-
-				// Define formatter for YYYYMMDD pattern
-				DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-
-				// Format the date as YYYYMMDD string
-			    String dateString = currentDate.format(formatter);
+			    String dateString = today();
 				// Get the encryption key first from github (first line only, matching the prior readLine())
 				String keyBody = httpGetString(DropTrackerUrls.content(dateString + "-k.txt"));
 				String loadedKey = keyBody.split("\\R", 2)[0].trim();
@@ -256,27 +225,8 @@ public class UrlManager {
 				}
 
 				String responseBody = httpGetString(DropTrackerUrls.content(dateString + ".json"));
-				JsonArray jsonArray = gson.fromJson(responseBody, JsonArray.class);
-
-				for (JsonElement element : jsonArray) {
-					try {
-						String encrypted = element.getAsString();
-						try {
-							// Always load webhook credentials as they're needed for both API disabled
-							// users and as a fallback when API is enabled but fails
-							WebhookEndpoint endpoint = parseEndpoint(FernetDecrypt.decryptWebhook(encrypted));
-							if (endpoint != null) {
-								endpoints.add(endpoint);
-							} else {
-								log.error("Decrypted entry is not a Discord webhook credential; skipping");
-							}
-						} catch (Exception e) {
-							log.error("Decryption failed: {}", e.getMessage());
-						}
-					} catch (Exception e) {
-						log.error("Error processing element: {}", e.getMessage());
-					}
-				}
+				decryptInto(gson.fromJson(responseBody, JsonArray.class), endpoints,
+					"Decrypted entry is not a Discord webhook credential; skipping");
 			}
 			log.debug("Successfully loaded {} webhook endpoints from GitHub", endpoints.size());
 			endpointUrlsLoaded.complete(null);
@@ -293,6 +243,32 @@ public class UrlManager {
 			} else {
 				log.error("Failed to load webhook endpoints from GitHub after {} attempts; giving up", attempt, e);
 				endpointUrlsLoaded.completeExceptionally(e);
+			}
+		}
+	}
+
+	/** Today as YYYYMMDD, the date stamp on the published endpoint lists. */
+	private static String today() {
+		return LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+	}
+
+	/** Decrypts each published entry into {@code into}, skipping (and logging) bad ones. */
+	private void decryptInto(JsonArray jsonArray, List<WebhookEndpoint> into, String notWebhook) {
+		for (JsonElement element : jsonArray) {
+			try {
+				String encrypted = element.getAsString();
+				try {
+					WebhookEndpoint endpoint = parseEndpoint(FernetDecrypt.decryptWebhook(encrypted));
+					if (endpoint != null) {
+						into.add(endpoint);
+					} else {
+						log.error(notWebhook);
+					}
+				} catch (Exception e) {
+					log.error("Decryption failed: {}", e.getMessage());
+				}
+			} catch (Exception e) {
+				log.error("Error processing element: {}", e.getMessage());
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 package io.droptracker.ui.pages;
 
+import lombok.RequiredArgsConstructor;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.api.GroupConfig;
@@ -24,6 +25,7 @@ import java.util.Map;
  * The "Activity" tab: this session's submission feed (promoted from the old buried
  * "API" tab), a compact session stats row, and the per-group configuration summary.
  */
+@RequiredArgsConstructor
 public class ActivityPanel {
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
@@ -40,18 +42,6 @@ public class ActivityPanel {
     private JPanel groupsContainerPanel;
     private JScrollPane groupsScrollPane;
     private final Map<String, Boolean> groupExpandStates = new HashMap<>();
-
-    public ActivityPanel(
-        DropTrackerConfig config,
-        DropTrackerApi api,
-        SubmissionManager submissionManager,
-        DropTrackerPanel mainPanel
-    ) {
-        this.config = config;
-        this.api = api;
-        this.submissionManager = submissionManager;
-        this.mainPanel = mainPanel;
-    }
 
     public JPanel create() {
         activityRoot = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);

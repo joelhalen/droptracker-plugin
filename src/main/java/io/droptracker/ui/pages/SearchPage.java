@@ -1,5 +1,8 @@
 package io.droptracker.ui.pages;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.submissions.RecentSubmission;
@@ -22,6 +25,7 @@ import java.util.function.Consumer;
  * area that swaps between the default view, a loading state, an error and a
  * detail card. Both pages lay their detail cards out the same way.
  */
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 abstract class SearchPage {
     protected final Client client;
     protected final DropTrackerConfig config;
@@ -32,13 +36,6 @@ abstract class SearchPage {
     protected JPanel contentPanel;
     protected JTextField searchField;
     protected JPanel leaderboardPlaceholder;
-
-    SearchPage(Client client, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager) {
-        this.client = client;
-        this.config = config;
-        this.api = api;
-        this.itemManager = itemManager;
-    }
 
     protected abstract void showDefaultState();
 
@@ -108,14 +105,11 @@ abstract class SearchPage {
         return message != null && message.contains("status: 404");
     }
 
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     private static class SearchOutcome<R> {
         final R result;
         final Exception error;
 
-        SearchOutcome(R result, Exception error) {
-            this.result = result;
-            this.error = error;
-        }
     }
 
     /* ===================== default view pieces ===================== */

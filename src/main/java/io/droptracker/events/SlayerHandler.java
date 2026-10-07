@@ -1,5 +1,7 @@
 package io.droptracker.events;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
 import java.util.*;
 import java.util.regex.*;
 
@@ -525,6 +527,7 @@ public class SlayerHandler extends BaseEventHandler {
         String raw;
     }
 
+    @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
     private static final class PendingChat {
         private final TaskLine taskLine;
         @Nullable
@@ -533,11 +536,6 @@ public class SlayerHandler extends BaseEventHandler {
         @Nullable
         private StreakLine streak;
 
-        private PendingChat(TaskLine taskLine, @Nullable String bossName, int tick) {
-            this.taskLine = taskLine;
-            this.bossName = bossName;
-            this.tick = tick;
-        }
     }
 
     /** One completed task, as it is submitted. */

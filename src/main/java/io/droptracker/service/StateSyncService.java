@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.AllArgsConstructor;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,6 +26,7 @@ import net.runelite.client.callback.ClientThread;
  */
 @Slf4j
 @Singleton
+@AllArgsConstructor(onConstructor_ = @Inject)
 public class StateSyncService {
 
 	private final Client client;
@@ -48,23 +50,6 @@ public class StateSyncService {
 
 	/** Prevents overlapping syncs; a slow request must not queue up behind itself. */
 	private final AtomicBoolean syncing = new AtomicBoolean(false);
-
-	@Inject
-	public StateSyncService(Client client,
-	                        ClientThread clientThread,
-	                        DropTrackerConfig config,
-	                        DropTrackerApi api,
-	                        ManifestService manifestService,
-	                        ScheduledExecutorService executor,
-	                        DropTrackerPlugin plugin) {
-		this.client = client;
-		this.clientThread = clientThread;
-		this.config = config;
-		this.api = api;
-		this.manifestService = manifestService;
-		this.executor = executor;
-		this.plugin = plugin;
-	}
 
 	/** True when the user has opted in and the server has not switched sync off. */
 	public boolean isEnabled() {

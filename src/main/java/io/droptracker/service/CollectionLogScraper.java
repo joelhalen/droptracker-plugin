@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import javax.inject.*;
 
 import io.droptracker.DropTrackerConfig;
@@ -32,6 +33,7 @@ import net.runelite.client.eventbus.*;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class CollectionLogScraper {
 
 	/**
@@ -70,19 +72,6 @@ public class CollectionLogScraper {
 
 	/** True while we are driving the interface, so our own init does not re-trigger us. */
 	private boolean selfTriggered = false;
-
-	@Inject
-	public CollectionLogScraper(EventBus eventBus,
-	                            Client client,
-	                            DropTrackerConfig config,
-	                            StateSyncService stateSyncService,
-	                            StateSyncScheduler stateSyncScheduler) {
-		this.eventBus = eventBus;
-		this.client = client;
-		this.config = config;
-		this.stateSyncService = stateSyncService;
-		this.stateSyncScheduler = stateSyncScheduler;
-	}
 
 	public void startUp() {
 		eventBus.register(this);

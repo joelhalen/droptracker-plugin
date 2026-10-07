@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import java.util.concurrent.*;
 
 import javax.inject.*;
@@ -33,6 +34,7 @@ import net.runelite.client.events.ConfigChanged;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class StateSyncScheduler {
 
 	private final EventBus eventBus;
@@ -50,17 +52,6 @@ public class StateSyncScheduler {
 
 	private static final int DEFAULT_INTERVAL_MINUTES = 60;
 	private static final int DEFAULT_RAPID_SECONDS = 3;
-
-	@Inject
-	public StateSyncScheduler(EventBus eventBus,
-	                          ScheduledExecutorService executor,
-	                          StateSyncService stateSyncService,
-	                          ManifestService manifestService) {
-		this.eventBus = eventBus;
-		this.executor = executor;
-		this.stateSyncService = stateSyncService;
-		this.manifestService = manifestService;
-	}
 
 	public void startUp() {
 		eventBus.register(this);

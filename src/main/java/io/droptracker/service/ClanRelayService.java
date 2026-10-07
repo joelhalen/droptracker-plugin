@@ -5,6 +5,7 @@
  */
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import com.google.inject.*;
 import io.droptracker.*;
 import io.droptracker.api.DropTrackerApi;
@@ -51,6 +52,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ClanRelayService {
 
     private static final int FLUSH_DELAY_SECONDS = 2;
@@ -91,18 +93,6 @@ public class ClanRelayService {
     private volatile Map<String, String> publishedClans = null;
     private volatile long publishedClansFetchedAt = 0L;
     private final AtomicBoolean publishedClansLoading = new AtomicBoolean(false);
-
-    @Inject
-    public ClanRelayService(Client client, DropTrackerConfig config, DropTrackerApi api,
-                            DropTrackerPlugin plugin, SubmissionManager submissionManager,
-                            ScheduledExecutorService executor) {
-        this.client = client;
-        this.config = config;
-        this.api = api;
-        this.plugin = plugin;
-        this.submissionManager = submissionManager;
-        this.executor = executor;
-    }
 
     /** Called from the client thread whenever the clan channel changes. */
     public void updateClanChannel(ClanChannel channel) {

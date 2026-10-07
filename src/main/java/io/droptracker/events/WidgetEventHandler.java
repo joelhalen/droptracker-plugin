@@ -28,6 +28,7 @@
  */
 package io.droptracker.events;
 
+import lombok.AllArgsConstructor;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
@@ -90,16 +91,12 @@ public class WidgetEventHandler {
 
     static final int ADV_LOG_EXPLOITS_TEXT_INDEX = 1;
 
+    @AllArgsConstructor
     private static class BossPB {
         private final String bossName;
         private final String teamSize;
         private final double time;
     
-        public BossPB(String bossName, String teamSize, double time) {
-            this.bossName = bossName;
-            this.teamSize = teamSize;
-            this.time = time;
-        }
     
         public String getBossName() {
             return bossName;

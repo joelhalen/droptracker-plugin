@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -24,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ManifestService {
 
 	private final DropTrackerApi api;
@@ -33,12 +35,6 @@ public class ManifestService {
 	private final AtomicBoolean fetching = new AtomicBoolean(false);
 
 	private volatile Manifest manifest;
-
-	@Inject
-	public ManifestService(DropTrackerApi api, ScheduledExecutorService executor) {
-		this.api = api;
-		this.executor = executor;
-	}
 
 	/**
 	 * The manifest, or null if it has not arrived (or could not be fetched).

@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import java.util.Arrays;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +42,7 @@ import net.runelite.client.callback.ClientThread;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class PlayerModelService {
 
 	/**
@@ -101,19 +103,6 @@ public class PlayerModelService {
 
 	/** Earliest an upload may start, as a monotonic timestamp. */
 	private volatile long nextUploadAtMs;
-
-	@Inject
-	public PlayerModelService(Client client,
-	                          ClientThread clientThread,
-	                          DropTrackerConfig config,
-	                          DropTrackerApi api,
-	                          ScheduledExecutorService executor) {
-		this.client = client;
-		this.clientThread = clientThread;
-		this.config = config;
-		this.api = api;
-		this.executor = executor;
-	}
 
 	public boolean isEnabled() {
 		return config.useApi() && config.uploadCharacterModel();

@@ -1,5 +1,6 @@
 package io.droptracker.ui.components;
 
+import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
@@ -301,14 +302,11 @@ public class LeaderboardComponents {
     /**
      * Result container for header creation
      */
+    @AllArgsConstructor
     public static class HeaderResult {
         public final JPanel panel;
         public final JTextField searchField;
 
-        public HeaderResult(JPanel panel, JTextField searchField) {
-            this.panel = panel;
-            this.searchField = searchField;
-        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package io.droptracker.events;
 
+import lombok.AllArgsConstructor;
 import java.util.*;
 import java.util.regex.*;
 
@@ -29,6 +30,7 @@ import net.runelite.client.game.ItemStack;
  * this package are not registered on the RuneLite event bus).
  */
 @Slf4j
+@AllArgsConstructor(onConstructor_ = @Inject)
 public class TrawlingHandler extends BaseEventHandler {
 
     public static final String SOURCE_NAME = "Deep Sea Trawling";
@@ -61,11 +63,6 @@ public class TrawlingHandler extends BaseEventHandler {
     }
 
     private final DropHandler dropHandler;
-
-    @Inject
-    public TrawlingHandler(DropHandler dropHandler) {
-        this.dropHandler = dropHandler;
-    }
 
     @Override
     public boolean isEnabled() {

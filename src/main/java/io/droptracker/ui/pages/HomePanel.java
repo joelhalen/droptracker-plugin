@@ -1,5 +1,6 @@
 package io.droptracker.ui.pages;
 
+import lombok.RequiredArgsConstructor;
 import io.droptracker.api.*;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.ui.*;
@@ -13,6 +14,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
+@RequiredArgsConstructor
 public class HomePanel {
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
@@ -24,15 +26,6 @@ public class HomePanel {
     private JPanel homePanel;
     private @Nullable JPanel playerButtonRow;
     private int playerButtonIndex = -1; // Tracks where to insert the button
-
-    public HomePanel(DropTrackerConfig config, DropTrackerApi api, Client client, DropTrackerPanel panel,
-                     DeathMessageApi deathMessageApi) {
-        this.config = config;
-        this.api = api;
-        this.client = client;
-        this.panel = panel;
-        this.deathMessageApi = deathMessageApi;
-    }
 
     public JPanel create() {
         homePanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);

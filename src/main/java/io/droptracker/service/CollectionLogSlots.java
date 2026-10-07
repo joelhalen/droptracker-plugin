@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.RequiredArgsConstructor;
 import java.util.*;
 
 import javax.inject.*;
@@ -41,6 +42,7 @@ import net.runelite.client.game.ItemManager;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class CollectionLogSlots {
 
 	/** Enum holding the collection log's top level tab structs. */
@@ -66,12 +68,6 @@ public class CollectionLogSlots {
 	 * message naming one cannot say which was unlocked.
 	 */
 	private Map<String, Integer> slotByName = null;
-
-	@Inject
-	public CollectionLogSlots(Client client, ItemManager itemManager) {
-		this.client = client;
-		this.itemManager = itemManager;
-	}
 
 	/** Drops the cached read, so a new session re-reads the cache. */
 	public void reset() {

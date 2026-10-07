@@ -50,6 +50,7 @@ public class GroupPanel extends SearchPage {
     @Override
     protected void showDefaultState() {
         activeDetailGroupName = null;
+        contentPanel.removeAll();
 
         JPanel defaultPanel = defaultPanel();
         defaultPanel.add(instructions("Search for a group by name above"));
@@ -190,6 +191,7 @@ public class GroupPanel extends SearchPage {
      */
     private void showGroupDetails(GroupSearchResult groupResult, boolean partial) {
         activeDetailGroupName = groupResult.getGroupName();
+        contentPanel.removeAll();
 
         // Group icon
         BufferedImage placeholderImg = new BufferedImage(50, 50, BufferedImage.TYPE_INT_ARGB);

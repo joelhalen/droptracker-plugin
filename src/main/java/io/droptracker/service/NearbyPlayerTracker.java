@@ -1,5 +1,8 @@
 package io.droptracker.service;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
 import net.runelite.api.coords.WorldPoint;
@@ -37,6 +40,7 @@ import java.util.concurrent.*;
  * attached to an unrelated kill minutes after the raid ended.
  */
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class NearbyPlayerTracker
 {
     private final Client client;
@@ -100,14 +104,6 @@ public class NearbyPlayerTracker
 
     private int ticksSinceRosterScan = 0;
     private boolean wasInRaid = false;
-
-    @Inject
-    public NearbyPlayerTracker(Client client, ClientThread clientThread, PartyService partyService)
-    {
-        this.client = client;
-        this.clientThread = clientThread;
-        this.partyService = partyService;
-    }
 
     /**
      * Maps a submission's source name (drop {@code source} field / PB
@@ -816,6 +812,7 @@ public class NearbyPlayerTracker
         int playersAdded;
     }
 
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
     public static final class NearbyPlayerTrace
     {
         private final List<String> nearbyPlayers;
@@ -841,57 +838,6 @@ public class NearbyPlayerTracker
         private final int fallbackRosterSize;
         private final long capturedAtMs;
         private final String fallbackReason;
-
-        private NearbyPlayerTrace(
-            List<String> nearbyPlayers,
-            int radiusTiles,
-            String localPlayer,
-            WorldPoint localWorldPoint,
-            boolean inRaidContext,
-            String raidType,
-            String sourceName,
-            String rosterSource,
-            boolean localPlayerInRoster,
-            int raidPartySize,
-            int toaTeamCount,
-            int tobTeamCount,
-            int coxTeamCount,
-            boolean inParty,
-            int partySize,
-            int worldViewsScanned,
-            int playersSeen,
-            int playersWithinRadius,
-            int uniquePlayersAdded,
-            int authoritativeRosterSize,
-            int fallbackRosterSize,
-            long capturedAtMs,
-            String fallbackReason
-        )
-        {
-            this.nearbyPlayers = nearbyPlayers;
-            this.radiusTiles = radiusTiles;
-            this.localPlayer = localPlayer;
-            this.localWorldPoint = localWorldPoint;
-            this.inRaidContext = inRaidContext;
-            this.raidType = raidType;
-            this.sourceName = sourceName;
-            this.rosterSource = rosterSource;
-            this.localPlayerInRoster = localPlayerInRoster;
-            this.raidPartySize = raidPartySize;
-            this.toaTeamCount = toaTeamCount;
-            this.tobTeamCount = tobTeamCount;
-            this.coxTeamCount = coxTeamCount;
-            this.inParty = inParty;
-            this.partySize = partySize;
-            this.worldViewsScanned = worldViewsScanned;
-            this.playersSeen = playersSeen;
-            this.playersWithinRadius = playersWithinRadius;
-            this.uniquePlayersAdded = uniquePlayersAdded;
-            this.authoritativeRosterSize = authoritativeRosterSize;
-            this.fallbackRosterSize = fallbackRosterSize;
-            this.capturedAtMs = capturedAtMs;
-            this.fallbackReason = fallbackReason;
-        }
 
         public static NearbyPlayerTrace empty(int radiusTiles, String fallbackReason)
         {

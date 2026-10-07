@@ -1,5 +1,8 @@
 package io.droptracker.service;
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
 import com.google.inject.*;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
@@ -68,6 +71,7 @@ import java.util.regex.*;
  */
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class EventTeamIndicatorService {
 
     /**
@@ -146,25 +150,6 @@ public class EventTeamIndicatorService {
     private volatile Map<Integer, Integer> slotByTeam = Collections.emptyMap();
 
     private final Runnable stateListener = this::onEventStateUpdated;
-
-    @Inject
-    public EventTeamIndicatorService(Client client,
-                                     ClientThread clientThread,
-                                     EventBus eventBus,
-                                     DropTrackerConfig config,
-                                     DropTrackerApi api,
-                                     ManifestService manifestService,
-                                     EventNotificationService eventNotificationService,
-                                     ScheduledExecutorService executor) {
-        this.client = client;
-        this.clientThread = clientThread;
-        this.eventBus = eventBus;
-        this.config = config;
-        this.api = api;
-        this.manifestService = manifestService;
-        this.eventNotificationService = eventNotificationService;
-        this.executor = executor;
-    }
 
     public void startUp() {
         eventBus.register(this);
@@ -513,14 +498,11 @@ public class EventTeamIndicatorService {
     }
 
     /** A badge's pixels, and how many of its rows sit above the text baseline. */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     static final class BadgeArt {
         final BufferedImage image;
         final int ascent;
 
-        BadgeArt(BufferedImage image, int ascent) {
-            this.image = image;
-            this.ascent = ascent;
-        }
     }
 
     /**
@@ -750,6 +732,7 @@ public class EventTeamIndicatorService {
     }
 
     /** One team's rendering inputs, resolved once per roster load. */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     static final class TeamBadge {
         private final int teamId;
         @Nullable
@@ -758,14 +741,6 @@ public class EventTeamIndicatorService {
         private final Color orbColor;
         @Nullable
         private final Color accent;
-
-        TeamBadge(int teamId, @Nullable String tag, @Nullable Color orbColor,
-                  @Nullable Color accent) {
-            this.teamId = teamId;
-            this.tag = tag;
-            this.orbColor = orbColor;
-            this.accent = accent;
-        }
 
         /** The team's colour for text: the admin-set accent, else the orb's. */
         @Nullable

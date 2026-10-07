@@ -1,5 +1,7 @@
 package io.droptracker.api;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
@@ -27,6 +29,7 @@ import okhttp3.*;
  */
 @Slf4j
 @Singleton
+@AllArgsConstructor(onConstructor_ = @Inject)
 public class DeathMessageApi {
 
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
@@ -37,27 +40,13 @@ public class DeathMessageApi {
     private final OkHttpClient httpClient;
     private final ScheduledExecutorService executor;
 
-    @Inject
-    public DeathMessageApi(DropTrackerConfig config, DropTrackerApi api, Gson gson,
-                           OkHttpClient httpClient, ScheduledExecutorService executor) {
-        this.config = config;
-        this.api = api;
-        this.gson = gson;
-        this.httpClient = httpClient;
-        this.executor = executor;
-    }
-
     /** What a call came back with: the messages, or a sentence for the player. */
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
     public static final class Result {
         @Nullable
         public final DeathMessages messages;
         @Nullable
         public final String error;
-
-        private Result(@Nullable DeathMessages messages, @Nullable String error) {
-            this.messages = messages;
-            this.error = error;
-        }
 
         public static Result ok(DeathMessages messages) {
             return new Result(messages, null);

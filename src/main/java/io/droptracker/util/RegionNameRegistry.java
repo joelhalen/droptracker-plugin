@@ -1,5 +1,7 @@
 package io.droptracker.util;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.extern.slf4j.Slf4j;
@@ -33,14 +35,10 @@ public final class RegionNameRegistry {
     private static final String RESOURCE_PATH = "/io/droptracker/region_names.json";
 
     /** A named area and the coarse bucket RuneLite files it under. */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static final class Area {
         private final String name;
         private final String type;
-
-        Area(String name, String type) {
-            this.name = name;
-            this.type = type;
-        }
 
         /** Human-readable area name, e.g. {@code "Theatre of Blood"}. */
         public String getName() {

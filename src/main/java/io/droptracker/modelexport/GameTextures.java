@@ -25,6 +25,7 @@ import java.util.*;
  * sync would otherwise re-encode the same cape every time.
  */
 @Slf4j
+@AllArgsConstructor
 public final class GameTextures {
     /**
      * The client advances texture animation once per client tick, and shifts
@@ -58,12 +59,9 @@ public final class GameTextures {
         }
     }
 
+    @NonNull
     private final Client client;
     private final Map<Integer, TextureData> cache = new HashMap<>();
-
-    public GameTextures(@NonNull Client client) {
-        this.client = client;
-    }
 
     /**
      * Returns the texture, or null when the client has not loaded it yet (its

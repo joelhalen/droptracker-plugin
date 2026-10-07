@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.AllArgsConstructor;
 import com.google.common.cache.*;
 
 import io.droptracker.util.*;
@@ -34,6 +35,7 @@ import java.util.concurrent.TimeUnit;
  * fan-out for exactly this reason.
  */
 @Singleton
+@AllArgsConstructor(onConstructor_ = @Inject)
 public class RaidLootDeduplicator {
 
     private final Client client;
@@ -42,11 +44,6 @@ public class RaidLootDeduplicator {
             .expireAfterWrite(2, TimeUnit.HOURS)
             .maximumSize(32L)
             .build();
-
-    @Inject
-    public RaidLootDeduplicator(Client client) {
-        this.client = client;
-    }
 
     /**
      * Whether this loot event repeats a raid chest bundle already seen for the

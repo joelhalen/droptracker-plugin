@@ -1,5 +1,6 @@
 package io.droptracker.service;
 
+import lombok.AllArgsConstructor;
 import javax.annotation.Nullable;
 import javax.inject.*;
 
@@ -30,6 +31,7 @@ import net.runelite.api.gameval.InventoryID;
  */
 @Slf4j
 @Singleton
+@AllArgsConstructor(onConstructor_ = @Inject)
 public class LoadoutCapture {
 
 	/** Slot-index/item-id/quantity triples, e.g. {@code "0-11802-1,3-995-1000"}. */
@@ -45,12 +47,6 @@ public class LoadoutCapture {
 
 	private final Client client;
 	private final DropTrackerConfig config;
-
-	@Inject
-	public LoadoutCapture(Client client, DropTrackerConfig config) {
-		this.client = client;
-		this.config = config;
-	}
 
 	public boolean isEnabled() {
 		return config.uploadCharacterModel() && config.sendLoadoutWithPbs();

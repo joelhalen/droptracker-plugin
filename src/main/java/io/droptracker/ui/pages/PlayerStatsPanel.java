@@ -32,6 +32,7 @@ public class PlayerStatsPanel extends SearchPage {
 
     @Override
     protected void showDefaultState() {
+        contentPanel.removeAll();
         JPanel defaultPanel = defaultPanel();
         defaultPanel.add(DropTrackerTheme.gap(5));
         defaultPanel.add(instructions("Search for a player by name above"));
@@ -121,6 +122,7 @@ public class PlayerStatsPanel extends SearchPage {
     }
 
     private void showPlayerDetails(PlayerSearchResult playerResult) {
+        contentPanel.removeAll();
         JPanel playerNamePanel = nameColumn(playerResult.getPlayerName());
 
         String statusText = playerResult.isRegistered() ? "Registered Player" : "Not registered!";

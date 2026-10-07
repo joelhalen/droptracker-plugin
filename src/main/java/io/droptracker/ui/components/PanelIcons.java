@@ -1,5 +1,7 @@
 package io.droptracker.ui.components;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import java.awt.*;
 import java.awt.geom.*;
 
@@ -136,16 +138,11 @@ public final class PanelIcons {
     }
 
     /** Square icon that antialiases and hands a clean surface to its painter. */
+    @AllArgsConstructor(access = AccessLevel.PRIVATE)
     private static final class ShapeIcon implements Icon {
         private final int size;
         private final Color color;
         private final ShapePainter painter;
-
-        private ShapeIcon(int size, Color color, ShapePainter painter) {
-            this.size = size;
-            this.color = color;
-            this.painter = painter;
-        }
 
         @Override
         public void paintIcon(Component c, Graphics g, int x, int y) {

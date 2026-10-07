@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Singleton
+@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class SubmissionManager {
 
     private final DropTrackerConfig config;
@@ -80,29 +81,6 @@ public class SubmissionManager {
     private volatile boolean groupConfigsLoaded = false;
 
     private static final long BASE_RETRY_DELAY_MS = 1000L;
-
-    @Inject
-    public SubmissionManager(
-        DropTrackerConfig config,
-        DropTrackerApi api,
-        ChatMessageUtil chatMessageUtil,
-        Gson gson,
-        OkHttpClient okHttpClient,
-        Client client,
-        UrlManager urlManager,
-        ScreenshotPrivacyService screenshotPrivacy,
-        NearbyPlayerTracker nearbyPlayerTracker
-    ) {
-        this.config = config;
-        this.api = api;
-        this.chatMessageUtil = chatMessageUtil;
-        this.gson = gson;
-        this.okHttpClient = okHttpClient;
-        this.client = client;
-        this.urlManager = urlManager;
-        this.screenshotPrivacy = screenshotPrivacy;
-        this.nearbyPlayerTracker = nearbyPlayerTracker;
-    }
 
     // ========== Public Entry Points for Event Handlers ==========
 
@@ -1302,6 +1280,7 @@ public class SubmissionManager {
      * Represents an event that arrived before group configs were loaded.
      * Stored temporarily until configs arrive, then re-evaluated.
      */
+    @AllArgsConstructor(access = AccessLevel.PACKAGE)
     private static class PendingEvent {
         final CustomWebhookBody webhook;
         final SubmissionType type;
@@ -1309,12 +1288,5 @@ public class SubmissionManager {
         final long totalValue;
         final long singleValue;
 
-        PendingEvent(CustomWebhookBody webhook, SubmissionType type, boolean hasScreenshot, long totalValue, long singleValue) {
-            this.webhook = webhook;
-            this.type = type;
-            this.hasScreenshot = hasScreenshot;
-            this.totalValue = totalValue;
-            this.singleValue = singleValue;
-        }
     }
 }

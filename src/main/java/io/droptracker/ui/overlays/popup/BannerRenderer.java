@@ -1,5 +1,7 @@
 package io.droptracker.ui.overlays.popup;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import io.droptracker.models.EventPopupCard;
 import io.droptracker.service.EventNotificationService.Toast;
 
@@ -15,6 +17,7 @@ import java.util.Locale;
  * screen. Slides down into place and fades out. The least screen for the most
  * information, for players who want pop-ups but not panels.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 class BannerRenderer implements PopupRenderer {
     private static final int WIDTH = 340;
     private static final int HEIGHT = 40;
@@ -23,10 +26,6 @@ class BannerRenderer implements PopupRenderer {
     private static final long FADE_MS = 500;
 
     private final PopupIcons icons;
-
-    BannerRenderer(PopupIcons icons) {
-        this.icons = icons;
-    }
 
     @Override
     public int preferredWidth() {
