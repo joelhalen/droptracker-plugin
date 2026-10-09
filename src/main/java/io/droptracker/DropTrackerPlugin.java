@@ -718,6 +718,8 @@ public class DropTrackerPlugin extends Plugin {
 		// released at STARTING, because the client rebuilds its mod-icon
 		// array on a restart.
 		eventTeamIndicatorService.onGameStateChanged(newState);
+		// Also ahead of it: entering or leaving a house is a LOADING transition.
+		widgetEventHandler.onGameStateChanged(newState);
 
 		if (newState == GameState.LOADING) {
 			return;

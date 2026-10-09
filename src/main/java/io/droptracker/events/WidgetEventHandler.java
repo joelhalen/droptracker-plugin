@@ -38,6 +38,7 @@ import io.droptracker.models.submissions.SubmissionType;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.*;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -89,7 +90,11 @@ public class WidgetEventHandler {
     );
     private static final Pattern ADVENTURE_LOG_PB_TIME_ONLY_PATTERN = Pattern.compile("^(?<time>[0-9:]+(?:\\.[0-9]+)?)$");
 
-    static final int ADV_LOG_EXPLOITS_TEXT_INDEX = 1;
+    // The adventure log opens in one of two menu interfaces, depending on the
+    // player's interface style setting. Newer style first, then the original.
+    private static final int[] ADVENTURE_LOG_TITLE_CONTAINERS = {
+        InterfaceID.MenuNew.TITLE, InterfaceID.Menu.LJ_LAYER2
+    };
 
     @AllArgsConstructor
     private static class BossPB {
@@ -112,21 +117,70 @@ public class WidgetEventHandler {
     }
 
 
-    @SuppressWarnings("deprecation")
     public void onWidgetLoaded(WidgetLoaded widget)
     {
         switch (widget.getGroupId())
         {
-            case InterfaceID.ADVENTURE_LOG:
+            case InterfaceID.MENU:
+            case InterfaceID.MENU_NEW:
                 advLogLoaded = true;
                 break;
             case InterfaceID.KILL_LOG:
                 bossLogLoaded = true;
                 break;
-            case InterfaceID.ACHIEVEMENT_DIARY_SCROLL:
+            case InterfaceID.JOURNALSCROLL:
                 scrollInterfaceLoaded = true;
                 break;
         }
+    }
+
+    /** Entering or leaving a house (or hopping) means a new adventure log owner. */
+    public void onGameStateChanged(GameState state)
+    {
+        if (state == GameState.LOADING || state == GameState.HOPPING)
+        {
+            pohOwner = null;
+        }
+    }
+
+    /**
+     * The adventure log owner, or null when the loaded menu is not an adventure
+     * log. The title sits at a different child index in each menu interface, so
+     * each container is scanned for it rather than indexed.
+     */
+    @VisibleForTesting
+    String readAdventureLogOwner()
+    {
+        for (int componentId : ADVENTURE_LOG_TITLE_CONTAINERS)
+        {
+            Widget container = client.getWidget(componentId);
+            if (container == null)
+            {
+                continue;
+            }
+            String owner = matchAdventureLogOwner(container.getText());
+            Widget[] children = container.getChildren();
+            for (int i = 0; owner == null && children != null && i < children.length; i++)
+            {
+                owner = children[i] == null ? null : matchAdventureLogOwner(children[i].getText());
+            }
+            if (owner != null)
+            {
+                return owner;
+            }
+        }
+        return null;
+    }
+
+    @VisibleForTesting
+    static String matchAdventureLogOwner(String text)
+    {
+        if (text == null)
+        {
+            return null;
+        }
+        Matcher matcher = ADVENTURE_LOG_TITLE_PATTERN.matcher(Text.removeTags(text));
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     @SuppressWarnings({ "deprecation", "null" })
@@ -142,15 +196,10 @@ public class WidgetEventHandler {
         {
             advLogLoaded = false;
 
-            Widget adventureLog = client.getWidget(ComponentID.ADVENTURE_LOG_CONTAINER);
-
-            if (adventureLog != null && adventureLog.getChild(ADV_LOG_EXPLOITS_TEXT_INDEX) != null)
+            String owner = readAdventureLogOwner();
+            if (owner != null)
             {
-                Matcher advLogExploitsText = ADVENTURE_LOG_TITLE_PATTERN.matcher(adventureLog.getChild(ADV_LOG_EXPLOITS_TEXT_INDEX).getText());
-                if (advLogExploitsText.find())
-                {
-                    pohOwner = advLogExploitsText.group(1);
-                }
+                pohOwner = owner;
             }
         }
 
