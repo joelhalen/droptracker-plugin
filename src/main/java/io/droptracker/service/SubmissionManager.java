@@ -1208,7 +1208,7 @@ public class SubmissionManager {
     public String sanitize(String str) {
         if (str == null || str.isEmpty())
             return "";
-        return Text.removeTags(str.replace("<br>", "\n")).replace('\u00A0', ' ').trim();
+        return Text.removeTags(ChatMessageUtil.expandTagVariables(str).replace("<br>", "\n")).replace('\u00A0', ' ').trim();
     }
 
     /**

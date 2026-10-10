@@ -103,6 +103,45 @@ public class ChatMessageUtil {
         return name != null && name.contains(DISCORD_SENDER_MARKER);
     }
 
+    // Jagex string variables (rev241, 2026-10-07): a line defines a value in a
+    // tag and references it later, e.g. quest broadcasts read
+    // "<str_quest_name_0=Big Chompy Bird Hunting>X has completed a quest: <str_quest_name_0>".
+    // Both halves are tags, so Text.removeTags alone deletes the name. The
+    // underscore keeps <col=..>, <img=..> and <str> out of the match.
+    private static final java.util.regex.Pattern TAG_VAR_DEF =
+        java.util.regex.Pattern.compile("<([a-zA-Z]+_[a-zA-Z0-9_]+)=([^>]*)>");
+    private static final java.util.regex.Pattern TAG_VAR_REF =
+        java.util.regex.Pattern.compile("<([a-zA-Z]+_[a-zA-Z0-9_]+)>");
+
+    /**
+     * Drops {@code <name=value>} definitions and replaces each {@code <name>}
+     * reference with its value; undefined references are left for removeTags.
+     */
+    public static String expandTagVariables(String str) {
+        if (str == null || str.indexOf('=') < 0) {
+            return str;
+        }
+        java.util.Map<String, String> values = new java.util.HashMap<>();
+        java.util.regex.Matcher def = TAG_VAR_DEF.matcher(str);
+        StringBuffer stripped = new StringBuffer();
+        while (def.find()) {
+            values.put(def.group(1).toLowerCase(), def.group(2));
+            def.appendReplacement(stripped, "");
+        }
+        def.appendTail(stripped);
+        if (values.isEmpty()) {
+            return str;
+        }
+        java.util.regex.Matcher ref = TAG_VAR_REF.matcher(stripped);
+        StringBuffer out = new StringBuffer();
+        while (ref.find()) {
+            String value = values.get(ref.group(1).toLowerCase());
+            ref.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(value != null ? value : ref.group()));
+        }
+        ref.appendTail(out);
+        return out.toString();
+    }
+
     /**
      * Discord→game bridge line, rendered to look like clan chat (visible only
      * to this client — nothing is sent to the game server). Approach adapted
