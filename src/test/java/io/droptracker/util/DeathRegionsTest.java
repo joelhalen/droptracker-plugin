@@ -1,14 +1,16 @@
 package io.droptracker.util;
 
+import io.droptracker.testing.RuneLiteStubs;
+import net.runelite.api.Client;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Covers the account-independent half of the safe/dangerous split. The rest of
- * {@link DeathRegions#classify} needs a live client (account type, Pest Control
- * status overlay) and is not exercised here.
+ * Covers the safe/dangerous split: the region policy directly, and
+ * {@link DeathRegions#classify} with a stub client for the account type.
  */
 public class DeathRegionsTest {
 
@@ -23,6 +25,8 @@ public class DeathRegionsTest {
         assertTrue(DeathRegions.isSafeRegion(13462)); // MTA creature graveyard
         assertTrue(DeathRegions.isSafeRegion(6997));  // Clan hall
         assertTrue(DeathRegions.isSafeRegion(13658)); // Last Man Standing
+        assertTrue(DeathRegions.isSafeRegion(10588)); // PK tutor
+        assertTrue(DeathRegions.isSafeRegion(11100)); // PK tutor
     }
 
     @Test
@@ -56,5 +60,40 @@ public class DeathRegionsTest {
         assertFalse(DeathRegions.isSafeRegion(9023));  // Vorkath
         assertFalse(DeathRegions.isSafeRegion(6557));  // Catacombs of Kourend
         assertFalse(DeathRegions.isSafeRegion(0));
+    }
+
+    private static Client account(int accountType) {
+        Client client = RuneLiteStubs.stub(Client.class, "client");
+        RuneLiteStubs.state(client).put("getVarbitValue", accountType);
+        return client;
+    }
+
+    @Test
+    public void hardcoreMinigameDeathsAreSafe() {
+        // Neither items nor hardcore status are lost in a minigame.
+        for (int hardcore : new int[] { 3, 5 }) {
+            Client client = account(hardcore);
+            assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 13658)); // LMS
+            assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 10588)); // PK tutor
+            assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 9520));  // Castle Wars
+            assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 7257));  // POH
+        }
+    }
+
+    @Test
+    public void hardcoreRaidAndGauntletDeathsAreDangerous() {
+        // The status is what a hardcore account loses here.
+        Client client = account(3);
+        assertEquals(DeathRegions.Danger.DANGEROUS, DeathRegions.classify(client, 12889)); // CoX
+        assertEquals(DeathRegions.Danger.DANGEROUS, DeathRegions.classify(client, 7512));  // Gauntlet
+        assertEquals(DeathRegions.Danger.DANGEROUS, DeathRegions.classify(client, 9023));  // Vorkath
+    }
+
+    @Test
+    public void otherAccountsFollowTheRegion() {
+        Client client = account(1);
+        assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 12889));
+        assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 13658));
+        assertEquals(DeathRegions.Danger.DANGEROUS, DeathRegions.classify(client, 9023));
     }
 }

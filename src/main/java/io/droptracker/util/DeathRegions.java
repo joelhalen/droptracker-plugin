@@ -11,9 +11,10 @@ import java.util.*;
  * Classifies a death location as safe (no items lost) or dangerous.
  *
  * This is policy, deliberately kept out of {@link RegionNameRegistry} so the
- * name data there stays a verbatim, regenerable extract. The region sets and
- * the ordering of the checks mirror Dink's {@code WorldUtils#getDangerLevel},
- * which is the most complete public treatment of this question.
+ * name data there stays a verbatim, regenerable extract. The region sets
+ * mirror Dink's {@code WorldUtils#getDangerLevel}. Unlike Dink, a hardcore
+ * account is only treated as at risk in raids and the Gauntlet: a minigame
+ * death costs it nothing.
  *
  * Not modelled here (both grant a one-off daily resurrection that makes an
  * otherwise-safe death dangerous, and both need extra varbit reads): the
@@ -40,6 +41,8 @@ public final class DeathRegions {
     private static final Set<Integer> GAUNTLET = regions(7512, 7768, 12127);
     private static final Set<Integer> LAST_MAN_STANDING = regions(13658, 13659, 13660, 13914, 13915, 13916,
             13918, 13919, 13920, 14174, 14175, 14176, 14430, 14431, 14432);
+    // Pete Kayer's PK tutor: the tutor hands out the gear.
+    private static final Set<Integer> PK_TUTOR = regions(10588, 11100);
     private static final Set<Integer> PLAYER_OWNED_HOUSE = regions(7257, 7534, 7535, 7790, 7791, 8046, 8047,
             8302, 8303);
     private static final Set<Integer> SOUL_WARS = regions(8493, 8748, 8749, 9005);
@@ -75,16 +78,14 @@ public final class DeathRegions {
      * @return whether items are at risk in this location
      */
     public static Danger classify(Client client, int regionId) {
-        // Every PvM death is dangerous on a hardcore account — the status is
-        // what is actually lost, so nothing below can downgrade it to safe.
-        if (isHardcore(client)) {
-            return Danger.DANGEROUS;
-        }
-
-        if (isSafeRegion(regionId) || isPestControl(client, regionId)) {
+        // Minigames cost nobody anything, hardcore status included.
+        if (isSafeMinigame(regionId) || isPestControl(client, regionId)) {
             return Danger.SAFE;
         }
-
+        // A raid or Gauntlet death costs a hardcore account its status.
+        if (isSafeInstance(regionId) && !isHardcore(client)) {
+            return Danger.SAFE;
+        }
         return Danger.DANGEROUS;
     }
 
@@ -97,20 +98,31 @@ public final class DeathRegions {
      * Control status overlay.
      */
     public static boolean isSafeRegion(int regionId) {
-        // Items cannot be carried in or out of these, so a death costs the run
-        // rather than the inventory. ToA/ToB/CoX deaths inside a still-running
-        // raid are likewise recoverable by the rest of the team.
-        if (GAUNTLET.contains(regionId)
+        return isSafeInstance(regionId) || isSafeMinigame(regionId);
+    }
+
+    /**
+     * Items cannot be carried in or out of these, so a death costs the run
+     * rather than the inventory. ToA/ToB/CoX deaths inside a still-running
+     * raid are likewise recoverable by the rest of the team. Safe for every
+     * account except a hardcore one, which loses its status here.
+     */
+    @VisibleForTesting
+    static boolean isSafeInstance(int regionId) {
+        return GAUNTLET.contains(regionId)
                 || TOMBS_OF_AMASCUT.contains(regionId)
                 || THEATRE_OF_BLOOD.contains(regionId)
-                || CHAMBERS_OF_XERIC.contains(regionId)) {
-            return true;
-        }
+                || CHAMBERS_OF_XERIC.contains(regionId);
+    }
 
+    /** Safe for every account, hardcore included. */
+    @VisibleForTesting
+    static boolean isSafeMinigame(int regionId) {
         return BARBARIAN_ASSAULT.contains(regionId)
                 || CASTLE_WARS.contains(regionId)
                 || CLAN_WARS.contains(regionId)
                 || LAST_MAN_STANDING.contains(regionId)
+                || PK_TUTOR.contains(regionId)
                 || PLAYER_OWNED_HOUSE.contains(regionId)
                 || SOUL_WARS.contains(regionId)
                 || regionId == CLAN_HALL
