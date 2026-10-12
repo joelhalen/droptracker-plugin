@@ -153,7 +153,7 @@ public class DeathHandler extends BaseEventHandler {
 
     private void submitDeath(Player localPlayer) {
         WorldPoint location = currentLocation(localPlayer);
-        Killer killer = identifyKiller(localPlayer);
+        Killer killer = identifyKiller(localPlayer, location);
         boolean pk = killer != null && killer.isPlayer();
         boolean npc = killer != null && killer.isNpc();
 
@@ -280,8 +280,8 @@ public class DeathHandler extends BaseEventHandler {
      */
     @Nullable
     @VisibleForTesting
-    Killer identifyKiller(Player localPlayer) {
-        boolean pvpEnabled = isPvpEnabled();
+    Killer identifyKiller(Player localPlayer, @Nullable WorldPoint location) {
+        boolean pvpEnabled = isPvpEnabled(location);
 
         Actor live = findLiveKiller(localPlayer, pvpEnabled);
         if (live != null) {
@@ -345,7 +345,13 @@ public class DeathHandler extends BaseEventHandler {
         return own != null ? own : client.getTopLevelWorldView();
     }
 
-    private boolean isPvpEnabled() {
+    private boolean isPvpEnabled(@Nullable WorldPoint location) {
+        // LMS, Castle Wars, Soul Wars, Clan Wars and the PvP Arena: the other
+        // players are the opponents there, outside the Wilderness too.
+        if ((location != null && DeathRegions.isPvpMinigame(location.getRegionID()))
+                || client.getWorldType().contains(WorldType.PVP_ARENA)) {
+            return true;
+        }
         if (isPvpSafeZone()) {
             // Bank/lobby areas of PvP worlds and Deadman — nobody can be
             // attacked here, so no bystander should be blamed.
@@ -357,7 +363,9 @@ public class DeathHandler extends BaseEventHandler {
     }
 
     private boolean isPvpSafeZone() {
-        Widget widget = client.getWidget(InterfaceID.PvpIcons.SAFEZONE);
+        // PVPW_SAFE, not SAFEZONE: SAFEZONE is shown all over the Wilderness,
+        // which stopped every player kill being attributed from 6.0.3.
+        Widget widget = client.getWidget(InterfaceID.PvpIcons.PVPW_SAFE);
         return widget != null && !widget.isHidden();
     }
 

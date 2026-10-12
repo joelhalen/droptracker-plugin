@@ -38,6 +38,8 @@ public final class DeathRegions {
     private static final Set<Integer> CLAN_WARS = regions(12621, 12622, 12623, 13130, 13131, 13133, 13134,
             13135, 13386, 13387, 13390, 13641, 13642, 13643, 13644, 13645, 13646, 13647, 13899, 13900,
             14155, 14156);
+    // Emir's Arena: PvP Arena fights cost nothing.
+    private static final Set<Integer> EMIRS_ARENA = regions(13362, 13363);
     private static final Set<Integer> GAUNTLET = regions(7512, 7768, 12127);
     private static final Set<Integer> LAST_MAN_STANDING = regions(13658, 13659, 13660, 13914, 13915, 13916,
             13918, 13919, 13920, 14174, 14175, 14176, 14430, 14431, 14432);
@@ -119,17 +121,23 @@ public final class DeathRegions {
     @VisibleForTesting
     static boolean isSafeMinigame(int regionId) {
         return BARBARIAN_ASSAULT.contains(regionId)
-                || CASTLE_WARS.contains(regionId)
-                || CLAN_WARS.contains(regionId)
-                || LAST_MAN_STANDING.contains(regionId)
+                || isPvpMinigame(regionId)
                 || PK_TUTOR.contains(regionId)
                 || PLAYER_OWNED_HOUSE.contains(regionId)
-                || SOUL_WARS.contains(regionId)
                 || regionId == CLAN_HALL
                 || regionId == CREATURE_GRAVEYARD
                 || regionId == NIGHTMARE_ZONE
                 || regionId == PEST_CONTROL_LANDER
                 || regionId == TZHAAR_FIGHT_PIT;
+    }
+
+    /** Minigames where the other players are the opponents. */
+    public static boolean isPvpMinigame(int regionId) {
+        return CASTLE_WARS.contains(regionId)
+                || CLAN_WARS.contains(regionId)
+                || EMIRS_ARENA.contains(regionId)
+                || LAST_MAN_STANDING.contains(regionId)
+                || SOUL_WARS.contains(regionId);
     }
 
     public static boolean isSafe(Client client, int regionId) {

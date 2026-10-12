@@ -96,4 +96,15 @@ public class DeathRegionsTest {
         assertEquals(DeathRegions.Danger.SAFE, DeathRegions.classify(client, 13658));
         assertEquals(DeathRegions.Danger.DANGEROUS, DeathRegions.classify(client, 9023));
     }
+
+    @Test
+    public void pvpMinigamesAreRecognised() {
+        assertTrue(DeathRegions.isPvpMinigame(13915)); // LMS
+        assertTrue(DeathRegions.isPvpMinigame(9520));  // Castle Wars
+        assertTrue(DeathRegions.isPvpMinigame(8493));  // Soul Wars
+        assertTrue(DeathRegions.isPvpMinigame(13362)); // Emir's Arena
+        assertTrue(DeathRegions.isSafeRegion(13362));  // PvP Arena fights cost nothing
+        assertFalse(DeathRegions.isPvpMinigame(10588)); // PK tutor: NPC opponents
+        assertFalse(DeathRegions.isPvpMinigame(12889));
+    }
 }

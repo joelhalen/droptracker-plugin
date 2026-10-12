@@ -9,6 +9,9 @@ import net.runelite.api.Client;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.WorldType;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.InteractingChanged;
 import org.junit.Before;
@@ -61,7 +64,7 @@ public class DeathHandlerKillerAttributionTest {
         targets(vorkath, localPlayer);
         RuneLiteStubs.setScene(client, localPlayer, Collections.emptyList(), Collections.singletonList(vorkath));
 
-        DeathHandler.Killer killer = handler.identifyKiller(localPlayer);
+        DeathHandler.Killer killer = handler.identifyKiller(localPlayer, null);
         assertNotNull(killer);
         assertEquals("Vorkath", killer.getName());
         assertEquals(Integer.valueOf(8061), killer.getNpcId());
@@ -81,7 +84,7 @@ public class DeathHandlerKillerAttributionTest {
         targets(boss, localPlayer);
         RuneLiteStubs.setScene(client, localPlayer, Collections.emptyList(), Collections.singletonList(boss));
 
-        assertEquals("The Whisperer", handler.identifyKiller(localPlayer).getName());
+        assertEquals("The Whisperer", handler.identifyKiller(localPlayer, null).getName());
     }
 
     // --- the fallback ---------------------------------------------------
@@ -104,7 +107,7 @@ public class DeathHandlerKillerAttributionTest {
         handler.onInteractingChanged(new InteractingChanged(vorkath, null));
         RuneLiteStubs.setScene(client, localPlayer, Collections.emptyList(), Collections.emptyList());
 
-        DeathHandler.Killer killer = handler.identifyKiller(localPlayer);
+        DeathHandler.Killer killer = handler.identifyKiller(localPlayer, null);
         assertNotNull("a death with no live attacker must still name a killer", killer);
         assertEquals("Vorkath", killer.getName());
         assertEquals(Integer.valueOf(8061), killer.getNpcId());
@@ -125,14 +128,14 @@ public class DeathHandlerKillerAttributionTest {
         assertEquals(1, handler.recentCombat.size());
 
         tick(52);
-        assertEquals("Dagannoth", handler.identifyKiller(localPlayer).getName());
+        assertEquals("Dagannoth", handler.identifyKiller(localPlayer, null).getName());
     }
 
     @Test
     public void aDeathNothingExplainsIsStillReportedAsUnattributed() {
         // Poison, falling damage, a wilderness dragonfire wall: nothing ever
         // engaged us, so there is nobody to blame and we say so.
-        assertNull(handler.identifyKiller(localPlayer));
+        assertNull(handler.identifyKiller(localPlayer, null));
     }
 
     // --- players --------------------------------------------------------
@@ -146,7 +149,7 @@ public class DeathHandlerKillerAttributionTest {
         tick(10);
         handler.onInteractingChanged(new InteractingChanged(bystander, localPlayer));
 
-        assertNull(handler.identifyKiller(localPlayer));
+        assertNull(handler.identifyKiller(localPlayer, null));
     }
 
     @Test
@@ -156,7 +159,7 @@ public class DeathHandlerKillerAttributionTest {
         RuneLiteStubs.state(pker).put("getInteracting", localPlayer);
         RuneLiteStubs.setScene(client, localPlayer, Collections.singletonList(pker), Collections.emptyList());
 
-        DeathHandler.Killer killer = handler.identifyKiller(localPlayer);
+        DeathHandler.Killer killer = handler.identifyKiller(localPlayer, null);
         assertNotNull(killer);
         assertEquals("Zezima", killer.getName());
         assertTrue(killer.isPlayer());
@@ -170,13 +173,13 @@ public class DeathHandlerKillerAttributionTest {
     @Test
     public void nobodyIsBlamedInsideAPvpSafeZone() {
         RuneLiteStubs.state(client).put("getWorldType", EnumSet.of(WorldType.PVP));
-        RuneLiteStubs.state(client).put("getWidget", RuneLiteStubs.visibleWidget());
+        showOnly(InterfaceID.PvpIcons.PVPW_SAFE);
 
         Player bystander = RuneLiteStubs.player("Zezima", 126);
         RuneLiteStubs.state(bystander).put("getInteracting", localPlayer);
         RuneLiteStubs.setScene(client, localPlayer, Collections.singletonList(bystander), Collections.emptyList());
 
-        assertNull(handler.identifyKiller(localPlayer));
+        assertNull(handler.identifyKiller(localPlayer, null));
     }
 
     /** A dead attacker is a corpse we outlived, not our killer. */
@@ -190,7 +193,7 @@ public class DeathHandlerKillerAttributionTest {
         RuneLiteStubs.state(dying).put("isDead", true);
         RuneLiteStubs.setScene(client, localPlayer, Collections.emptyList(), Collections.singletonList(dying));
 
-        assertNull(handler.identifyKiller(localPlayer));
+        assertNull(handler.identifyKiller(localPlayer, null));
     }
 
     // --- history lifecycle ----------------------------------------------
@@ -226,7 +229,46 @@ public class DeathHandlerKillerAttributionTest {
         handler.onInteractingChanged(new InteractingChanged(localPlayer, banker));
 
         assertEquals(0, handler.recentCombat.size());
-        assertNull(handler.identifyKiller(localPlayer));
+        assertNull(handler.identifyKiller(localPlayer, null));
+    }
+
+    /**
+     * The regression behind 6.1.6: the PvP icons layer (SAFEZONE) is shown all
+     * over the Wilderness, and treating it as the safe-zone marker stopped
+     * every player kill from being attributed.
+     */
+    @Test
+    public void thePvpIconsLayerIsNotASafeZone() {
+        insideWilderness();
+        showOnly(InterfaceID.PvpIcons.SAFEZONE);
+        Player pker = RuneLiteStubs.player("Zezima", 126);
+        RuneLiteStubs.state(pker).put("getInteracting", localPlayer);
+        RuneLiteStubs.setScene(client, localPlayer, Collections.singletonList(pker), Collections.emptyList());
+
+        DeathHandler.Killer killer = handler.identifyKiller(localPlayer, null);
+        assertNotNull(killer);
+        assertTrue(killer.isPlayer());
+    }
+
+    /** LMS is outside the Wilderness, but the other players are the opponents. */
+    @Test
+    public void anOpponentInLastManStandingIsAttributed() {
+        Player opponent = RuneLiteStubs.player("Zezima", 126);
+        RuneLiteStubs.state(opponent).put("getInteracting", localPlayer);
+        RuneLiteStubs.setScene(client, localPlayer, Collections.singletonList(opponent), Collections.emptyList());
+
+        DeathHandler.Killer killer = handler.identifyKiller(localPlayer, new WorldPoint(3456, 5824, 0));
+        assertNotNull(killer);
+        assertEquals("Zezima", killer.getName());
+        assertTrue(killer.isPlayer());
+    }
+
+    /** Only the widget with this component id is visible; every other lookup finds nothing. */
+    private void showOnly(int componentId) {
+        Widget visible = RuneLiteStubs.visibleWidget();
+        RuneLiteStubs.state(client).put("getWidget",
+                (RuneLiteStubs.Answer) args -> args.length == 1 && Integer.valueOf(componentId).equals(args[0])
+                        ? visible : null);
     }
 
     private void insideWilderness() {
