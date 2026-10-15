@@ -109,6 +109,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	public TrawlingHandler trawlingHandler;
 	@Inject
+	public PyramidPlunderHandler pyramidPlunderHandler;
+	@Inject
 	public SlayerHandler slayerHandler;
 	@Inject
 	private ConfigSnapshotHandler configSnapshotHandler;
@@ -198,7 +200,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.6";
+	public String pluginVersion = "6.1.7";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -549,6 +551,9 @@ public class DropTrackerPlugin extends Plugin {
 				}
 				if(trawlingHandler.isEnabled()) {
 					trawlingHandler.onGameMessage(chatMessage);
+				}
+				if(pyramidPlunderHandler.isEnabled()) {
+					pyramidPlunderHandler.onGameMessage(chatMessage);
 				}
 				if(slayerHandler.isEnabled()) {
 					slayerHandler.onGameMessage(chatMessage);

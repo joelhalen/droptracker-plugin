@@ -158,7 +158,7 @@ public interface DropTrackerConfig extends Config {
         keyName = "trackActivities",
         name = "Activity Tracking",
         description = "<html>Track items from activities RuneLite's loot tracker misses:<br />"
-            + "deep sea trawling catches.</html>",
+            + "deep sea trawling catches and Pharaoh's sceptres.</html>",
         position = 12,
         section = trackingSection
     )
