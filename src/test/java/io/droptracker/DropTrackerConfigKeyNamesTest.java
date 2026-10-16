@@ -42,7 +42,7 @@ public class DropTrackerConfigKeyNamesTest {
         // Clan Chat
         "clanChatSync", "receiveDiscordChat",
         // Advanced
-        "useApi", "receiveInGameMessages", "dropConfirmations", "syncAccountState",
+        "useApi", "inGameMessages", "dropConfirmations", "syncAccountState",
         "uploadCharacterModel", "showSidePanel", "debugLogging",
         // Retired from the UI, kept so existing values still apply
         "trackExperience", "trackTrawling", "hideWhispers",

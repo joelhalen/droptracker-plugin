@@ -109,7 +109,7 @@ public class ConfigSnapshotHandler extends BaseEventHandler {
         setting("Events", "eventTeamIndicatorsPublicChat", DropTrackerConfig::eventTeamIndicatorsPublicChat),
 
         setting("Advanced", "useApi", DropTrackerConfig::useApi),
-        setting("Advanced", "receiveInGameMessages", DropTrackerConfig::receiveInGameMessages),
+        setting("Advanced", "inGameMessages", DropTrackerConfig::receiveInGameMessages),
         setting("Advanced", "dropConfirmations", DropTrackerConfig::dropConfirmations),
         setting("Advanced", "receiveDiscordChat", DropTrackerConfig::receiveDiscordChat),
         setting("Advanced", "syncAccountState", DropTrackerConfig::syncAccountState),

@@ -430,15 +430,17 @@ public interface DropTrackerConfig extends Config {
         return false;
     }
 
+    // keyName changed from "receiveInGameMessages" in 6.1.8 so everyone starts
+    // from the new default (off): RuneLite finds saved values by keyName.
     @ConfigItem(
-        keyName = "receiveInGameMessages",
+        keyName = "inGameMessages",
         name = "Receive in-game messages",
-        description = "Do you want to see chat messages from the plugin to confirm your submissions/etc?",
+        description = "Show chat messages from the plugin, such as drop confirmations and notices about your submissions",
         position = 2,
         section = advancedSection
     )
     default boolean receiveInGameMessages() {
-        return true;
+        return false;
     }
 
     @ConfigItem(
