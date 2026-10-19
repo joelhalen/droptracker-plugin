@@ -14,6 +14,8 @@ import io.droptracker.service.*;
 import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.coords.WorldPoint;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.events.*;
 import net.runelite.client.game.*;
 import net.runelite.client.plugins.loottracker.LootReceived;
@@ -70,8 +72,29 @@ public class DropHandler extends BaseEventHandler {
 		if (!plugin.isTracking) {
 			return;
 		}
-		Collection<ItemStack> items = playerLootReceived.getItems();
-		processDropEvent(playerLootReceived.getPlayer().getName(), "pvp", LootRecordType.PLAYER, items);
+		Player victim = playerLootReceived.getPlayer();
+		processDropEvent(victim.getName(), "pvp", LootRecordType.PLAYER, playerLootReceived.getItems(), pvpContext(victim));
+	}
+
+	/** Whom and where, sent with every item of a PvP kill so the server can file it (6.1.9). */
+	private Map<String, Object> pvpContext(Player victim) {
+		Map<String, Object> fields = new HashMap<>();
+		fields.put("victim_combat_level", victim.getCombatLevel());
+		fields.put("world", client.getWorld());
+		Player local = client.getLocalPlayer();
+		WorldPoint point = local != null ? local.getWorldLocation() : null;
+		if (point != null) {
+			fields.put("region_id", point.getRegionID());
+			if (client.getVarbitValue(VarbitID.INSIDE_WILDERNESS) > 0) {
+				fields.put("wilderness_level", wildernessLevel(point.getY()));
+			}
+		}
+		return fields;
+	}
+
+	/** Eight tiles per level: the surface from y=3520, the dungeons below it from y=9920. */
+	static int wildernessLevel(int y) {
+		return Math.max(1, ((y > 6400 ? y - 9920 : y - 3520) / 8) + 1);
 	}
 
 	public void onServerNpcLoot(ServerNpcLoot event) {
@@ -118,6 +141,10 @@ public class DropHandler extends BaseEventHandler {
 	}
 
     private void processDropEvent(String rawNpcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items) {
+		processDropEvent(rawNpcName, sourceType, lootRecordType, items, null);
+	}
+
+    private void processDropEvent(String rawNpcName, String sourceType, LootRecordType lootRecordType, Collection<ItemStack> items, Map<String, Object> extraFields) {
 		final Collection<ItemStack> finalItems = new ArrayList<>(items);
 		if (!plugin.isTracking) {
 			return;
@@ -223,6 +250,9 @@ public class DropHandler extends BaseEventHandler {
 				if (npcName != null) {
 					Integer killCount = kcService.getKillCountWithStorage(lootRecordType, npcName);
 					fieldData.put("killcount", killCount != null ? killCount : 0);
+				}
+				if (extraFields != null) {
+					fieldData.putAll(extraFields);
 				}
 				
 				addFields(itemEmbed, fieldData);

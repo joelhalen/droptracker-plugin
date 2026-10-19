@@ -200,7 +200,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.8";
+	public String pluginVersion = "6.1.9";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
