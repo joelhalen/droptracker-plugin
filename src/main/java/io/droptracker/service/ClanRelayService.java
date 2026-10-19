@@ -16,6 +16,7 @@ import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.clan.ClanChannel;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.util.Text;
 
 import java.util.*;
@@ -46,6 +47,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * RELAYER and dedupes across multiple relaying clanmates, so this can be
  * enabled by any number of members safely.
  *
+ * Muted clanmates: the game prints a muted player's clan chat only on their
+ * own screen. Their own lines are relayed marked {@code self}, the server
+ * works out from who else reported them which ones nobody saw, and sends
+ * those back to this client as {@code clan_chat_muted} envelopes, shown by
+ * {@link #showMutedLine} with a muted icon by the name.
+ *
  * Rides whichever transport the player uses: the API, or our Discord
  * webhooks, which the server's webhook bot reads. Only the Discord→game
  * direction needs the API, because it polls our server for lines.
@@ -64,12 +71,28 @@ public class ClanRelayService {
     /** A chat icon tag in a sender name, e.g. {@code <img=2>} for an ironman. */
     private static final Pattern ICON_TAG = Pattern.compile("<img=(\\d+)>");
 
+    /** Game-mode badges by {@code IconID}, as the server's wire strings. */
+    private static final Map<Integer, String> ACCOUNT_ICONS = Map.of(
+        2, "ironman", 3, "ultimate_ironman", 10, "hardcore_ironman",
+        41, "group_ironman", 42, "hardcore_group_ironman", 43, "unranked_group_ironman");
+
+    /** How long a delivered or rendered clan chat line is remembered. */
+    private static final long LINE_MEMORY_MS = TimeUnit.SECONDS.toMillis(90);
+    private static final int MAX_REMEMBERED_LINES = 200;
+
     private final Client client;
     private final DropTrackerConfig config;
     private final DropTrackerApi api;
     private final DropTrackerPlugin plugin;
     private final SubmissionManager submissionManager;
     private final ScheduledExecutorService executor;
+    private final ClientThread clientThread;
+    private final ChatMessageUtil chatMessageUtil;
+
+    /** Clan chat lines the game delivered (client thread only). */
+    private final Map<String, Long> heardLines = new LinkedHashMap<>();
+    /** Muted clanmates' lines this client rendered (client thread only). */
+    private final Map<String, Long> injectedLines = new LinkedHashMap<>();
 
     private final ConcurrentLinkedQueue<PendingLine> queue = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean flushScheduled = new AtomicBoolean(false);
@@ -255,14 +278,10 @@ public class ClanRelayService {
         }
         Matcher m = ICON_TAG.matcher(rawName);
         while (m.find()) {
-            switch (Integer.parseInt(m.group(1))) {
-                case 2: return "ironman";                   // IconID.IRONMAN
-                case 3: return "ultimate_ironman";          // IconID.ULTIMATE_IRONMAN
-                case 10: return "hardcore_ironman";         // IconID.HARDCORE_IRONMAN
-                case 41: return "group_ironman";            // IconID.GROUP_IRONMAN
-                case 42: return "hardcore_group_ironman";   // IconID.HARDCORE_GROUP_IRONMAN
-                case 43: return "unranked_group_ironman";   // IconID.UNRANKED_GROUP_IRONMAN
-                default: break; // moderator crowns, league icons, ...
+            // Anything else is a moderator crown, a league icon, ...
+            String type = ACCOUNT_ICONS.get(Integer.parseInt(m.group(1)));
+            if (type != null) {
+                return type;
             }
         }
         return "normal";
@@ -276,22 +295,71 @@ public class ClanRelayService {
      * Discord→game direction feeds straight back into the game→Discord one.
      * Unguarded that echoes every Discord message back into the channel it
      * was typed in, so lines wearing {@link
-     * ChatMessageUtil#DISCORD_SENDER_MARKER} stop here.</p>
+     * ChatMessageUtil#DISCORD_SENDER_MARKER} stop here, and so do muted
+     * clanmates' lines from {@link #showMutedLine}, which the server already
+     * has.</p>
      */
     public void onClanChat(String senderName, String message) {
-        if (!config.clanChatSync()) {
+        String sender = senderName != null ? Text.removeTags(Text.toJagexName(senderName)).trim() : "";
+        if (sender.isEmpty()) {
             return;
         }
-        String sender = senderName != null ? Text.removeTags(Text.toJagexName(senderName)) : null;
-        if (sender == null || sender.trim().isEmpty()) {
+        String key = lineKey(sender, message);
+        if (injectedLines.remove(key) != null) {
             return;
         }
-        if (ChatMessageUtil.isDiscordBridgeSender(sender)) {
+        remember(heardLines, key);
+        if (!config.clanChatSync() || ChatMessageUtil.isDiscordBridgeSender(sender)) {
             return;
         }
-        PendingLine line = new PendingLine(SubmissionType.CLAN_CHAT, sender.trim(), message);
+        PendingLine line = new PendingLine(SubmissionType.CLAN_CHAT, sender, message);
         line.accountType = accountTypeFromName(senderName);
+        // A muted player's own line is printed only on their screen; the
+        // server tells those apart by who else reports them.
+        line.self = client.getLocalPlayer() != null
+            && sender.equalsIgnoreCase(Text.toJagexName(client.getLocalPlayer().getName()));
         queueLine(line);
+    }
+
+    /**
+     * A muted clanmate's line that the game never delivered here, shown as
+     * their clan chat with a muted icon. Dropped if the game did deliver it
+     * after all, or if this player ignores them, as the game would.
+     */
+    public void showMutedLine(String sender, String message, String accountType) {
+        clientThread.invokeLater(() -> {
+            String key = lineKey(sender, message);
+            Long heard = heardLines.get(key);
+            if ((heard != null && System.currentTimeMillis() - heard <= LINE_MEMORY_MS)
+                || (client.getIgnoreContainer() != null && client.getIgnoreContainer().findByName(sender) != null)) {
+                return;
+            }
+            int icon = -1;
+            for (Map.Entry<Integer, String> e : ACCOUNT_ICONS.entrySet()) {
+                if (e.getValue().equals(accountType)) {
+                    icon = e.getKey();
+                }
+            }
+            remember(injectedLines, key);
+            if (!chatMessageUtil.sendMutedClanMessage(sender, message, icon)) {
+                injectedLines.remove(key);
+            }
+        });
+    }
+
+    /** Sender and text as both copies of one line compare (case, tags, spacing folded). */
+    static String lineKey(String sender, String message) {
+        return (Text.toJagexName(Text.removeTags(sender)) + "|" + Text.removeTags(message == null ? "" : message))
+            .replace('\u00A0', ' ').trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private static void remember(Map<String, Long> lines, String key) {
+        long now = System.currentTimeMillis();
+        lines.values().removeIf(t -> now - t > LINE_MEMORY_MS);
+        if (lines.size() >= MAX_REMEMBERED_LINES) {
+            lines.remove(lines.keySet().iterator().next());
+        }
+        lines.put(key, now);
     }
 
     private void queueLine(PendingLine line) {
@@ -383,6 +451,9 @@ public class ClanRelayService {
             if (line.accountType != null) {
                 embed.addField("account_type", line.accountType, true);
             }
+            if (line.self) {
+                embed.addField("self", "true", true);
+            }
             embed.addField("player_name", relayerName, true);
             embed.addField("acc_hash", String.valueOf(client.getAccountHash()), true);
             embed.addField("p_v", plugin.pluginVersion != null ? plugin.pluginVersion : "unknown", true);
@@ -400,6 +471,7 @@ public class ClanRelayService {
         private String clanName;
         private String message;
         private String accountType;
+        private boolean self;
 
         private PendingLine(SubmissionType type, String sender, String message) {
             this.type = type;

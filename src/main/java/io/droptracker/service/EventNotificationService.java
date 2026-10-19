@@ -386,8 +386,8 @@ public class EventNotificationService {
     private static final int BRIDGE_MESSAGE_MAX_CHARS = 200;
 
     /**
-     * Renders {@code clan_chat_message} envelopes (Discord→game bridge) as
-     * clan-styled chat lines and returns the batch without them. Stale lines
+     * Renders {@code clan_chat_message} envelopes (Discord→game bridge) and
+     * {@code clan_chat_muted} ones (a muted clanmate's line) as clan chat and returns the batch without them. Stale lines
      * — an offline backlog draining on login — are silently dropped: chat
      * from twenty minutes ago is noise, exactly like real clan chat you
      * weren't online for.
@@ -399,7 +399,8 @@ public class EventNotificationService {
         List<EventNotification> remainder = new ArrayList<>(batch.size());
         long nowSeconds = System.currentTimeMillis() / 1000L;
         for (EventNotification n : batch) {
-            if (!"clan_chat_message".equals(n.getType())) {
+            boolean muted = "clan_chat_muted".equals(n.getType());
+            if (!muted && !"clan_chat_message".equals(n.getType())) {
                 remainder.add(n);
                 continue;
             }
@@ -420,7 +421,11 @@ public class EventNotificationService {
             if (n.getTs() > 0 && nowSeconds - n.getTs() > BRIDGE_LINE_MAX_AGE_SECONDS) {
                 continue;
             }
-            chatMessageUtil.sendDiscordClanMessage(sender, message);
+            if (muted) {
+                clanRelayService.showMutedLine(sender, message, data.getAccountType());
+            } else {
+                chatMessageUtil.sendDiscordClanMessage(sender, message);
+            }
         }
         return remainder;
     }

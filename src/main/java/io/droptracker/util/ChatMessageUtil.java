@@ -28,6 +28,11 @@ public class ChatMessageUtil {
     @Inject
     private ClientThread clientThread;
 
+    private static final java.awt.image.BufferedImage MUTED_ICON =
+        ImageUtil.loadImageResource(ChatMessageUtil.class, "muted.png");
+    /** Mod-icon slot holding {@link #MUTED_ICON}, claimed on first use. */
+    private int mutedIconSlot = -1;
+
     @Subscribe
     public void onCommandExecuted(CommandExecuted event)
     {
@@ -167,6 +172,36 @@ public class ChatMessageUtil {
                             .build()
             );
         });
+    }
+
+    /**
+     * A muted clanmate's line as their clan chat, with a muted icon before the
+     * name: the game showed it to nobody, so clanmates without the plugin did
+     * not see it. Client thread. False when the icon can't be loaded yet.
+     */
+    public boolean sendMutedClanMessage(String sender, String message, int accountIcon) {
+        if (mutedIconSlot < 0) {
+            IndexedSprite[] icons = client.getModIcons();
+            if (icons == null) {
+                return false;
+            }
+            IndexedSprite[] grown = java.util.Arrays.copyOf(icons, icons.length + 1);
+            grown[icons.length] = ImageUtil.getImageIndexedSprite(MUTED_ICON, client);
+            client.setModIcons(grown);
+            mutedIconSlot = icons.length;
+        }
+        String clanName = client.getClanChannel() != null
+                ? Text.removeTags(client.getClanChannel().getName()) : "";
+        chatMessageManager.queue(
+                QueuedMessage.builder()
+                        .type(ChatMessageType.CLAN_CHAT)
+                        .name((accountIcon >= 0 ? "<img=" + accountIcon + ">" : "")
+                            + "<img=" + mutedIconSlot + ">" + sender)
+                        .sender(clanName)
+                        .value(message)
+                        .build()
+        );
+        return true;
     }
 
     /**

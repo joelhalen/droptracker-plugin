@@ -138,7 +138,10 @@ public class EventNotification {
         private Integer coinBalance;
         /** submission_notice only: server-supplied plain text. */
         private String message;
-        // clan_chat_message (Discord→game bridge): who spoke in Discord.
+        // clan_chat_message (Discord→game bridge): who spoke in Discord;
+        // clan_chat_muted: the muted clanmate.
         private String sender;
+        @SerializedName("account_type")
+        private String accountType;
     }
 }
