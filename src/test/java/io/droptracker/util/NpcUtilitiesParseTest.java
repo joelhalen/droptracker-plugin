@@ -100,5 +100,8 @@ public class NpcUtilitiesParseTest {
     @Test
     public void secondaryRejectsNonRaidNames() {
         assertNull(NpcUtilities.parseSecondary("Some Random Boss"));
+        // "Your completed Fractured Archive count is: N" — without this the
+        // raid's kill count was discarded and its loot went out with none.
+        assertEquals("Fractured Archive", NpcUtilities.parseSecondary("Fractured Archive"));
     }
 }

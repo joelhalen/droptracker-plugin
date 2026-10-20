@@ -93,6 +93,7 @@ public class RaidLootDeduplicatorTest {
         assertEquals("Theatre of Blood", RaidLootDeduplicator.raidFamily("Theatre of Blood: Entry Mode"));
         assertEquals("Tombs of Amascut", RaidLootDeduplicator.raidFamily("Tombs of Amascut: Expert Mode"));
         assertEquals("Chambers of Xeric", RaidLootDeduplicator.raidFamily("Chambers of Xeric Challenge Mode"));
+        assertEquals("Fractured Archive", RaidLootDeduplicator.raidFamily("Fractured Archive"));
         assertNull(RaidLootDeduplicator.raidFamily("Zulrah"));
         assertNull(RaidLootDeduplicator.raidFamily(null));
     }

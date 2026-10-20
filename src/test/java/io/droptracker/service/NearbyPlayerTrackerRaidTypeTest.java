@@ -28,6 +28,13 @@ public class NearbyPlayerTrackerRaidTypeTest {
     }
 
     @Test
+    public void fracturedArchiveMapsToTfa() {
+        assertEquals("tfa", NearbyPlayerTracker.raidTypeForSource("Fractured Archive"));
+        assertEquals("tfa", NearbyPlayerTracker.raidTypeForSource("The Fractured Archive"));
+        assertEquals(8, NearbyPlayerTracker.rosterCapacity("tfa"));
+    }
+
+    @Test
     public void coxVariantsMapToCox() {
         assertEquals("cox", NearbyPlayerTracker.raidTypeForSource("Chambers of Xeric"));
         assertEquals("cox", NearbyPlayerTracker.raidTypeForSource("Chambers of Xeric Challenge Mode"));

@@ -23,6 +23,13 @@ public class NpcUtilities {
     public static final String TOA = "Tombs of Amascut";
     public static final String TOB = "Theatre of Blood";
     public static final String COX = "Chambers of Xeric";
+    /**
+     * The Fractured Archive (raid 4). RuneLite's loot tracker names the chest
+     * loot without the article, and so does the kill-count message ("Your
+     * completed Fractured Archive count is: N"), so this is the name every
+     * submission for it carries.
+     */
+    public static final String TFA = "Fractured Archive";
 
     public static final Set<String> SPECIAL_NPC_NAMES = Set.of("The Whisperer", "Araxxor", "Branda the Fire Queen",
             "Eldric the Ice King", "Dusk", "Corrupted Hunllef", "Crystalline Hunllef","Maggot King");
@@ -201,7 +208,7 @@ public class NpcUtilities {
         assert plugin.lastDrop != null;
         String lastSource = plugin.lastDrop.getSource();
         Predicate<String> coincides = source -> source.equals(event.getName()) && lastSource.startsWith(source);
-        return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX);
+        return coincides.test(TOA) || coincides.test(TOB) || coincides.test(COX) || coincides.test(TFA);
     }
 
     public static Optional<Pair<String, Integer>> parseBoss(String message, DropTrackerPlugin plugin) {
@@ -276,7 +283,8 @@ public class NpcUtilities {
         if (raid.equalsIgnoreCase("Theatre of Blood")
                 || raid.equalsIgnoreCase("Tombs of Amascut")
                 || raid.equalsIgnoreCase("Chambers of Xeric")
-                || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode"))
+                || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode")
+                || raid.equalsIgnoreCase(TFA))
             return boss;
 
         return null;

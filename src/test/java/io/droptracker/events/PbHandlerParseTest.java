@@ -234,6 +234,42 @@ public class PbHandlerParseTest {
         assertNull(m.group("pbIndicator"));
     }
 
+    // The Fractured Archive's tracked raid time is its "Total completion time"
+    // line (RuneLite's chat-commands plugin records exactly this one), so it
+    // must survive the wall-clock filter that drops ToB's and ToA's totals.
+    private static final String TFA_PB_MESSAGE =
+        "The Fractured Archive: Total completion time: <col=ef1020>2:25.80</col> (new personal best)";
+
+    private static final String TFA_NO_PB_MESSAGE =
+        "The Fractured Archive: Total completion time: <col=ef1020>2:54.60</col>. Personal best: 2:25.80";
+
+    @Test
+    public void tfaTotalCompletionTimeIsTheRaidTime() {
+        Matcher m = timeMatcherFor(TFA_PB_MESSAGE);
+        assertEquals("2:25.80", m.group("duration"));
+        assertEquals("(new personal best)", m.group("pbIndicator"));
+
+        Matcher noPb = timeMatcherFor(TFA_NO_PB_MESSAGE);
+        assertEquals("2:54.60", noPb.group("duration"));
+        assertEquals("2:25.80", noPb.group("pbtime"));
+        assertNull(noPb.group("pbIndicator"));
+    }
+
+    @Test
+    public void tfaExemptionDoesNotLetOtherRaidTotalsThrough() {
+        assertNull(PbHandler.selectTimeLine(sanitize(TOB_TOTAL_MESSAGE)));
+        assertNull(PbHandler.selectTimeLine(sanitize(TOA_TOTAL_MESSAGE)));
+    }
+
+    @Test
+    public void tfaCompletedCountMatchesSecondaryPattern() {
+        Matcher m = PbHandler.SECONDARY_BOSS_PATTERN.matcher("Your completed Fractured Archive count is: 3.");
+        assertTrue(m.find());
+        assertEquals("Fractured Archive", m.group("key"));
+        assertEquals("3", m.group("value"));
+        assertFalse(PbHandler.BOSS_COUNT_PATTERN.matcher("Your completed Fractured Archive count is: 3.").find());
+    }
+
     @Test
     public void tobWallClockTotalIsNotAKillTimeAtAll() {
         // Null keeps updateKillData from overwriting the raid time.

@@ -149,7 +149,7 @@ public class KCService {
             String cacheKey = getCacheKey(LootRecordType.UNKNOWN, boss);
             killCounts.asMap().merge(cacheKey, kc - 1, Math::max);
 
-            if (boss.equals(NpcUtilities.GAUNTLET_BOSS) || boss.equals(NpcUtilities.CG_BOSS) || boss.startsWith(NpcUtilities.TOA) || boss.startsWith(NpcUtilities.TOB) || boss.startsWith(NpcUtilities.COX)) {
+            if (boss.equals(NpcUtilities.GAUNTLET_BOSS) || boss.equals(NpcUtilities.CG_BOSS) || boss.startsWith(NpcUtilities.TOA) || boss.startsWith(NpcUtilities.TOB) || boss.startsWith(NpcUtilities.COX) || boss.startsWith(NpcUtilities.TFA)) {
                 // populate lastDrop to workaround loot tracker quirks
                 // (RuneLite fires LootReceived with "The Gauntlet" for both regular and corrupted)
                 plugin.lastDrop = new Drop(boss, LootRecordType.EVENT, Collections.emptyList());

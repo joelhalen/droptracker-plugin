@@ -8,6 +8,7 @@ import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Varbit;
+import net.runelite.api.gameval.VarbitID;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.*;
@@ -63,9 +64,12 @@ public class PbHandler extends BaseEventHandler {
     /**
      * The wall-clock total is not the tracked PB metric; RuneLite excludes the
      * same line with a {@code (?<!total )completion time:} lookbehind.
+     * The Fractured Archive is the exception: its "The Fractured Archive:
+     * Total completion time:" line IS the raid's tracked time (RuneLite
+     * matches it explicitly), so it is let through.
      */
     private static final Pattern TOTAL_COMPLETION_PATTERN = Pattern.compile(
-        "total completion time",
+        "(?<!Fractured Archive: )total completion time",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -366,6 +370,9 @@ public class PbHandler extends BaseEventHandler {
         if (message.contains("Chambers of Xeric")) {
             return "Chambers of Xeric";
         }
+        if (message.contains(NpcUtilities.TFA)) {
+            return NpcUtilities.TFA;
+        }
         // Chambers of Xeric time lines often omit the raid name but include the Olm split
         if (message.contains("Olm Duration")) {
             return "Chambers of Xeric";
@@ -444,9 +451,13 @@ public class PbHandler extends BaseEventHandler {
         boolean mentionsToa = message.contains("Tombs of Amascut") || (bossName != null && bossName.contains("Tombs of Amascut"));
         boolean mentionsTob = message.contains("Theatre of Blood") || (bossName != null && bossName.contains("Theatre of Blood"));
         boolean mentionsRoyalTitans = message.contains("Royal Titans") || (bossName != null && bossName.contains("Royal Titans"));
+        boolean mentionsTfa = message.contains(NpcUtilities.TFA) || (bossName != null && bossName.contains(NpcUtilities.TFA));
 
         if (mentionsToa) {
             return getToaTeamSize();
+        }
+        if (mentionsTfa) {
+            return getTfaTeamSize();
         }
         if (mentionsTob) {
             return getTobTeamSize();
@@ -672,7 +683,8 @@ public class PbHandler extends BaseEventHandler {
         int modeSeparator = boss.lastIndexOf(':');
         String raid = modeSeparator > 0 ? boss.substring(0, modeSeparator) : boss;
         if (raid.equalsIgnoreCase("Theatre of Blood") || raid.equalsIgnoreCase("Tombs of Amascut") ||
-            raid.equalsIgnoreCase("Chambers of Xeric") || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode")) {
+            raid.equalsIgnoreCase("Chambers of Xeric") || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode") ||
+            raid.equalsIgnoreCase(NpcUtilities.TFA)) {
             return boss;
         }
         return null;
@@ -695,6 +707,15 @@ public class PbHandler extends BaseEventHandler {
                 Varbits.TOA_MEMBER_5_HEALTH, Varbits.TOA_MEMBER_6_HEALTH, Varbits.TOA_MEMBER_7_HEALTH);
         return formatRaidTeamSize(
             nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOA) : 0,
+            varbitSize);
+    }
+
+    private String getTfaTeamSize() {
+        int varbitSize = occupied(VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1,
+                VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3, VarbitID.TFA_CLIENT_P4,
+                VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7);
+        return formatRaidTeamSize(
+            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TFA) : 0,
             varbitSize);
     }
 

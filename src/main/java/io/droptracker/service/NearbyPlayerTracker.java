@@ -50,6 +50,7 @@ public class NearbyPlayerTracker
     public static final String RAID_TOB = "tob";
     public static final String RAID_TOA = "toa";
     public static final String RAID_COX = "cox";
+    public static final String RAID_TFA = "tfa";
 
     /**
      * Names read from the authoritative roster source of the active raid,
@@ -67,7 +68,7 @@ public class NearbyPlayerTracker
      */
     private final Set<String> fallbackRoster = new LinkedHashSet<>();
 
-    /** Raid the rosters above belong to: {@code "tob"|"toa"|"cox"}, or null. */
+    /** Raid the rosters above belong to: {@code "tob"|"toa"|"cox"|"tfa"}, or null. */
     private String activeRaidType = null;
 
     /**
@@ -130,6 +131,10 @@ public class NearbyPlayerTracker
         {
             return RAID_COX;
         }
+        if (source.contains("fractured archive"))
+        {
+            return RAID_TFA;
+        }
         return null;
     }
 
@@ -156,7 +161,8 @@ public class NearbyPlayerTracker
     /**
      * How many member slots the raid's authoritative source publishes, which is
      * also the largest party the game will let into it: Theatre of Blood has
-     * five health orbs, Tombs of Amascut eight. 0 means "no fixed ceiling" —
+     * five health orbs, Tombs of Amascut and The Fractured Archive eight. 0
+     * means "no fixed ceiling" —
      * Chambers of Xeric has no small cap, so mass raids stay legal there.
      */
     static int rosterCapacity(String raidType)
@@ -165,7 +171,7 @@ public class NearbyPlayerTracker
         {
             return 5;
         }
-        if (RAID_TOA.equals(raidType))
+        if (RAID_TOA.equals(raidType) || RAID_TFA.equals(raidType))
         {
             return 8;
         }
@@ -301,6 +307,8 @@ public class NearbyPlayerTracker
                 return getToaTeamCount();
             case RAID_COX:
                 return getCoxTeamCount();
+            case RAID_TFA:
+                return getTfaTeamCount();
             default:
                 return 0;
         }
@@ -417,6 +425,11 @@ public class NearbyPlayerTracker
         {
             return RAID_COX;
         }
+        // The Fractured Archive copies ToA's party varbits: 2=inside raid.
+        if (client.getVarbitValue(VarbitID.TFA_CLIENT_PARTYSTATUS) >= 2)
+        {
+            return RAID_TFA;
+        }
         return null;
     }
 
@@ -434,13 +447,16 @@ public class NearbyPlayerTracker
             case RAID_COX:
                 captureCoxSidepanelNames(into);
                 break;
+            case RAID_TFA:
+                captureVarcNames(VarClientID.TFA_CLIENT_NAME0, VarClientID.TFA_CLIENT_NAME7, into);
+                break;
             default:
                 break;
         }
     }
 
     /**
-     * ToB/ToA publish the party roster in varcstrings (health-orb name slots),
+     * ToB/ToA/TFA publish the party roster in varcstrings (health-orb name slots),
      * which stay populated for the whole raid — and usually beyond — regardless
      * of where teammates are standing. Empty slots read as "" or "-".
      */
@@ -583,7 +599,9 @@ public class NearbyPlayerTracker
         int toaTeamCount = getToaTeamCount();
         int tobTeamCount = getTobTeamCount();
         int coxTeamCount = getCoxTeamCount();
-        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1) || (coxTeamCount > 1) || currentRaidType() != null;
+        int tfaTeamCount = getTfaTeamCount();
+        boolean inRaidContext = (toaTeamCount > 1) || (tobTeamCount > 1) || (coxTeamCount > 1)
+            || (tfaTeamCount > 1) || currentRaidType() != null;
 
         Set<String> names = new LinkedHashSet<>();
         String rosterSource;
@@ -772,6 +790,23 @@ public class NearbyPlayerTracker
             Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_5_HEALTH), 1) +
             Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_6_HEALTH), 1) +
             Math.min(client.getVarbitValue(Varbits.TOA_MEMBER_7_HEALTH), 1);
+    }
+
+    /**
+     * The Fractured Archive's party slots, one varbit per member like ToA's
+     * (non-zero while the slot is filled) — the same read RuneLite's loot
+     * tracker uses for ToA's team size.
+     */
+    private int getTfaTeamCount()
+    {
+        return Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P0), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P1), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P2), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P3), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P4), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P5), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P6), 1) +
+            Math.min(client.getVarbitValue(VarbitID.TFA_CLIENT_P7), 1);
     }
 
     @SuppressWarnings("deprecation")

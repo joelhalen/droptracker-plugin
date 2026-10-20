@@ -119,6 +119,9 @@ public class RaidLootDeduplicator {
         if (name.startsWith(NpcUtilities.COX)) {
             return NpcUtilities.COX;
         }
+        if (name.startsWith(NpcUtilities.TFA)) {
+            return NpcUtilities.TFA;
+        }
         return null;
     }
 }

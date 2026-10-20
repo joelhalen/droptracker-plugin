@@ -296,6 +296,8 @@ public class PetHandler extends BaseEventHandler {
         Map.entry("Kalphite princess", "Kalphite Queen"),
         Map.entry("Lil' creator", "Spoils of war"),
         Map.entry("Lil' zik", "Theatre of Blood"),
+        // The Fractured Archive's pet (its metamorphs share the clog slot).
+        Map.entry("Orion", "Fractured Archive"),
         Map.entry("Lil'viathan", "The Leviathan"),
         Map.entry("Little nightmare", "Nightmare"),
         Map.entry("Moxi", "Amoxliatl"),
