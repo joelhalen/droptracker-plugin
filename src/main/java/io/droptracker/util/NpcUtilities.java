@@ -44,9 +44,10 @@ public class NpcUtilities {
     public static final Set<String> DEFERRED_SCREENSHOT_NPC_NAMES = Set.of(
             "The Nightmare", "Phosani's Nightmare");
 
-    /** Whether a submission from {@code source} must delay its screenshot a tick. */
+    /** Whether a submission from {@code source} must delay its screenshot a
+     *  tick. Contains-matching: a kill time's source is its count line. */
     public static boolean needsDeferredScreenshot(@Nullable String source) {
-        return source != null && DEFERRED_SCREENSHOT_NPC_NAMES.contains(source);
+        return source != null && DEFERRED_SCREENSHOT_NPC_NAMES.stream().anyMatch(source::contains);
     }
 
     /* Mad Angel npc ids (Wyrmscraig, released 2026-07-29) — raw literals because

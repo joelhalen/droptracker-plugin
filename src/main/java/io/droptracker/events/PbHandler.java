@@ -1,5 +1,6 @@
 package io.droptracker.events;
 
+import com.google.gson.Gson;
 import com.google.inject.Inject;
 import io.droptracker.models.CustomWebhookBody;
 import io.droptracker.models.submissions.SubmissionType;
@@ -7,105 +8,36 @@ import io.droptracker.service.*;
 import io.droptracker.util.*;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
-import net.runelite.api.annotations.Varbit;
 import net.runelite.api.gameval.VarbitID;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.jetbrains.annotations.*;
 
-import java.time.*;
-import java.time.temporal.Temporal;
 import java.util.*;
-import java.util.concurrent.atomic.*;
 import java.util.regex.*;
 
-import static java.time.temporal.ChronoField.*;
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
-
+/**
+ * Kill times and personal bests. The plugin does not read these messages
+ * itself: it forwards the candidate chat lines of one kill, with the game
+ * facts only the client can see (raid party sizes, precise timing, loadout),
+ * and the server parses them exactly as this class used to
+ * (data/submissions/pb_lines.py).
+ *
+ * <p>A kill is sent on the tick its lines hold both a count line and a time,
+ * or a timed delve level (a delve level is a whole kill on its own) — the
+ * tick the parser here used to finish it on. Lines that never complete a
+ * kill are dropped after ten seconds, as partial kills always were.
+ */
 @Slf4j
 public class PbHandler extends BaseEventHandler {
 
-    @VisibleForTesting
-    static final int MAX_BAD_TICKS = 10;
-    private static final long DUPLICATE_THRESHOLD = 5000;
-
-    @VisibleForTesting
-    static final Pattern BOSS_COUNT_PATTERN = Pattern.compile(
-        "Your (?<key>[\\w\\s:'-]+) (?<type>kill|chest|completion|success) count is:? (?<value>[\\d,]+)", 
-        Pattern.CASE_INSENSITIVE
-    );
-    
-    @VisibleForTesting
-    static final Pattern SECONDARY_BOSS_PATTERN = Pattern.compile(
-        "Your (?<type>completed|subdued) (?<key>[\\w\\s:]+) count is:?[ \\t]*(?<value>[\\d,]+)",
-        Pattern.CASE_INSENSITIVE
-    );
-    
-    @VisibleForTesting
-    static final Pattern TIME_WITH_PB_PATTERN = Pattern.compile(
-        "(?<prefix>.*?)(?<duration>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*(?:Personal best: (?<pbtime>\\d*:?\\d+:\\d+(?:\\.\\d+)?)\\.?\\s*)?(?<pbIndicator>\\(new personal best\\))?",
-        Pattern.CASE_INSENSITIVE
-    );
-    
-    /**
-     * The game buckets large teams rather than reporting a head count, and the
-     * bucket label is the whole token: "16-23 players", "24+ players", "6+
-     * players". The range and open-ended alternatives must precede the bare
-     * {@code \d+}, or it matches the low end alone and a 16-23 raid is
-     * submitted as a 16-player one, splitting the board away from the same
-     * raid's adventure-log and clan-broadcast copies (suggestion #153).
-     */
-    @VisibleForTesting
-    static final Pattern TEAM_SIZE_PATTERN = Pattern.compile(
-        "Team size:\\s*(?<size>\\d+\\s*-\\s*\\d+|\\d+\\s*\\+|\\d+|Solo)\\s*(?:players?)?",
-        Pattern.CASE_INSENSITIVE
-    );
-
-    /**
-     * The wall-clock total is not the tracked PB metric; RuneLite excludes the
-     * same line with a {@code (?<!total )completion time:} lookbehind.
-     * The Fractured Archive is the exception: its "The Fractured Archive:
-     * Total completion time:" line IS the raid's tracked time (RuneLite
-     * matches it explicitly), so it is let through.
-     */
-    private static final Pattern TOTAL_COMPLETION_PATTERN = Pattern.compile(
-        "(?<!Fractured Archive: )total completion time",
-        Pattern.CASE_INSENSITIVE
-    );
-
-    /**
-     * A raid's in-raid completion line — the metric the adventure log and clan
-     * bots track. The lookbehind keeps the wall-clock "total completion time"
-     * out, same as {@link #TOTAL_COMPLETION_PATTERN}.
-     */
-    private static final Pattern COMPLETION_TIME_PATTERN = Pattern.compile(
-        "(?<!total )completion time:",
-        Pattern.CASE_INSENSITIVE
-    );
-
-    /**
-     * One completed Doom of Mokhaiotl delve level, e.g.
-     * {@code Delve level: 3 duration: 1:23. Personal best: 1:05} or
-     * {@code Delve level: 8+ (9) duration: 1:27 (new personal best)}. Every
-     * level past 8 shares the game's single "8+" personal best; the level
-     * actually completed is only in the parentheses. The level-start
-     * announcement ({@code Delve level: 8+ (9)}) has no time and never gets
-     * this far.
-     */
-    private static final Pattern DELVE_LEVEL_PATTERN = Pattern.compile(
-        "Delve level:\\s*(?<level>\\d+)(?<deep>\\+)?(?:\\s*\\((?<actual>\\d+)\\))?"
-    );
-
-    /**
-     * The whole run to the bottom of the fixed levels, e.g.
-     * {@code Delve level 1 - 8 duration: 12:05. Personal best: 11:56}. Tracked
-     * as the boss itself. Note: no colon after "level".
-     */
-    private static final Pattern DELVE_TOTAL_PATTERN = Pattern.compile(
-        "Delve level\\s+\\d+\\s*-\\s*\\d+\\s+duration"
-    );
-
-    private static final String DOOM = "Doom of Mokhaiotl";
+    /** A message the server's parser could use: a time, a count or a delve level. */
+    private static final Pattern CANDIDATE = Pattern.compile("\\d:\\d\\d| count is|Delve level");
+    private static final Pattern TIME = Pattern.compile("\\d:\\d\\d");
+    /** The wall-clock total, never a kill time (except the Fractured Archive's). */
+    private static final Pattern TOTAL = Pattern.compile(
+        "(?<!Fractured Archive: )total completion time", Pattern.CASE_INSENSITIVE);
+    /* Discord caps an embed field at 1024 characters and an embed at 6000. */
+    private static final int MAX_LINES = 8;
+    private static final int MAX_LINE_CHARS = 900;
+    private static final long EXPIRY_MS = 10_000;
 
     @Inject
     protected NearbyPlayerTracker nearbyPlayerTracker;
@@ -118,74 +50,31 @@ public class PbHandler extends BaseEventHandler {
     @Inject
     protected PlayerModelService playerModelService;
 
-    private final AtomicInteger badTicks = new AtomicInteger();
-    private final AtomicReference<KillData> killData = new AtomicReference<>();
-    private String lastProcessedKill = null;
-    private long lastProcessedTime = 0;
-    private long lastKillDataUpdate = 0L;
+    @Inject
+    protected Gson gson;
 
-    private static class KillData {
-        final String boss;
-        final Integer count;
-        final Duration time;
-        final Duration bestTime;
-        final boolean isPersonalBest;
-        final String teamSize;
-        final String gameMessage;
-        /* Doom of Mokhaiotl only: the delve level this time completed. */
-        final Integer delveLevel;
-
-        KillData(String boss, Integer count, Duration time, Duration bestTime, 
-                boolean isPersonalBest, String teamSize, String gameMessage) {
-            this(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage, null);
-        }
-
-        KillData(String boss, Integer count, Duration time, Duration bestTime,
-                boolean isPersonalBest, String teamSize, String gameMessage, Integer delveLevel) {
-            this.boss = boss;
-            this.count = count;
-            this.time = time;
-            this.bestTime = bestTime;
-            this.isPersonalBest = isPersonalBest;
-            this.teamSize = teamSize;
-            this.gameMessage = gameMessage;
-            this.delveLevel = delveLevel;
-        }
-
-        boolean isValid() {
-            if (boss != null) {
-                if (boss.contains("Doom")) {
-                    // Doom levels do not include count; so we do not need a null check here
-                    return time != null && !time.isZero();
-                }
-            }
-            return boss != null && count != null && time != null && !time.isZero();
-        }
-    }
+    private final List<Map<String, Object>> lines = new ArrayList<>();
+    private long lastLineAt;
 
     @Override
     public boolean isEnabled() {
         return config.pbEmbeds();
     }
 
-    public void onGameMessage(String message) {
-        if (!isEnabled()) return;
-        parseMessage(message).ifPresent(data -> {
-            if (isDelveLine(data)) {
-                // A delve line is a whole kill on its own. The level 8 split
-                // and the "1 - 8" total arrive in the same tick, and merging
-                // them let the total overwrite the split, so level 8 was never
-                // sent.
-                processKill(data);
-            } else {
-                updateKillData(data);
-            }
-        });
-    }
-
-    private static boolean isDelveLine(KillData data) {
-        return data.boss != null && data.boss.startsWith(DOOM)
-            && data.time != null && !data.time.isZero();
+    public synchronized void onGameMessage(String message) {
+        if (!isEnabled() || !CANDIDATE.matcher(message).find()
+                || message.startsWith("Preparation") || message.contains("target time")) {
+            return;
+        }
+        if (lines.size() >= MAX_LINES) {
+            lines.remove(0);
+        }
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("m", message.length() > MAX_LINE_CHARS ? message.substring(0, MAX_LINE_CHARS) : message);
+        line.put("t", client.getTickCount());
+        line.put("p", party());
+        lines.add(line);
+        lastLineAt = System.currentTimeMillis();
     }
 
     public void onFriendsChatNotification(String message) {
@@ -194,549 +83,110 @@ public class PbHandler extends BaseEventHandler {
         }
     }
 
-    public void onTick() {
-        KillData data = killData.get();
-        if (data == null) {
-            if (badTicks.incrementAndGet() > MAX_BAD_TICKS) {
-                reset();
-            }
+    public synchronized void onTick() {
+        if (lines.isEmpty()) {
             return;
         }
-
-        if (data.isValid() && isEnabled()) {
-            if (data.count == null) {
-                /* Doom does not have KCs available for individual floors, so we need to handle the data anyways for this boss */
-                /* Otherwise, we should handle other data with no count included consistently with before */
-                if (data.boss.contains("Doom")) {
-                    processKill(data);
-                    reset();
-                }
-            } else {
-                processKill(data);
-                reset();
-            }
-        } else {
-            // Allow partial data (e.g., time before count or vice versa) to coalesce for up to 10 seconds
-            long now = System.currentTimeMillis();
-            if (now - lastKillDataUpdate > 10_000) {
-                reset();
-            }
+        boolean count = false;
+        boolean time = false;
+        boolean delve = false;
+        for (Map<String, Object> line : lines) {
+            String message = (String) line.get("m");
+            boolean timed = has(message, null);
+            count |= message.contains(" count is");
+            time |= timed;
+            delve |= timed && message.contains("Delve level");
+        }
+        if ((count && time) || delve) {
+            send(new ArrayList<>(lines));
+            reset();
+        } else if (System.currentTimeMillis() - lastLineAt > EXPIRY_MS) {
+            reset();
         }
     }
 
-    private Optional<KillData> parseMessage(String message) {
-        if (message.startsWith("Preparation")) {
-            return Optional.empty();
-        }
-        // Ignore raid target-time announcements (e.g. "Your party failed to beat the overall target time of 40:00.")
-        // These contain a time string but are unrelated to the player's personal best.
-        if (message.contains("target time")) {
-            return Optional.empty();
-        }
-
-        // Try boss count first
-        Optional<Pair<String, Integer>> bossCount = parseBossCount(message);
-        if (bossCount.isPresent()) {
-            Pair<String, Integer> pair = bossCount.get();
-            return Optional.of(new KillData(pair.getLeft(), pair.getRight(), 
-                Duration.ZERO, Duration.ZERO, false, null, message));
-        }
-
-        // Try time data
-        return parseTimeData(message);
-    }
-
-    private Optional<Pair<String, Integer>> parseBossCount(String message) {
-        Matcher primary = BOSS_COUNT_PATTERN.matcher(message);
-        if (primary.find()) {
-            Optional<Pair<String, Integer>> count = bossCount(parsePrimaryBoss(primary.group("key"), primary.group("type")), primary);
-            if (count.isPresent()) {
-                return count;
-            }
-        }
-
-        Matcher secondary = SECONDARY_BOSS_PATTERN.matcher(message);
-        if (secondary.find()) {
-            return bossCount(parseSecondaryBoss(secondary.group("key")), secondary);
-        }
-
-        return Optional.empty();
-    }
-
-    private static Optional<Pair<String, Integer>> bossCount(String boss, Matcher matcher) {
-        if (boss != null) {
-            try {
-                return Optional.of(Pair.of(boss, Integer.parseInt(matcher.group("value").replace(",", ""))));
-            } catch (NumberFormatException e) {
-                log.debug("Failed to parse kill count: {}", matcher.group("value"));
-            }
-        }
-        return Optional.empty();
-    }
-
-    /**
-     * Picks the line to read a kill time from: drops "total completion time"
-     * lines, prefers a line carrying personal-best info, else the first timed
-     * line. Null when the message has no usable time.
-     * <p>
-     * When the message states a raid completion time, that line is the ONLY
-     * candidate. The same message also carries the final room's
-     * {@code Duration:} — at ToB that is the Verzik split, which sits first and
-     * so won any fallback that was allowed to look past the completion line.
-     * Two ways that happened: a non-PB raid, where the completion line carries
-     * no PB marker at all and nothing returned early; and a room that was
-     * itself a personal best, whose {@code Duration:} line carries the marker
-     * the completion line lacks. Both submitted a ~5 minute "raid" time.
-     */
-    @VisibleForTesting
-    static String selectTimeLine(String message) {
-        if (message == null) {
-            return null;
-        }
-        String[] lines = message.split("\n");
-        String fromCompletion = selectTimeLine(lines, true);
-        return fromCompletion != null ? fromCompletion : selectTimeLine(lines, false);
-    }
-
-    /**
-     * @param completionOnly restrict candidates to raid completion lines; the
-     *                       caller retries without it for everything that has
-     *                       no completion line (CoX, Gauntlet, ordinary bosses)
-     */
-    private static String selectTimeLine(String[] lines, boolean completionOnly) {
-        String firstTimed = null;
-        for (String line : lines) {
-            if (TOTAL_COMPLETION_PATTERN.matcher(line).find()) {
-                continue;
-            }
-            if (completionOnly && !COMPLETION_TIME_PATTERN.matcher(line).find()) {
-                continue;
-            }
-            Matcher matcher = TIME_WITH_PB_PATTERN.matcher(line);
-            if (!matcher.find()) {
-                continue;
-            }
-            if (matcher.group("pbIndicator") != null || matcher.group("pbtime") != null) {
-                return line;
-            }
-            if (firstTimed == null) {
-                firstTimed = line;
-            }
-        }
-        return firstTimed;
-    }
-
-    private Optional<KillData> parseTimeData(String message) {
-        // Only the time is read off the selected line; boss and team size
-        // still come from the whole message.
-        String timeLine = selectTimeLine(message);
-        if (timeLine == null) {
-            return Optional.empty();
-        }
-        Matcher matcher = TIME_WITH_PB_PATTERN.matcher(timeLine);
-        if (!matcher.find()) {
-            return Optional.empty();
-        }
-
-        try {
-            Duration time = parseTime(matcher.group("duration"));
-            String pbTimeStr = matcher.group("pbtime");
-            Duration bestTime = pbTimeStr != null ? parseTime(pbTimeStr) : Duration.ZERO;
-            boolean isPersonalBest = matcher.group("pbIndicator") != null;
-            
-            String bossName = determineBossFromContext(message);
-            String teamSize = extractTeamSize(message, bossName);
-            
-            // For CoX, PB lines often include Olm split but team size isn't always on KC line. If team size missing, try to extract now.
-            if (teamSize == null && message.contains("Team size:")) {
-                teamSize = extractTeamSize(message, bossName);
-            }
-            return Optional.of(new KillData(bossName, null, time, bestTime, 
-                isPersonalBest, teamSize, message, delveLevel(message)));
-                
-        } catch (Exception e) {
-            log.error("Error parsing time data: {}", e.getMessage());
-            return Optional.empty();
-        }
-    }
-
-    private String determineBossFromContext(String message) {
-        if (message.contains("Tombs of Amascut")) {
-            return message.contains("Expert Mode") ? "Tombs of Amascut: Expert Mode" : "Tombs of Amascut";
-        }
-        if (message.contains("Theatre of Blood")) {
-            return "Theatre of Blood";
-        }
-        if (message.contains("Chambers of Xeric")) {
-            return "Chambers of Xeric";
-        }
-        if (message.contains(NpcUtilities.TFA)) {
-            return NpcUtilities.TFA;
-        }
-        // Chambers of Xeric time lines often omit the raid name but include the Olm split
-        if (message.contains("Olm Duration")) {
-            return "Chambers of Xeric";
-        }
-        if (message.contains("Corrupted challenge")) {
-            return "Corrupted Hunllef";
-        }
-        if (message.contains("Challenge duration")) {
-            return "Crystalline Hunllef";
-        }
-        if (message.contains("Colosseum duration")) {
-            return "Sol Heredit";
-        }
-        if (message.contains("Delve level")) {
-            return extractDelveBoss(message);
-        }
-        // With an unknown context, don't guess--defer to subsequent kill-count parsing
-        return null;
-    }
-
-    /**
-     * The board a delve line belongs to: {@code Doom of Mokhaiotl (Level:3)},
-     * the shared {@code (Level:8+)} past level 8, or the boss itself for the
-     * "1 - 8" total.
-     */
-    @VisibleForTesting
-    static String extractDelveBoss(String message) {
-        if (DELVE_TOTAL_PATTERN.matcher(message).find()) {
-            return DOOM;
-        }
-        Matcher matcher = DELVE_LEVEL_PATTERN.matcher(message);
-        if (matcher.find()) {
-            String deep = matcher.group("deep") != null ? "+" : "";
-            return DOOM + " (Level:" + matcher.group("level") + deep + ")";
-        }
-        return DOOM;
-    }
-
-    /**
-     * The delve level a line completed: the number itself up to 8, the one in
-     * parentheses past it. Null for the "1 - 8" total and anything else.
-     */
-    @VisibleForTesting
-    static Integer delveLevel(String message) {
-        if (message == null || DELVE_TOTAL_PATTERN.matcher(message).find()) {
-            return null;
-        }
-        Matcher matcher = DELVE_LEVEL_PATTERN.matcher(message);
-        if (!matcher.find()) {
-            return null;
-        }
-        String level = matcher.group("deep") != null ? matcher.group("actual") : matcher.group("level");
-        try {
-            return level != null ? Integer.parseInt(level) : null;
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private String extractTeamSize(String message, String bossName) {
-        Matcher teamMatcher = TEAM_SIZE_PATTERN.matcher(message);
-        if (teamMatcher.find()) {
-            String raw = teamMatcher.group("size");
-            if (raw == null) {
-                return "Solo";
-            }
-            if (raw.equalsIgnoreCase("solo")) {
-                return "Solo";
-            }
-            // "16 - 23" and "24 +" are the same brackets as "16-23" and "24+";
-            // the label is the board's identity, so spacing cannot vary.
-            String size = raw.replaceAll("\\s+", "");
-            return "1".equals(size) ? "Solo" : size;
-        }
-
-        boolean mentionsToa = message.contains("Tombs of Amascut") || (bossName != null && bossName.contains("Tombs of Amascut"));
-        boolean mentionsTob = message.contains("Theatre of Blood") || (bossName != null && bossName.contains("Theatre of Blood"));
-        boolean mentionsRoyalTitans = message.contains("Royal Titans") || (bossName != null && bossName.contains("Royal Titans"));
-        boolean mentionsTfa = message.contains(NpcUtilities.TFA) || (bossName != null && bossName.contains(NpcUtilities.TFA));
-
-        if (mentionsToa) {
-            return getToaTeamSize();
-        }
-        if (mentionsTfa) {
-            return getTfaTeamSize();
-        }
-        if (mentionsTob) {
-            return getTobTeamSize();
-        }
-        if (mentionsRoyalTitans) {
-            return getRoyalTitansTeamSize();
-        }
-
-        return "Solo";
-    }
-
-    private void updateKillData(KillData newData) {
-        DebugLogger.log("[PbHandler][update] " + newData);
-        killData.getAndUpdate(old -> {
-            if (old == null) {
-                lastKillDataUpdate = System.currentTimeMillis();
-                return newData;
-            }
-
-            String boss = defaultIfNull(newData.boss, old.boss);
-            Integer count = defaultIfNull(newData.count, old.count);
-            Duration time = newData.time != null && !newData.time.isZero() ? newData.time : old.time;
-            Duration bestTime = newData.bestTime != null && !newData.bestTime.isZero() ? newData.bestTime : old.bestTime;
-            boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
-            String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
-            String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
-            KillData merged = new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
-            DebugLogger.log("[PbHandler][update] merged " + merged);
-            lastKillDataUpdate = System.currentTimeMillis();
-            return merged;
-        });
-    }
-
-    // === KILL PROCESSING ===
-    private void processKill(KillData data) {
-        DebugLogger.log("[PbHandler][process] " + data);
-        if (data == null || !data.isValid()) {
-            return;
-        }
-
-        // Duplicate prevention
-        String killIdentifier = data.boss + "-" + data.count;
-        long currentTime = System.currentTimeMillis();
-        
-        if (killIdentifier.equals(lastProcessedKill) && 
-            (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD) {
-            if (!data.boss.contains("1-8")) {
-                
-                DebugLogger.log("[PbHandler][process] duplicate " + killIdentifier);
-                return;
-            }
-        }
-        
-        lastProcessedKill = killIdentifier;
-        lastProcessedTime = currentTime;
-
-        if (clientThread == null) {
-            log.error("ClientThread is null, cannot process kill");
-            return;
-        }
-
-        clientThread.invokeLater(() -> {
-            try {
-                sendKillNotification(data);
-            } catch (Exception e) {
-                DebugLogger.log("[PbHandler][process] send failed: " + e.getMessage());
-                log.error("Error processing kill notification", e);
-            }
-        });
-    }
-
-    private void sendKillNotification(KillData data) {
+    private void send(List<Map<String, Object>> batch) {
         String player = getPlayerName();
-        if (player == null) {
+        if (player == null || !isEnabled()) {
             return;
         }
-        // Read once so the flag and both formatted times always agree.
-        boolean precise = isPreciseTiming(client);
-        String formattedTime = formatTime(data.time, precise);
-        String formattedBestTime = formatTime(data.bestTime, precise);
-        
+        DebugLogger.log("[PbHandler][send] " + batch);
+        Map<String, Object> fieldData = new LinkedHashMap<>();
+        boolean pb = false;
+        for (int i = 0; i < batch.size(); i++) {
+            String message = (String) batch.get(i).get("m");
+            pb |= has(message, "(new personal best)");
+            if (message.contains(" count is")) {
+                // Names the boss for the raid roster and the screenshot delay.
+                fieldData.put("source", message);
+            }
+            fieldData.put("chat_line_" + (i + 1), gson.toJson(batch.get(i)));
+        }
+        // With precise timing off the game prints whole seconds; the server
+        // credits those as approximate, so it needs to know which it got.
+        fieldData.put("precise_timing", client.getVarbitValue(11866) > 0);
+        // Decides the screenshot here; the server reads the real flag.
+        fieldData.put("is_pb", pb);
+
+        // Loadout at the moment of the kill. The outfit fingerprint pairs this
+        // time with the character model filed under the same key, so the
+        // leaderboard shows the model as worn for the kill. Same consent.
+        if (loadoutCapture != null && loadoutCapture.isEnabled()) {
+            fieldData.put("equipment", loadoutCapture.captureEquipment());
+            fieldData.put("inventory", loadoutCapture.captureInventory());
+            fieldData.put("model_fingerprint",
+                playerModelService != null ? playerModelService.currentFingerprint() : null);
+            fieldData.values().removeIf(Objects::isNull);
+        }
+
         CustomWebhookBody webhook = createWebhookBody(player + " has killed a boss:");
         CustomWebhookBody.Embed embed = createEmbed(player + " has killed a boss:", "npc_kill");
-        
-        Map<String, Object> fieldData = new HashMap<>();
-        fieldData.put("boss_name", data.boss);
-        fieldData.put("kill_time", formattedTime != null ? formattedTime : "N/A");
-        fieldData.put("best_time", formattedBestTime != null ? formattedBestTime : "N/A");
-        // With precise timing off the game prints whole seconds, rounded to the
-        // nearest one. The times are sent exactly as shown; the server credits
-        // them with the slowest game tick they could stand for and marks them
-        // approximate, so it needs to know which kind it was given.
-        fieldData.put("precise_timing", precise);
-        fieldData.put("is_pb", data.isPersonalBest);
-        fieldData.put("team_size", data.teamSize != null ? data.teamSize : "Solo");
-        fieldData.put("killcount", data.count);
-        if (data.delveLevel != null) {
-            fieldData.put("delve_level", data.delveLevel);
-        }
-
-        // Loadout at the moment of the kill. Captured here because this runs on
-        // the client thread immediately after the kill is recognised - by the
-        // time a submission is assembled the player may have banked or died.
-        if (loadoutCapture != null && loadoutCapture.isEnabled()) {
-            String equipment = loadoutCapture.captureEquipment();
-            String inventory = loadoutCapture.captureInventory();
-            if (equipment != null) {
-                fieldData.put("equipment", equipment);
-            }
-            if (inventory != null) {
-                fieldData.put("inventory", inventory);
-            }
-            // The outfit fingerprint pairs this time with the character model
-            // the automatic upload files under the same key, so the leaderboard
-            // shows the model as worn for the kill rather than whatever the
-            // player happened to upload last. Same consent as the gear itself.
-            String fingerprint = playerModelService != null
-                    ? playerModelService.currentFingerprint() : null;
-            if (fingerprint != null) {
-                fieldData.put("model_fingerprint", fingerprint);
-            }
-        }
-        
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
-        
         sendData(webhook, SubmissionType.KILL_TIME);
     }
 
-    public void reset() {
-        killData.set(null);
-        badTicks.set(0);
-    }
-
-    @VisibleForTesting
-    static Duration parseTime(String timeStr) {
-        if (timeStr == null || timeStr.trim().isEmpty()) {
-            return Duration.ZERO;
-        }
-
-        try {
-            String timePart = timeStr.contains(".") ? timeStr.substring(0, timeStr.indexOf('.')) : timeStr;
-            String[] timeParts = timePart.split(":");
-
-            long hours = 0, minutes = 0, seconds = 0, millis = 0;
-
-            if (timeParts.length == 3) {  // h:m:s
-                hours = Long.parseLong(timeParts[0]);
-                minutes = Long.parseLong(timeParts[1]);
-                seconds = Long.parseLong(timeParts[2]);
-            } else if (timeParts.length == 2) {  // m:s
-                minutes = Long.parseLong(timeParts[0]);
-                seconds = Long.parseLong(timeParts[1]);
+    /** Whether a line of the message, other than a wall-clock total, holds
+     *  {@code text} (or a time, when null). */
+    private static boolean has(String message, String text) {
+        for (String line : message.split("\n")) {
+            if (!TOTAL.matcher(line).find() && (text == null ? TIME.matcher(line).find() : line.contains(text))) {
+                return true;
             }
-
-            if (timeStr.contains(".")) {
-                String millisStr = timeStr.substring(timeStr.indexOf('.') + 1);
-                while (millisStr.length() < 3) {
-                    millisStr += "0";
-                }
-                millis = Long.parseLong(millisStr);
-            }
-
-            return Duration.ofHours(hours).plusMinutes(minutes).plusSeconds(seconds).plusMillis(millis);
-
-        } catch (Exception e) {
-            log.error("Error parsing time: {}", e.getMessage());
-            return Duration.ZERO;
         }
+        return false;
     }
 
-    @NotNull
-    public String formatTime(@Nullable Duration duration, boolean precise) {
-        Temporal time = ObjectUtils.defaultIfNull(duration, Duration.ZERO).addTo(LocalTime.of(0, 0));
-        StringBuilder sb = new StringBuilder();
-
-        int h = time.get(HOUR_OF_DAY);
-        if (h > 0) sb.append(String.format("%02d", h)).append(':');
-
-        sb.append(String.format("%02d", time.get(MINUTE_OF_HOUR))).append(':');
-        sb.append(String.format("%02d", time.get(SECOND_OF_MINUTE)));
-
-        if (precise) sb.append('.').append(String.format("%02d", time.get(MILLI_OF_SECOND) / 10));
-
-        return sb.toString();
-    }
-
-    public boolean isPreciseTiming(@NotNull Client client) {
-        @Varbit int ENABLE_PRECISE_TIMING = 11866;
-        return client.getVarbitValue(ENABLE_PRECISE_TIMING) > 0;
-    }
-
-    // === BOSS PARSING METHODS ===
-    @Nullable
-    private static String parsePrimaryBoss(String boss, String type) {
-        switch (type.toLowerCase()) {
-            case "chest":
-                if ("Barrows".equalsIgnoreCase(boss)) return boss;
-                if ("Lunar".equals(boss)) return boss + " " + type;
-                return null;
-            case "completion":
-                if (NpcUtilities.GAUNTLET_NAME.equalsIgnoreCase(boss)) return NpcUtilities.GAUNTLET_BOSS;
-                if (NpcUtilities.CG_NAME.equalsIgnoreCase(boss)) return NpcUtilities.CG_BOSS;
-                return null;
-            case "kill":
-            case "success":
-                return boss;
-            default:
-                return null;
-        }
-    }
-
-    private static String parseSecondaryBoss(String boss) {
-        if (boss == null || "Wintertodt".equalsIgnoreCase(boss)) return boss;
-
-        int modeSeparator = boss.lastIndexOf(':');
-        String raid = modeSeparator > 0 ? boss.substring(0, modeSeparator) : boss;
-        if (raid.equalsIgnoreCase("Theatre of Blood") || raid.equalsIgnoreCase("Tombs of Amascut") ||
-            raid.equalsIgnoreCase("Chambers of Xeric") || raid.equalsIgnoreCase("Chambers of Xeric Challenge Mode") ||
-            raid.equalsIgnoreCase(NpcUtilities.TFA)) {
-            return boss;
-        }
-        return null;
-    }
-
-    // === TEAM SIZE METHODS ===
-    @SuppressWarnings("deprecation")
-    private String getTobTeamSize() {
-        int varbitSize = occupied(Varbits.THEATRE_OF_BLOOD_ORB1, Varbits.THEATRE_OF_BLOOD_ORB2,
-                Varbits.THEATRE_OF_BLOOD_ORB3, Varbits.THEATRE_OF_BLOOD_ORB4, Varbits.THEATRE_OF_BLOOD_ORB5);
-        return formatRaidTeamSize(
-            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOB) : 0,
-            varbitSize);
-    }
-
-    @SuppressWarnings("deprecation")
-    private String getToaTeamSize() {
-        int varbitSize = occupied(Varbits.TOA_MEMBER_0_HEALTH, Varbits.TOA_MEMBER_1_HEALTH,
-                Varbits.TOA_MEMBER_2_HEALTH, Varbits.TOA_MEMBER_3_HEALTH, Varbits.TOA_MEMBER_4_HEALTH,
-                Varbits.TOA_MEMBER_5_HEALTH, Varbits.TOA_MEMBER_6_HEALTH, Varbits.TOA_MEMBER_7_HEALTH);
-        return formatRaidTeamSize(
-            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TOA) : 0,
-            varbitSize);
-    }
-
-    private String getTfaTeamSize() {
-        int varbitSize = occupied(VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1,
-                VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3, VarbitID.TFA_CLIENT_P4,
-                VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7);
-        return formatRaidTeamSize(
-            nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(NearbyPlayerTracker.RAID_TFA) : 0,
-            varbitSize);
+    public synchronized void reset() {
+        lines.clear();
     }
 
     /**
-     * Prefers the accumulated raid roster over the health-orb varbits — the
-     * orbs clear at completion, collapsing group raids to "Solo". The varbit
-     * read remains the fallback when no roster was accumulated.
+     * Raid party sizes the server reads team size from when a message does not
+     * state it: [ToB, ToA, TFA, Royal Titans]. The raids prefer the
+     * accumulated roster over the health-orb varbits, which clear at
+     * completion; Royal Titans counts the players in view.
      */
-    /** How many of the given party-slot varbits are filled. */
     @SuppressWarnings("deprecation")
-    private int occupied(int... varbits) {
+    private int[] party() {
+        return new int[] {
+            raidSize(NearbyPlayerTracker.RAID_TOB, Varbits.THEATRE_OF_BLOOD_ORB1, Varbits.THEATRE_OF_BLOOD_ORB2,
+                Varbits.THEATRE_OF_BLOOD_ORB3, Varbits.THEATRE_OF_BLOOD_ORB4, Varbits.THEATRE_OF_BLOOD_ORB5),
+            raidSize(NearbyPlayerTracker.RAID_TOA, Varbits.TOA_MEMBER_0_HEALTH, Varbits.TOA_MEMBER_1_HEALTH,
+                Varbits.TOA_MEMBER_2_HEALTH, Varbits.TOA_MEMBER_3_HEALTH, Varbits.TOA_MEMBER_4_HEALTH,
+                Varbits.TOA_MEMBER_5_HEALTH, Varbits.TOA_MEMBER_6_HEALTH, Varbits.TOA_MEMBER_7_HEALTH),
+            raidSize(NearbyPlayerTracker.RAID_TFA, VarbitID.TFA_CLIENT_P0, VarbitID.TFA_CLIENT_P1,
+                VarbitID.TFA_CLIENT_P2, VarbitID.TFA_CLIENT_P3, VarbitID.TFA_CLIENT_P4,
+                VarbitID.TFA_CLIENT_P5, VarbitID.TFA_CLIENT_P6, VarbitID.TFA_CLIENT_P7),
+            client.getPlayers().size()
+        };
+    }
+
+    private int raidSize(String raid, int... varbits) {
         int filled = 0;
         for (int varbit : varbits) {
             filled += Math.min(client.getVarbitValue(varbit), 1);
         }
-        return filled;
+        return Math.max(nearbyPlayerTracker != null ? nearbyPlayerTracker.raidRosterSize(raid) : 0, filled);
     }
-
-    @VisibleForTesting
-    static String formatRaidTeamSize(int rosterSize, int varbitSize) {
-        int teamSize = Math.max(rosterSize, varbitSize);
-        return teamSize == 1 ? "Solo" : Integer.toString(teamSize);
-    }
-
-    @SuppressWarnings("deprecation")
-    private String getRoyalTitansTeamSize() {
-        int size = client.getPlayers().size();
-        return size == 1 ? "Solo" : String.valueOf(size);
-    }
-
 }
