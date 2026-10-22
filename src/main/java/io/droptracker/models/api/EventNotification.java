@@ -16,7 +16,7 @@ import java.util.*;
  * closed sets, an item id or an {@code /img}-relative path; never markup,
  * colours, format strings or links, and every string is sanitized again
  * here. {@link Data} keeps only the typed fields this side still reads (the
- * catch-up digest, the dedupe, the clan chat bridge). {@code submission_notice}
+ * hidden-task mute, the dedupe, the clan chat bridge). {@code submission_notice}
  * stays plain server text rendered as sanitized chat.
  */
 @Getter
@@ -96,10 +96,16 @@ public class EventNotification {
         @SerializedName("ends_at")
         @Nullable
         private String endsAt;
+        /** event_digest only: the indented tallies under the header. */
+        @Nullable
+        private List<Chat> lines;
     }
 
     @Getter
     public static class Chat {
+        /** Digest lines only. */
+        @Nullable
+        private String text;
         private String tag;
         /** A tone name from a closed set; the colour is the plugin's. */
         private String tone;
@@ -114,15 +120,6 @@ public class EventNotification {
         private Integer taskId;
         @SerializedName("task_label")
         private String taskLabel;
-        @SerializedName("team_name")
-        private String teamName;
-        private Integer points;
-        @SerializedName("team_score")
-        private Integer teamScore;
-        @SerializedName("icon_item_id")
-        private Integer iconItemId;
-        @SerializedName("bonus_points")
-        private Integer bonusPoints;
         /** submission_notice only: server-supplied plain text. */
         private String message;
         // clan_chat_message (Discord→game bridge): who spoke in Discord;

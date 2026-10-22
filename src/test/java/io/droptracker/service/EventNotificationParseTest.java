@@ -28,7 +28,7 @@ public class EventNotificationParseTest {
         String json = "{\"notifications\":[{"
             + "\"id\":\"1752770000-abc12345\",\"type\":\"event_completion\",\"ts\":1752770000,"
             + "\"event\":{\"id\":19,\"name\":\"Bingo Extravaganza\"},"
-            + "\"data\":{\"task_label\":\"Obtain 3 Bandos hilts\",\"team_id\":38,"
+            + "\"data\":{\"task_id\":42,\"task_label\":\"Obtain 3 Bandos hilts\",\"team_id\":38,"
             + "\"team_name\":\"Team Alpha\",\"player_name\":\"Koeppy\",\"points\":5,"
             + "\"icon_item_id\":11804,\"progress\":3,\"target\":3}}],"
             + "\"active_event\":true}";
@@ -41,35 +41,8 @@ public class EventNotificationParseTest {
         EventNotification n = response.notifications.get(0);
         assertEquals("event_completion", n.getType());
         assertEquals(Integer.valueOf(19), n.getEvent().getId());
-        assertEquals("Team Alpha", n.getData().getTeamName());
-        assertEquals(Integer.valueOf(11804), n.getData().getIconItemId());
-        assertEquals(Integer.valueOf(5), n.getData().getPoints());
-    }
-
-    @Test
-    public void catchUpGateNeedsBothSizeAndStaleness() {
-        long now = System.currentTimeMillis() / 1000L;
-        // Big AND stale -> digest.
-        assertTrue(EventNotificationService.isCatchUpBatch(batchWithTs(
-            now - 7200, now - 7200, now - 3600, now - 60)));
-        // Big but all fresh (live burst, e.g. a teammate spamming tasks) -> normal render.
-        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(
-            now - 5, now - 5, now - 5, now - 5)));
-        // Stale but tiny -> normal render (three old lines don't need a digest).
-        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(
-            now - 7200, now - 7200, now - 7200)));
-        // Missing ts (0) never counts as stale.
-        assertFalse(EventNotificationService.isCatchUpBatch(batchWithTs(0, 0, 0, 0)));
-    }
-
-    private java.util.List<EventNotification> batchWithTs(long... timestamps) {
-        java.util.List<EventNotification> batch = new java.util.ArrayList<>();
-        for (long ts : timestamps) {
-            batch.add(gson.fromJson(
-                "{\"id\":\"x" + ts + "\",\"type\":\"event_completion\",\"ts\":" + ts + "}",
-                EventNotification.class));
-        }
-        return batch;
+        assertEquals(Integer.valueOf(42), n.getData().getTaskId());
+        assertEquals("Obtain 3 Bandos hilts", n.getData().getTaskLabel());
     }
 
     @Test

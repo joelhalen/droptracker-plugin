@@ -74,7 +74,7 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
         service.renderBatch(Arrays.asList(
-            progressTick(), tileCompletion(null), otherEventCompletion()), false);
+            progressTick(), tileCompletion(null), otherEventCompletion()));
 
         // One card for the whole batch, headlined by the important update.
         List<Toast> toasts = new ArrayList<>(service.getToasts());
@@ -95,7 +95,7 @@ public class EventBroadcastPriorityTest {
             "{'title':'<img=1>Bingo line!','text':'<col=ff0000>Red</col> completed a line!',"
                 + "'chat':{'tag':'BINGO LINE','tone':'not-a-tone','emphasis':'<b>Red'},"
                 + "'card':{'kind':'LINE','caption':'Bingo line','headline':'<col=00ff00>Red',"
-                + "'leftLabel':'Bonus:','leftValue':'<br>+10 pts'}}")), false);
+                + "'leftLabel':'Bonus:','leftValue':'<br>+10 pts'}}")));
         Toast toast = service.getToasts().getFirst();
         assertEquals("Bingo line!", toast.getTitle());
         assertEquals("Red completed a line!", toast.getBody());
@@ -112,7 +112,7 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
         service.renderBatch(java.util.Collections.singletonList(gson.fromJson(
-            "{\"id\":\"x\",\"type\":\"event_line\",\"ts\":1,\"data\":{}}", EventNotification.class)), false);
+            "{\"id\":\"x\",\"type\":\"event_line\",\"ts\":1,\"data\":{}}", EventNotification.class)));
         assertTrue(chat.lines.isEmpty());
         assertTrue(service.getToasts().isEmpty());
     }
@@ -125,7 +125,7 @@ public class EventBroadcastPriorityTest {
         EventNotificationService service = service(new TestConfig(), chat);
         service.renderBatch(java.util.Collections.singletonList(envelope("event_line", "{}", "high",
             "{'title':'Bingo line!','text':'Red completed a line!','ends_at':'" + endsAt + "',"
-                + "'card':{'kind':'LINE','caption':'Bingo line','headline':'Red'}}")), false);
+                + "'card':{'kind':'LINE','caption':'Bingo line','headline':'Red'}}")));
         assertEquals("5h 0m left", service.getToasts().getFirst().getCard().getNote());
     }
 
@@ -134,7 +134,7 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
         // The same tile completion the server chose to call routine.
-        service.renderBatch(java.util.Collections.singletonList(tileCompletion("low")), false);
+        service.renderBatch(java.util.Collections.singletonList(tileCompletion("low")));
         assertEquals(Priority.LOW, service.getToasts().getFirst().getPriority());
     }
 
@@ -145,11 +145,11 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(config, chat);
 
-        service.renderBatch(java.util.Collections.singletonList(progressTick()), false);
+        service.renderBatch(java.util.Collections.singletonList(progressTick()));
         assertTrue(service.getToasts().isEmpty());
         assertEquals(1, chat.lines.size()); // chat is never filtered by tier
 
-        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)), false);
+        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)));
         assertEquals(1, service.getToasts().size());
     }
 
@@ -159,8 +159,8 @@ public class EventBroadcastPriorityTest {
         EventNotificationService service = service(new TestConfig(), chat);
         // Distinct envelope ids (the seen-id guard is upstream of this), same
         // (event, task, type) — one human-visible update, one card.
-        service.renderBatch(java.util.Collections.singletonList(progressTick()), false);
-        service.renderBatch(java.util.Collections.singletonList(progressTick()), false);
+        service.renderBatch(java.util.Collections.singletonList(progressTick()));
+        service.renderBatch(java.util.Collections.singletonList(progressTick()));
         assertEquals(1, service.getToasts().size());
         assertEquals(2, chat.lines.size());
     }
@@ -171,7 +171,7 @@ public class EventBroadcastPriorityTest {
         config.mode = EventDisplayMode.CHAT;
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(config, chat);
-        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)), false);
+        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)));
         assertTrue(service.getToasts().isEmpty());
         assertEquals(1, chat.lines.size());
     }
@@ -197,7 +197,7 @@ public class EventBroadcastPriorityTest {
     public void chatLinesCarryPerTypeTagsAndColours() {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
-        service.renderBatch(Arrays.asList(tileCompletion(null), progressTick(), leadChange()), false);
+        service.renderBatch(Arrays.asList(tileCompletion(null), progressTick(), leadChange()));
 
         assertEquals(3, chat.lines.size());
         assertEquals("TILE COMPLETE", chat.lines.get(0).tag);
@@ -213,15 +213,32 @@ public class EventBroadcastPriorityTest {
     public void catchUpDigestIsAHeaderPlusIndentedTallies() {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
-        service.renderBatch(Arrays.asList(
-            tileCompletion(null), progressTick(), leadChange(), bingoLine()), true);
+        TestConfig important = new TestConfig();
+        important.importantOnly = true;
+        EventNotificationService strict = service(important, new RecordingChat());
+        service.renderBatch(Arrays.asList(digest(), otherEventCompletion()));
+        strict.renderBatch(Arrays.asList(digest()));
 
         assertEquals("While you were away:", chat.lines.get(0).body);
-        for (int i = 1; i < chat.lines.size(); i++) {
-            assertTrue(chat.lines.get(i).body, chat.lines.get(i).body.startsWith("  - "));
-        }
-        assertTrue(chat.lines.size() <= 5); // header + at most four details
-        assertEquals("While you were away", service.getToasts().getFirst().getTitle());
+        assertEquals("  - 1 task completed (+5 pts)", chat.lines.get(1).body);
+        assertEquals("  - Progress on 1 task", chat.lines.get(4).body);
+        assertFalse(chat.lines.get(1).hex.equals(chat.lines.get(2).hex));
+        assertEquals("Ra ine completed: Zulrah x5", chat.lines.get(5).body); // other events render as usual
+        Toast toast = service.getToasts().getFirst();
+        assertEquals("While you were away", toast.getTitle());
+        assertEquals(EventPopupCard.Kind.DIGEST, toast.getCard().getKind());
+        // The one card explaining what you missed survives "important only".
+        assertEquals(1, strict.getToasts().size());
+    }
+
+    @Test
+    public void anUnreadableDigestIsDropped() {
+        RecordingChat chat = new RecordingChat();
+        EventNotificationService service = service(new TestConfig(), chat);
+        service.renderBatch(java.util.Collections.singletonList(envelope("event_digest", "{}", "high",
+            "{'title':'While you were away','text':'1 dice roll.'}")));
+        assertTrue(chat.lines.isEmpty());
+        assertTrue(service.getToasts().isEmpty());
     }
 
     /* ===================== hidden tasks ===================== */
@@ -232,13 +249,13 @@ public class EventBroadcastPriorityTest {
         PrefsService service = new PrefsService(new TestConfig(), chat);
         service.hidden.add(127); // the task the progress fixture ticks
 
-        service.renderBatch(java.util.Collections.singletonList(progressTick()), false);
+        service.renderBatch(java.util.Collections.singletonList(progressTick()));
         assertTrue(chat.lines.isEmpty());
         assertTrue(service.getToasts().isEmpty());
 
         // Control: the identical tick on a task the user did not hide.
         service.hidden.clear();
-        service.renderBatch(java.util.Collections.singletonList(progressTick()), false);
+        service.renderBatch(java.util.Collections.singletonList(progressTick()));
         assertEquals(1, chat.lines.size());
         assertEquals(1, service.getToasts().size());
     }
@@ -251,7 +268,7 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         PrefsService service = new PrefsService(new TestConfig(), chat);
         service.hidden.add(218);
-        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)), false);
+        service.renderBatch(java.util.Collections.singletonList(tileCompletion(null)));
         assertEquals(1, chat.lines.size());
         assertEquals("TILE COMPLETE", chat.lines.get(0).tag);
         assertEquals(1, service.getToasts().size());
@@ -264,24 +281,9 @@ public class EventBroadcastPriorityTest {
         RecordingChat chat = new RecordingChat();
         PrefsService service = new PrefsService(new TestConfig(), chat);
         service.hidden.add(218);
-        service.renderBatch(java.util.Collections.singletonList(leadChange()), false);
+        service.renderBatch(java.util.Collections.singletonList(leadChange()));
         assertEquals(1, chat.lines.size());
         assertEquals("LEAD CHANGE", chat.lines.get(0).tag);
-    }
-
-    @Test
-    public void catchUpDigestLeavesOutHiddenTaskProgress() {
-        List<EventNotification> backlog = Arrays.asList(
-            tileCompletion(null), progressTick(), leadChange(), bingoLine());
-        RecordingChat visible = new RecordingChat();
-        new PrefsService(new TestConfig(), visible).renderBatch(backlog, true);
-        assertTrue(bodies(visible), bodies(visible).contains("Progress on 1 task"));
-
-        RecordingChat chat = new RecordingChat();
-        PrefsService service = new PrefsService(new TestConfig(), chat);
-        service.hidden.add(127);
-        service.renderBatch(backlog, true);
-        assertFalse(bodies(chat), bodies(chat).contains("Progress on"));
     }
 
     @Test
@@ -408,6 +410,19 @@ public class EventBroadcastPriorityTest {
                 + "'chat':{'tag':'LEAD CHANGE','tone':'lead','emphasis':'Team Alpha'},'card':{'kind':'LEAD',"
                 + "'caption':'New leader','headline':'Team Alpha','detail':'Bingo Extravaganza',"
                 + "'rightLabel':'Score:','rightValue':'120 pts'}}");
+    }
+
+    /** services/plugin_display.py's digest of tileCompletion, progressTick,
+     *  leadChange and bingoLine arriving as a stale login backlog. */
+    private EventNotification digest() {
+        return envelope("event_digest", "{}", "high",
+            "{'title':'While you were away','text':'1 task completed (+5 pts), 1 bingo line (+10 pts),"
+                + " Team Alpha now leads (120 pts), Progress on 1 task.','toast':true,"
+                + "'card':{'kind':'DIGEST','caption':'While you were away','headline':'Bingo Extravaganza',"
+                + "'detail':'1 task completed (+5 pts), 1 bingo line (+10 pts), Team Alpha now leads (120 pts),"
+                + " Progress on 1 task.'},'lines':[{'text':'1 task completed (+5 pts)','tone':'complete'},"
+                + "{'text':'1 bingo line (+10 pts)','tone':'line'},{'text':'Team Alpha now leads (120 pts)',"
+                + "'tone':'lead'},{'text':'Progress on 1 task','tone':'muted'}]}");
     }
 
     private EventNotification bingoLine() {

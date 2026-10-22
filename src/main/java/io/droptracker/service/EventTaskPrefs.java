@@ -64,6 +64,21 @@ public class EventTaskPrefs {
         return parse(get(configManager, HIDDEN_PREFIX + eventId));
     }
 
+    /** Every event's hide set as "eventId:id,id;..." (the catch-up digest's
+     *  query param); empty when nothing is hidden or the config is unreadable. */
+    public static String hiddenQuery(ConfigManager configManager) {
+        StringBuilder out = new StringBuilder();
+        try {
+            for (String key : configManager.getConfigurationKeys(DropTrackerConfig.GROUP + "." + HIDDEN_PREFIX)) {
+                String eventId = key.substring(key.lastIndexOf('_') + 1);
+                out.append(eventId).append(':').append(get(configManager, HIDDEN_PREFIX + eventId)).append(';');
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return out.toString();
+    }
+
     /** Pin or unpin a task, then re-point the HUD focus at the top pin. */
     public void togglePin(EventState.Entry entry, int taskId) {
         int eventId = eventId(entry);

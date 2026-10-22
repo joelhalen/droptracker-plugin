@@ -1064,7 +1064,8 @@ public class DropTrackerApi {
      * what Discord→game fan-out delivers against.
      */
     @Nullable
-    public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds, String clanName) {
+    public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds, String clanName,
+                                     @Nullable String catchUpHidden) {
         if (!canIdentify(playerName, accountHash)) {
             return null;
         }
@@ -1077,6 +1078,13 @@ public class DropTrackerApi {
         }
         if (clanName != null && !clanName.isEmpty()) {
             url.addQueryParameter("clan", clanName);
+        }
+        if (catchUpHidden != null) {
+            // The session's first batch: a stale backlog comes back as one
+            // digest per event, minus what the player hid or muted.
+            url.addQueryParameter("catchup", "1");
+            url.addQueryParameter("hidden", catchUpHidden);
+            url.addQueryParameter("progress", config.eventTaskProgressNotifications() ? "1" : "0");
         }
         OkHttpClient callClient = waitSeconds > 0 ? longPollHttpClient : panelHttpClient;
         return callClient.newCall(getRequest(url.build()));
