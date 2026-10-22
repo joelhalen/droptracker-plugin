@@ -1,6 +1,9 @@
 package io.droptracker.ui.overlays.popup;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.EventDisplayMode;
 import io.droptracker.models.EventPopupCard;
@@ -272,11 +275,18 @@ public class PopupRenderersTest {
         samples.put("roll", "event_board_roll_prompt|high|{\"coins_awarded\":3}");
 
         long now = System.currentTimeMillis();
+        // What the server composes for each sample (services/plugin_display.py,
+        // read from sampleEntry's side); regenerate the resource if that changes.
+        JsonObject displays = gson.fromJson(new InputStreamReader(
+            getClass().getResourceAsStream("/io/droptracker/popup-samples.json"), StandardCharsets.UTF_8),
+            JsonObject.class);
+        String endsAt = sampleEntry().getEvent().getEndsAt();
         Map<String, Toast> toasts = new LinkedHashMap<>();
         for (Map.Entry<String, String> sample : samples.entrySet()) {
             String[] parts = sample.getValue().split("\\|", 3);
             EventNotification n = gson.fromJson("{\"id\":\"" + sample.getKey() + "\",\"type\":\"" + parts[0]
                 + "\",\"ts\":1,\"priority\":\"" + parts[1] + "\","
+                + "\"display\":" + displays.get(sample.getKey()).toString().replace("ENDS_AT", endsAt) + ","
                 + "\"event\":{\"id\":7,\"name\":\"Autumn Bingo\"},\"data\":" + parts[2] + "}",
                 EventNotification.class);
             service.getToasts().clear();

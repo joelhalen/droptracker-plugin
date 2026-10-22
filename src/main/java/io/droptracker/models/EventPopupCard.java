@@ -1,6 +1,5 @@
 package io.droptracker.models;
 
-import lombok.RequiredArgsConstructor;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
@@ -9,15 +8,13 @@ import javax.annotation.Nullable;
  * The structured half of an event pop-up. The chat line is one sentence; the
  * pop-ups lay the same news out in parts (a small caption, a big headline,
  * up to four "label: value" stats around the icon, a progress line and a
- * corner note), so the renderer that composes the sentence fills these in
- * too. Every string is already sanitized by the time it lands here.
+ * corner note). The server fills these in (the JSON keys are these field
+ * names); {@link #sanitize} runs before anything is drawn.
  *
  * <p>Stats sit in the showcase's corners: left and right on the first row,
- * left2 and right2 under them. Setters skip null values, so a card can be
- * built in one expression from optional server fields.
+ * left2 and right2 under them.
  */
 @Getter
-@RequiredArgsConstructor
 public class EventPopupCard {
     /** What kind of news this is; drives the colour scheme. */
     public enum Kind {
@@ -36,9 +33,9 @@ public class EventPopupCard {
 
     private final Kind kind;
     /** Small line above the headline, e.g. "Tile complete". */
-    private final String caption;
+    private String caption;
     /** The big line: the task, the team, the event. */
-    private final String headline;
+    private String headline;
     /** Optional small line under the headline (the item received, the event). */
     @Nullable
     private String detail;
@@ -70,61 +67,31 @@ public class EventPopupCard {
     @Nullable
     private Long need;
 
+    public EventPopupCard(Kind kind, String caption, String headline) {
+        this.kind = kind;
+        this.caption = caption;
+        this.headline = headline;
+    }
+
     public EventPopupCard detail(@Nullable String detail) {
         this.detail = detail;
         return this;
     }
 
-    public EventPopupCard left(String label, @Nullable String value) {
-        if (value != null) {
-            this.leftLabel = label;
-            this.leftValue = value;
-        }
-        return this;
-    }
-
-    public EventPopupCard right(String label, @Nullable String value) {
-        if (value != null) {
-            this.rightLabel = label;
-            this.rightValue = value;
-        }
-        return this;
-    }
-
-    public EventPopupCard left2(String label, @Nullable String value) {
-        if (value != null) {
-            this.left2Label = label;
-            this.left2Value = value;
-        }
-        return this;
-    }
-
-    public EventPopupCard right2(String label, @Nullable String value) {
-        if (value != null) {
-            this.right2Label = label;
-            this.right2Value = value;
-        }
-        return this;
-    }
-
-    /** Fills the first empty stat slot (left, right, left2, right2). */
-    public EventPopupCard extra(String label, @Nullable String value) {
-        if (value == null) {
-            return this;
-        }
-        if (leftValue == null) {
-            return left(label, value);
-        }
-        if (rightValue == null) {
-            return right(label, value);
-        }
-        if (left2Value == null) {
-            return left2(label, value);
-        }
-        if (right2Value == null) {
-            return right2(label, value);
-        }
-        return this;
+    /** Runs every text slot through {@code clean} (tag strip + length cap). */
+    public void sanitize(java.util.function.UnaryOperator<String> clean) {
+        caption = clean.apply(caption);
+        headline = clean.apply(headline);
+        detail = clean.apply(detail);
+        leftLabel = clean.apply(leftLabel);
+        leftValue = clean.apply(leftValue);
+        rightLabel = clean.apply(rightLabel);
+        rightValue = clean.apply(rightValue);
+        left2Label = clean.apply(left2Label);
+        left2Value = clean.apply(left2Value);
+        right2Label = clean.apply(right2Label);
+        right2Value = clean.apply(right2Value);
+        iconPath = clean.apply(iconPath);
     }
 
     public EventPopupCard note(@Nullable String note) {
@@ -134,25 +101,12 @@ public class EventPopupCard {
         return this;
     }
 
-    public EventPopupCard iconPath(@Nullable String iconPath) {
-        this.iconPath = iconPath;
-        return this;
-    }
-
     public boolean hasStats() {
         return leftValue != null || rightValue != null || left2Value != null || right2Value != null;
     }
 
     public boolean hasSecondRow() {
         return left2Value != null || right2Value != null;
-    }
-
-    public EventPopupCard progress(@Nullable Long have, @Nullable Long need) {
-        if (have != null && need != null && need > 0) {
-            this.have = have;
-            this.need = need;
-        }
-        return this;
     }
 
     /** Progress as 0..1, or -1 when the card carries none. */

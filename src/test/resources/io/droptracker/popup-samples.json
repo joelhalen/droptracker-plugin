@@ -1,0 +1,322 @@
+{
+ "tile": {
+  "v": 1,
+  "title": "Tile complete!",
+  "text": "Zezima received Bandos tassets, completing: Obtain Bandos tassets (+10 pts) — tile: Bandos set — 7 tiles, 2nd of 5",
+  "chat": {
+   "tag": "TILE COMPLETE",
+   "tone": "tile",
+   "emphasis": "Bandos tassets"
+  },
+  "toast": true,
+  "icon_item_id": 11834,
+  "card": {
+   "kind": "TILE",
+   "caption": "Tile complete",
+   "headline": "Bandos set",
+   "detail": "Bandos tassets",
+   "leftLabel": "Obtained by:",
+   "leftValue": "Zezima",
+   "rightLabel": "Standing:",
+   "rightValue": "2nd of 5",
+   "left2Label": "Points:",
+   "left2Value": "+10",
+   "right2Label": "Team:",
+   "right2Value": "Iron Eagles"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "complete": {
+  "v": 1,
+  "title": "Task complete!",
+  "text": "Zezima received Dragon warhammer, completing: Obtain a Dragon warhammer (+5 pts)",
+  "chat": {
+   "tag": "COMPLETE",
+   "tone": "complete",
+   "emphasis": "Dragon warhammer"
+  },
+  "toast": true,
+  "icon_item_id": 13576,
+  "card": {
+   "kind": "COMPLETE",
+   "caption": "Task complete",
+   "headline": "Obtain a Dragon warhammer",
+   "detail": "Dragon warhammer",
+   "leftLabel": "Obtained by:",
+   "leftValue": "Zezima",
+   "rightLabel": "Points:",
+   "rightValue": "+5",
+   "left2Label": "Team:",
+   "left2Value": "Iron Eagles",
+   "right2Label": "Tiles done:",
+   "right2Value": "7 / 25"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "progress": {
+  "v": 1,
+  "title": "Task progress",
+  "text": "Lynx Titan received Abyssal whip, progressing Obtain 5 Abyssal whips (2/5)",
+  "chat": {
+   "tag": "PROGRESS",
+   "tone": "muted",
+   "emphasis": null
+  },
+  "toast": true,
+  "icon_item_id": 4151,
+  "card": {
+   "kind": "PROGRESS",
+   "caption": "Task progress",
+   "headline": "Obtain 5 Abyssal whips",
+   "detail": "Abyssal whip",
+   "leftLabel": "Obtained by:",
+   "leftValue": "Lynx Titan",
+   "rightLabel": "Progress:",
+   "rightValue": "2/5",
+   "have": 2,
+   "need": 5,
+   "left2Label": "Team:",
+   "left2Value": "Iron Eagles",
+   "right2Label": "Still needed:",
+   "right2Value": "3"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "kc": {
+  "v": 1,
+  "title": "Task complete!",
+  "text": "Zezima completed: Kill Vorkath 50 times (+15 pts)",
+  "chat": {
+   "tag": "COMPLETE",
+   "tone": "complete",
+   "emphasis": null
+  },
+  "toast": true,
+  "icon_item_id": null,
+  "card": {
+   "kind": "COMPLETE",
+   "caption": "Task complete",
+   "headline": "Kill Vorkath 50 times",
+   "detail": "Autumn Bingo",
+   "leftLabel": "Completed by:",
+   "leftValue": "Zezima",
+   "rightLabel": "Points:",
+   "rightValue": "+15",
+   "iconPath": "npcdb/8061.png",
+   "left2Label": "Team:",
+   "left2Value": "Iron Eagles",
+   "right2Label": "Tiles done:",
+   "right2Value": "7 / 25"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "xp": {
+  "v": 1,
+  "title": "Task progress",
+  "text": "Lynx Titan progressed Gain 2M Slayer XP (1.3M/2M)",
+  "chat": {
+   "tag": "PROGRESS",
+   "tone": "muted",
+   "emphasis": null
+  },
+  "toast": true,
+  "icon_item_id": null,
+  "card": {
+   "kind": "PROGRESS",
+   "caption": "Task progress",
+   "headline": "Gain 2M Slayer XP",
+   "detail": "Autumn Bingo",
+   "leftLabel": "Progressed by:",
+   "leftValue": "Lynx Titan",
+   "rightLabel": "Progress:",
+   "rightValue": "1.3M/2M",
+   "have": 1300000,
+   "need": 2000000,
+   "iconPath": "metrics/slayer.png",
+   "left2Label": "Team:",
+   "left2Value": "Iron Eagles",
+   "right2Label": "Worth:",
+   "right2Value": "20 pts"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "lead": {
+  "v": 1,
+  "title": "Lead change!",
+  "text": "Iron Eagles took the lead (1,240 pts) in Autumn Bingo!",
+  "chat": {
+   "tag": "LEAD CHANGE",
+   "tone": "lead",
+   "emphasis": "Iron Eagles"
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "LEAD",
+   "caption": "New leader",
+   "headline": "Iron Eagles",
+   "detail": "Autumn Bingo",
+   "rightLabel": "Score:",
+   "rightValue": "1,240 pts",
+   "leftLabel": "Your team:",
+   "leftValue": "In the lead!"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "line": {
+  "v": 1,
+  "title": "Bingo line!",
+  "text": "Iron Eagles completed a line (+25 pts)!",
+  "chat": {
+   "tag": "BINGO LINE",
+   "tone": "line",
+   "emphasis": "Iron Eagles"
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "LINE",
+   "caption": "Bingo line",
+   "headline": "Iron Eagles",
+   "detail": "Autumn Bingo",
+   "rightLabel": "Bonus:",
+   "rightValue": "+25 pts",
+   "leftLabel": "Standing:",
+   "leftValue": "1st of 5",
+   "left2Label": "Team score:",
+   "left2Value": "1,240 pts",
+   "right2Label": "Tiles done:",
+   "right2Value": "7 / 25"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "blackout": {
+  "v": 1,
+  "title": "Blackout!",
+  "text": "Iron Eagles blacked out the board (+100 pts)!",
+  "chat": {
+   "tag": "BLACKOUT",
+   "tone": "blackout",
+   "emphasis": "Iron Eagles"
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "BLACKOUT",
+   "caption": "Blackout!",
+   "headline": "Iron Eagles",
+   "detail": "The whole board is complete",
+   "rightLabel": "Bonus:",
+   "rightValue": "+100 pts",
+   "leftLabel": "Standing:",
+   "leftValue": "1st of 5",
+   "left2Label": "Team score:",
+   "left2Value": "1,240 pts",
+   "right2Label": "Tiles done:",
+   "right2Value": "7 / 25"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "start": {
+  "v": 1,
+  "title": "Event started",
+  "text": "Autumn Bingo has started!",
+  "chat": {
+   "tag": "EVENT STARTED",
+   "tone": "action",
+   "emphasis": "Autumn Bingo"
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "STARTED",
+   "caption": "Event started",
+   "headline": "Autumn Bingo",
+   "detail": "Good luck, and have fun!",
+   "leftLabel": "Your team:",
+   "leftValue": "Iron Eagles",
+   "rightLabel": "Teams:",
+   "rightValue": "5",
+   "left2Label": "Tasks:",
+   "left2Value": "25",
+   "right2Label": "Ends in:",
+   "right2Value": "2d 4h"
+  }
+ },
+ "end": {
+  "v": 1,
+  "title": "Event ended",
+  "text": "Autumn Bingo has ended.",
+  "chat": {
+   "tag": "EVENT ENDED",
+   "tone": "info",
+   "emphasis": "Autumn Bingo"
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "ENDED",
+   "caption": "Event ended",
+   "headline": "Autumn Bingo",
+   "detail": "Thanks for playing!",
+   "leftLabel": "Your team:",
+   "leftValue": "Iron Eagles",
+   "rightLabel": "Final place:",
+   "rightValue": "1st of 5",
+   "left2Label": "Score:",
+   "left2Value": "1,240 pts",
+   "right2Label": "Tasks done:",
+   "right2Value": "7 / 25"
+  }
+ },
+ "board": {
+  "v": 1,
+  "title": "Board roll",
+  "text": "Zezima rolled 4 + 2 to tile 18: Obtain any Zenyte jewel",
+  "chat": {
+   "tag": "BOARD",
+   "tone": "info",
+   "emphasis": null
+  },
+  "toast": true,
+  "icon_item_id": 19529,
+  "card": {
+   "kind": "BOARD",
+   "caption": "Board roll",
+   "headline": "Obtain any Zenyte jewel",
+   "detail": "Autumn Bingo",
+   "leftLabel": "Rolled by:",
+   "leftValue": "Zezima",
+   "rightLabel": "Rolled:",
+   "rightValue": "4 + 2 > 18",
+   "left2Label": "Worth:",
+   "left2Value": "25 pts"
+  },
+  "ends_at": "ENDS_AT"
+ },
+ "roll": {
+  "v": 1,
+  "title": "Roll the dice!",
+  "text": "Task complete — your team can roll the dice! (+3 coins)",
+  "chat": {
+   "tag": "YOUR TURN",
+   "tone": "action",
+   "emphasis": null
+  },
+  "toast": true,
+  "icon_item_id": 12000,
+  "card": {
+   "kind": "ROLL",
+   "caption": "Your turn",
+   "headline": "Roll the dice!",
+   "detail": "Autumn Bingo",
+   "rightLabel": "Coins:",
+   "rightValue": "+3",
+   "leftLabel": "Your team:",
+   "leftValue": "Iron Eagles",
+   "left2Label": "Standing:",
+   "left2Value": "1st of 5"
+  },
+  "ends_at": "ENDS_AT"
+ }
+}

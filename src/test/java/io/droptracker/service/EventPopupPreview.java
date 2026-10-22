@@ -257,7 +257,16 @@ public class EventPopupPreview {
                 card, 0, popup));
             return;
         }
-        EventNotification n = gson.fromJson(kinds.get(kind).get(), EventNotification.class);
+        JsonObject envelope = kinds.get(kind).get();
+        // The wording is the server's now: borrow what it composes for this
+        // sample (src/test/resources/io/droptracker/popup-samples.json).
+        JsonObject display = SAMPLE_DISPLAYS.getAsJsonObject("more".equals(kind) ? "tile" : kind);
+        if (display != null) {
+            String endsAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(2).plusHours(4)
+                .withNano(0).toString();
+            envelope.add("display", gson.fromJson(display.toString().replace("ENDS_AT", endsAt), JsonObject.class));
+        }
+        EventNotification n = gson.fromJson(envelope, EventNotification.class);
         boolean shown = service.previewNotification(n, popup, "more".equals(kind) ? 2 : 0);
         if (!shown) {
             say("That kind is muted by your settings (Task progress notifications is off).");
@@ -331,6 +340,10 @@ public class EventPopupPreview {
         n.add("data", data);
         return n;
     }
+
+    private static final JsonObject SAMPLE_DISPLAYS = new Gson().fromJson(new java.io.InputStreamReader(
+        EventPopupPreview.class.getResourceAsStream("/io/droptracker/popup-samples.json"),
+        java.nio.charset.StandardCharsets.UTF_8), JsonObject.class);
 
     private static DataBuilder data() {
         return new DataBuilder();

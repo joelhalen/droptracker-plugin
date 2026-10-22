@@ -3,6 +3,7 @@ package io.droptracker.service;
 import com.google.gson.Gson;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.models.EventDisplayMode;
+import io.droptracker.models.EventPopupCard;
 import io.droptracker.models.api.EventNotification;
 import io.droptracker.models.api.EventNotification.Priority;
 import io.droptracker.models.api.EventState;
@@ -27,7 +28,8 @@ import static org.junit.Assert.assertTrue;
  * Broadcast legibility: the importance tier drives which pop-up survives a
  * batch, how long it lives and whether "important only" lets it through, and
  * every chat line carries its own type tag. The JSON bodies mirror what the
- * server actually enqueues (services/event_engine.py, event_completion).
+ * server actually enqueues (services/event_engine.py), and each fixture's
+ * display block is services/plugin_display.py's real output for its data.
  *
  * <p>Also covers what a task hidden in the Events tab is allowed to say: the
  * hide has to reach the chat, the pop-ups and the HUD, not just the list it
@@ -53,22 +55,16 @@ public class EventBroadcastPriorityTest {
     }
 
     @Test
-    public void parsesTileCompletionFields() {
-        EventNotification n = envelope("event_completion",
-            "{\"task_id\":218,\"task_label\":\"Obtain 3 Bandos hilts\",\"team_name\":\"Team Alpha\","
-                + "\"player_name\":\"Koeppy\",\"points\":5,\"icon_item_id\":11804,"
-                + "\"received_item\":\"Bandos hilt\",\"received_qty\":1,"
-                + "\"cell_idxs\":[4,5],\"cell_labels\":[\"Bandos set\",\"Godwars row\"],"
-                + "\"tiles_completed\":7,\"team_rank\":2,\"team_count\":5,"
-                + "\"source_type\":\"drop\"}", "high");
-        EventNotification.Data data = n.getData();
-        assertEquals(Integer.valueOf(218), data.getTaskId());
-        assertEquals(Arrays.asList(4, 5), data.getCellIdxs());
-        assertEquals(Arrays.asList("Bandos set", "Godwars row"), data.getCellLabels());
-        assertEquals(Integer.valueOf(7), data.getTilesCompleted());
-        assertEquals(Integer.valueOf(2), data.getTeamRank());
-        assertEquals(Integer.valueOf(5), data.getTeamCount());
-        assertEquals("drop", data.getSourceType());
+    public void parsesTheDisplayBlock() {
+        EventNotification.Display d = tileCompletion(null).getDisplay();
+        assertEquals("Tile complete!", d.getTitle());
+        assertEquals("TILE COMPLETE", d.getChat().getTag());
+        assertEquals("tile", d.getChat().getTone());
+        assertEquals(EventPopupCard.Kind.TILE, d.getCard().getKind());
+        assertEquals("Standing:", d.getCard().getRightLabel());
+        assertEquals("2nd of 5", d.getCard().getRightValue());
+        // The typed fields older plugins render from are still there.
+        assertEquals(Integer.valueOf(218), tileCompletion(null).getData().getTaskId());
     }
 
     /* ===================== pop-up policy ===================== */
@@ -92,18 +88,45 @@ public class EventBroadcastPriorityTest {
     }
 
     @Test
-    public void tileNameIsNotRepeatedWhenItMatchesTheTask() {
+    public void theServersWordingIsShownButSanitized() {
         RecordingChat chat = new RecordingChat();
         EventNotificationService service = service(new TestConfig(), chat);
-        // Cells usually inherit the task's own label on a bingo board.
-        service.renderBatch(java.util.Collections.singletonList(envelope("event_completion",
-            "{\"task_id\":9,\"task_label\":\"Bandos set\",\"player_name\":\"Koeppy\","
-                + "\"cell_idxs\":[4],\"cell_labels\":[\"Bandos set\"],"
-                + "\"tiles_completed\":3}", null)), false);
+        service.renderBatch(java.util.Collections.singletonList(envelope("event_line", "{}", "high",
+            "{'title':'<img=1>Bingo line!','text':'<col=ff0000>Red</col> completed a line!',"
+                + "'chat':{'tag':'BINGO LINE','tone':'not-a-tone','emphasis':'<b>Red'},"
+                + "'card':{'kind':'LINE','caption':'Bingo line','headline':'<col=00ff00>Red',"
+                + "'leftLabel':'Bonus:','leftValue':'<br>+10 pts'}}")), false);
         Toast toast = service.getToasts().getFirst();
-        assertFalse(toast.getBody(), toast.getBody().contains("tile: Bandos set"));
-        assertTrue(toast.getBody(), toast.getBody().contains("3 tiles"));
-        assertEquals(Priority.HIGH, toast.getPriority()); // still a tile finish
+        assertEquals("Bingo line!", toast.getTitle());
+        assertEquals("Red completed a line!", toast.getBody());
+        assertEquals("Red", toast.getCard().getHeadline());
+        assertEquals("+10 pts", toast.getCard().getLeftValue());
+        assertEquals("Red", chat.lines.get(0).emphasis);
+        assertNull(chat.lines.get(0).hex); // an unknown tone stays uncoloured
+    }
+
+    @Test
+    public void anEnvelopeWithoutADisplayIsDropped() {
+        // A server from before display (or a type it composed nothing for):
+        // dropped like an unknown type, never rendered half-empty.
+        RecordingChat chat = new RecordingChat();
+        EventNotificationService service = service(new TestConfig(), chat);
+        service.renderBatch(java.util.Collections.singletonList(gson.fromJson(
+            "{\"id\":\"x\",\"type\":\"event_line\",\"ts\":1,\"data\":{}}", EventNotification.class)), false);
+        assertTrue(chat.lines.isEmpty());
+        assertTrue(service.getToasts().isEmpty());
+    }
+
+    @Test
+    public void theTimeLeftNoteIsKeptByTheReadersClock() {
+        String endsAt = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusHours(5).plusMinutes(1)
+            .withNano(0).toString();
+        RecordingChat chat = new RecordingChat();
+        EventNotificationService service = service(new TestConfig(), chat);
+        service.renderBatch(java.util.Collections.singletonList(envelope("event_line", "{}", "high",
+            "{'title':'Bingo line!','text':'Red completed a line!','ends_at':'" + endsAt + "',"
+                + "'card':{'kind':'LINE','caption':'Bingo line','headline':'Red'}}")), false);
+        assertEquals("5h 0m left", service.getToasts().getFirst().getCard().getNote());
     }
 
     @Test
@@ -330,9 +353,16 @@ public class EventBroadcastPriorityTest {
     }
 
     private EventNotification envelope(String type, String dataJson, String priority) {
+        return envelope(type, dataJson, priority, null);
+    }
+
+    /** {@code display} is the server's composition (services/plugin_display.py) in
+     *  single-quoted JSON; the fixtures below are its real output for their data. */
+    private EventNotification envelope(String type, String dataJson, String priority, String display) {
         return gson.fromJson("{\"id\":\"" + type + "-" + Math.random()
             + "\",\"type\":\"" + type + "\",\"ts\":1,"
             + (priority != null ? "\"priority\":\"" + priority + "\"," : "")
+            + (display != null ? "\"display\":" + display.replace('\'', '"') + "," : "")
             + "\"event\":{\"id\":19,\"name\":\"Bingo Extravaganza\"},"
             + "\"data\":" + dataJson + "}", EventNotification.class);
     }
@@ -342,30 +372,51 @@ public class EventBroadcastPriorityTest {
             "{\"task_id\":218,\"task_label\":\"Obtain 3 Bandos hilts\",\"player_name\":\"Koeppy\","
                 + "\"points\":5,\"received_item\":\"Bandos hilt\",\"received_qty\":1,"
                 + "\"cell_idxs\":[4],\"cell_labels\":[\"Bandos set\"],"
-                + "\"tiles_completed\":7,\"team_rank\":2,\"team_count\":5}", priority);
+                + "\"tiles_completed\":7,\"team_rank\":2,\"team_count\":5}", priority != null ? priority : "high",
+            "{'title':'Tile complete!','text':'Koeppy received Bandos hilt, completing: Obtain 3 Bandos hilts"
+                + " (+5 pts) \u2014 tile: Bandos set \u2014 7 tiles, 2nd of 5',"
+                + "'chat':{'tag':'TILE COMPLETE','tone':'tile','emphasis':'Bandos hilt'},'toast':true,"
+                + "'card':{'kind':'TILE','caption':'Tile complete','headline':'Bandos set','detail':'Bandos hilt',"
+                + "'leftLabel':'Obtained by:','leftValue':'Koeppy','rightLabel':'Standing:','rightValue':'2nd of 5'}}");
     }
 
     private EventNotification otherEventCompletion() {
         return gson.fromJson("{\"id\":\"other\",\"type\":\"event_completion\",\"ts\":1,"
             + "\"event\":{\"id\":20,\"name\":\"Board\"},"
-            + "\"data\":{\"task_id\":9,\"task_label\":\"Zulrah x5\",\"player_name\":\"Ra ine\"}}",
+            + "\"data\":{\"task_id\":9,\"task_label\":\"Zulrah x5\",\"player_name\":\"Ra ine\"},"
+            + ("{'title':'Task complete!','text':'Ra ine completed: Zulrah x5',"
+                + "'chat':{'tag':'COMPLETE','tone':'complete'},'card':{'kind':'COMPLETE','caption':'Task complete',"
+                + "'headline':'Zulrah x5','detail':'Board','leftLabel':'Completed by:','leftValue':'Ra ine'}}")
+                .replace('\'', '"').replaceFirst("^", "\"display\":") + "}",
             EventNotification.class);
     }
 
     private EventNotification progressTick() {
         return envelope("event_task_progress",
             "{\"task_id\":127,\"task_label\":\"1,000,000 Magic XP\",\"player_name\":\"Koeppy\","
-                + "\"milestone_pct\":50}", null);
+                + "\"milestone_pct\":50}", "low",
+            "{'title':'Task progress','text':'Koeppy progressed 1,000,000 Magic XP (50%)',"
+                + "'chat':{'tag':'PROGRESS','tone':'muted'},'card':{'kind':'PROGRESS','caption':'Task progress',"
+                + "'headline':'1,000,000 Magic XP','detail':'Bingo Extravaganza','leftLabel':'Progressed by:',"
+                + "'leftValue':'Koeppy','rightLabel':'Progress:','rightValue':'50%','have':50,'need':100}}");
     }
 
     private EventNotification leadChange() {
         return envelope("event_lead_change",
-            "{\"task_id\":218,\"team_name\":\"Team Alpha\",\"team_score\":120}", null);
+            "{\"task_id\":218,\"team_name\":\"Team Alpha\",\"team_score\":120}", "high",
+            "{'title':'Lead change!','text':'Team Alpha took the lead (120 pts) in Bingo Extravaganza!',"
+                + "'chat':{'tag':'LEAD CHANGE','tone':'lead','emphasis':'Team Alpha'},'card':{'kind':'LEAD',"
+                + "'caption':'New leader','headline':'Team Alpha','detail':'Bingo Extravaganza',"
+                + "'rightLabel':'Score:','rightValue':'120 pts'}}");
     }
 
     private EventNotification bingoLine() {
         return envelope("event_line",
-            "{\"team_name\":\"Team Alpha\",\"bonus_points\":10}", null);
+            "{\"team_name\":\"Team Alpha\",\"bonus_points\":10}", "high",
+            "{'title':'Bingo line!','text':'Team Alpha completed a line (+10 pts)!',"
+                + "'chat':{'tag':'BINGO LINE','tone':'line','emphasis':'Team Alpha'},'card':{'kind':'LINE',"
+                + "'caption':'Bingo line','headline':'Team Alpha','detail':'Bingo Extravaganza',"
+                + "'rightLabel':'Bonus:','rightValue':'+10 pts'}}");
     }
 
     private EventNotificationService service(DropTrackerConfig config, ChatMessageUtil chat) {
