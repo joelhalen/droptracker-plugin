@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import io.droptracker.api.*;
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.ui.*;
+import io.droptracker.ui.admin.GroupAdminWindow;
 import io.droptracker.ui.components.*;
+import io.droptracker.models.api.GroupAdmin;
 import net.runelite.api.Client;
 import net.runelite.client.ui.*;
 import net.runelite.client.util.LinkBrowser;
@@ -21,11 +23,15 @@ public class HomePanel {
     private final Client client;
     private final DropTrackerPanel panel;
     private final DeathMessageApi deathMessageApi;
+    private final GroupAdminApi groupAdminApi;
 
     // Store references for dynamic updates
     private JPanel homePanel;
     private @Nullable JPanel playerButtonRow;
     private int playerButtonIndex = -1; // Tracks where to insert the button
+    /** Holds the "Group admin" card; empty (and so invisible) for most players. */
+    private final JPanel adminSlot = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
+    private long adminCardHash = -1;
 
     public JPanel create() {
         homePanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
@@ -62,6 +68,9 @@ public class HomePanel {
 
         // Note: playerButtonIndex will be set to the next component index
         playerButtonIndex = homePanel.getComponentCount();
+
+        adminSlot.setAlignmentX(Component.LEFT_ALIGNMENT);
+        homePanel.add(adminSlot);
 
         // Initialize player button (will add if config is available)
         updatePlayerButton();
@@ -196,8 +205,75 @@ public class HomePanel {
             homePanel.add(playerButtonRow, playerButtonIndex);
         }
 
+        refreshAdminCard();
+
         // Refresh the panel
         homePanel.revalidate();
         homePanel.repaint();
+    }
+
+    /**
+     * Asks once per account which groups it may manage, and shows a small card
+     * for them. Players who manage nothing never see it.
+     */
+    private void refreshAdminCard() {
+        long hash = client.getAccountHash();
+        String name = config.lastAccountName();
+        if (!config.useApi() || hash == -1 || name == null || name.isEmpty()) {
+            adminSlot.removeAll();
+            adminCardHash = -1;
+            return;
+        }
+        if (hash == adminCardHash) {
+            return;
+        }
+        adminCardHash = hash;
+        groupAdminApi.groups(name, hash, result -> {
+            adminSlot.removeAll();
+            if (result.value != null && !result.value.getGroups().isEmpty() && hash == adminCardHash) {
+                adminSlot.add(DropTrackerTheme.gap(8));
+                adminSlot.add(createAdminCard(result.value.getGroups()));
+            }
+            adminSlot.revalidate();
+            adminSlot.repaint();
+        });
+    }
+
+    private JPanel createAdminCard(java.util.List<GroupAdmin.Group> groups) {
+        JPanel card = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
+        card.setBorder(DropTrackerTheme.accentCardBorder(8, 8, 8, 8));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, Integer.MAX_VALUE));
+
+        JLabel title = DropTrackerTheme.label("Group admin", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
+        title.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(title);
+        JLabel hint = DropTrackerTheme.label("Manage your group in-game.",
+            FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        card.add(hint);
+
+        for (GroupAdmin.Group group : groups.subList(0, Math.min(groups.size(), 4))) {
+            card.add(DropTrackerTheme.gap(6));
+            JPanel row = new JPanel(new BorderLayout(6, 0));
+            row.setBackground(DropTrackerTheme.SURFACE_2);
+            row.setBorder(new EmptyBorder(4, 6, 4, 4));
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+            row.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
+
+            JPanel names = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
+            names.add(DropTrackerTheme.label(group.getName(), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT));
+            boolean owner = "owner".equals(group.getRole());
+            names.add(DropTrackerTheme.label(owner ? "Owner" : "Admin", FontManager.getRunescapeSmallFont(),
+                owner ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT_MUTED));
+            row.add(names, BorderLayout.CENTER);
+
+            JButton manage = new JButton("Manage");
+            DropTrackerTheme.styleButton(manage);
+            manage.addActionListener(e -> GroupAdminWindow.open(client, config, groupAdminApi, groups, group.getId()));
+            row.add(manage, BorderLayout.EAST);
+            card.add(row);
+        }
+        return card;
     }
 }
