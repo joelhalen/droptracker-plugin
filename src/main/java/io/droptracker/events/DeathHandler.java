@@ -165,7 +165,6 @@ public class DeathHandler extends BaseEventHandler {
 
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping death submission: no resolvable player name");
             return;
         }
 

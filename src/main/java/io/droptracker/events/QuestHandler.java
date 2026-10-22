@@ -73,7 +73,6 @@ public class QuestHandler extends BaseEventHandler {
 
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping quest submission: no resolvable player name");
             return;
         }
 

@@ -212,7 +212,6 @@ public class DropHandler extends BaseEventHandler {
 			if (localPlayerName == null) {
 				/* No identity, no submission: the drop cannot be attributed to
 				   anyone, and this bails before the screenshot work below. */
-				log.debug("Skipping drop submission for {}: no resolvable player name", npcName);
 				return;
 			}
 			AtomicLong totalValue = new AtomicLong(0);

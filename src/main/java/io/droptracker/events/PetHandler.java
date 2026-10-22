@@ -181,7 +181,6 @@ public class PetHandler extends BaseEventHandler {
 
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping pet submission: no resolvable player name");
             return;
         }
 

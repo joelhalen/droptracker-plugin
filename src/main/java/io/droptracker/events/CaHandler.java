@@ -52,7 +52,6 @@ public class CaHandler extends BaseEventHandler {
 
             String player = getPlayerName();
             if (player == null) {
-                log.debug("Skipping combat achievement submission: no resolvable player name");
                 return;
             }
             CustomWebhookBody combatWebhook = createWebhookBody(player + " has completed a new combat task:");

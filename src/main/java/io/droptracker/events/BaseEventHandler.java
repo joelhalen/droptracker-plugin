@@ -69,11 +69,15 @@ public abstract class BaseEventHandler {
      */
     @Nullable
     protected String getPlayerName() {
-        return PlayerIdentity.resolve(
+        String name = PlayerIdentity.resolve(
             plugin != null ? plugin.getLocalPlayerName() : null,
             getAccountHash(),
             config != null ? config.lastAccountName() : null,
             config != null ? config.lastAccountHash() : null);
+        if (name == null) {
+            DebugLogger.log("[" + getClass().getSimpleName() + "] no resolvable player name; not submitting");
+        }
+        return name;
     }
 
     /**
@@ -107,7 +111,6 @@ public abstract class BaseEventHandler {
            submission fail SubmissionManager's identity check instead of going
            out under a made-up one. */
         if (playerName == null) {
-            log.debug("Building an embed with no resolvable player name; this submission will be dropped");
             playerName = "";
         }
 
@@ -222,9 +225,7 @@ public abstract class BaseEventHandler {
      * @param type the event type identifier
      */
     protected void sendData(CustomWebhookBody webhook, SubmissionType type) {
-        DebugLogger.log("[BaseEventHandler][send] sendData called; type=" + type
-            + ", embedCount=" + (webhook != null && webhook.getEmbeds() != null ? webhook.getEmbeds().size() : 0)
-            + ", payload=" + webhook);
+        DebugLogger.log("[BaseEventHandler][send] " + type + " " + webhook);
         if (webhook == null) {
             log.warn("Attempted to send null webhook data");
             return;

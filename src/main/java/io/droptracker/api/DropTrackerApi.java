@@ -339,12 +339,8 @@ public class DropTrackerApi {
                         groupConfigs = parsedConfigs;
                     }
                     groupConfigsLoaded();
-                } catch (IOException e) {
-                    log.debug("Couldn't load group config in side panel (IOException) " + e);
-                } catch (JsonSyntaxException e) {
-                    log.debug("Couldn't load group config in side panel (JsonSyntaxException) " + e);
                 } catch (Exception e) {
-                    log.debug("Couldn't load group config in side panel (Exception) " + e);
+                    log.debug("Couldn't load group config in side panel: " + e);
                 }
             } finally {
                 isLoadingGroupConfigs = false;
@@ -735,55 +731,10 @@ public class DropTrackerApi {
     }
 
 
-    /**
-     * Check whether a submission with the given uuid has been processed by the API.
-     * Sends a JSON body {"uuid": "..."} to {apiUrl}/check via POST.
-     * Returns true if the API explicitly reports the submission as processed.
-     */
+    /** Whether the API reports this one submission as processed. */
     public boolean checkSubmissionProcessed(String uuid) throws IOException {
-        if (!config.useApi() || uuid == null || uuid.isEmpty()) {
-            return false;
-        }
-
-        HttpUrl url = apiUrl("/check");
-        if (url == null) {
-            throw new IllegalArgumentException("Invalid URL");
-        }
-
-        try (Response response = httpClient.newCall(postJson(url, Collections.singletonMap("uuid", uuid))).execute()) {
-            touch();
-
-            if (!response.isSuccessful()) {
-                return false;
-            }
-            ResponseBody responseBody = response.body();
-            if (responseBody == null) {
-                return false;
-            }
-            String responseData = responseBody.string();
-            
-            try {
-                // Response is expected to contain at least { processed: boolean } for the given uuid
-                @SuppressWarnings("unchecked")
-                Map<String, Object> map = gson.fromJson(responseData, Map.class);
-                Object processedVal = map != null ? map.get("processed") : null;
-                
-                if (processedVal instanceof Boolean) {
-                    return (Boolean) processedVal;
-                }
-                // Some APIs might return status: "processed"
-                Object statusVal = map != null ? map.get("status") : null;
-                
-                if (statusVal instanceof String) {
-                    return "processed".equalsIgnoreCase((String) statusVal);
-                }
-            } catch (Exception e) {
-                // If parsing fails, consider it not processed
-                return false;
-            }
-        }
-
-        return false;
+        return uuid != null && Boolean.TRUE.equals(
+            checkSubmissionsProcessed(Collections.singletonList(uuid)).get(uuid));
     }
 
     /** One entry in the batch POST /check response. */
@@ -799,14 +750,12 @@ public class DropTrackerApi {
     }
 
     /**
-     * Batch form of {@link #checkSubmissionProcessed(String)}: checks up to
+     * Checks up to
      * {@value #CHECK_BATCH_LIMIT} submission uuids in a single POST /check request
      * ({"uuids": [...]}). Returns a map of uuid to processed-state for the uuids the
      * API reported on. "pending" is a normal long-lived state, not an error.
      *
-     * @throws IOException when the request fails or the body is unparseable (e.g. an
-     *         older custom endpoint that only supports the single-uuid form) so the
-     *         caller can fall back to per-uuid checks for this poll tick.
+     * @throws IOException when the request fails or the body is unparseable.
      */
     public Map<String, Boolean> checkSubmissionsProcessed(List<String> uuids) throws IOException {
         if (!config.useApi() || uuids == null || uuids.isEmpty()) {

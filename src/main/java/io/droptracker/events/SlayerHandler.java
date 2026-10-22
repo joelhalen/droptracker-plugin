@@ -374,7 +374,6 @@ public class SlayerHandler extends BaseEventHandler {
     void submit(Completion completion) {
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping slayer task submission: no resolvable player name");
             return;
         }
         CustomWebhookBody webhook = createWebhookBody(playerName + " completed a slayer task!");

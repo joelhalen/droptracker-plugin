@@ -252,10 +252,8 @@ public class DropTrackerPlugin extends Plugin {
 		// announce it, so the handler reads it directly.
 		slayerHandler.startUp();
 
-		DebugLogger.log("[DropTrackerPlugin][startup] plugin started; apiEnabled=" + config.useApi()
-			+ ", sidePanelEnabled=" + config.showSidePanel()
-			+ (config.customApiEndpoint().equals("") ? ", customApiEndpoint=default" : ", customApiEndpoint=" + config.customApiEndpoint()));
-		DebugLogger.log("[DropTrackerPlugin][startup] pluginVersion=" + pluginVersion);
+		DebugLogger.log("[DropTrackerPlugin][startup] v" + pluginVersion + ", api=" + config.useApi()
+			+ ", panel=" + config.showSidePanel() + ", endpoint=" + config.customApiEndpoint());
 	}
 
 	/**

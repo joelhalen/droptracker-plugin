@@ -286,7 +286,6 @@ public class ExperienceHandler extends BaseEventHandler {
            be loading. */
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping {} XP snapshot: no resolvable player name", reason);
             return;
         }
 
@@ -372,7 +371,6 @@ public class ExperienceHandler extends BaseEventHandler {
         // next attempt rather than being lost with the submission.
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping XP milestone submission: no resolvable player name");
             return;
         }
 
@@ -438,7 +436,6 @@ public class ExperienceHandler extends BaseEventHandler {
         // Bail before levelledSkills is drained, for the same reason as notifyXp.
         String playerName = getPlayerName();
         if (playerName == null) {
-            log.debug("Skipping level up submission: no resolvable player name");
             return;
         }
 

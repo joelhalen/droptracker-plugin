@@ -470,7 +470,7 @@ public class PbHandler extends BaseEventHandler {
     }
 
     private void updateKillData(KillData newData) {
-        DebugLogger.log("[PbHandler][update] updateKillData called; newData=" + newData);
+        DebugLogger.log("[PbHandler][update] " + newData);
         killData.getAndUpdate(old -> {
             if (old == null) {
                 lastKillDataUpdate = System.currentTimeMillis();
@@ -478,26 +478,23 @@ public class PbHandler extends BaseEventHandler {
             }
 
             String boss = defaultIfNull(newData.boss, old.boss);
-            DebugLogger.log("[PbHandler][update] boss merge; newBoss=" + newData.boss + ", oldBoss=" + old.boss);
             Integer count = defaultIfNull(newData.count, old.count);
             Duration time = newData.time != null && !newData.time.isZero() ? newData.time : old.time;
             Duration bestTime = newData.bestTime != null && !newData.bestTime.isZero() ? newData.bestTime : old.bestTime;
             boolean isPersonalBest = newData.isPersonalBest || old.isPersonalBest;
             String teamSize = defaultIfNull(newData.teamSize, old.teamSize);
             String gameMessage = defaultIfNull(newData.gameMessage, old.gameMessage);
-            DebugLogger.log("[PbHandler][update] merged killData=" + new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage));
+            KillData merged = new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+            DebugLogger.log("[PbHandler][update] merged " + merged);
             lastKillDataUpdate = System.currentTimeMillis();
-            return new KillData(boss, count, time, bestTime, isPersonalBest, teamSize, gameMessage);
+            return merged;
         });
-        DebugLogger.log("[PbHandler][update] updateKillData completed; boss=" + newData.boss + ", time=" + newData.time + ", count=" + newData.count);
     }
 
     // === KILL PROCESSING ===
     private void processKill(KillData data) {
-        DebugLogger.log("[PbHandler][process] processKill invoked; data=" + data);
+        DebugLogger.log("[PbHandler][process] " + data);
         if (data == null || !data.isValid()) {
-            DebugLogger.log("[PbHandler][process] skipping invalid kill data");
-            log.debug("Invalid kill data, skipping processing");
             return;
         }
 
@@ -509,8 +506,7 @@ public class PbHandler extends BaseEventHandler {
             (currentTime - lastProcessedTime) < DUPLICATE_THRESHOLD) {
             if (!data.boss.contains("1-8")) {
                 
-                DebugLogger.log("[PbHandler][process] duplicate kill detected; killIdentifier=" + killIdentifier);
-                log.debug("Duplicate kill detected, skipping: {}", killIdentifier);
+                DebugLogger.log("[PbHandler][process] duplicate " + killIdentifier);
                 return;
             }
         }
@@ -519,7 +515,6 @@ public class PbHandler extends BaseEventHandler {
         lastProcessedTime = currentTime;
 
         if (clientThread == null) {
-            DebugLogger.log("[PbHandler][process] cannot process kill; clientThread=null");
             log.error("ClientThread is null, cannot process kill");
             return;
         }
@@ -528,8 +523,8 @@ public class PbHandler extends BaseEventHandler {
             try {
                 sendKillNotification(data);
             } catch (Exception e) {
-                DebugLogger.log("[PbHandler][process] sendKillNotification failed; reason=" + e.getMessage());
-                log.error("Error processing kill notification: {}", e.getMessage(), e);
+                DebugLogger.log("[PbHandler][process] send failed: " + e.getMessage());
+                log.error("Error processing kill notification", e);
             }
         });
     }
@@ -537,8 +532,6 @@ public class PbHandler extends BaseEventHandler {
     private void sendKillNotification(KillData data) {
         String player = getPlayerName();
         if (player == null) {
-            DebugLogger.log("[PbHandler][send] skipping kill notification; no resolvable player name");
-            log.debug("Skipping kill time submission: no resolvable player name");
             return;
         }
         // Read once so the flag and both formatted times always agree.

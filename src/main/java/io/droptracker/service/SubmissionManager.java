@@ -27,6 +27,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 @Slf4j
 @Singleton
@@ -89,30 +90,30 @@ public class SubmissionManager {
      */
     public void sendDataToDropTracker(CustomWebhookBody webhook, SubmissionType type) {
         if (hasUnidentifiedEmbed(webhook)) {
-            debugLogEventFlow("skipped", type, "player_name missing; submission has no identity");
+            debugLogEventFlow("skipped", type, "no player_name");
             return;
         }
         boolean requiredScreenshot = false;
         PrivacyMode privacyMode = config.privacyMode();
-        debugLogEventFlow("received", type, "entry=non-drop, useApi=" + config.useApi() + ", privacyMode=" + privacyMode.name());
+        debugLogEventFlow("received", type, "useApi=" + config.useApi() + ", privacy=" + privacyMode);
 
         // Check if the user has this event type enabled locally
+        Predicate<DropTrackerConfig> embedsOn = EMBED_TOGGLES.get(type);
+        if (embedsOn != null && !embedsOn.test(config)) {
+            debugLogEventFlow("skipped", type, "embeds off");
+            return;
+        }
         switch (type) {
             case DROP:
                 // Drops use the value-based overload; this should not be called for drops
-                debugLogEventFlow("received", type, "non-drop entrypoint invoked for DROP type; ignoring");
+                debugLogEventFlow("skipped", type, "wrong entrypoint");
                 break;
             case KILL_TIME:
-                if (!embedsOn(config.pbEmbeds(), type, "pbEmbeds")) {
-                    return;
-                }
                 // Raid completion times are raid data: attach the
                 // authoritative raid roster. Non-raid kill times are left
                 // untouched.
                 if (NearbyPlayerTracker.raidTypeForSource(extractSourceName(webhook)) != null) {
-                    NearbyPlayerTracker.NearbyPlayerTrace killTrace = addParticipantsField(webhook);
-                    debugLogEventFlow("nearby-trace", type,
-                        killTrace != null ? killTrace.toDebugSummary() : "trace unavailable");
+                    addParticipantsField(webhook);
                 }
                 boolean isPb = isFieldTrue(webhook, "is_pb");
                 if (config.screenshots() && isPb) {
@@ -120,7 +121,7 @@ public class SubmissionManager {
                 }
                 if (!isPb) {
                     // Non-PB kill times: just send, no ValidSubmission tracking
-                    debugLogEventFlow("send", type, "non-pb kill time; direct send; screenshotRequired=" + requiredScreenshot);
+                    debugLogEventFlow("send", type, "non-pb; screenshot=" + requiredScreenshot);
                     if (requiredScreenshot) {
                         captureAndSend(webhook, null, privacyMode);
                     } else {
@@ -129,22 +130,7 @@ public class SubmissionManager {
                     return;
                 }
                 break;
-            case COLLECTION_LOG:
-                if (!embedsOn(config.clogEmbeds(), type, "clogEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
-            case COMBAT_ACHIEVEMENT:
-                if (!embedsOn(config.caEmbeds(), type, "caEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
             case LEVEL_UP:
-                if (!embedsOn(config.levelEmbed(), type, "levelEmbed")) {
-                    return;
-                }
                 // Honor the "Minimum Level to Screenshot" option: only capture
                 // when at least one skill reached that level (default 1 = always).
                 if (config.screenshots()
@@ -152,81 +138,39 @@ public class SubmissionManager {
                     requiredScreenshot = true;
                 }
                 break;
-            case QUEST_COMPLETION:
-                if (!embedsOn(config.questsEmbed(), type, "questsEmbed")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
-            case PET:
-                if (!embedsOn(config.petEmbeds(), type, "petEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
-            case DEATH:
-                if (!embedsOn(config.deathEmbeds(), type, "deathEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
-            case DIARY:
-                if (!embedsOn(config.diaryEmbeds(), type, "diaryEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
-            case SLAYER_TASK:
-                if (!embedsOn(config.slayerEmbeds(), type, "slayerEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
-                break;
             case EXPERIENCE:
-                // No screenshots for experience events
-                break;
-            case EXPERIENCE_MILESTONE:
-                if (!embedsOn(config.xpMilestoneEmbeds(), type, "xpMilestoneEmbeds")) {
-                    return;
-                }
-                requiredScreenshot = config.screenshots();
+            case ADVENTURE_LOG:
+                // No screenshot, no extra processing
                 break;
             case EXPERIENCE_UPDATE:
-                // Background XP snapshot for event tracking: no screenshot,
-                // no group qualification and no UI submission tracking
-                debugLogEventFlow("send", type, "experience snapshot; direct send");
-                sendWebhookDirect(webhook, null, null);
-                return;
+                // Background XP snapshot for event tracking
             case CLAN_BROADCAST:
             case CLAN_CHAT:
                 // Clan relay payloads ride whichever transport the player
                 // uses (API or our Discord webhooks; the webhook bot reads
                 // them server-side). ClanRelayService only queues lines from
-                // an opted-in clan. No screenshot, no group qualification, no
-                // UI submission tracking: the server owns everything downstream.
-                debugLogEventFlow("send", type, "clan relay; direct send");
-                sendWebhookDirect(webhook, null, null);
-                return;
+                // an opted-in clan.
             case CONFIG_SNAPSHOT:
-                // Debug record of the player's settings (ConfigSnapshotHandler):
-                // no screenshot, no group qualification, no side-panel entry.
-                debugLogEventFlow("send", type, "config snapshot; direct send");
+                // Debug record of the player's settings (ConfigSnapshotHandler).
+                // None of these take a screenshot, group qualification or a
+                // side-panel entry: the server owns everything downstream.
+                debugLogEventFlow("send", type, "direct");
                 sendWebhookDirect(webhook, null, null);
                 return;
-            case ADVENTURE_LOG:
-                // No extra processing needed
+            default:
+                // Collection log, combat achievements, quests, pets, deaths,
+                // diaries, slayer tasks and XP milestones.
+                requiredScreenshot = config.screenshots();
                 break;
         }
 
         // Create ValidSubmission if the event qualifies for any group
         ValidSubmission submission = createSubmissionIfQualified(webhook, type, requiredScreenshot, 0, 0);
-        debugLogEventFlow("qualification", type, "screenshotRequired=" + requiredScreenshot + ", " + summarizeSubmission(submission));
+        debugLogEventFlow("qualification", type, "screenshot=" + requiredScreenshot);
 
         if (requiredScreenshot) {
-            debugLogEventFlow("capture", type, "captureAndSend path selected");
             captureAndSend(webhook, submission, privacyMode);
         } else {
-            debugLogEventFlow("send", type, "sendWebhookDirect path selected");
             sendWebhookDirect(webhook, null, submission);
         }
     }
@@ -237,13 +181,18 @@ public class SubmissionManager {
      * the "Minimum Level to Screenshot" config option. Returns 0 when no
      * level fields are present.
      */
-    /** Whether a type's embeds are switched on; logs the skip when they are not. */
-    private boolean embedsOn(boolean enabled, SubmissionType type, String setting) {
-        if (!enabled) {
-            debugLogEventFlow("skipped", type, setting + "=false");
-        }
-        return enabled;
-    }
+    /** The per-type embed switches in the plugin config. */
+    private static final Map<SubmissionType, Predicate<DropTrackerConfig>> EMBED_TOGGLES = Map.of(
+        SubmissionType.KILL_TIME, DropTrackerConfig::pbEmbeds,
+        SubmissionType.COLLECTION_LOG, DropTrackerConfig::clogEmbeds,
+        SubmissionType.COMBAT_ACHIEVEMENT, DropTrackerConfig::caEmbeds,
+        SubmissionType.LEVEL_UP, DropTrackerConfig::levelEmbed,
+        SubmissionType.QUEST_COMPLETION, DropTrackerConfig::questsEmbed,
+        SubmissionType.PET, DropTrackerConfig::petEmbeds,
+        SubmissionType.DEATH, DropTrackerConfig::deathEmbeds,
+        SubmissionType.DIARY, DropTrackerConfig::diaryEmbeds,
+        SubmissionType.SLAYER_TASK, DropTrackerConfig::slayerEmbeds,
+        SubmissionType.EXPERIENCE_MILESTONE, DropTrackerConfig::xpMilestoneEmbeds);
 
     private int maxNewLevelIn(CustomWebhookBody webhook) {
         int max = 0;
@@ -269,25 +218,23 @@ public class SubmissionManager {
      */
     public void sendDataToDropTracker(CustomWebhookBody customWebhookBody, long totalValue, long singleValue, boolean valueModified) {
         if (hasUnidentifiedEmbed(customWebhookBody)) {
-            debugLogEventFlow("skipped", SubmissionType.DROP, "player_name missing; submission has no identity");
+            debugLogEventFlow("skipped", SubmissionType.DROP, "no player_name");
             return;
         }
-        if (!embedsOn(config.lootEmbeds(), SubmissionType.DROP, "lootEmbeds")) {
+        if (!config.lootEmbeds()) {
+            debugLogEventFlow("skipped", SubmissionType.DROP, "embeds off");
             return;
         }
 
-        NearbyPlayerTracker.NearbyPlayerTrace nearbyTrace = addParticipantsField(customWebhookBody);
-        debugLogEventFlow("nearby-trace", SubmissionType.DROP,
-            nearbyTrace != null ? nearbyTrace.toDebugSummary() : "trace unavailable");
+        addParticipantsField(customWebhookBody);
 
         boolean requiredScreenshot = (config.screenshots() && totalValue > config.screenshotValue()) || valueModified;
-        debugLogEventFlow("received", SubmissionType.DROP, "totalValue=" + totalValue + ", singleValue=" + singleValue
-                + ", valueModified=" + valueModified + ", screenshotRequired=" + requiredScreenshot
-                + ", screenshotThreshold=" + config.screenshotValue());
+        debugLogEventFlow("received", SubmissionType.DROP, "total=" + totalValue + ", single=" + singleValue
+                + ", modified=" + valueModified + ", screenshot=" + requiredScreenshot
+                + ", threshold=" + config.screenshotValue() + ", privacy=" + config.privacyMode());
 
         // Create ValidSubmission if the drop qualifies for any group
         ValidSubmission submission = createSubmissionIfQualified(customWebhookBody, SubmissionType.DROP, requiredScreenshot, totalValue, singleValue);
-        debugLogEventFlow("qualification", SubmissionType.DROP, summarizeSubmission(submission));
 
         // Update session value statistics
         this.sessionTotalValue += totalValue;
@@ -296,11 +243,8 @@ public class SubmissionManager {
         }
 
         if (requiredScreenshot) {
-            PrivacyMode privacyMode = config.privacyMode();
-            debugLogEventFlow("capture", SubmissionType.DROP, "captureAndSend path selected; privacyMode=" + privacyMode.name());
-            captureAndSend(customWebhookBody, submission, privacyMode);
+            captureAndSend(customWebhookBody, submission, config.privacyMode());
         } else {
-            debugLogEventFlow("send", SubmissionType.DROP, "sendWebhookDirect path selected");
             sendWebhookDirect(customWebhookBody, null, submission);
         }
     }
@@ -359,9 +303,9 @@ public class SubmissionManager {
         return false;
     }
 
-    private NearbyPlayerTracker.NearbyPlayerTrace addParticipantsField(CustomWebhookBody webhook) {
+    private void addParticipantsField(CustomWebhookBody webhook) {
         if (webhook == null || webhook.getEmbeds() == null) {
-            return NearbyPlayerTracker.NearbyPlayerTrace.empty(20, "webhook/embeds missing");
+            return;
         }
 
         // Raid-sourced submissions get the authoritative raid roster; anything
@@ -371,15 +315,12 @@ public class SubmissionManager {
         NearbyPlayerTracker.NearbyPlayerTrace trace = nearbyPlayerTracker.getParticipantsTrace(sourceName, 20);
         List<String> members = trace.getNearbyPlayers();
         String membersValue = String.join(",", members);
-        int embedsTouched = 0;
-        int embedsWithExistingMembersField = 0;
-        int membersFieldsAdded = 0;
+        int added = 0;
 
         for (CustomWebhookBody.Embed embed : webhook.getEmbeds()) {
             if (embed == null) {
                 continue;
             }
-            embedsTouched++;
 
             boolean hasMembersField = false;
             boolean hasPartySizeField = false;
@@ -400,9 +341,7 @@ public class SubmissionManager {
             // entirely when no players are nearby rather than sending a sentinel.
             if (!hasMembersField && !membersValue.isEmpty()) {
                 embed.addField("nearby_players", membersValue, false);
-                membersFieldsAdded++;
-            } else if (hasMembersField) {
-                embedsWithExistingMembersField++;
+                added++;
             }
 
             // Raid submissions carry the evidence behind the participant list,
@@ -421,15 +360,7 @@ public class SubmissionManager {
             }
         }
 
-        debugLogEventFlow("nearby-trace", SubmissionType.DROP,
-            "nearby_players field enrichment: embedsTouched=" + embedsTouched
-                + ", existingMembersField=" + embedsWithExistingMembersField
-                + ", membersFieldsAdded=" + membersFieldsAdded
-                + ", membersValueLength=" + membersValue.length()
-                + ", raidSourced=" + raidSourced
-                + ", raidPartySize=" + trace.getRaidPartySize()
-                + ", rosterSource=" + trace.getRosterSource());
-        return trace;
+        debugLogEventFlow("nearby-trace", null, "nearby_players added to " + added + " embeds, raid=" + raidSourced);
     }
 
     // ========== Unified Qualification Logic ==========
@@ -443,7 +374,7 @@ public class SubmissionManager {
             boolean hasScreenshot, long totalValue, long singleValue) {
 
         if (!config.useApi()) {
-            debugLogEventFlow("qualification", type, "useApi=false; skipping group qualification");
+            debugLogEventFlow("qualification", type, "useApi=false");
             return null;
         }
 
@@ -456,9 +387,8 @@ public class SubmissionManager {
         if (groupConfigs == null || groupConfigs.isEmpty()) {
             if (!groupConfigsLoaded) {
                 pendingEvents.add(new PendingEvent(webhook, type, hasScreenshot, totalValue, singleValue));
-                debugLogEventFlow("qualification", type, "group configs unavailable; queued for later evaluation");
             }
-            debugLogEventFlow("qualification", type, "groupConfigs unavailable; queued=" + (!groupConfigsLoaded));
+            debugLogEventFlow("qualification", type, "no group configs; queued=" + !groupConfigsLoaded);
             return null;
         }
 
@@ -467,7 +397,7 @@ public class SubmissionManager {
         for (GroupConfig groupConfig : groupConfigs) {
             String failReason = getQualificationFailureReason(type, groupConfig, hasScreenshot, totalValue, singleValue);
             if (failReason != null) {
-                debugLogEventFlow("qualification-skip", type, "group=" + groupConfig.getGroupId() + ", reason=" + failReason);
+                debugLogEventFlow("qualification", type, "skip group=" + groupConfig.getGroupId() + ": " + failReason);
                 continue;
             }
 
@@ -477,14 +407,8 @@ public class SubmissionManager {
             } else {
                 submission.addGroupId(groupConfig.getGroupId());
             }
-            debugLogEventFlow("qualification-pass", type, "group=" + groupConfig.getGroupId());
         }
-
-        if (submission == null) {
-            debugLogEventFlow("qualification", type, "no groups qualified");
-        } else {
-            debugLogEventFlow("qualification", type, summarizeSubmission(submission));
-        }
+        debugLogEventFlow("qualification", type, summarizeSubmission(submission));
         return submission;
     }
 
@@ -572,9 +496,8 @@ public class SubmissionManager {
     private void sendWebhookDirect(CustomWebhookBody webhook, byte[] screenshot, ValidSubmission submission) {
         String worldTypeName = getWorldTypeName();
 
-        debugLogFlow("send", submission,
-                "attempting direct send; world_type=" + worldTypeName + ", hasScreenshot=" + (screenshot != null)
-                        + ", " + summarizeSubmission(submission));
+        debugLogFlow("send", submission, "world=" + worldTypeName + ", image=" + (screenshot != null)
+                + ", " + summarizeSubmission(submission));
 
         if (submission != null) {
             submission.markAsSending();
@@ -611,25 +534,20 @@ public class SubmissionManager {
         if (!config.useApi()) {
             try {
                 url = UrlManager.getRandomEndpoint();
-                debugLogFlow("dispatch", submission,
-                        "using random webhook endpoint (API disabled); attempt=" + attempt);
+                debugLogFlow("dispatch", submission, "webhook, attempt=" + attempt);
             } catch (Exception e) {
-                debugLogFlow("failed", submission,
-                        "failed to resolve webhook endpoint: " + e.getMessage());
+                debugLogFlow("failed", submission, "no webhook endpoint: " + e.getMessage());
                 return;
             }
         } else {
             url = HttpUrl.parse(api.getApiUrl() + "/webhook");
-            debugLogFlow("dispatch", submission,
-                    "using API webhook endpoint; attempt=" + attempt + ", url=" + url);
+            debugLogFlow("dispatch", submission, "api, attempt=" + attempt + ", url=" + url);
         }
         // Both branches build on a hardcoded base, so this is defence in depth rather
         // than a real gate. Log only the host: a webhook URL's path is a credential.
         if (url == null || !urlManager.isValidDiscordWebhookUrl(url)) {
             String host = url == null ? "(unparseable)" : url.host();
-            log.debug("Invalid or malformed webhook URL for host: {}", host);
-            debugLogFlow("failed", submission,
-                    "invalid webhook host: " + host);
+            debugLogFlow("failed", submission, "invalid host: " + host);
             return;
         }
 
@@ -641,8 +559,7 @@ public class SubmissionManager {
         okHttpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
-                debugLogFlow("retry", submission,
-                        "network failure on attempt=" + attempt + ": " + e.getMessage());
+                debugLogFlow("retry", submission, "attempt=" + attempt + ": " + e.getMessage());
                 scheduleRetryOrFail(webhook, screenshot, submission, attempt, e);
             }
 
@@ -675,16 +592,13 @@ public class SubmissionManager {
 
                     if (!response.isSuccessful()) {
                         int code = response.code();
-                        debugLogFlow("response", submission,
-                                "unsuccessful HTTP response code=" + code + ", message=" + response.message() + ", attempt=" + attempt);
+                        debugLogFlow("response", submission, "HTTP " + code + " " + response.message() + ", attempt=" + attempt);
 
                         if (code == 400 || code == 401 || code == 403) {
                             if (submission != null) {
                                 submission.markAsFailed("HTTP " + code);
                                 submissionsChanged();
                             }
-                            debugLogFlow("failed", submission,
-                                    "terminal HTTP failure code=" + code + "; no retry");
                             return;
                         }
 
@@ -707,8 +621,7 @@ public class SubmissionManager {
                         submission.markAsSuccess();
                         submissionsChanged();
                     }
-                    debugLogFlow("response", submission,
-                            "success HTTP response; attempt=" + attempt + ", " + summarizeSubmission(submission));
+                    debugLogFlow("response", submission, "ok, attempt=" + attempt + ", " + summarizeSubmission(submission));
 
                     // Check if the API has already processed this submission
                     if (config.useApi() && submission != null && submission.getUuid() != null && !submission.getUuid().isEmpty()) {
@@ -718,12 +631,10 @@ public class SubmissionManager {
                                 if (processed) {
                                     submission.markAsProcessed();
                                     submissionsChanged();
-                                    debugLogEventFlow("processed", submission.getType(),
-                                            "API check confirmed processed; uuid=" + submission.getUuid());
+                                    debugLogFlow("processed", submission, submission.getUuid());
                                 }
-                            } catch (IOException ignored) {
-                                debugLogEventFlow("processed", submission.getType(),
-                                        "API check failed for uuid=" + submission.getUuid() + ": " + ignored.getMessage());
+                            } catch (IOException e) {
+                                debugLogFlow("processed", submission, "check failed: " + e.getMessage());
                             }
                         });
                     }
@@ -741,10 +652,8 @@ public class SubmissionManager {
                 submissionsChanged();
             }
             executor.schedule(() -> sendWebhookWithRetry(webhook, screenshot, attempt + 1, submission), delay, TimeUnit.MILLISECONDS);
-            log.debug("Scheduled webhook retry in {} ms (attempt {}/{})", delay, attempt + 1, maxAttempts);
-            debugLogFlow("retry", submission,
-                    "scheduled retry in " + delay + "ms (nextAttempt=" + (attempt + 1) + "/" + maxAttempts + ")"
-                            + (e != null && e.getMessage() != null ? ", reason=" + e.getMessage() : ""));
+            debugLogFlow("retry", submission, "in " + delay + "ms, attempt " + (attempt + 1) + "/" + maxAttempts
+                + (e != null ? ": " + e.getMessage() : ""));
         } else {
             if (submission != null) {
                 String reason = e != null && e.getMessage() != null ? e.getMessage() : "Retry limit reached";
@@ -752,9 +661,7 @@ public class SubmissionManager {
                 submissionsChanged();
             }
             log.warn("Exhausted retry attempts when sending webhook");
-            debugLogFlow("failed", submission,
-                    "retry limit exhausted after " + maxAttempts + " attempts"
-                            + (e != null && e.getMessage() != null ? ", lastError=" + e.getMessage() : ""));
+            debugLogFlow("failed", submission, "gave up: " + (e != null ? e.getMessage() : null));
         }
     }
 
@@ -783,8 +690,7 @@ public class SubmissionManager {
         // photographed before their own drop message (issue #48).
         String source = extractSourceName(webhook);
         if (NpcUtilities.needsDeferredScreenshot(source)) {
-            debugLogFlow("capture", submission,
-                    "deferring screenshot one game tick; source=" + source);
+            debugLogFlow("capture", submission, "deferred a tick: " + source);
             deferredCaptures.add(() -> captureNow(webhook, submission, privacyMode));
             return;
         }
@@ -799,8 +705,6 @@ public class SubmissionManager {
      * @param privacyMode What to hide from the frame before it is captured
      */
     private void captureNow(CustomWebhookBody webhook, ValidSubmission submission, PrivacyMode privacyMode) {
-        debugLogFlow("capture", submission,
-                "capturing screenshot; privacyMode=" + privacyMode.name());
 
         screenshotPrivacy.capture(privacyMode, bufferedImage -> {
             // PNG/JPEG encoding can take hundreds of ms for large frames; keep it
@@ -810,8 +714,7 @@ public class SubmissionManager {
                     // No frame could be captured with the player's privacy mode
                     // applied. Send the submission without proof rather than lose
                     // it — an unhidden frame is never the fallback.
-                    debugLogFlow("capture", submission,
-                            "screenshot unavailable; sending without an image");
+                    debugLogFlow("capture", submission, "no frame; sending without");
                     sendWebhookDirect(webhook, null, submission);
                     return;
                 }
@@ -821,12 +724,8 @@ public class SubmissionManager {
                     imageBytes = encodeForUpload(bufferedImage);
                 } catch (IOException e) {
                     log.error("Error converting image to byte array", e);
-                    debugLogFlow("capture", submission,
-                            "screenshot conversion failed: " + e.getMessage());
                 }
-
-                debugLogFlow("capture", submission,
-                        "screenshot captured; bytes=" + (imageBytes != null ? imageBytes.length : 0));
+                debugLogFlow("capture", submission, "bytes=" + (imageBytes != null ? imageBytes.length : 0));
                 sendWebhookDirect(webhook, imageBytes, submission);
             });
         });
@@ -1007,31 +906,11 @@ public class SubmissionManager {
                 }
 
                 boolean changed = false;
-                java.util.Map<String, Boolean> results = null;
-                try {
-                    results = api.checkSubmissionsProcessed(uuids);
-                } catch (IOException e) {
-                    log.debug("Batch /check failed ({}); falling back to per-uuid checks", e.getMessage());
-                }
-
-                if (results != null) {
-                    for (ValidSubmission submission : pending) {
-                        if (Boolean.TRUE.equals(results.get(submission.getUuid()))) {
-                            submission.markAsProcessed();
-                            changed = true;
-                        }
-                    }
-                } else {
-                    // Legacy fallback: one request per pending submission.
-                    for (ValidSubmission submission : pending) {
-                        try {
-                            if (api.checkSubmissionProcessed(submission.getUuid())) {
-                                submission.markAsProcessed();
-                                changed = true;
-                            }
-                        } catch (IOException e) {
-                            log.debug("/check failed for uuid {}: {}", submission.getUuid(), e.getMessage());
-                        }
+                java.util.Map<String, Boolean> results = api.checkSubmissionsProcessed(uuids);
+                for (ValidSubmission submission : pending) {
+                    if (Boolean.TRUE.equals(results.get(submission.getUuid()))) {
+                        submission.markAsProcessed();
+                        changed = true;
                     }
                 }
 
@@ -1069,7 +948,7 @@ public class SubmissionManager {
             return;
         }
 
-        debugLogEventFlow("qualification", null, "group configs loaded; replaying pendingEvents=" + pendingEvents.size());
+        debugLogEventFlow("qualification", null, "configs loaded; replaying " + pendingEvents.size());
         List<PendingEvent> toProcess = new ArrayList<>(pendingEvents);
         pendingEvents.clear();
 
@@ -1116,7 +995,7 @@ public class SubmissionManager {
                         }
                         validSubmissions.add(s);
                     }
-                    debugLogEventFlow("persistence", null, "loaded submissions count=" + loaded.size() + ", accountHash=" + accountHash);
+                    debugLogEventFlow("persistence", null, "loaded " + loaded.size() + " for " + accountHash);
                     notifyUpdateCallback();
                 }
             } catch (Exception e) {
@@ -1161,7 +1040,7 @@ public class SubmissionManager {
 
             String json = gson.newBuilder().setPrettyPrinting().create().toJson(toSave);
             Files.write(filePath, json.getBytes(StandardCharsets.UTF_8));
-            debugLogEventFlow("persistence", null, "persisted submissions count=" + toSave.size() + ", accountHash=" + accountHash);
+            debugLogEventFlow("persistence", null, "saved " + toSave.size() + " for " + accountHash);
         } catch (Exception e) {
             log.debug("Failed to persist submissions: {}", e.getMessage());
         }
@@ -1248,11 +1127,9 @@ public class SubmissionManager {
 
     private String summarizeSubmission(ValidSubmission submission) {
         if (submission == null) {
-            return "submission=null";
+            return "none";
         }
-        return "submissionUuid=" + submission.getUuid()
-                + ", status=" + submission.getStatus()
-                + ", groups=" + Arrays.toString(submission.getGroupIds());
+        return submission.getUuid() + " " + submission.getStatus() + " groups=" + Arrays.toString(submission.getGroupIds());
     }
 
     // ========== Inner Classes ==========
