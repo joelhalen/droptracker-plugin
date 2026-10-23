@@ -535,17 +535,18 @@ public class DropTrackerApi {
             return false;
         }
 
-        MediaType glb = MediaType.parse("model/gltf-binary");
+        // The mesh; the server writes the glTF from it (GlbExporter).
+        MediaType mesh = MediaType.parse("application/octet-stream");
         MultipartBody.Builder body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("acc_hash", String.valueOf(client.getAccountHash()))
                 .addFormDataPart("fingerprint", fingerprint)
-                .addFormDataPart("model", "model.glb", RequestBody.create(glb, model));
+                .addFormDataPart("mesh", "model.dtm", RequestBody.create(mesh, model));
         if (pin) {
             body.addFormDataPart("pin", "1");
         }
         if (petModel != null && petModel.length > 0) {
-            body.addFormDataPart("pet_model", "pet.glb", RequestBody.create(glb, petModel));
+            body.addFormDataPart("pet_mesh", "pet.dtm", RequestBody.create(mesh, petModel));
         }
 
         Request request = new Request.Builder().url(url).post(body.build()).build();

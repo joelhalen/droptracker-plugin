@@ -22,7 +22,6 @@ public class HomePanel {
     private final DropTrackerApi api;
     private final Client client;
     private final DropTrackerPanel panel;
-    private final DeathMessageApi deathMessageApi;
     private final GroupAdminApi groupAdminApi;
 
     // Store references for dynamic updates
@@ -115,8 +114,7 @@ public class HomePanel {
         body.setBorder(new EmptyBorder(5, 0, 5, 0));
         body.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JButton learnMore = new JButton("Learn more");
-        DropTrackerTheme.styleButton(learnMore);
+        JButton learnMore = DropTrackerTheme.button("Learn more");
         learnMore.setToolTipText("Read about the DropTracker API on the wiki");
         learnMore.setAlignmentX(Component.LEFT_ALIGNMENT);
         learnMore.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("wiki").toString()));
@@ -153,8 +151,7 @@ public class HomePanel {
     }
 
     private JButton linkButton(String text, String url) {
-        JButton button = new JButton(text);
-        DropTrackerTheme.styleButton(button);
+        JButton button = DropTrackerTheme.button(text);
         button.addActionListener(e -> LinkBrowser.browse(url));
         button.setMargin(new Insets(0, 0, 0, 0));
         return button;
@@ -177,29 +174,19 @@ public class HomePanel {
 
         // Add player button if the API is on and an account has been seen
         if (config.useApi() && config.lastAccountName() != null && !config.lastAccountName().isEmpty()) {
-            playerButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
+            playerButtonRow = new JPanel(new GridLayout(1, 1));
             playerButtonRow.setBackground(DropTrackerTheme.SURFACE_0);
             playerButtonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
             playerButtonRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 30));
 
-            JButton playerStatsButton = new JButton("View your Stats");
-            DropTrackerTheme.styleButton(playerStatsButton);
+            JButton playerStatsButton = DropTrackerTheme.button("View your Stats");
             playerStatsButton.addActionListener(e -> {
                 panel.selectPanel("player");
                 panel.updatePlayerPanel(config.lastAccountName());
             });
             playerStatsButton.setMargin(new Insets(0, 0, 0, 0));
 
-            // The line the account's clans post when it dies (members' own
-            // death messages); the same messages as the website and Discord.
-            JButton deathMessageButton = new JButton("Death message");
-            DropTrackerTheme.styleButton(deathMessageButton);
-            deathMessageButton.setToolTipText("Write what your clan sees when you die");
-            deathMessageButton.addActionListener(e -> DeathMessageDialog.open(client, config, deathMessageApi));
-            deathMessageButton.setMargin(new Insets(0, 0, 0, 0));
-
             playerButtonRow.add(playerStatsButton);
-            playerButtonRow.add(deathMessageButton);
 
             // Insert at the correct position (after the global lootboard button)
             homePanel.add(playerButtonRow, playerButtonIndex);
@@ -268,8 +255,7 @@ public class HomePanel {
                 owner ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT_MUTED));
             row.add(names, BorderLayout.CENTER);
 
-            JButton manage = new JButton("Manage");
-            DropTrackerTheme.styleButton(manage);
+            JButton manage = DropTrackerTheme.button("Manage");
             manage.addActionListener(e -> GroupAdminWindow.open(client, config, groupAdminApi, groups, group.getId()));
             row.add(manage, BorderLayout.EAST);
             card.add(row);

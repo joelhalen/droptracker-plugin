@@ -39,26 +39,12 @@ public final class JagexColor
 	{
 	}
 
-	public static int unpackHue(short hsl)
-	{
-		return hsl >> 10 & 63;
-	}
-
-	public static int unpackSaturation(short hsl)
-	{
-		return hsl >> 7 & 7;
-	}
-
-	public static int unpackLuminance(short hsl)
-	{
-		return hsl & 127;
-	}
 
 	public static int HSLtoRGB(short hsl, double brightness)
 	{
-		double hue = (double) unpackHue(hsl) / 64.D + HUE_OFFSET;
-		double saturation = (double) unpackSaturation(hsl) / 8.D + SATURATION_OFFSET;
-		double luminance = (double) unpackLuminance(hsl) / 128.D;
+		double hue = (double) net.runelite.api.JagexColor.unpackHue(hsl) / 64.D + HUE_OFFSET;
+		double saturation = (double) net.runelite.api.JagexColor.unpackSaturation(hsl) / 8.D + SATURATION_OFFSET;
+		double luminance = (double) net.runelite.api.JagexColor.unpackLuminance(hsl) / 128.D;
 
 		// This is just a standard hsl to rgb transform
 		// the only difference is the offsets above and the brightness transform below

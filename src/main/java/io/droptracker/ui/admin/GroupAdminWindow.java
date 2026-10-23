@@ -23,8 +23,8 @@ import net.runelite.client.util.LinkBrowser;
  * The group manager: a window of its own rather than more side-panel rows,
  * because a group has dozens of settings and the side panel is 225px wide.
  *
- * <p>Left, a list of pages (Overview, then one per settings category from the
- * server); right, the page; along the bottom, a save bar that appears once
+ * <p>Left, a list of pages (Overview, Members, then one per settings category
+ * from the server); right, the page; along the bottom, a save bar that appears once
  * something has changed. Before any of that, a group needs its verification
  * code once on this device (see {@link GroupAdminApi}).
  */
@@ -73,6 +73,8 @@ public class GroupAdminWindow extends JPanel {
     private GroupAdmin.Group group;
     @Nullable
     private GroupAdmin.Settings settings;
+    @Nullable
+    private MembersPage members;
     private boolean busy;
     private boolean closed;
 
@@ -303,6 +305,7 @@ public class GroupAdminWindow extends JPanel {
         signOut.setVisible(true);
         pages.removeAll();
         pages.add(overviewPage(overview), "page0");
+        members = new MembersPage(api, playerName, accountHash, () -> group.getId(), this::showLink);
         buildForms(loaded, 0);
         bodyCards.show(body, MANAGE);
     }
@@ -317,8 +320,10 @@ public class GroupAdminWindow extends JPanel {
         nav.removeAll();
         nav.add(navHeading("GROUP"));
         addNav("Overview", 0, true);
+        pages.add(members, "page1");
+        addNav("Members", 1, true);
         nav.add(navHeading("SETTINGS"));
-        int index = 1;
+        int index = 2;
         for (GroupAdmin.Category category : loaded.getCategories()) {
             if (loaded.getFields().stream().noneMatch(f -> category.getKey().equals(f.getCategory()))) {
                 continue;
@@ -334,7 +339,6 @@ public class GroupAdminWindow extends JPanel {
         }
         nav.add(navHeading("COMING SOON"));
         addNav("Events", -1, false);
-        addNav("Members", -1, false);
         nav.add(Box.createVerticalGlue());
         nav.revalidate();
         nav.repaint();
@@ -580,6 +584,9 @@ public class GroupAdminWindow extends JPanel {
 
     private void showPage(int page) {
         pageCards.show(pages, "page" + page);
+        if (page == 1 && members != null) {
+            members.opened();
+        }
         navItems.forEach(n -> n.setSelected(n.page == page));
     }
 
@@ -619,8 +626,7 @@ public class GroupAdminWindow extends JPanel {
     }
 
     private static JButton button(String text, @Nullable String tooltip) {
-        JButton b = new JButton(text);
-        DropTrackerTheme.styleButton(b);
+        JButton b = DropTrackerTheme.button(text);
         b.setToolTipText(tooltip);
         return b;
     }

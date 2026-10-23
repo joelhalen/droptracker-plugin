@@ -78,6 +78,8 @@ public class DropTrackerPanel extends PluginPanel {
 	private io.droptracker.api.DeathMessageApi deathMessageApi;
 	@Inject
 	private io.droptracker.api.GroupAdminApi groupAdminApi;
+	@Inject
+	private net.runelite.client.callback.ClientThread clientThread;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -134,7 +136,7 @@ public class DropTrackerPanel extends PluginPanel {
 		tabbedPane.setForeground(DropTrackerTheme.TEXT);
 		tabbedPane.setFont(FontManager.getRunescapeSmallFont());
 
-		homePanel = new HomePanel(config, api, client, this, deathMessageApi, groupAdminApi);
+		homePanel = new HomePanel(config, api, client, this, groupAdminApi);
 		homeComponent = homePanel.create();
 
 		if (config.useApi()) {
@@ -163,6 +165,7 @@ public class DropTrackerPanel extends PluginPanel {
 			tabbedPane.addTab("Events", eventsComponent);
 			tabbedPane.addTab("Player", playerComponent);
 			tabbedPane.addTab("Group", groupComponent);
+			tabbedPane.addTab("Extras", new ExtrasPanel(config, client, deathMessageApi).create());
 		} else {
 			activityComponent = null;
 			playerComponent = null;
@@ -221,15 +224,13 @@ public class DropTrackerPanel extends PluginPanel {
 		titleCol.add(Box.createVerticalGlue());
 		topRow.add(titleCol, BorderLayout.CENTER);
 
-		JButton docsButton = new JButton("?");
-		DropTrackerTheme.styleButton(docsButton);
+		JButton docsButton = DropTrackerTheme.button("?");
 		docsButton.setToolTipText("Open the DropTracker documentation");
 		docsButton.setPreferredSize(new Dimension(26, 26));
 		docsButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
 		docsButton.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("docs").toString()));
 
-		JButton refreshButton = new JButton(
-			PanelIcons.refresh(DropTrackerTheme.TEXT, 12));
+		JButton refreshButton = new JButton(PanelIcons.refresh(DropTrackerTheme.TEXT, 12));
 		DropTrackerTheme.styleButton(refreshButton);
 		refreshButton.setToolTipText("Refresh panel");
 		refreshButton.setPreferredSize(new Dimension(26, 26));
@@ -341,10 +342,13 @@ public class DropTrackerPanel extends PluginPanel {
 		}
 	}
 
-	// Update the group panel from sources other than direct searches
-	public void updateGroupPanel(String groupToLoad) {
-		if (groupPanel != null && groupToLoad != null && !groupToLoad.trim().isEmpty()) {
-			groupPanel.performGroupSearch(groupToLoad);
+	/** Registers a group in game; without the API or a logged-in account, the website's guide. */
+	public void openRegister() {
+		String name = config.lastAccountName();
+		if (config.useApi() && name != null && !name.isEmpty() && client.getAccountHash() != -1) {
+			io.droptracker.ui.admin.RegisterWindow.open(client, clientThread, config, groupAdminApi);
+		} else {
+			LinkBrowser.browse(DropTrackerUrls.web("wiki", "create-group").toString());
 		}
 	}
 

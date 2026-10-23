@@ -15,6 +15,7 @@ import com.google.gson.*;
 
 import io.droptracker.models.api.GroupAdmin;
 import io.droptracker.ui.DropTrackerTheme;
+import io.droptracker.ui.components.PanelElements;
 import net.runelite.client.ui.FontManager;
 
 /**
@@ -26,7 +27,7 @@ import net.runelite.client.ui.FontManager;
  * changed row gets a gold edge, and {@link #changes()} holds exactly the rows
  * whose value differs from what the server sent.
  */
-class SettingsForm extends JPanel implements Scrollable {
+public class SettingsForm extends JPanel implements Scrollable {
 
     private static final int CONTROL_WIDTH = 210;
 
@@ -194,8 +195,7 @@ class SettingsForm extends JPanel implements Scrollable {
             String type = field.getType() == null ? "" : field.getType();
             if (!GroupAdmin.KNOWN_TYPES.contains(type)) {
                 read = () -> value;
-                JButton web = new JButton("Edit on website");
-                DropTrackerTheme.styleButton(web);
+                JButton web = DropTrackerTheme.button("Edit on website");
                 web.addActionListener(e -> openWebsite.run());
                 return web;
             }
@@ -243,6 +243,42 @@ class SettingsForm extends JPanel implements Scrollable {
                     control = input;
                     break;
                 }
+                case "multi": {
+                    Set<String> chosen = new LinkedHashSet<>();
+                    if (value != null && value.isJsonArray()) {
+                        value.getAsJsonArray().forEach(v -> chosen.add(v.getAsString()));
+                    }
+                    JButton pick = DropTrackerTheme.button(" ");
+                    pick.setHorizontalAlignment(SwingConstants.LEFT);
+                    pick.setPreferredSize(new Dimension(CONTROL_WIDTH, 26));
+                    Runnable label = () -> {
+                        List<String> names = chosenLabels(field.getOptions(), chosen);
+                        pick.setText(names.isEmpty() ? "None chosen" : names.size() == 1 ? names.get(0)
+                            : names.get(0) + " +" + (names.size() - 1) + " more");
+                        pick.setToolTipText("<html>" + (names.isEmpty() ? "" : PanelElements.escapeHtml(String.join(", ", names)) + "<br>")
+                            + "Click to choose</html>");
+                    };
+                    label.run();
+                    pick.addActionListener(e -> ChecklistDialog.open(pick, field.getLabel(), field.getOptions(), chosen,
+                        picked -> {
+                            chosen.clear();
+                            chosen.addAll(picked);
+                            label.run();
+                            changed();
+                        }));
+                    read = () -> {
+                        // Option order, then anything chosen that's no longer offered.
+                        Set<String> ordered = new LinkedHashSet<>();
+                        field.getOptions().stream().map(GroupAdmin.Choice::getValue).filter(chosen::contains)
+                            .forEach(ordered::add);
+                        ordered.addAll(chosen);
+                        JsonArray out = new JsonArray();
+                        ordered.forEach(out::add);
+                        return out;
+                    };
+                    control = pick;
+                    break;
+                }
                 case "text": {
                     JTextArea area = new JTextArea(asString(value), 3, 18);
                     area.setLineWrap(true);
@@ -252,7 +288,8 @@ class SettingsForm extends JPanel implements Scrollable {
                     listen(area, this::changed);
                     JScrollPane scroll = new JScrollPane(area);
                     scroll.setBorder(BorderFactory.createLineBorder(DropTrackerTheme.SURFACE_3, 1));
-                    scroll.setPreferredSize(new Dimension(CONTROL_WIDTH, 64));
+                    int lines = asString(value).split("\n", -1).length;
+                    scroll.setPreferredSize(new Dimension(CONTROL_WIDTH, lines > 3 ? Math.min(160, 16 * lines + 16) : 64));
                     control = scroll;
                     break;
                 }
@@ -269,6 +306,19 @@ class SettingsForm extends JPanel implements Scrollable {
             }
             return control;
         }
+    }
+
+    /** Labels of the chosen options, in option order; a value no longer offered shows as itself. */
+    static List<String> chosenLabels(List<GroupAdmin.Choice> options, Set<String> chosen) {
+        List<String> names = new ArrayList<>();
+        Set<String> left = new LinkedHashSet<>(chosen);
+        for (GroupAdmin.Choice c : options) {
+            if (left.remove(c.getValue())) {
+                names.add(c.getLabel() == null ? c.getValue() : c.getLabel());
+            }
+        }
+        names.addAll(left);
+        return names;
     }
 
     /** "Must be at least 0", or null when the number is fine (or empty). */
@@ -349,7 +399,7 @@ class SettingsForm extends JPanel implements Scrollable {
                     String name = choices.contains(c) ? prefix + label : label;
                     // Channel categories trail in muted text inside the list only.
                     setText(index >= 0 && c.getGroup() != null
-                        ? "<html>" + escape(name) + " <font color='#9a8a6a'>" + escape(c.getGroup()) + "</font></html>"
+                        ? "<html>" + PanelElements.escapeHtml(name) + " <font color='#9a8a6a'>" + PanelElements.escapeHtml(c.getGroup()) + "</font></html>"
                         : name);
                 }
                 setFont(FontManager.getRunescapeSmallFont());
@@ -377,7 +427,7 @@ class SettingsForm extends JPanel implements Scrollable {
         c.setFont(FontManager.getRunescapeSmallFont());
     }
 
-    private static void listen(JTextComponent c, Runnable onChange) {
+    public static void listen(JTextComponent c, Runnable onChange) {
         c.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -395,7 +445,7 @@ class SettingsForm extends JPanel implements Scrollable {
         });
     }
 
-    static JComponent wrapped(String text, Color color) {
+    public static JComponent wrapped(String text, Color color) {
         JTextArea area = new JTextArea(text);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
@@ -408,12 +458,9 @@ class SettingsForm extends JPanel implements Scrollable {
         return area;
     }
 
-    static JComponent left(JComponent c) {
+    public static JComponent left(JComponent c) {
         c.setAlignmentX(Component.LEFT_ALIGNMENT);
         return c;
     }
 
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
-    }
 }

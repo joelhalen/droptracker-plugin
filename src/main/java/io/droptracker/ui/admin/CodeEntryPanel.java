@@ -8,7 +8,6 @@ import java.util.List;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.*;
 import javax.swing.text.*;
 
 import io.droptracker.ui.DropTrackerTheme;
@@ -42,21 +41,7 @@ class CodeEntryPanel extends JPanel {
                 BorderFactory.createLineBorder(DropTrackerTheme.BRONZE, 1), new EmptyBorder(6, 8, 6, 8)));
             ((AbstractDocument) box.getDocument()).setDocumentFilter(new DigitsFilter(i));
             int index = i;
-            box.getDocument().addDocumentListener(new DocumentListener() {
-                @Override
-                public void insertUpdate(DocumentEvent e) {
-                    changed(index);
-                }
-
-                @Override
-                public void removeUpdate(DocumentEvent e) {
-                    changed(index);
-                }
-
-                @Override
-                public void changedUpdate(DocumentEvent e) {
-                }
-            });
+            SettingsForm.listen(box, () -> changed(index));
             box.addKeyListener(new KeyAdapter() {
                 @Override
                 public void keyPressed(KeyEvent e) {

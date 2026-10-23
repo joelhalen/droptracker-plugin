@@ -118,6 +118,52 @@ public class GroupAdminApi {
             accountHash, groupId, body, GroupAdmin.Settings.class));
     }
 
+    public void members(String playerName, long accountHash, int groupId, String query, int page,
+                        Consumer<Result<GroupAdmin.Members>> callback) {
+        String path = "/plugin/admin/groups/" + groupId + "/members?page=" + page + "&q="
+            + java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
+        run(callback, () -> call("GET", path, playerName, accountHash, groupId, null, GroupAdmin.Members.class));
+    }
+
+    /** Shows or hides a member on the group's boards. */
+    public void setHidden(String playerName, long accountHash, int groupId, int playerId, boolean hidden,
+                          Consumer<Result<JsonObject>> callback) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("hidden", hidden);
+        run(callback, () -> call("POST", "/plugin/admin/groups/" + groupId + "/members/" + playerId + "/hidden",
+            playerName, accountHash, groupId, body, JsonObject.class));
+    }
+
+    public void womSync(String playerName, long accountHash, int groupId, Consumer<Result<GroupAdmin.Notice>> callback) {
+        run(callback, () -> call("POST", "/plugin/admin/groups/" + groupId + "/wom-sync", playerName, accountHash,
+            groupId, new HashMap<>(), GroupAdmin.Notice.class));
+    }
+
+    /** Starts registering a group: a WiseOldMan id, or (null) the clan roster to make one from. */
+    public void register(String playerName, long accountHash, String name, @Nullable Integer womId,
+                         List<Map<String, String>> roster, Consumer<Result<GroupAdmin.Registration>> callback) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", name);
+        body.put("wom_id", womId);
+        body.put("roster", roster);
+        run(callback, () -> call("POST", "/plugin/register", playerName, accountHash, 0, body,
+            GroupAdmin.Registration.class));
+    }
+
+    /** Polls a registration; once done, keeps the new group's session like {@link #link}. */
+    public void registration(String playerName, long accountHash, String id,
+                             Consumer<Result<GroupAdmin.RegistrationStatus>> callback) {
+        run(callback, () -> {
+            Result<GroupAdmin.RegistrationStatus> result = call("GET", "/plugin/register/status?id=" + id, playerName,
+                accountHash, 0, null, GroupAdmin.RegistrationStatus.class);
+            if (result.value != null && result.value.getToken() != null) {
+                configManager.setRSProfileConfiguration(DropTrackerConfig.GROUP, TOKEN_KEY + result.value.getGroupId(),
+                    result.value.getToken());
+            }
+            return result;
+        });
+    }
+
     public boolean hasSession(int groupId) {
         return token(groupId) != null;
     }
@@ -222,6 +268,8 @@ public class GroupAdminApi {
             fallback = THROTTLED;
         } else if (status == 403) {
             fallback = NOT_ADMIN;
+        } else if (status == 422) {
+            fallback = UNREACHABLE;
         } else {
             return Result.failed(UNREACHABLE);
         }

@@ -48,23 +48,19 @@ public class PetHandlerParseTest {
         assertEquals("200 kills.", m.group("milestone"));
     }
 
-    // Regression: skilling pets have no boss source and are absent from PET_TO_SOURCE,
-    // but must still be recognised via the Pet enum, else their name is dropped.
+    // Pet names come from the server's manifest ("pets": name -> kill-count boss).
+    // Skilling pets have no boss and must still be recognised; chat spells
+    // names in whatever case the game uses.
     @Test
-    public void isPetNameRecognisesSkillingPets() {
-        for (String skillingPet : new String[]{
-                "Beaver", "Heron", "Rock golem", "Rocky", "Giant squirrel",
-                "Tangleroot", "Rift guardian", "Baby chinchompa"}) {
-            assertTrue(skillingPet + " should be recognised", PetHandler.isPetName(skillingPet));
-        }
-    }
-
-    @Test
-    public void isPetNameRecognisesBossPetsAndRejectsNonPets() {
-        // Newer boss pets live only in PET_TO_SOURCE, not the Pet enum.
-        assertTrue(PetHandler.isPetName("Yami"));
-        assertTrue(PetHandler.isPetName("Dom"));
-        assertTrue(PetHandler.isPetName("Baby mole"));
-        assertFalse(PetHandler.isPetName("Dragon warhammer"));
+    public void petKeyFindsManifestPetsIgnoringCase() {
+        java.util.Map<String, String> pets = new java.util.HashMap<>();
+        pets.put("Baby mole", "Giant Mole");
+        pets.put("Heron", null);
+        pets.put("Lil' zik", "Theatre of Blood");
+        assertEquals("Baby mole", PetHandler.petKey(pets, "baby Mole"));
+        assertEquals("Heron", PetHandler.petKey(pets, "Heron"));
+        assertEquals("Lil' zik", PetHandler.petKey(pets, "Lil' Zik"));
+        assertEquals(null, PetHandler.petKey(pets, "Dragon warhammer"));
+        assertEquals(null, PetHandler.petKey(java.util.Collections.emptyMap(), "Baby mole"));
     }
 }

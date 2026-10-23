@@ -41,8 +41,7 @@ public final class StateViews {
 
         if (retryAction != null) {
             panel.add(DropTrackerTheme.gap(12));
-            JButton retryButton = new JButton(buttonText != null ? buttonText : "Retry");
-            DropTrackerTheme.styleButton(retryButton);
+            JButton retryButton = DropTrackerTheme.button(buttonText != null ? buttonText : "Retry");
             retryButton.setAlignmentX(Component.CENTER_ALIGNMENT);
             retryButton.addActionListener(e -> retryAction.run());
             panel.add(retryButton);

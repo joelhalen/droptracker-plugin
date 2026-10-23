@@ -98,8 +98,7 @@ public class EventsPanel {
         header.setBackground(DropTrackerTheme.SURFACE_0);
         JLabel title = DropTrackerTheme.label("Your events", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         header.add(title, BorderLayout.WEST);
-        JButton refresh = new JButton("Refresh");
-        DropTrackerTheme.styleButton(refresh);
+        JButton refresh = DropTrackerTheme.button("Refresh");
         refresh.addActionListener(e -> refreshAsync());
         header.add(refresh, BorderLayout.EAST);
         header.setBorder(new EmptyBorder(4, 6, 4, 6));
@@ -306,12 +305,7 @@ public class EventsPanel {
     private JPanel cardHeader(EventState.Entry entry, boolean showHudPick, boolean onHud) {
         EventState.EventInfo event = entry.getEvent();
 
-        JPanel header = new JPanel(new BorderLayout(6, 0)) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel header = new DropTrackerTheme.FitPanel(new BorderLayout(6, 0));
         header.setBackground(DropTrackerTheme.SURFACE_2);
         header.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 0, 1, 0, DropTrackerTheme.BRONZE),
@@ -346,8 +340,7 @@ public class EventsPanel {
                 chip.setToolTipText("The Enhanced Display HUD is showing this event");
                 east.add(chip, BorderLayout.NORTH);
             } else {
-                JButton pin = new JButton("Show on HUD");
-                DropTrackerTheme.styleButton(pin);
+                JButton pin = DropTrackerTheme.button("Show on HUD");
                 pin.setToolTipText("Switch the Enhanced Display HUD to this event");
                 pin.addActionListener(e -> {
                     config.setPinnedEventId(event.getId());
@@ -398,12 +391,7 @@ public class EventsPanel {
         box.add(head);
         box.add(vgap(4));
 
-        JPanel row = new JPanel(new BorderLayout(6, 0)) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel row = new DropTrackerTheme.FitPanel(new BorderLayout(6, 0));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
         row.setBackground(DropTrackerTheme.SURFACE_2);
         JLabel icon = new JLabel();
@@ -480,12 +468,7 @@ public class EventsPanel {
         wrap.add(caption);
         wrap.add(vgap(3));
 
-        JPanel grid = new JPanel(new GridBagLayout()) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel grid = new DropTrackerTheme.FitPanel(new GridBagLayout());
         grid.setBackground(DropTrackerTheme.SURFACE_2);
         grid.setAlignmentX(Component.LEFT_ALIGNMENT);
 
@@ -535,24 +518,10 @@ public class EventsPanel {
         return slot;
     }
 
-    /** Same struck-through obtained styling as the row tooltip, per item. */
     private static String requirementTooltip(EventState.Requirement req, boolean obtained) {
-        StringBuilder html = new StringBuilder("<html>");
-        if (obtained) {
-            html.append("<strike><font color='#8a7c5e'>");
-        }
-        html.append(escape(req.getName()));
-        if (req.getQuantity() != null && req.getQuantity() > 1) {
-            html.append(" ×").append(req.getQuantity());
-        }
-        if (req.getPoints() != null) {
-            html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
-        }
-        if (obtained) {
-            html.append("</font></strike> (done)");
-        }
-        html.append("</html>");
-        return html.toString();
+        String label = req.getLabel() != null ? req.getLabel() : req.getName();
+        return tip(Collections.singletonList(new EventState.TipLine(obtained ? label + " (done)" : label,
+            obtained ? "done" : null)));
     }
 
     /** Item sprite or allowlisted remote icon into a requirement slot, marked
@@ -714,12 +683,7 @@ public class EventsPanel {
 
     /** Fold-out header for the tasks the user hid, with a way back. */
     private JComponent hiddenHeader(EventState.Entry entry, String key, int count, boolean revealed) {
-        JPanel row = new JPanel(new BorderLayout(5, 0)) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel row = new DropTrackerTheme.FitPanel(new BorderLayout(5, 0));
         row.setBackground(DropTrackerTheme.SURFACE_1);
         row.setBorder(new EmptyBorder(2, 2, 2, 4));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -774,12 +738,7 @@ public class EventsPanel {
                            int displayedId, boolean controls, boolean pinned, boolean hidden) {
         boolean isDisplayed = task.getId() == displayedId;
 
-        JPanel row = new JPanel(new BorderLayout(5, 0)) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel row = new DropTrackerTheme.FitPanel(new BorderLayout(5, 0));
         Color baseBg = isDisplayed ? DropTrackerTheme.SURFACE_3 : DropTrackerTheme.SURFACE_2;
         row.setBackground(baseBg);
         row.setBorder(BorderFactory.createCompoundBorder(
@@ -918,57 +877,22 @@ public class EventsPanel {
         return glyph;
     }
 
-    /** Tooltip explaining the task: full label, badge, description,
-     *  requirements (with per-item quantity/points) and progress. */
-    private String taskTooltip(EventState.TaskInfo task) {
+    /** The server's tooltip lines, escaped, in its fixed set of styles. */
+    private static String tip(List<EventState.TipLine> lines) {
         StringBuilder html = new StringBuilder("<html><p style='width:200px;'>");
-        html.append("<b>").append(escape(task.getLabel())).append("</b>");
-        if (task.getBadge() != null) {
-            html.append(" &nbsp;<i>[").append(escape(task.getBadge()));
-            if (task.getValue() != null) {
-                html.append(" — ").append(escape(task.getValue()));
-            }
-            html.append("]</i>");
+        for (int i = 0; i < lines.size(); i++) {
+            String text = escape(lines.get(i).getText() == null ? "" : lines.get(i).getText());
+            String style = String.valueOf(lines.get(i).getStyle());
+            html.append(i > 0 ? "<br/>" : "").append("title".equals(style) ? "<b>" + text + "</b>"
+                : "note".equals(style) ? "<i>" + text + "</i>"
+                : "done".equals(style) ? "<strike><font color='#8a7c5e'>" + text + "</font></strike>" : text);
         }
-        if (task.getDescription() != null) {
-            html.append("<br/>").append(escape(task.getDescription()));
-        }
-        List<EventState.Requirement> requirements = task.getRequirements();
-        if (requirements != null && !requirements.isEmpty()) {
-            html.append("<br/>");
-            for (EventState.Requirement req : requirements) {
-                // Struck through = the team already banked this item and
-                // re-receiving it can't advance the task (server-decided;
-                // never set on point/any-of tasks where re-receives count).
-                boolean obtained = Boolean.TRUE.equals(req.getObtained());
-                html.append("<br/>- ");
-                if (obtained) {
-                    html.append("<strike><font color='#8a7c5e'>");
-                }
-                html.append(escape(req.getName()));
-                if (req.getQuantity() != null && req.getQuantity() > 1) {
-                    html.append(" ×").append(req.getQuantity());
-                }
-                if (req.getPoints() != null) {
-                    html.append(" <i>(").append(req.getPoints()).append(" pts)</i>");
-                }
-                if (obtained) {
-                    html.append("</font></strike> (done)");
-                }
-            }
-        }
-        if (!task.isCompleted() && (task.getNeed() > 1 || task.getHave() > 0)) {
-            html.append("<br/><br/>Progress: ")
-                .append(ValueFormat.progress(task.getHave(), task.getNeed()));
-        }
-        if (task.isCompleted()) {
-            html.append("<br/><br/>Completed");
-        }
-        if (task.getPoints() > 0) {
-            html.append("<br/>Worth ").append(task.getPoints()).append(" points");
-        }
-        html.append("</p></html>");
-        return html.toString();
+        return html.append("</p></html>").toString();
+    }
+
+    private String taskTooltip(EventState.TaskInfo task) {
+        return tip(task.getTip() != null ? task.getTip()
+            : Collections.singletonList(new EventState.TipLine(task.getLabel(), "title")));
     }
 
     /* ===================== standings table ===================== */
@@ -1108,12 +1032,7 @@ public class EventsPanel {
         JPanel wrap = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         wrap.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JPanel head = new JPanel(new BorderLayout()) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel head = new DropTrackerTheme.FitPanel(new BorderLayout());
         head.setAlignmentX(Component.LEFT_ALIGNMENT);
         head.setBackground(DropTrackerTheme.SURFACE_1);
         head.setBorder(BorderFactory.createCompoundBorder(

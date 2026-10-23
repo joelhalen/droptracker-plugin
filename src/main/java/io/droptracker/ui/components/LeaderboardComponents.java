@@ -59,8 +59,7 @@ public class LeaderboardComponents {
         searchField.setPreferredSize(new Dimension(200, 35));
         searchField.setMinimumSize(new Dimension(100, 35));
         
-        JButton searchButton = new JButton("Search");
-        DropTrackerTheme.styleButton(searchButton);
+        JButton searchButton = DropTrackerTheme.button("Search");
         searchButton.setPreferredSize(new Dimension(70, 35));
         searchButton.setMaximumSize(new Dimension(70, 35));
         searchButton.setMinimumSize(new Dimension(70, 35));

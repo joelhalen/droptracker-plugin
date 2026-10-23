@@ -90,6 +90,24 @@ public final class DropTrackerTheme {
     }
 
     /** Applies the standard themed button look (SURFACE_2 body, gold-bright hover). */
+    public static JButton button(String text) {
+        JButton button = new JButton(text);
+        styleButton(button);
+        return button;
+    }
+
+    /** A panel no taller than its content inside a vertical BoxLayout. */
+    public static class FitPanel extends JPanel {
+        public FitPanel(LayoutManager layout) {
+            super(layout);
+        }
+
+        @Override
+        public Dimension getMaximumSize() {
+            return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+        }
+    }
+
     public static void styleButton(JButton button) {
         button.setFocusPainted(false);
         button.setContentAreaFilled(true);

@@ -2,6 +2,7 @@ package io.droptracker.models.api;
 
 import com.google.gson.annotations.SerializedName;
 import io.droptracker.models.submissions.RecentSubmission;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import javax.annotation.Nullable;
@@ -146,12 +147,24 @@ public class EventState {
         private String description;
         @Nullable
         private List<Requirement> requirements;
+        /** The tooltip, composed by the server. */
+        private List<TipLine> tip;
+    }
+
+    /** One tooltip line. {@code style}: "title", "note", "done" or null. */
+    @Getter
+    @AllArgsConstructor
+    public static class TipLine {
+        private String text;
+        private String style;
     }
 
     /** One item requirement of a task
      *  ({name, quantity?, points?, obtained?, icon_item_id?, icon_path?}). */
     @Getter
     public static class Requirement {
+        /** "Dragon claws ×2 (5 pts)", as shown. */
+        private String label;
         private String name;
         @Nullable
         private Integer quantity;

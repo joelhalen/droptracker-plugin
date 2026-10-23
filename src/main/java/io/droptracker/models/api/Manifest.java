@@ -75,6 +75,9 @@ public class Manifest {
 	@SerializedName("team_indicators")
 	private TeamIndicatorSettings teamIndicators;
 
+	/** Pet name to the boss its kill count comes from (null for skilling and other pets). */
+	private Map<String, String> pets;
+
 	/**
 	 * Parses a manifest document section by section.
 	 *
@@ -102,6 +105,7 @@ public class Manifest {
 		manifest.questIds = section(gson, root, "quest_ids", INT_LIST);
 		manifest.sync = section(gson, root, "sync", SyncSettings.class);
 		manifest.teamIndicators = section(gson, root, "team_indicators", TeamIndicatorSettings.class);
+		manifest.pets = section(gson, root, "pets", new TypeToken<Map<String, String>>() {}.getType());
 		return manifest;
 	}
 
@@ -120,6 +124,10 @@ public class Manifest {
 			log.warn("Ignoring manifest section '{}': {}", name, e.toString());
 			return null;
 		}
+	}
+
+	public Map<String, String> getPets() {
+		return pets == null ? Collections.emptyMap() : pets;
 	}
 
 	public List<Integer> getCombatAchievementVarps() {

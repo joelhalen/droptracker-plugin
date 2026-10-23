@@ -15,6 +15,7 @@ import java.util.regex.*;
 import io.droptracker.service.KCService;
 import io.droptracker.util.ItemIDSearch;
 import io.droptracker.models.*;
+import io.droptracker.models.api.Manifest;
 import io.droptracker.models.submissions.SubmissionType;
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,6 +53,9 @@ public class PetHandler extends BaseEventHandler {
     @Inject
     private KCService kcService;
 
+    @Inject
+    private io.droptracker.service.ManifestService manifestService;
+
     @Setter(AccessLevel.PRIVATE)
     private volatile String petName = null;
 
@@ -88,7 +92,7 @@ public class PetHandler extends BaseEventHandler {
             // *before* "You have a funny feeling…", so we store any matching name here
             // and consume it when PET_REGEX fires below.
             parseItemFromGameMessage(chatMessage)
-                    .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
+                    .filter(this::isPet)
                     .ifPresent(parseResult -> {
                         this.pendingPetName = parseResult.itemName;
                         this.pendingCollection = parseResult.collectionLog;
@@ -110,7 +114,7 @@ public class PetHandler extends BaseEventHandler {
             }
         } else if (PRIMED_NAME.equals(petName) || !collection) {
             parseItemFromGameMessage(chatMessage)
-                    .filter(item -> item.itemName.startsWith("Pet ") || isPetName(item.itemName))
+                    .filter(this::isPet)
                     .ifPresent(parseResult -> {
                         this.petName = parseResult.itemName;
                         if (parseResult.collectionLog) {
@@ -204,9 +208,9 @@ public class PetHandler extends BaseEventHandler {
         // getKillCountWithStorage checks the in-memory cache AND falls back to data
         // stored by the RuneLite Chat Commands / Loot Tracker plugins, so it works
         // even on the very first kill of a session (when the cache is cold).
-        String pet = petName != null ? ucFirst(petName) : null;
-        if (pet != null && PET_TO_SOURCE.containsKey(pet)) {
-            String source = PET_TO_SOURCE.get(pet);
+        String pet = petName != null ? petKey(pets(), petName) : null;
+        String source = pet != null ? pets().get(pet) : null;
+        if (source != null) {
             Integer kc = kcService.getKillCountWithStorage(LootRecordType.UNKNOWN, source);
             if (kc != null && kc > 0) {
                 fieldData.put("source", source);
@@ -264,72 +268,27 @@ public class PetHandler extends BaseEventHandler {
         return Character.toUpperCase(text.charAt(0)) + text.substring(1).toLowerCase();
     }
 
-    // Skilling pets (Beaver, Heron, Rocky, ...) have no boss source, so PET_TO_SOURCE
-    // alone isn't a complete pet list; the Pet enum carries them, PET_TO_SOURCE the newer
-    // boss pets it lacks. Accept a name present in either.
-    @VisibleForTesting
-    static boolean isPetName(String itemName) {
-        if (itemName == null) return false;
-        String name = ucFirst(itemName);
-        return Pet.findPet(name) != null || PET_TO_SOURCE.containsKey(name);
+    /** Pets by name, each with its kill-count boss (or null), from the server's manifest. */
+    private Map<String, String> pets() {
+        Manifest manifest = manifestService.getManifest();
+        return manifest == null ? Collections.emptyMap() : manifest.getPets();
     }
 
-    // Boss pet to source mapping - used for KC lookup. Skilling pets have no boss
-    // source; their source (the skill) is attributed server-side to avoid a plugin
-    // release per new pet and to keep skill names out of NPC resolution.
-    private static final Map<String, String> PET_TO_SOURCE = Map.ofEntries(
-        Map.entry("Abyssal orphan", "Abyssal Sire"),
-        // "Mad Angel" (not the collection-log page's "The Mad Angel") — the npc
-        // name the kc storage and npc_list are both keyed on.
-        Map.entry("Aggy", "Mad Angel"),
-        Map.entry("Baby mole", "Giant Mole"),
-        Map.entry("Baron", "Duke Sucellus"),
-        Map.entry("Butch", "Vardorvis"),
-        Map.entry("Callisto cub", "Callisto"),
-        Map.entry("Chompy chick", "Chompy bird"),
-        Map.entry("Hellpuppy", "Cerberus"),
-        Map.entry("Herbi", "Herbiboar"),
-        Map.entry("Huberte", "The Hueycoatl"),
-        Map.entry("Ikkle hydra", "Alchemical Hydra"),
-        Map.entry("Jal-nib-rek", "TzKal-Zuk"),
-        Map.entry("Kalphite princess", "Kalphite Queen"),
-        Map.entry("Lil' creator", "Spoils of war"),
-        Map.entry("Lil' zik", "Theatre of Blood"),
-        // The Fractured Archive's pet (its metamorphs share the clog slot).
-        Map.entry("Orion", "Fractured Archive"),
-        Map.entry("Lil'viathan", "The Leviathan"),
-        Map.entry("Little nightmare", "Nightmare"),
-        Map.entry("Moxi", "Amoxliatl"),
-        Map.entry("Muphin", "Phantom Muspah"),
-        Map.entry("Nexling", "Nex"),
-        Map.entry("Nid", "Araxxor"),
-        Map.entry("Noon", "Grotesque Guardians"),
-        Map.entry("Pet chaos elemental", "Chaos Elemental"),
-        Map.entry("Pet dagannoth prime", "Dagannoth Prime"),
-        Map.entry("Pet dagannoth rex", "Dagannoth Rex"),
-        Map.entry("Pet dagannoth supreme", "Dagannoth Supreme"),
-        Map.entry("Pet dark core", "Corporeal Beast"),
-        Map.entry("Pet general graardor", "General Graardor"),
-        Map.entry("Pet k'ril tsutsaroth", "K'ril Tsutsaroth"),
-        Map.entry("Pet kraken", "Kraken"),
-        Map.entry("Pet smoke devil", "Thermonuclear smoke devil"),
-        Map.entry("Pet snakeling", "Zulrah"),
-        Map.entry("Pet zilyana", "Commander Zilyana"),
-        Map.entry("Phoenix", "Wintertodt"),
-        Map.entry("Prince black dragon", "King Black Dragon"),
-        Map.entry("Scorpia's offspring", "Scorpia"),
-        Map.entry("Scurry", "Scurrius"),
-        Map.entry("Skotos", "Skotizo"),
-        Map.entry("Smolcano", "Zalcano"),
-        Map.entry("Sraracha", "Sarachnis"),
-        Map.entry("Tiny tempor", "Tempoross"),
-        Map.entry("Tzrek-jad", "TzTok-Jad"),
-        Map.entry("Venenatis spiderling", "Venenatis"),
-        Map.entry("Vet'ion jr.", "Vet'ion"),
-        Map.entry("Vorki", "Vorkath"),
-        Map.entry("Wisp", "The Whisperer"),
-        Map.entry("Yami", "Yama"),
-        Map.entry("Youngllef", "Gauntlet"),
-        Map.entry("Dom", "Doom of Mokhaitl")
-    );
+    /** The manifest's spelling of a pet's name, matched ignoring case, or null. */
+    @VisibleForTesting
+    static String petKey(Map<String, String> pets, String itemName) {
+        for (String name : pets.keySet()) {
+            if (name.equalsIgnoreCase(itemName)) {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    /** A pet's name in a chat line. Without a manifest, the collection log line is the pet's. */
+    private boolean isPet(ParseResult item) {
+        Map<String, String> pets = pets();
+        return item.itemName.startsWith("Pet ") || petKey(pets, item.itemName) != null
+            || (pets.isEmpty() && item.collectionLog);
+    }
 }

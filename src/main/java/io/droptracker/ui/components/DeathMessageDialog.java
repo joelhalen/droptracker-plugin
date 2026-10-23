@@ -10,7 +10,7 @@ import io.droptracker.api.DeathMessageApi;
 import net.runelite.api.Client;
 
 /**
- * The window around {@link DeathMessageEditor}, opened from the Home tab.
+ * The window around {@link DeathMessageEditor}, opened from the Extras tab.
  * One at a time: a second click brings the open one forward.
  */
 public final class DeathMessageDialog {

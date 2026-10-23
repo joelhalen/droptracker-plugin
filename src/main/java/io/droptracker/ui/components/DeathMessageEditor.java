@@ -9,7 +9,6 @@ import java.util.function.*;
 import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.*;
 import javax.swing.text.BadLocationException;
 
 import io.droptracker.api.*;
@@ -129,22 +128,7 @@ public class DeathMessageEditor extends JPanel {
             // so a long message would otherwise widen the whole window.
             field.setPreferredSize(new Dimension(WIDTH - 24, field.getPreferredSize().height));
             field.setToolTipText("Message " + (i + 1) + " - leave blank if you don't need it");
-            field.getDocument().addDocumentListener(new DocumentListener() {
-                @Override
-                public void insertUpdate(DocumentEvent e) {
-                    refresh();
-                }
-
-                @Override
-                public void removeUpdate(DocumentEvent e) {
-                    refresh();
-                }
-
-                @Override
-                public void changedUpdate(DocumentEvent e) {
-                    refresh();
-                }
-            });
+            io.droptracker.ui.admin.SettingsForm.listen(field, this::refresh);
             field.addFocusListener(new FocusAdapter() {
                 @Override
                 public void focusGained(FocusEvent e) {
@@ -179,15 +163,13 @@ public class DeathMessageEditor extends JPanel {
         leftButtons.setBackground(DropTrackerTheme.SURFACE_0);
         DropTrackerTheme.styleButton(saveButton);
         saveButton.addActionListener(e -> save());
-        JButton close = new JButton("Close");
-        DropTrackerTheme.styleButton(close);
+        JButton close = DropTrackerTheme.button("Close");
         close.addActionListener(e -> onClose.run());
         leftButtons.add(saveButton);
         leftButtons.add(Box.createRigidArea(new Dimension(6, 0)));
         leftButtons.add(close);
         buttons.add(leftButtons, BorderLayout.WEST);
-        JButton website = new JButton("Open website");
-        DropTrackerTheme.styleButton(website);
+        JButton website = DropTrackerTheme.button("Open website");
         website.setToolTipText("Edit your death messages on the DropTracker website");
         website.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("settings").toString()));
         buttons.add(website, BorderLayout.EAST);
@@ -294,8 +276,7 @@ public class DeathMessageEditor extends JPanel {
         tokenPanel.removeAll();
         boolean editable = !fields.isEmpty() && fields.get(0).isEditable();
         for (String token : tokens) {
-            JButton button = new JButton(token);
-            DropTrackerTheme.styleButton(button);
+            JButton button = DropTrackerTheme.button(token);
             button.setEnabled(editable);
             button.addActionListener(e -> insertToken(token));
             tokenPanel.add(button);

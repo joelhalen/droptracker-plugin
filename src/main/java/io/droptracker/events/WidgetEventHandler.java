@@ -230,20 +230,6 @@ public class WidgetEventHandler {
 
 
 
-    @VisibleForTesting
-    static String secondsToTimeString(double seconds)
-    {
-        int hours = (int) (Math.floor(seconds) / 3600);
-        int minutes = (int) (Math.floor(seconds / 60) % 60);
-        seconds = seconds % 60;
-
-        String timeString = hours > 0 ? String.format("%d:%02d:", hours, minutes) : String.format("%d:", minutes);
-
-        // If the seconds is an integer, it is ambiguous if the pb is a precise
-        // pb or not. So we always show it without the trailing .00.
-        return timeString + (Math.floor(seconds) == seconds ? String.format("%02d", (int) seconds) : String.format("%05.2f", seconds));
-    }
-
     // Method to collect all PBs from the adventure log
     @SuppressWarnings({ "null", "deprecation" })
     private void collectAndSendAdventureLogPBs() {
@@ -430,35 +416,8 @@ public class WidgetEventHandler {
     /**
      * Looks up the list of owned pets for the local player
      */
-    private List<Pet> getPetListOld()
-    {
-        String petListJson = configManager.getRSProfileConfiguration("chatcommands", "pets",
-                String.class);
-
-        List<Pet> petList;
-        try
-        {
-            // CHECKSTYLE:OFF
-            petList = gson.fromJson(petListJson, new TypeToken<List<Pet>>(){}.getType());
-            // CHECKSTYLE:ON
-        }
-        catch (JsonSyntaxException ex)
-        {
-            return Collections.emptyList();
-        }
-
-        return petList != null ? petList : Collections.emptyList();
-    }
-
     private List<Integer> getPetList()
     {
-        List<Pet> old = getPetListOld();
-        if (!old.isEmpty())
-        {
-            List<Integer> l = old.stream().map(Pet::getIconID).collect(Collectors.toList());
-            return l;
-        }
-
         String petListJson = configManager.getRSProfileConfiguration("chatcommands", "pets2",
                 String.class);
 

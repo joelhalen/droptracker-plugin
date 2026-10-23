@@ -536,11 +536,6 @@ public class NearbyPlayerTracker
         }
     }
 
-    public List<String> getNearbyPlayerNames(int radiusTiles)
-    {
-        return getNearbyPlayerTrace(radiusTiles).getNearbyPlayers();
-    }
-
     /** Participant trace with no submission source: plain proximity scan. */
     public NearbyPlayerTrace getNearbyPlayerTrace(int radiusTiles)
     {

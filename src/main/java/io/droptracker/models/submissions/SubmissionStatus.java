@@ -1,32 +1,28 @@
 package io.droptracker.models.submissions;
 
-import java.awt.Color;
-
 /**
  * Represents the lifecycle status of a ValidSubmission.
  */
 public enum SubmissionStatus {
     /** Submission has been created and is about to be sent */
-    PENDING("Sending...", "#FFFF00", new Color(255, 255, 0)),
+    PENDING("Sending...", "#FFFF00"),
     /** Submission is actively being sent over the network */
-    SENDING("Sending...", "#FFFF00", new Color(255, 255, 0)),
+    SENDING("Sending...", "#FFFF00"),
     /** Submission was successfully delivered to the server */
-    SENT("Sent successfully", "#00FF00", new Color(0, 255, 0)),
+    SENT("Sent successfully", "#00FF00"),
     /** Submission is being retried after a failure */
-    RETRYING("Retrying...", "#FFFF00", new Color(255, 255, 0)),
+    RETRYING("Retrying...", "#FFFF00"),
     /** Submission was confirmed processed by the API */
-    PROCESSED("Processed by API", "#00FF00", new Color(0, 255, 0)),
+    PROCESSED("Processed by API", "#00FF00"),
     /** Submission failed after exhausting retries */
-    FAILED("Failed", "#FF0000", new Color(255, 0, 0));
+    FAILED("Failed", "#FF0000");
 
     private final String description;
     private final String hexColor;
-    private final Color awtColor;
 
-    SubmissionStatus(String description, String hexColor, Color awtColor) {
+    SubmissionStatus(String description, String hexColor) {
         this.description = description;
         this.hexColor = hexColor;
-        this.awtColor = awtColor;
     }
 
     public String getDescription() {
@@ -35,10 +31,6 @@ public enum SubmissionStatus {
 
     public String getHexColor() {
         return hexColor;
-    }
-
-    public Color getAwtColor() {
-        return awtColor;
     }
 
     /**

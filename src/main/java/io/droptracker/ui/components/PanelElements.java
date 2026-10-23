@@ -451,12 +451,7 @@ public class PanelElements {
 
         // Header strip: darker bar with the title and chevron; the whole strip
         // toggles, and its height is pinned to its content.
-        JPanel headerPanel = new JPanel(new BorderLayout()) {
-            @Override
-            public Dimension getMaximumSize() {
-                return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
-            }
-        };
+        JPanel headerPanel = new DropTrackerTheme.FitPanel(new BorderLayout());
         headerPanel.setBackground(DropTrackerTheme.SURFACE_2);
         headerPanel.setBorder(new EmptyBorder(6, 8, 6, 8));
         headerPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));

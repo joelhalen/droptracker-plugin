@@ -41,8 +41,7 @@ public class PlayerStatsPanel extends SearchPage {
 
         if (playerName != null && !"Not logged in".equals(playerName)) {
             // Button to view current player stats
-            JButton viewStatsButton = new JButton("View My Stats (" + playerName + ")");
-            DropTrackerTheme.styleButton(viewStatsButton);
+            JButton viewStatsButton = DropTrackerTheme.button("View My Stats (" + playerName + ")");
             viewStatsButton.setPreferredSize(new Dimension(200, 30));
             viewStatsButton.setToolTipText("View your DropTracker statistics");
             viewStatsButton.addActionListener(e -> performPlayerSearch(playerName));
@@ -111,8 +110,7 @@ public class PlayerStatsPanel extends SearchPage {
      */
     private JButton createSendModelButton() {
         final String idleLabel = "Send Player Model";
-        JButton sendModelButton = new JButton(idleLabel);
-        DropTrackerTheme.styleButton(sendModelButton);
+        JButton sendModelButton = DropTrackerTheme.button(idleLabel);
         sendModelButton.setPreferredSize(new Dimension(200, 30));
         sendModelButton.setToolTipText("<html>Uploads your character (and pet) exactly as they look right now<br/>"
                 + "and shows that model on your droptracker.io profile.<br/>"

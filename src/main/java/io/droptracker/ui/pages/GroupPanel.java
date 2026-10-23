@@ -67,7 +67,7 @@ public class GroupPanel extends SearchPage {
             }, this::showLeaderboard);
         }
 
-        defaultPanel.add(buttonRow(PanelElements.createExternalLinkButton("Create a Group", "Click to visit the group creation documentation", false, this::openCreateGroupPage), 0));
+        defaultPanel.add(buttonRow(PanelElements.createExternalLinkButton("Register your group", "Put your clan on the DropTracker from here", false, panel::openRegister), 0));
         defaultPanel.add(DropTrackerTheme.gap(5));
         defaultPanel.add(buttonRow(PanelElements.createExternalLinkButton("View All Groups", "Click to visit the group page", true, this::openGroupPage), 0));
         defaultPanel.add(Box.createVerticalGlue());
@@ -172,17 +172,6 @@ public class GroupPanel extends SearchPage {
         }
     }
 
-    private void openCreateGroupPage() {
-        try {
-            LinkBrowser.browse(DropTrackerUrls.web("wiki", "create-group").toString());
-        } catch (Exception e) {
-            // Fallback: copy URL to clipboard or show message
-            JOptionPane.showMessageDialog(contentPanel,
-                    "Could not open browser. Please visit:\nhttps://droptracker.io/wiki/create-group",
-                    "Create Group Guide",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
 
     /**
      * Downloads the group icon, scales it to 50×50, then swaps it into the given label.

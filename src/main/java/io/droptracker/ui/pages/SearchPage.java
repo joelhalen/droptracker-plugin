@@ -162,8 +162,7 @@ abstract class SearchPage {
     }
 
     protected static JButton actionButton(String text) {
-        JButton button = new JButton(text);
-        DropTrackerTheme.styleButton(button);
+        JButton button = DropTrackerTheme.button(text);
         button.setMargin(new Insets(0, 5, 0, 5));
         return button;
     }

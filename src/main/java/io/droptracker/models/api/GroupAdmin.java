@@ -125,7 +125,68 @@ public final class GroupAdmin {
         private String group;
     }
 
-    /** Field types the plugin draws itself. */
+    /** {@code GET /plugin/admin/groups/{id}/members}: one page, most loot first. */
+    @Getter
+    public static class Members {
+        private String summary;
+        private String help;
+        private List<Member> rows = new ArrayList<>();
+        private int page;
+        private int pages;
+        private int matches;
+        /** e.g. "Showing 100 of 312. Search to find anyone else."; null when all are shown. */
+        private String footer;
+        private Wom wom;
+    }
+
+    @Getter
+    public static class Member {
+        @SerializedName("player_id")
+        private int playerId;
+        private String name;
+        /** Place in the whole group, also while searching. */
+        private int rank;
+        private String detail;
+        /** Left off the group's lootboard and leaderboards. */
+        private boolean hidden;
+    }
+
+    @Getter
+    public static class Wom {
+        @SerializedName("can_sync")
+        private boolean canSync;
+        private String note;
+    }
+
+    /** A one-line outcome, e.g. of a WiseOldMan sync. {@code tone}: "good" or "warn". */
+    @Getter
+    public static class Notice {
+        private String message;
+        private String tone;
+    }
+
+    /** {@code POST /plugin/register}: a registration held until Discord finishes it. */
+    @Getter
+    public static class Registration {
+        private String id;
+        /** e.g. which WiseOldMan group the id found. */
+        private String note;
+    }
+
+    /** {@code GET /plugin/register/status}: "pending", "done" or "failed". */
+    @Getter
+    public static class RegistrationStatus {
+        private String status;
+        private String message;
+        @SerializedName("group_id")
+        private int groupId;
+        @SerializedName("group_name")
+        private String groupName;
+        /** The new group's admin session, sent once; stored, never shown. */
+        private String token;
+    }
+
+    /** Field types the plugin draws itself. "multi" is a checklist of {@link Field#getOptions()}. */
     public static final Set<String> KNOWN_TYPES = new HashSet<>(Arrays.asList(
-        "boolean", "int", "string", "text", "select", "channel", "role", "csv"));
+        "boolean", "int", "string", "text", "select", "channel", "role", "csv", "multi"));
 }
