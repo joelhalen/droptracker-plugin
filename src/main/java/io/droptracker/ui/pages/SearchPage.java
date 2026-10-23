@@ -152,26 +152,6 @@ abstract class SearchPage {
         return panel;
     }
 
-    /** The name column of a detail header, holding the bold name label. */
-    protected static JPanel nameColumn(String name) {
-        JPanel column = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
-        JLabel nameLabel = DropTrackerTheme.label(name, FontManager.getRunescapeBoldFont(), DropTrackerTheme.TEXT);
-        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        column.add(nameLabel);
-        return column;
-    }
-
-    /** Detail header: optional icon, the name column and a clear button. */
-    protected JPanel detailHeader(@Nullable JComponent icon, JPanel names) {
-        JPanel header = fixed(new BorderLayout(10, 0), PluginPanel.PANEL_WIDTH - 40, 60);
-        if (icon != null) {
-            header.add(icon, BorderLayout.WEST);
-        }
-        header.add(names, BorderLayout.CENTER);
-        header.add(LeaderboardComponents.createClearButton(this::reset), BorderLayout.EAST);
-        return header;
-    }
-
     protected static JPanel statsGrid(JComponent... boxes) {
         JPanel stats = fixed(new GridLayout(2, 2, 5, 5), PluginPanel.PANEL_WIDTH, 100);
         stats.setBorder(new EmptyBorder(10, 0, 10, 0));
@@ -179,10 +159,6 @@ abstract class SearchPage {
             stats.add(box);
         }
         return stats;
-    }
-
-    protected static JPanel actionRow() {
-        return fixed(new FlowLayout(FlowLayout.CENTER, 10, 0), PluginPanel.PANEL_WIDTH - 40, 40);
     }
 
     protected static JButton actionButton(String text) {
@@ -216,58 +192,77 @@ abstract class SearchPage {
      * our own hosts.
      */
     protected void showCard(PanelCard card) {
-        JPanel names = nameColumn(card.getTitle());
+        JComponent icon = cardIcon(card);
+        // Text wraps to what the icon and the clear button leave of the row.
+        int width = PluginPanel.PANEL_WIDTH - (icon != null ? 150 : 80);
+        JPanel names = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
+        names.add(left(DropTrackerTheme.label(html(card.getTitle(), width), FontManager.getRunescapeBoldFont(),
+            DropTrackerTheme.TEXT)));
         PanelCard.Subtitle sub = card.getSubtitle();
         if (sub != null) {
             names.add(DropTrackerTheme.gap(5));
             JLabel label = DropTrackerTheme.label(sub.getText(), FontManager.getRunescapeSmallFont(),
                 "good".equals(sub.getTone()) ? DropTrackerTheme.GREEN
                     : "warn".equals(sub.getTone()) ? DropTrackerTheme.EMBER : DropTrackerTheme.TEXT_MUTED);
-            label.setToolTipText(html(sub.getTip()));
+            label.setToolTipText(html(sub.getTip(), 0));
             names.add(left(label));
         }
-        if (card.getDescription() != null) {
-            names.add(left(DropTrackerTheme.label(html(card.getDescription()), FontManager.getRunescapeSmallFont(),
+        List<String> lines = new java.util.ArrayList<>();
+        if (card.getDescription() != null && !card.getDescription().isEmpty()) {
+            lines.add(card.getDescription());
+        }
+        if (card.getListTitle() != null) {
+            lines.add(card.getListTitle());
+        }
+        lines.addAll(card.getList());
+        for (String line : lines) {
+            names.add(left(DropTrackerTheme.label(html(line, width), FontManager.getRunescapeSmallFont(),
                 DropTrackerTheme.TEXT_MUTED)));
         }
-        if (!card.getList().isEmpty()) {
-            JPanel list = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
-            list.setAlignmentX(Component.LEFT_ALIGNMENT);
-            if (card.getListTitle() != null) {
-                list.add(left(DropTrackerTheme.label(card.getListTitle(), FontManager.getRunescapeSmallFont(),
-                    DropTrackerTheme.TEXT_MUTED)));
-            }
-            for (String line : card.getList()) {
-                list.add(left(DropTrackerTheme.label(line, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED)));
-            }
-            names.add(list);
+
+        JPanel header = new JPanel(new BorderLayout(10, 0));
+        header.setBackground(DropTrackerTheme.SURFACE_1);
+        header.setAlignmentX(Component.LEFT_ALIGNMENT);
+        if (icon != null) {
+            header.add(top(icon), BorderLayout.WEST);
         }
+        header.add(names, BorderLayout.CENTER);
+        header.add(top(LeaderboardComponents.createClearButton(this::reset)), BorderLayout.EAST);
 
         JComponent[] boxes = card.getStats().stream().map(this::statBox).toArray(JComponent[]::new);
-        JPanel actions = actionRow();
+        // One button per row: two side by side don't fit the panel's width.
+        JPanel actions = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
+        actions.setAlignmentX(Component.LEFT_ALIGNMENT);
         for (PanelCard.Button b : card.getActions()) {
             Runnable run = () -> perform(b.getAction());
+            JButton button;
             if ("lootboard".equals(b.getIcon())) {
-                actions.add(PanelElements.createLootboardButton(b.getLabel(), "Click to view the lootboard", run));
-                continue;
+                button = PanelElements.createLootboardButton(b.getLabel(), "Click to view the lootboard", run);
+            } else {
+                button = actionButton(b.getLabel());
+                if ("external".equals(b.getIcon())) {
+                    button.setIcon(PanelElements.getExternalLinkIcon());
+                }
+                button.addActionListener(e -> run.run());
             }
-            JButton button = actionButton(b.getLabel());
-            if ("external".equals(b.getIcon())) {
-                button.setIcon(PanelElements.getExternalLinkIcon());
-            }
-            button.addActionListener(e -> run.run());
-            actions.add(button);
+            JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 2));
+            row.setOpaque(false);
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+            row.add(button);
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+            actions.add(row);
         }
-        showCard(detailHeader(cardIcon(card), names), statsGrid(boxes),
-            recent(card.getRecent(), card.isRecentGroup(), card.getRecentEmpty()), actions);
+        showCard(header, statsGrid(boxes), recent(card.getRecent(), card.isRecentGroup(), card.getRecentEmpty()),
+            actions);
     }
+
 
     /** A stat tile; one with an action is clickable and lights up on hover. */
     private JComponent statBox(PanelCard.Stat stat) {
         JPanel box = PanelElements.createStatBox(stat.getLabel(), stat.getValue());
         if (stat.getAction() != null) {
             box.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            box.setToolTipText(html(stat.getTip()));
+            box.setToolTipText(html(stat.getTip(), 0));
             box.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
@@ -307,9 +302,17 @@ abstract class SearchPage {
 
     /** Escaped for a Swing HTML label (it would fetch a remote {@code <img>}); newlines kept. */
     @Nullable
-    private static String html(@Nullable String text) {
-        return text == null ? null
-            : "<html>" + PanelElements.escapeHtml(text).replace("\n", "<br/>") + "</html>";
+    private static String html(@Nullable String text, int width) {
+        return text == null ? null : "<html>" + (width > 0 ? "<div style='width:" + width + "px'>" : "")
+            + PanelElements.escapeHtml(text).replace("\n", "<br/>") + "</html>";
+    }
+
+    /** Pins a header piece to the top instead of stretching it down the row. */
+    private static JComponent top(JComponent c) {
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(false);
+        wrap.add(c, BorderLayout.NORTH);
+        return wrap;
     }
 
     private static JComponent left(JComponent c) {

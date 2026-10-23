@@ -141,13 +141,14 @@ class SettingsForm extends JPanel implements Scrollable {
                 FontManager.getRunescapeFont(), DropTrackerTheme.TEXT));
             if (field.isLocked()) {
                 title.add(Box.createRigidArea(new Dimension(6, 0)));
-                JLabel chip = DropTrackerTheme.chip(field.getLockedReason() == null ? "Locked" : field.getLockedReason(),
-                    DropTrackerTheme.EMBER);
-                title.add(chip);
+                title.add(DropTrackerTheme.chip("Locked", DropTrackerTheme.EMBER));
             }
             text.add(left(title));
             if (field.getHelp() != null && !field.getHelp().isEmpty()) {
                 text.add(left(wrapped(field.getHelp(), DropTrackerTheme.TEXT_MUTED)));
+            }
+            if (field.isLocked() && field.getLockedReason() != null) {
+                text.add(left(wrapped(field.getLockedReason(), DropTrackerTheme.EMBER)));
             }
             error.setVisible(false);
             text.add(left(error));

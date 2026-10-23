@@ -355,6 +355,8 @@ public class PanelElements {
 
         JLabel valueLabel = DropTrackerTheme.label(value, FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Long values are cut to the tile; the tooltip has them whole.
+        valueLabel.setToolTipText(value);
 
         box.add(nameLabel);
         box.add(valueLabel);
@@ -604,12 +606,12 @@ public class PanelElements {
      * {@link #createRecentSubmissionPanel} so the layout doesn't jump when data arrives.
      */
     public static JPanel createRecentSubmissionsPlaceholder(String message) {
-        JPanel container = submissionsContainer(120);
+        JPanel container = submissionsContainer(64);
 
         JPanel titlePanel = centeredRow(20);
         titlePanel.add(DropTrackerTheme.label("Recent Submissions", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT));
 
-        JPanel contentWrapper = centeredRow(80);
+        JPanel contentWrapper = centeredRow(20);
 
         JLabel messageLabel = DropTrackerTheme.label(message, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         messageLabel.setHorizontalAlignment(JLabel.CENTER);

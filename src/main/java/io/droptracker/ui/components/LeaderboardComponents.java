@@ -199,7 +199,7 @@ public class LeaderboardComponents {
         nameButton.setOpaque(false);
         nameButton.setContentAreaFilled(false);
         nameButton.setFocusPainted(false);
-        nameButton.setToolTipText("View details");
+        nameButton.setToolTipText(name);
         nameButton.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         nameButton.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override

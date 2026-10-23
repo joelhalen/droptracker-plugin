@@ -321,6 +321,7 @@ public class EventsPanel {
         JPanel titleCol = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
 
         JLabel name = DropTrackerTheme.label(entry.getEvent().getName(), FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
+        name.setToolTipText(entry.getEvent().getName());
         name.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(name);
 
@@ -1005,6 +1006,7 @@ public class EventsPanel {
             swatch.setPreferredSize(new Dimension(8, 8));
             nameCol.add(swatch, BorderLayout.WEST);
             JLabel name = DropTrackerTheme.label(truncate(standing.getName(), 18) + (own ? " (you)" : ""), own ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT);
+            name.setToolTipText(standing.getName());
             nameCol.add(name, BorderLayout.CENTER);
             rowPanel.add(nameCol, BorderLayout.CENTER);
 
