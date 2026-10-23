@@ -5,12 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.awt.*;
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.function.*;
 import java.util.concurrent.CompletableFuture;
 
 import javax.swing.*;
 import javax.swing.border.*;
 
+import io.droptracker.models.api.PanelCard;
 import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.client.ui.*;
 
@@ -81,8 +82,8 @@ public class LeaderboardComponents {
     /**
      * Creates a standard leaderboard table with rank, name, and value columns
      */
-    public static <T> JPanel createLeaderboardTable(String title, String nameColumnHeader, 
-            List<T> data, LeaderboardItemRenderer<T> renderer) {
+    public static JPanel createLeaderboardTable(String title, String nameColumnHeader,
+            List<PanelCard.Row> data, Consumer<PanelCard.Row> onClick) {
         
         JPanel leaderboardPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         leaderboardPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -104,10 +105,10 @@ public class LeaderboardComponents {
         
         if (data != null && !data.isEmpty()) {
             int displayRank = 1;
-            for (T item : data) {
+            for (PanelCard.Row item : data) {
                 if (displayRank > 5) break; // Only show top 5
                 
-                JPanel dataRow = createDataRow(item, displayRank, renderer);
+                JPanel dataRow = createDataRow(item, displayRank, onClick);
                 dataContainer.add(dataRow);
                 
                 if (displayRank < Math.min(5, data.size())) {
@@ -170,14 +171,14 @@ public class LeaderboardComponents {
     /**
      * Creates a data row for the leaderboard table
      */
-    private static <T> JPanel createDataRow(T item, int displayRank, LeaderboardItemRenderer<T> renderer) {
+    private static JPanel createDataRow(PanelCard.Row item, int displayRank, Consumer<PanelCard.Row> onClick) {
         JPanel dataRow = new JPanel(new BorderLayout(5, 0));
         dataRow.setBackground(DropTrackerTheme.SURFACE_1);
         dataRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
         dataRow.setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 40, 25));
         
         // Rank
-        Integer apiRank = renderer.getRank(item);
+        Integer apiRank = item.getRank();
         int rankToShow = (apiRank != null) ? apiRank : displayRank;
         
         JLabel rankLabel = DropTrackerTheme.label("#" + rankToShow, FontManager.getRunescapeSmallFont(), rankToShow <= 3 ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
@@ -189,7 +190,7 @@ public class LeaderboardComponents {
         nameAndLootData.setBackground(DropTrackerTheme.SURFACE_1);
         
         // Name button. No remote <img> tags: Swing HTML would fetch them over the network.
-        String name = renderer.getName(item);
+        String name = item.getName() != null && !item.getName().trim().isEmpty() ? item.getName() : "Unknown";
         JButton nameButton = new JButton(name);
         nameButton.setFont(FontManager.getRunescapeSmallFont());
         nameButton.setForeground(DropTrackerTheme.TEXT);
@@ -211,10 +212,10 @@ public class LeaderboardComponents {
                 nameButton.setForeground(DropTrackerTheme.TEXT);
             }
         });
-        nameButton.addActionListener(e -> renderer.onItemClick(item));
+        nameButton.addActionListener(e -> onClick.accept(item));
         
         // Loot value
-        String lootValue = renderer.getLootValue(item);
+        String lootValue = item.getTotalLoot() != null && !item.getTotalLoot().trim().isEmpty() ? item.getTotalLoot() : "0 GP";
         JLabel lootLabel = DropTrackerTheme.label(lootValue, FontManager.getRunescapeSmallFont(), DropTrackerTheme.GOLD);
         lootLabel.setHorizontalAlignment(JLabel.RIGHT);
         lootLabel.setPreferredSize(new Dimension(50, 25));
@@ -280,7 +281,7 @@ public class LeaderboardComponents {
      */
     public static <T> void loadLeaderboardAsync(JPanel placeholder, 
             Supplier<T> dataLoader, 
-            java.util.function.Function<T, JPanel> panelCreator) {
+            Function<T, JPanel> panelCreator) {
         
         CompletableFuture.supplyAsync(() -> {
             try {
@@ -309,13 +310,4 @@ public class LeaderboardComponents {
 
     }
 
-    /**
-     * Interface for rendering leaderboard items
-     */
-    public interface LeaderboardItemRenderer<T> {
-        String getName(T item);
-        String getLootValue(T item);
-        Integer getRank(T item);
-        void onItemClick(T item);
-    }
 } 

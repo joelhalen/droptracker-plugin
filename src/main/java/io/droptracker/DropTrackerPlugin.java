@@ -394,11 +394,11 @@ public class DropTrackerPlugin extends Plugin {
 				}
 				if (client.getAccountHash() != -1 && client.getLocalPlayer() != null) {
 					// Run off the calling thread; config changes can fire on the EDT and
-					// lookupPlayer performs blocking network I/O.
+					// the player search performs blocking network I/O.
 					final String localName = client.getLocalPlayer().getName();
 					executor.submit(() -> {
 						try {
-							api.lookupPlayer(localName);
+							api.searchCard("/player_search", localName);
 						} catch (Exception e) {
 							log.debug("Couldn't look the current player up in the DropTracker database");
 						}

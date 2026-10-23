@@ -165,9 +165,9 @@ public class DropTrackerApi {
         @SerializedName("player_found")
         public Boolean playerFound;
         @SerializedName("top_groups")
-        public TopGroupResult topGroups;
+        public PanelCard.Top topGroups;
         @SerializedName("top_players")
-        public TopPlayersResult topPlayers;
+        public PanelCard.Top topPlayers;
         public String welcome;
         public String news;
         public VersionInfo version;
@@ -606,14 +606,12 @@ public class DropTrackerApi {
         }
     }
 
-    public TopGroupResult getTopGroups() {
-        return topList(p -> p.topGroups != null && p.topGroups.getGroups() != null ? p.topGroups : null,
-            "/top_groups", TopGroupResult.class, "groups");
+    public PanelCard.Top getTopGroups() {
+        return topList(p -> p.topGroups, "/top_groups");
     }
 
-    public TopPlayersResult getTopPlayers() {
-        return topList(p -> p.topPlayers != null && p.topPlayers.getPlayers() != null ? p.topPlayers : null,
-            "/top_players", TopPlayersResult.class, "players");
+    public PanelCard.Top getTopPlayers() {
+        return topList(p -> p.topPlayers, "/top_players");
     }
 
     /**
@@ -621,38 +619,29 @@ public class DropTrackerApi {
      * both), else from its own endpoint. {@code fromPanel} returns null when
      * the snapshot lacks the list.
      */
-    private <T> T topList(Function<PanelData, T> fromPanel, String path, Class<T> type, String what) {
+    private PanelCard.Top topList(Function<PanelData, PanelCard.Top> fromPanel, String path) {
         if (!config.useApi()) {
             return null;
         }
         PanelData panelData = getPanelDataFreshOrFetch();
-        T cached = panelData != null ? fromPanel.apply(panelData) : null;
-        if (cached != null) {
+        PanelCard.Top cached = panelData != null ? fromPanel.apply(panelData) : null;
+        if (cached != null && cached.rows() != null) {
             return cached;
         }
         try {
-            return getJson(apiUrl(path), type);
+            return getJson(apiUrl(path), PanelCard.Top.class);
         } catch (IOException e) {
-            log.debug("Couldn't get top " + what + " (IOException) " + e);
+            log.debug("Couldn't get " + path + ": " + e);
             return null;
         }
     }
 
     /**
-     * Sends a request to the API to search for a group and returns the GroupSearchResult.
+     * The server-composed detail card for a group ({@code /group_search}) or a
+     * player ({@code /player_search}); null when nothing matched.
      */
-    public GroupSearchResult searchGroup(String groupName) throws IOException {
-        return search("/group_search", groupName, GroupSearchResult.class);
-    }
-
-    /**
-     * Sends a request to the API to look up a player's data and returns the PlayerSearchResult.
-     */
-    public PlayerSearchResult lookupPlayer(String playerName) throws IOException {
-        return search("/player_search", playerName, PlayerSearchResult.class);
-    }
-
-    private <T> T search(String path, String name, Class<T> type) throws IOException {
+    @Nullable
+    public PanelCard searchCard(String path, String name) throws IOException {
         if (!config.useApi()) {
             return null;
         }
@@ -660,7 +649,9 @@ public class DropTrackerApi {
         if (baseUrl == null) {
             throw new IllegalArgumentException("Invalid URL");
         }
-        return getJson(baseUrl.newBuilder().addQueryParameter("name", name).build(), type);
+        PanelCard.Search found = getJson(baseUrl.newBuilder().addQueryParameter("name", name).build(),
+            PanelCard.Search.class);
+        return found != null ? found.card : null;
     }
 
     public String getApiUrl() {

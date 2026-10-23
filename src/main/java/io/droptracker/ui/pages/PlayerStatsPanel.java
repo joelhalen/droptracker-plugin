@@ -8,17 +8,15 @@ import io.droptracker.ui.components.*;
 import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
-import net.runelite.client.ui.FontManager;
-import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
-import java.util.List;
 
 public class PlayerStatsPanel extends SearchPage {
     private final DropTrackerPlugin plugin;
     private final PlayerModelService playerModelService;
+    /** The player the detail card shows, for its Refresh button. */
+    private String lastPlayer;
 
     public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, PlayerModelService playerModelService) {
         super(client, config, api, itemManager);
@@ -72,35 +70,10 @@ public class PlayerStatsPanel extends SearchPage {
         show(defaultPanel);
     }
 
-    private JPanel showPlayerLeaderboard(TopPlayersResult leaderboardData) {
-        return LeaderboardComponents.createLeaderboardTable(
-                "Top Players",
-                "Player",
-                leaderboardData != null ? leaderboardData.getPlayers() : null,
-                new LeaderboardComponents.LeaderboardItemRenderer<TopPlayersResult.TopPlayer>() {
-                    @Override
-                    public String getName(TopPlayersResult.TopPlayer player) {
-                        return player.getPlayerName() != null ? player.getPlayerName() : "Unknown Player";
-                    }
-
-                    @Override
-                    public String getLootValue(TopPlayersResult.TopPlayer player) {
-                        String loot = player.getTotalLoot();
-                        return (loot != null && !loot.trim().isEmpty()) ? loot : "0 GP";
-                    }
-
-                    @Override
-                    public Integer getRank(TopPlayersResult.TopPlayer player) {
-                        return player.getRank();
-                    }
-
-                    @Override
-                    public void onItemClick(TopPlayersResult.TopPlayer player) {
-                        // Search for this player when clicked
-                        performPlayerSearch(player.getPlayerName());
-                    }
-                }
-        );
+    private JPanel showPlayerLeaderboard(PanelCard.Top top) {
+        // Search for this player when clicked
+        return LeaderboardComponents.createLeaderboardTable("Top Players", "Player", top.rows(),
+            row -> performPlayerSearch(row.getName()));
     }
 
     public void performPlayerSearch(String searchQuery) {
@@ -117,77 +90,17 @@ public class PlayerStatsPanel extends SearchPage {
             toSearch = searchQuery;
         }
 
-        runSearch("Searching for player…", () -> api.lookupPlayer(toSearch), this::showPlayerDetails,
-            "Player '" + toSearch + "' was not found.");
+        runSearch("Searching for player…", () -> api.searchCard("/player_search", toSearch), card -> {
+            lastPlayer = card.getTitle();
+            showCard(card);
+        }, "Player '" + toSearch + "' was not found.");
     }
 
-    private void showPlayerDetails(PlayerSearchResult playerResult) {
-        contentPanel.removeAll();
-        JPanel playerNamePanel = nameColumn(playerResult.getPlayerName());
-
-        String statusText = playerResult.isRegistered() ? "Registered Player" : "Not registered!";
-        JLabel playerDescLabel = DropTrackerTheme.label(statusText, FontManager.getRunescapeSmallFont(),
-            playerResult.isRegistered() ? DropTrackerTheme.GREEN : DropTrackerTheme.EMBER);
-        playerDescLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        if (!playerResult.isRegistered()) {
-            playerDescLabel.setToolTipText("<html>This account has not been claimed on DropTracker.<br/>"
-                + "Claim your in-game name in our Discord to register.</html>");
+    @Override
+    protected void onCardAction(String type, String value) {
+        if ("refresh".equals(type) && lastPlayer != null) {
+            performPlayerSearch(lastPlayer);
         }
-
-        playerNamePanel.add(DropTrackerTheme.gap(5));
-        playerNamePanel.add(playerDescLabel);
-
-        // Add groups information if available
-        if (playerResult.getGroups() != null && !playerResult.getGroups().isEmpty()) {
-            playerNamePanel.add(createGroupsPanel(playerResult.getGroups()));
-        }
-
-        JPanel playerPointsBox = PanelElements.createStatBox("Lifetime Points", playerResult.getPoints() + " pts");
-        JPanel statsPanel = statsGrid(
-            PanelElements.createStatBox("Total Loot", playerResult.getTotalLoot() + " GP"),
-            PanelElements.createStatBox("Global Rank", "#" + playerResult.getGlobalRank()),
-            playerPointsBox);
-
-        playerPointsBox.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                LinkBrowser.browse(DropTrackerUrls.web("wiki", "points").toString());
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                playerPointsBox.setBackground(DropTrackerTheme.SURFACE_3);
-                playerPointsBox.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                playerPointsBox.setBackground(DropTrackerTheme.SURFACE_2);
-                playerPointsBox.setCursor(Cursor.getDefaultCursor());
-            }
-        });
-        playerPointsBox.setToolTipText("View more info about points (click to open wiki)");
-
-        JPanel actionPanel = actionRow();
-
-        JButton refreshButton = actionButton("Refresh Stats");
-        refreshButton.addActionListener(e -> performPlayerSearch(playerResult.getPlayerName()));
-
-        JButton viewProfileButton = actionButton("View Profile");
-        viewProfileButton.setIcon(PanelElements.getExternalLinkIcon());
-        viewProfileButton.addActionListener(e -> {
-            if (playerResult.getDropTrackerPlayerId() != null) {
-                LinkBrowser.browse(DropTrackerUrls.web("players", String.valueOf(playerResult.getDropTrackerPlayerId()), "view").toString());
-            } else {
-                LinkBrowser.browse(DropTrackerUrls.web("players", playerResult.getPlayerName(), "view").toString());
-            }
-        });
-
-        actionPanel.add(refreshButton);
-        actionPanel.add(viewProfileButton);
-
-        showCard(detailHeader(null, playerNamePanel), statsPanel,
-            recent(playerResult.getRecentSubmissions(), false, "No recent submissions available"), actionPanel);
     }
 
     /**
@@ -221,34 +134,4 @@ public class PlayerStatsPanel extends SearchPage {
         });
         return sendModelButton;
     }
-
-    private JPanel createGroupsPanel(List<PlayerSearchResult.PlayerGroup> groups) {
-        if (groups == null || groups.isEmpty()) {
-            return new JPanel(); // Return empty panel if no groups
-        }
-
-        JPanel groupsContainer = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
-        groupsContainer.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel groupsHeaderLabel = DropTrackerTheme.label("Groups:", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
-        groupsHeaderLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        groupsContainer.add(groupsHeaderLabel);
-
-        // Add each group as a separate label for proper scaling
-        for (PlayerSearchResult.PlayerGroup group : groups) {
-            StringBuilder groupText = new StringBuilder("- ");
-            groupText.append(group.getName());
-            if (group.getMembers() != null) {
-                groupText.append(" (").append(group.getMembers()).append(" members)");
-            }
-
-            JLabel groupLabel = DropTrackerTheme.label(groupText.toString(), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
-            groupLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-            groupsContainer.add(groupLabel);
-        }
-
-        return groupsContainer;
-    }
-
 }

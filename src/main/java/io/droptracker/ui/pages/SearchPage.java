@@ -4,18 +4,21 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.AllArgsConstructor;
 import io.droptracker.DropTrackerConfig;
-import io.droptracker.api.DropTrackerApi;
+import io.droptracker.api.*;
+import io.droptracker.models.api.PanelCard;
 import io.droptracker.models.submissions.RecentSubmission;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.components.*;
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.*;
+import net.runelite.client.util.LinkBrowser;
 
 import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.*;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
@@ -194,6 +197,124 @@ abstract class SearchPage {
         return submissions != null && !submissions.isEmpty()
             ? PanelElements.createRecentSubmissionPanel(submissions, itemManager, client, group)
             : PanelElements.createRecentSubmissionsPlaceholder(emptyText);
+    }
+
+    /* ===================== server-composed cards ===================== */
+
+    /** The page's own actions: player, lootboard, refresh. */
+    protected abstract void onCardAction(String type, @Nullable String value);
+
+    /** The header icon, if this page's cards have one. */
+    @Nullable
+    protected JComponent cardIcon(PanelCard card) {
+        return null;
+    }
+
+    /**
+     * Draws a detail card the server composed (api/panel_cards.py): every
+     * string is escaped or set as plain text, and links are built here, on
+     * our own hosts.
+     */
+    protected void showCard(PanelCard card) {
+        JPanel names = nameColumn(card.getTitle());
+        PanelCard.Subtitle sub = card.getSubtitle();
+        if (sub != null) {
+            names.add(DropTrackerTheme.gap(5));
+            JLabel label = DropTrackerTheme.label(sub.getText(), FontManager.getRunescapeSmallFont(),
+                "good".equals(sub.getTone()) ? DropTrackerTheme.GREEN
+                    : "warn".equals(sub.getTone()) ? DropTrackerTheme.EMBER : DropTrackerTheme.TEXT_MUTED);
+            label.setToolTipText(html(sub.getTip()));
+            names.add(left(label));
+        }
+        if (card.getDescription() != null) {
+            names.add(left(DropTrackerTheme.label(html(card.getDescription()), FontManager.getRunescapeSmallFont(),
+                DropTrackerTheme.TEXT_MUTED)));
+        }
+        if (!card.getList().isEmpty()) {
+            JPanel list = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
+            list.setAlignmentX(Component.LEFT_ALIGNMENT);
+            if (card.getListTitle() != null) {
+                list.add(left(DropTrackerTheme.label(card.getListTitle(), FontManager.getRunescapeSmallFont(),
+                    DropTrackerTheme.TEXT_MUTED)));
+            }
+            for (String line : card.getList()) {
+                list.add(left(DropTrackerTheme.label(line, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED)));
+            }
+            names.add(list);
+        }
+
+        JComponent[] boxes = card.getStats().stream().map(this::statBox).toArray(JComponent[]::new);
+        JPanel actions = actionRow();
+        for (PanelCard.Button b : card.getActions()) {
+            Runnable run = () -> perform(b.getAction());
+            if ("lootboard".equals(b.getIcon())) {
+                actions.add(PanelElements.createLootboardButton(b.getLabel(), "Click to view the lootboard", run));
+                continue;
+            }
+            JButton button = actionButton(b.getLabel());
+            if ("external".equals(b.getIcon())) {
+                button.setIcon(PanelElements.getExternalLinkIcon());
+            }
+            button.addActionListener(e -> run.run());
+            actions.add(button);
+        }
+        showCard(detailHeader(cardIcon(card), names), statsGrid(boxes),
+            recent(card.getRecent(), card.isRecentGroup(), card.getRecentEmpty()), actions);
+    }
+
+    /** A stat tile; one with an action is clickable and lights up on hover. */
+    private JComponent statBox(PanelCard.Stat stat) {
+        JPanel box = PanelElements.createStatBox(stat.getLabel(), stat.getValue());
+        if (stat.getAction() != null) {
+            box.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            box.setToolTipText(html(stat.getTip()));
+            box.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    perform(stat.getAction());
+                }
+
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    box.setBackground(DropTrackerTheme.SURFACE_3);
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    box.setBackground(DropTrackerTheme.SURFACE_2);
+                }
+            });
+        }
+        return box;
+    }
+
+    private void perform(@Nullable PanelCard.Action action) {
+        if (action == null || action.getType() == null) {
+            return;
+        }
+        String value = action.getValue();
+        if ("web".equals(action.getType()) && value != null) {
+            LinkBrowser.browse(DropTrackerUrls.web(value.split("/")).toString());
+        } else if ("discord".equals(action.getType())) {
+            okhttp3.HttpUrl invite = DropTrackerUrls.discordInvite(value);
+            if (invite != null) {
+                LinkBrowser.browse(invite.toString());
+            }
+        } else {
+            onCardAction(action.getType(), value);
+        }
+    }
+
+    /** Escaped for a Swing HTML label (it would fetch a remote {@code <img>}); newlines kept. */
+    @Nullable
+    private static String html(@Nullable String text) {
+        return text == null ? null
+            : "<html>" + PanelElements.escapeHtml(text).replace("\n", "<br/>") + "</html>";
+    }
+
+    private static JComponent left(JComponent c) {
+        c.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return c;
     }
 
     /** Shows a detail card: header, stats, recent submissions, actions. */
