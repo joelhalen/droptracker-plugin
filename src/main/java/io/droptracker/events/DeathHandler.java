@@ -157,22 +157,10 @@ public class DeathHandler extends BaseEventHandler {
         boolean pk = killer != null && killer.isPlayer();
         boolean npc = killer != null && killer.isNpc();
 
-        // Classified before the fields are built because the valuation below
-        // needs it: a safe death loses nothing regardless of what is carried.
-        // An unknown location is treated as dangerous — the server filters on
-        // this, and guessing "safe" would silently swallow the notification.
-        boolean safeDeath = location != null && DeathRegions.isSafe(client, location.getRegionID());
-
         String playerName = getPlayerName();
         if (playerName == null) {
             return;
         }
-
-        // Read while the containers still hold what the player died with — they
-        // are emptied within a tick or two of here, and this is still the death
-        // tick. After the name check so a submission we are about to drop does
-        // not price a full inventory on the client thread first.
-        DeathValuation.Valuation valuation = DeathValuation.value(client, itemManager, safeDeath);
         CustomWebhookBody webhook = createWebhookBody(playerName + " has died!");
         CustomWebhookBody.Embed embed = createEmbed(playerName + " has died!", "death");
 
@@ -223,23 +211,49 @@ public class DeathHandler extends BaseEventHandler {
             fieldData.put("instanced", isInstance(localPlayer));
         }
 
-        // Sent unconditionally, not inside the location block: the server's
-        // safe-death filter defaults to muting safe deaths, so a death that
-        // could not be located must still say which side of that line it fell
-        // on rather than arriving with the field missing.
-        fieldData.put("is_safe_death", safeDeath);
-
-        if (valuation != null) {
-            // What the death actually cost — the value a group filters on.
-            fieldData.put("value_lost", valuation.getLostValue());
-            fieldData.put("value_kept", valuation.getKeptValue());
-            fieldData.put("items_lost", valuation.getLostItemCount());
-        }
+        // The server decides whether the death cost anything and what it cost
+        // (utils/death_regions, utils/death_valuation), from what only the
+        // client can see. Read on the death tick, while the containers still
+        // hold what the player died with.
+        fieldData.put("account_type_id", client.getVarbitValue(VarbitID.IRONMAN));
+        Widget pestControl = client.getWidget(InterfaceID.PestStatusOverlay.PEST_STATUS_PORT2);
+        fieldData.put("pest_control", pestControl != null && !pestControl.isHidden());
+        fieldData.put("skulled", localPlayer.getSkullIcon() != SkullIcon.NONE);
+        fieldData.put("protect_item", client.isPrayerActive(Prayer.PROTECT_ITEM)
+                || client.isPrayerActive(Prayer.RP_PROTECT_ITEM));
+        fieldData.put("carried_inv", carried(net.runelite.api.gameval.InventoryID.INV));
+        fieldData.put("carried_worn", carried(net.runelite.api.gameval.InventoryID.WORN));
 
         addFields(embed, fieldData);
         webhook.getEmbeds().add(embed);
 
         sendData(webhook, SubmissionType.DEATH);
+    }
+
+    /**
+     * A container as {@code id:quantity:unitPrice,...}. The price is RuneLite's
+     * GE price, else the store price untradeables are protected by.
+     */
+    private String carried(int containerId) {
+        ItemContainer container = client.getItemContainer(containerId);
+        StringBuilder out = new StringBuilder();
+        for (Item item : container != null ? container.getItems() : new Item[0]) {
+            if (item.getId() < 0 || item.getQuantity() <= 0) {
+                continue;
+            }
+            long price;
+            try {
+                price = itemManager.getItemPrice(item.getId());
+                if (price <= 0) {
+                    price = Math.max(0, itemManager.getItemComposition(item.getId()).getPrice());
+                }
+            } catch (RuntimeException e) {
+                price = 0;
+            }
+            out.append(out.length() > 0 ? "," : "").append(item.getId()).append(':')
+                .append(item.getQuantity()).append(':').append(price);
+        }
+        return out.toString();
     }
 
     /**
