@@ -439,6 +439,9 @@ public class DropTrackerPlugin extends Plugin {
 
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded widget) {
+		if (widget.getGroupId() == 742) {
+			dropHandler.onLootChestOpened();
+		}
 		widgetEventHandler.onWidgetLoaded(widget);
 		// Also check for quest completion widgets
 		questHandler.onWidgetLoaded(widget);

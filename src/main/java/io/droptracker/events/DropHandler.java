@@ -53,6 +53,15 @@ public class DropHandler extends BaseEventHandler {
             .maximumSize(256L)
             .build();
 
+    /** RuneLite's name for opened PvP loot keys; the server files these as PvP loot. */
+    static final String LOOT_CHEST = "Loot Chest";
+
+    /** Loot keys already sent, by container and contents: reopening the chest shows the
+     *  same unclaimed keys again. Five keys at most are held, so a few openings' worth. */
+    private final Cache<String, Boolean> sentLootKeys = CacheBuilder.newBuilder()
+            .maximumSize(25L)
+            .build();
+
     /*
      * NOTE: These handlers are NOT registered on the RuneLite event bus — they are
      * invoked manually by DropTrackerPlugin's own @Subscribe methods, which also
@@ -74,6 +83,44 @@ public class DropHandler extends BaseEventHandler {
 		}
 		Player victim = playerLootReceived.getPlayer();
 		processDropEvent(victim.getName(), "pvp", LootRecordType.PLAYER, playerLootReceived.getItems(), pvpContext(victim));
+	}
+
+	/**
+	 * The Wilderness loot chest opened (interface 742): one item container per held
+	 * loot key, 558-562. RuneLite's own "Loot Chest" event only fires with its Loot
+	 * Tracker plugin on, and not at all while any key is left in the inventory, so
+	 * about half of PKers never sent their key loot. Each key's contents go once.
+	 */
+	public void onLootChestOpened() {
+		if (!plugin.isTracking) {
+			return;
+		}
+		for (List<ItemStack> key : unsentLootKeys()) {
+			processDropEvent(LOOT_CHEST, "pvp", LootRecordType.EVENT, key);
+		}
+	}
+
+	/** The chest's keys not sent yet, each marked sent. */
+	List<List<ItemStack>> unsentLootKeys() {
+		List<List<ItemStack>> keys = new ArrayList<>();
+		for (int id = 558; id <= 562; id++) {
+			ItemContainer container = client.getItemContainer(id);
+			if (container == null) {
+				continue;
+			}
+			List<ItemStack> items = new ArrayList<>();
+			for (Item item : container.getItems()) {
+				if (item.getId() > 0 && item.getQuantity() > 0) {
+					items.add(new ItemStack(item.getId(), item.getQuantity()));
+				}
+			}
+			String key = id + "|" + ItemStacks.signature(items);
+			if (!items.isEmpty() && sentLootKeys.getIfPresent(key) == null) {
+				sentLootKeys.put(key, Boolean.TRUE);
+				keys.add(items);
+			}
+		}
+		return keys;
 	}
 
 	/** Whom and where, sent with every item of a PvP kill so the server can file it (6.1.9). */
@@ -108,6 +155,10 @@ public class DropHandler extends BaseEventHandler {
 
 	public void onLootReceived(LootReceived lootReceived) {
 		if (!plugin.isTracking) {
+			return;
+		}
+		/* Opened loot keys are read off the chest itself (onLootChestOpened) */
+		if (LOOT_CHEST.equals(lootReceived.getName())) {
 			return;
 		}
 		/* A select few npc loot sources will arrive here, instead of npclootreceived events */
