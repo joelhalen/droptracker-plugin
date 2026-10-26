@@ -3,7 +3,6 @@ package io.droptracker.ui.pages;
 import io.droptracker.api.*;
 import io.droptracker.*;
 import io.droptracker.models.api.*;
-import io.droptracker.service.PlayerModelService;
 import io.droptracker.ui.components.*;
 import io.droptracker.ui.DropTrackerTheme;
 import net.runelite.api.Client;
@@ -14,14 +13,12 @@ import java.awt.*;
 
 public class PlayerStatsPanel extends SearchPage {
     private final DropTrackerPlugin plugin;
-    private final PlayerModelService playerModelService;
     /** The player the detail card shows, for its Refresh button. */
     private String lastPlayer;
 
-    public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager, PlayerModelService playerModelService) {
+    public PlayerStatsPanel(Client client, DropTrackerPlugin plugin, DropTrackerConfig config, DropTrackerApi api, ItemManager itemManager) {
         super(client, config, api, itemManager);
         this.plugin = plugin;
-        this.playerModelService = playerModelService;
     }
 
     public JPanel create() {
@@ -46,10 +43,6 @@ public class PlayerStatsPanel extends SearchPage {
             viewStatsButton.setToolTipText("View your DropTracker statistics");
             viewStatsButton.addActionListener(e -> performPlayerSearch(playerName));
             defaultPanel.add(buttonRow(viewStatsButton, 5));
-
-            if (config.useApi()) {
-                defaultPanel.add(buttonRow(createSendModelButton(), 5));
-            }
             defaultPanel.add(DropTrackerTheme.gap(10));
         }
 
@@ -100,36 +93,5 @@ public class PlayerStatsPanel extends SearchPage {
         if ("refresh".equals(type) && lastPlayer != null) {
             performPlayerSearch(lastPlayer);
         }
-    }
-
-    /**
-     * The "Send Player Model" button: captures the character as it looks right
-     * now and pins that model to the player's droptracker.io profile. All
-     * feedback happens on the button itself — it narrates the send and shows
-     * the outcome, then returns to normal so it can be used again.
-     */
-    private JButton createSendModelButton() {
-        final String idleLabel = "Send Player Model";
-        JButton sendModelButton = DropTrackerTheme.button(idleLabel);
-        sendModelButton.setPreferredSize(new Dimension(200, 30));
-        sendModelButton.setToolTipText("<html>Uploads your character (and pet) exactly as they look right now<br/>"
-                + "and shows that model on your droptracker.io profile.<br/>"
-                + "Stand still with your favourite gear on, then click.</html>");
-        sendModelButton.addActionListener(e -> {
-            sendModelButton.setEnabled(false);
-            sendModelButton.setText("Sending model…");
-            playerModelService.sendCurrentModel((ok, message) -> {
-                // Callback already arrives on the EDT.
-                sendModelButton.setText(ok ? "Model sent!" : "Failed to send");
-                sendModelButton.setToolTipText(message);
-                Timer restore = new Timer(4000, ev -> {
-                    sendModelButton.setText(idleLabel);
-                    sendModelButton.setEnabled(true);
-                });
-                restore.setRepeats(false);
-                restore.start();
-            });
-        });
-        return sendModelButton;
     }
 }

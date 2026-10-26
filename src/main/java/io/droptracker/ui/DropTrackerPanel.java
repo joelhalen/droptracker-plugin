@@ -142,7 +142,7 @@ public class DropTrackerPanel extends PluginPanel {
 		if (config.useApi()) {
 			activityPanel = new ActivityPanel(config, api, submissionManager, this);
 			activityComponent = activityPanel.create();
-			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager, playerModelService);
+			statsPanel = new PlayerStatsPanel(client, plugin, config, api, itemManager);
 			playerComponent = statsPanel.create();
 			groupPanel = new GroupPanel(client, config, api, itemManager, this, httpClient);
 			groupComponent = groupPanel.create();
@@ -165,7 +165,7 @@ public class DropTrackerPanel extends PluginPanel {
 			tabbedPane.addTab("Events", eventsComponent);
 			tabbedPane.addTab("Player", playerComponent);
 			tabbedPane.addTab("Group", groupComponent);
-			tabbedPane.addTab("Extras", new ExtrasPanel(config, client, deathMessageApi).create());
+			tabbedPane.addTab("Extras", new ExtrasPanel(config, client, deathMessageApi, playerModelService).create());
 		} else {
 			activityComponent = null;
 			playerComponent = null;

@@ -1,12 +1,14 @@
 package io.droptracker.ui.pages;
 
 import java.awt.*;
+import java.util.function.Consumer;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DeathMessageApi;
+import io.droptracker.service.PlayerModelService;
 import io.droptracker.ui.DropTrackerTheme;
 import io.droptracker.ui.admin.SettingsForm;
 import io.droptracker.ui.components.DeathMessageDialog;
@@ -25,6 +27,7 @@ public class ExtrasPanel {
     private final DropTrackerConfig config;
     private final Client client;
     private final DeathMessageApi deathMessageApi;
+    private final PlayerModelService playerModelService;
 
     public JPanel create() {
         JPanel page = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
@@ -36,11 +39,32 @@ public class ExtrasPanel {
         page.add(DropTrackerTheme.gap(10));
         page.add(card("Your messages", "What your clans' Discord says when you die, log a collection log slot, "
             + "get a drop or set a personal best. Add a few and one is picked at random.", "Edit messages",
-            () -> DeathMessageDialog.open(client, config, deathMessageApi)));
+            b -> DeathMessageDialog.open(client, config, deathMessageApi)));
+        page.add(DropTrackerTheme.gap(8));
+        page.add(card("Your character", "The model shown on your droptracker.io profile. Stand still with your "
+            + "favourite gear on, then send it. Your pet comes along too.", "Send my model", this::sendModel));
         return page;
     }
 
-    private JComponent card(String title, String text, String button, Runnable action) {
+    /** Sends the character as it looks now; the button narrates, then resets. */
+    private void sendModel(JButton button) {
+        String idle = button.getText();
+        button.setEnabled(false);
+        button.setText("Sending model...");
+        playerModelService.sendCurrentModel((ok, message) -> {
+            // Already on the EDT.
+            button.setText(ok ? "Model sent!" : "Failed to send");
+            button.setToolTipText(message);
+            Timer restore = new Timer(4000, ev -> {
+                button.setText(idle);
+                button.setEnabled(true);
+            });
+            restore.setRepeats(false);
+            restore.start();
+        });
+    }
+
+    private JComponent card(String title, String text, String button, Consumer<JButton> action) {
         JPanel card = io.droptracker.ui.components.PanelElements.heightCappedPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(DropTrackerTheme.SURFACE_1);
@@ -56,7 +80,7 @@ public class ExtrasPanel {
                     + "account this is for.", title, JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
-            action.run();
+            action.accept(open);
         });
         open.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
         card.add(SettingsForm.left(open));
