@@ -28,7 +28,7 @@ public final class DeathMessageDialog {
             return;
         }
         JFrame parent = PanelElements.getParentFrame(client);
-        JDialog dialog = new JDialog(parent, "DropTracker - Your death message", false);
+        JDialog dialog = new JDialog(parent, "DropTracker - Your messages", false);
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
         DeathMessageEditor editor = new DeathMessageEditor(

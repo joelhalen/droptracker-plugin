@@ -35,6 +35,8 @@ public class DeathMessageEditorTest {
     /** Answers synchronously, as if the network were instant. */
     private static final class StubApi extends DeathMessageApi {
         int fetches;
+        String lastType;
+        String loaded = LOADED;
         List<String> saved;
         String saveError;
 
@@ -43,13 +45,16 @@ public class DeathMessageEditorTest {
         }
 
         @Override
-        public void fetch(String playerName, long accountHash, Consumer<Result> callback) {
+        public void fetch(String playerName, long accountHash, String type, Consumer<Result> callback) {
             fetches++;
-            callback.accept(Result.ok(GSON.fromJson(LOADED, DeathMessages.class)));
+            lastType = type;
+            callback.accept(Result.ok(GSON.fromJson(loaded, DeathMessages.class)));
         }
 
         @Override
-        public void save(String playerName, long accountHash, List<String> messages, Consumer<Result> callback) {
+        public void save(String playerName, long accountHash, String type, List<String> messages,
+                         Consumer<Result> callback) {
+            lastType = type;
             saved = new ArrayList<>(messages);
             if (saveError != null) {
                 callback.accept(Result.failed(saveError));
@@ -167,5 +172,53 @@ public class DeathMessageEditorTest {
 
     private static DeathMessages.Group group(String json) {
         return GSON.fromJson(json, DeathMessages.Group.class);
+    }
+
+    private static javax.swing.JComboBox<?> typeBox(java.awt.Container root) {
+        for (java.awt.Component c : root.getComponents()) {
+            if (c instanceof javax.swing.JComboBox) {
+                return (javax.swing.JComboBox<?>) c;
+            }
+            if (c instanceof java.awt.Container) {
+                javax.swing.JComboBox<?> found = typeBox((java.awt.Container) c);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    @Test
+    public void deathsAreTheDefaultType() {
+        StubApi api = new StubApi();
+        editor(api, 42L);
+        assertEquals("death", api.lastType);
+    }
+
+    @Test
+    public void pickingATypeLoadsItsMessagesAndPlaceholders() {
+        StubApi api = new StubApi();
+        DeathMessageEditor editor = editor(api, 42L);
+        api.loaded = "{\"player_name\":\"Iron Ron\",\"messages\":[\"{player_name} pb {boss}\"],"
+            + "\"tokens\":[{\"token\":\"{player_name}\",\"help\":\"Your name\",\"sample\":\"Zezima\"},"
+            + "{\"token\":\"{boss}\",\"help\":\"The boss\",\"sample\":\"Vorkath\"}],"
+            + "\"aliases\":{\"{npc_name}\":\"{boss}\"},\"groups\":[]}";
+        typeBox(editor).setSelectedIndex(3);
+        assertEquals(2, api.fetches);
+        assertEquals("pb", api.lastType);
+        assertEquals("{player_name} pb {boss}", editor.fields().get(0).getText());
+
+        // The type's own placeholders and aliases are accepted; death's are not.
+        editor.fields().get(1).setText("{player_name} {npc_name}");
+        assertTrue(editor.saveButton().isEnabled());
+        editor.fields().get(1).setText("{player_name} {killer}");
+        assertFalse(editor.saveButton().isEnabled());
+        assertTrue(editor.statusText(), editor.statusText().contains("Unknown placeholder"));
+
+        editor.fields().get(1).setText("");
+        editor.fields().get(0).setText("{player_name} got {boss}");
+        editor.clickSave();
+        assertEquals("pb", api.lastType);
     }
 }

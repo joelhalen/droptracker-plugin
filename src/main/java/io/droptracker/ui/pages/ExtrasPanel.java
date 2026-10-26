@@ -34,8 +34,9 @@ public class ExtrasPanel {
         page.add(SettingsForm.left(SettingsForm.wrapped("Set these up once. They're saved to your account on the DropTracker, not in your "
             + "plugin settings, so they follow you to every clan.", DropTrackerTheme.TEXT_MUTED)));
         page.add(DropTrackerTheme.gap(10));
-        page.add(card("Death message", "What your clans' Discord says when you die. Add a few and one is "
-            + "picked at random.", "Edit death message", () -> DeathMessageDialog.open(client, config, deathMessageApi)));
+        page.add(card("Your messages", "What your clans' Discord says when you die, log a collection log slot, "
+            + "get a drop or set a personal best. Add a few and one is picked at random.", "Edit messages",
+            () -> DeathMessageDialog.open(client, config, deathMessageApi)));
         return page;
     }
 

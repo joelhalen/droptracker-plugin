@@ -19,11 +19,14 @@ import net.runelite.client.ui.FontManager;
 import net.runelite.client.util.LinkBrowser;
 
 /**
- * The death message editor itself: five boxes, placeholders, a preview, and
- * where the message is posted. {@link DeathMessageDialog} puts it in a window.
+ * The member message editor itself: a message type, five boxes, placeholders,
+ * a preview, and where the message is posted. {@link DeathMessageDialog} puts
+ * it in a window.
  *
- * <p>What the member writes here is what their clan sees when they die — in
- * every clan whose leaders let members write their own. The same messages are
+ * <p>What the member writes here is what their clan sees when they die, log a
+ * collection log slot, get a drop or set a personal best — in every clan whose
+ * leaders let members write their own. Each type has its own placeholders,
+ * which come from the server with its messages. The same messages are
  * on the website and in Discord's {@code /settings}, so this is a view onto the
  * server's copy, never a local one: it loads on open and saves straight back.
  * Nothing here is a RuneLite config item, which would be per profile rather
@@ -32,6 +35,7 @@ import net.runelite.client.util.LinkBrowser;
 public class DeathMessageEditor extends JPanel {
 
     static final int WIDTH = 390;
+    private static final String[] TYPES = {"death", "clog", "drop", "pb"};
 
     private final DeathMessageApi api;
     private final LongSupplier accountHash;
@@ -45,6 +49,8 @@ public class DeathMessageEditor extends JPanel {
     private final JLabel statusLabel = new JLabel(" ");
     private final JButton saveButton = new JButton("Save");
     private final JPanel tokenPanel = new JPanel(new GridLayout(0, 2, 4, 4));
+    private final JComboBox<String> typeBox = new JComboBox<>(
+        new String[]{"Deaths", "Collection logs", "Drops", "Personal bests"});
 
     private JTextField lastFocused;
     private long hash = -1;
@@ -52,6 +58,10 @@ public class DeathMessageEditor extends JPanel {
     private String playerName;
     private List<String> savedMessages = new ArrayList<>();
     private Map<String, String> samples = new HashMap<>();
+    private String type = TYPES[0];
+    private List<String> shownTokens = DeathMessageRules.TOKENS;
+    private Map<String, String> aliases = DeathMessageRules.ALIASES;
+    private Set<String> allowed = DeathMessageRules.allowed(shownTokens, aliases);
     private boolean busy;
     private boolean closed;
 
@@ -74,17 +84,19 @@ public class DeathMessageEditor extends JPanel {
         hash = accountHash.getAsLong();
         playerName = playerNameSupplier.get();
         if (hash == -1) {
-            showStatus("Log in first: your death message belongs to the account you're playing.",
+            showStatus("Log in first: your messages belong to the account you're playing.",
                 DropTrackerTheme.EMBER);
             return;
         }
         busy = true;
+        setEditable(false);
         showStatus("Loading...", DropTrackerTheme.TEXT_MUTED);
-        api.fetch(playerName, hash, result -> {
-            busy = false;
-            if (closed) {
+        String requested = type;
+        api.fetch(playerName, hash, requested, result -> {
+            if (closed || !requested.equals(type)) {
                 return;
             }
+            busy = false;
             if (result.messages == null) {
                 showStatus(result.error, DropTrackerTheme.RED);
                 return;
@@ -106,13 +118,22 @@ public class DeathMessageEditor extends JPanel {
         setBackground(DropTrackerTheme.SURFACE_0);
         setBorder(new EmptyBorder(10, 12, 10, 12));
 
-        JLabel title = DropTrackerTheme.label("Your death message", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
+        JLabel title = DropTrackerTheme.label("Your messages", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         add(row(title));
 
         add(row(wrapped(
-            "Write what your clan sees when you die. One of your messages is picked at random for each death, "
-                + "in every clan whose leaders let members write their own. You can also edit these on the "
-                + "DropTracker website or with /settings in Discord.")));
+            "Write what your clan sees for your deaths, collection logs, drops and personal bests. One of "
+                + "your messages is picked at random each time, in every clan whose leaders let members write "
+                + "their own. Also on the DropTracker website and /settings in Discord.")));
+        add(DropTrackerTheme.gap(6));
+        typeBox.addActionListener(e -> {
+            String picked = TYPES[Math.max(0, typeBox.getSelectedIndex())];
+            if (!picked.equals(type)) {
+                type = picked;
+                load();
+            }
+        });
+        add(row(typeBox));
         add(DropTrackerTheme.gap(6));
 
         groupsLabel.setFont(FontManager.getRunescapeSmallFont());
@@ -170,7 +191,7 @@ public class DeathMessageEditor extends JPanel {
         leftButtons.add(close);
         buttons.add(leftButtons, BorderLayout.WEST);
         JButton website = DropTrackerTheme.button("Open website");
-        website.setToolTipText("Edit your death messages on the DropTracker website");
+        website.setToolTipText("Edit your messages on the DropTracker website");
         website.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("settings").toString()));
         buttons.add(website, BorderLayout.EAST);
         add(row(buttons));
@@ -180,7 +201,7 @@ public class DeathMessageEditor extends JPanel {
 
     private void save() {
         List<String> rows = rows();
-        String issue = DeathMessageRules.listIssue(rows);
+        String issue = DeathMessageRules.listIssue(rows, allowed, shownTokens);
         if (issue != null) {
             showStatus(issue, DropTrackerTheme.RED);
             return;
@@ -189,9 +210,10 @@ public class DeathMessageEditor extends JPanel {
         busy = true;
         setEditable(false);
         showStatus("Saving...", DropTrackerTheme.TEXT_MUTED);
-        api.save(playerName, hash, messages, result -> {
+        String requested = type;
+        api.save(playerName, hash, requested, messages, result -> {
             busy = false;
-            if (closed) {
+            if (closed || !requested.equals(type)) {
                 return;
             }
             setEditable(true);
@@ -202,7 +224,7 @@ public class DeathMessageEditor extends JPanel {
             }
             apply(result.messages);
             refresh();
-            showStatus(messages.isEmpty() ? "Cleared. Your clans will use their own death message."
+            showStatus(messages.isEmpty() ? "Cleared. Your clans will use their own message."
                 : "Saved.", DropTrackerTheme.GREEN);
         });
     }
@@ -225,7 +247,10 @@ public class DeathMessageEditor extends JPanel {
             tokens.add(token.getToken());
             samples.put(token.getToken(), token.getSample() == null ? "" : token.getSample());
         }
-        setTokens(tokens.isEmpty() ? DeathMessageRules.TOKENS : tokens);
+        shownTokens = tokens.isEmpty() ? DeathMessageRules.TOKENS : tokens;
+        aliases = loaded.getAliases().isEmpty() && TYPES[0].equals(type) ? DeathMessageRules.ALIASES : loaded.getAliases();
+        allowed = DeathMessageRules.allowed(shownTokens, aliases);
+        setTokens(shownTokens);
         groupsLabel.setText(groupsText(loaded.getGroups()));
         onResize.run();
     }
@@ -236,14 +261,14 @@ public class DeathMessageEditor extends JPanel {
             return;
         }
         List<String> rows = rows();
-        String issue = DeathMessageRules.listIssue(rows);
+        String issue = DeathMessageRules.listIssue(rows, allowed, shownTokens);
         boolean changed = !DeathMessageRules.normalize(rows).equals(savedMessages);
         saveButton.setEnabled(issue == null && changed && hash != -1 && fields.get(0).isEditable());
 
         String source = lastFocused != null && !lastFocused.getText().trim().isEmpty()
             ? lastFocused.getText() : firstNonBlank(rows);
         if (issue == null && source != null) {
-            previewLabel.setText(html("Example: " + escape(DeathMessageRules.preview(source, samples, playerName))));
+            previewLabel.setText(html("Example: " + escape(DeathMessageRules.preview(source, samples, aliases, playerName))));
         } else {
             previewLabel.setText(" ");
         }

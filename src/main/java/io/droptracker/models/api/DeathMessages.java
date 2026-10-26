@@ -7,8 +7,8 @@ import com.google.gson.annotations.SerializedName;
 import lombok.Getter;
 
 /**
- * The logged-in account's own death messages, from {@code GET/POST
- * /player/death_messages}.
+ * The logged-in account's own messages of one type (death, clog, drop or pb),
+ * from {@code GET/POST /player/death_messages}.
  *
  * <p>A member writes up to five lines; the server picks one for each death in
  * every group that lets members write their own. The response carries the
@@ -32,6 +32,9 @@ public class DeathMessages {
 
     private List<Token> tokens = new ArrayList<>();
 
+    /** Other placeholder spellings the server accepts, alias to canonical. */
+    private Map<String, String> aliases = new HashMap<>();
+
     private List<Group> groups = new ArrayList<>();
 
     /** One placeholder a message may use, with a sample value for previews. */
@@ -47,7 +50,7 @@ public class DeathMessages {
     public static class Group {
         private int id;
         private String name;
-        /** The group turned on members' own death messages. */
+        /** The group turned on members' own messages of this type. */
         private boolean allowed;
         /** The group's leaders blocked this member's own messages. */
         private boolean blocked;

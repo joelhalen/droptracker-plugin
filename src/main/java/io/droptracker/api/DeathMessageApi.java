@@ -19,8 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 
 /**
- * Reads and saves the logged-in account's own death messages
- * ({@code GET/POST /player/death_messages}).
+ * Reads and saves the logged-in account's own messages of one type: death,
+ * clog, drop or pb ({@code GET/POST /player/death_messages}, {@code type}).
  *
  * <p>The same messages the website and Discord's {@code /settings} edit, keyed
  * by account: the server resolves the account hash, which is also all the
@@ -58,23 +58,23 @@ public class DeathMessageApi {
     }
 
     /** Loads the account's messages; {@code callback} runs on the Swing thread. */
-    public void fetch(@Nullable String playerName, long accountHash, Consumer<Result> callback) {
+    public void fetch(@Nullable String playerName, long accountHash, String type, Consumer<Result> callback) {
         executor.execute(() -> {
-            Result result = fetchNow(playerName, accountHash);
+            Result result = fetchNow(playerName, accountHash, type);
             SwingUtilities.invokeLater(() -> callback.accept(result));
         });
     }
 
     /** Replaces the account's messages; {@code callback} runs on the Swing thread. */
-    public void save(@Nullable String playerName, long accountHash, List<String> messages,
+    public void save(@Nullable String playerName, long accountHash, String type, List<String> messages,
                      Consumer<Result> callback) {
         executor.execute(() -> {
-            Result result = saveNow(playerName, accountHash, messages);
+            Result result = saveNow(playerName, accountHash, type, messages);
             SwingUtilities.invokeLater(() -> callback.accept(result));
         });
     }
 
-    private Result fetchNow(@Nullable String playerName, long accountHash) {
+    private Result fetchNow(@Nullable String playerName, long accountHash, String type) {
         HttpUrl base = endpoint();
         if (base == null) {
             return Result.failed(API_OFF);
@@ -82,6 +82,7 @@ public class DeathMessageApi {
         HttpUrl url = base.newBuilder()
             .addQueryParameter("player_name", playerName == null ? "" : playerName)
             .addQueryParameter("acc_hash", String.valueOf(accountHash))
+            .addQueryParameter("type", type)
             .build();
         // FORCE_NETWORK: the injected client has a disk cache shared with the
         // whole of RuneLite, and a stale copy here would undo a save.
@@ -89,7 +90,7 @@ public class DeathMessageApi {
         return execute(request);
     }
 
-    private Result saveNow(@Nullable String playerName, long accountHash, List<String> messages) {
+    private Result saveNow(@Nullable String playerName, long accountHash, String type, List<String> messages) {
         HttpUrl url = endpoint();
         if (url == null) {
             return Result.failed(API_OFF);
@@ -98,6 +99,7 @@ public class DeathMessageApi {
         body.put("player_name", playerName == null ? "" : playerName);
         body.put("acc_hash", String.valueOf(accountHash));
         body.put("messages", messages);
+        body.put("type", type);
         Request request = new Request.Builder()
             .url(url)
             .post(RequestBody.create(JSON, gson.toJson(body)))
@@ -123,7 +125,7 @@ public class DeathMessageApi {
         return HttpUrl.parse(api.getApiUrl() + "/player/death_messages");
     }
 
-    static final String API_OFF = "Turn on \"Use API Connections\" in the plugin settings to edit your death message here.";
+    static final String API_OFF = "Turn on \"Use API Connections\" in the plugin settings to edit your messages here.";
     static final String UNREACHABLE = "Couldn't reach the DropTracker. Try again in a moment.";
     static final String NOT_REGISTERED = "This account isn't registered with the DropTracker yet. Submit something first, then try again.";
     static final String TOO_MANY = "That's a lot of saves - wait a minute and try again.";

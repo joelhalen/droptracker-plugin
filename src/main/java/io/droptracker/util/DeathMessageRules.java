@@ -6,7 +6,10 @@ import java.util.regex.*;
 import javax.annotation.Nullable;
 
 /**
- * What a member's own death message may contain, checked as they type.
+ * What a member's own message may contain, checked as they type. Death,
+ * collection log, drop and personal best messages share every rule but their
+ * placeholders: the constants here are death's, and the other types pass the
+ * placeholders and aliases the server sent with their messages.
  *
  * <p>The server is the authority (disc {@code db/member_messages.py}) and
  * refuses anything that breaks these rules with the same wording; this mirror
@@ -25,16 +28,18 @@ public final class DeathMessageRules {
         "{player_name}", "{killer}", "{location}", "{value_lost}", "{value_kept}", "{killer_combat_level}"));
 
     /** Also accepted, so a line copied from a group's own death messages works. */
-    private static final Map<String, String> ALIASES = Map.of(
+    public static final Map<String, String> ALIASES = Map.of(
         "{source}", "{killer}",
         "{region_name}", "{location}");
 
-    private static final Set<String> ALLOWED;
+    /** Death's accepted placeholders. */
+    public static final Set<String> ALLOWED = allowed(TOKENS, ALIASES);
 
-    static {
-        Set<String> allowed = new LinkedHashSet<>(TOKENS);
-        allowed.addAll(ALIASES.keySet());
-        ALLOWED = Collections.unmodifiableSet(allowed);
+    /** The placeholders a type accepts: the ones it documents plus their aliases. */
+    public static Set<String> allowed(List<String> tokens, Map<String, String> aliases) {
+        Set<String> allowed = new LinkedHashSet<>(tokens);
+        allowed.addAll(aliases.keySet());
+        return allowed;
     }
 
     private static final Pattern TOKEN = Pattern.compile("\\{[a-z0-9_]+\\}", Pattern.CASE_INSENSITIVE);
@@ -55,7 +60,7 @@ public final class DeathMessageRules {
 
     /** Why one trimmed message cannot be saved, or null. Same wording as the server. */
     @Nullable
-    public static String issue(String text) {
+    public static String issue(String text, Set<String> allowed, List<String> shown) {
         if (text.codePointCount(0, text.length()) > MAX_LENGTH) {
             return "Each message can be at most " + MAX_LENGTH + " characters.";
         }
@@ -74,13 +79,13 @@ public final class DeathMessageRules {
         Set<String> unknown = new TreeSet<>();
         Matcher m = TOKEN.matcher(text);
         while (m.find()) {
-            if (!ALLOWED.contains(m.group().toLowerCase(Locale.ROOT))) {
+            if (!allowed.contains(m.group().toLowerCase(Locale.ROOT))) {
                 unknown.add(m.group());
             }
         }
         if (!unknown.isEmpty()) {
             return "Unknown placeholder" + (unknown.size() > 1 ? "s " : " ") + String.join(", ", unknown)
-                + ". You can use " + String.join(", ", TOKENS) + ".";
+                + ". You can use " + String.join(", ", shown) + ".";
         }
         return null;
     }
@@ -105,10 +110,10 @@ public final class DeathMessageRules {
 
     /** The first problem with the whole list, or null when it can be saved. */
     @Nullable
-    public static String listIssue(List<String> rows) {
+    public static String listIssue(List<String> rows, Set<String> allowed, List<String> shown) {
         List<String> cleaned = normalize(rows);
         for (String message : cleaned) {
-            String issue = issue(message);
+            String issue = issue(message, allowed, shown);
             if (issue != null) {
                 return issue;
             }
@@ -124,12 +129,13 @@ public final class DeathMessageRules {
      * {@code {player_name}} becomes the account's name, aliases read their
      * canonical placeholder's sample, and anything else is left out.
      */
-    public static String preview(String template, Map<String, String> samples, String playerName) {
+    public static String preview(String template, Map<String, String> samples, Map<String, String> aliases,
+                                 String playerName) {
         Matcher m = TOKEN.matcher(template);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
             String token = m.group().toLowerCase(Locale.ROOT);
-            String canonical = ALIASES.getOrDefault(token, token);
+            String canonical = aliases.getOrDefault(token, token);
             String value;
             if ("{player_name}".equals(canonical)) {
                 value = playerName == null ? "" : playerName;

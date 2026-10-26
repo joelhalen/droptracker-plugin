@@ -44,18 +44,18 @@ public class DeathMessageRulesTest {
 
     @Test
     public void atMostFiveMessagesBlankRowsNotCounted() {
-        assertTrue(DeathMessageRules.listIssue(Arrays.asList("a", "b", "c", "d", "e", "f"))
+        assertTrue(DeathMessageRules.listIssue(Arrays.asList("a", "b", "c", "d", "e", "f"), DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS)
             .contains("at most 5 messages"));
-        assertNull(DeathMessageRules.listIssue(Arrays.asList("a", "b", "c", "d", "e", "", " ")));
+        assertNull(DeathMessageRules.listIssue(Arrays.asList("a", "b", "c", "d", "e", "", " "), DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
     }
 
     @Test
     public void lengthIsCountedInCharacters() {
         assertEquals("Each message can be at most 150 characters.",
-            DeathMessageRules.issue(repeat("x", 151)));
-        assertNull(DeathMessageRules.issue(repeat("x", 150)));
+            DeathMessageRules.issue(repeat("x", 151), DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
+        assertNull(DeathMessageRules.issue(repeat("x", 150), DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         // 150 emoji: 300 UTF-16 units, 150 characters to the server.
-        assertNull(DeathMessageRules.issue(repeat("💀", 150)));
+        assertNull(DeathMessageRules.issue(repeat("💀", 150), DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
     }
 
     @Test
@@ -64,7 +64,7 @@ public class DeathMessageRulesTest {
             "@everyone rip", "@here rip", "<@123> rip", "<@!123> rip", "<@&456> rip",
             "<#789> rip", "<:skull:123456> rip", "<a:dance:123456> rip",
             "</settings:123456> rip", "<t:1700000000:R> rip")) {
-            assertEquals(text, MENTIONS, DeathMessageRules.issue(text));
+            assertEquals(text, MENTIONS, DeathMessageRules.issue(text, DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         }
     }
 
@@ -74,30 +74,30 @@ public class DeathMessageRulesTest {
             "see https://example.com", "http://x.y", "www.example.org rip",
             "join discord.gg/abcdef", "discord.com/invite/abc", "free gp at scam.xyz",
             "[click me](https://example.com)")) {
-            assertEquals(text, LINKS, DeathMessageRules.issue(text));
+            assertEquals(text, LINKS, DeathMessageRules.issue(text, DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         }
     }
 
     @Test
     public void noHeadingsOrQuotes() {
         for (String text : Arrays.asList("# {player_name} died", "## big", "-# small", "> quoted", ">>> quoted")) {
-            assertEquals(text, HEADINGS, DeathMessageRules.issue(text));
+            assertEquals(text, HEADINGS, DeathMessageRules.issue(text, DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         }
     }
 
     @Test
     public void singleLine() {
         for (String text : Arrays.asList("line one\nline two", "tab\tseparated", "sep\u2028arated")) {
-            assertEquals(text, ONE_LINE, DeathMessageRules.issue(text));
+            assertEquals(text, ONE_LINE, DeathMessageRules.issue(text, DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         }
     }
 
     @Test
     public void unknownPlaceholdersAreNamed() {
-        String issue = DeathMessageRules.issue("{player_name} {video_url} {image_url}");
+        String issue = DeathMessageRules.issue("{player_name} {video_url} {image_url}", DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS);
         assertTrue(issue, issue.startsWith("Unknown placeholders {image_url}, {video_url}."));
         assertTrue(issue.contains("{killer}"));
-        assertTrue(DeathMessageRules.issue("{nope}").startsWith("Unknown placeholder {nope}."));
+        assertTrue(DeathMessageRules.issue("{nope}", DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS).startsWith("Unknown placeholder {nope}."));
     }
 
     @Test
@@ -108,7 +108,7 @@ public class DeathMessageRulesTest {
             "{player_name} vs {source} in {region_name}",
             "Mr. Mordaut got {player_name} again — 4.2M gone, e.g. everything",
             "{player_name} **really** thought that was ||safe||")) {
-            assertNull(text, DeathMessageRules.issue(text));
+            assertNull(text, DeathMessageRules.issue(text, DeathMessageRules.ALLOWED, DeathMessageRules.TOKENS));
         }
     }
 
@@ -118,11 +118,11 @@ public class DeathMessageRulesTest {
         samples.put("{killer}", "Vorkath");
         samples.put("{location}", "Ungael");
         assertEquals("Iron Ron fed Vorkath at Ungael",
-            DeathMessageRules.preview("{player_name} fed {killer} at {region_name} {video_url}", samples, "Iron Ron"));
-        assertEquals("Vorkath again", DeathMessageRules.preview("{Source} again", samples, "Ron"));
+            DeathMessageRules.preview("{player_name} fed {killer} at {region_name} {video_url}", samples, DeathMessageRules.ALIASES, "Iron Ron"));
+        assertEquals("Vorkath again", DeathMessageRules.preview("{Source} again", samples, DeathMessageRules.ALIASES, "Ron"));
         // A sample holding a regex replacement token must come out literally.
         samples.put("{value_lost}", "$1.2M");
-        assertEquals("Ron lost $1.2M", DeathMessageRules.preview("{player_name} lost {value_lost}", samples, "Ron"));
+        assertEquals("Ron lost $1.2M", DeathMessageRules.preview("{player_name} lost {value_lost}", samples, DeathMessageRules.ALIASES, "Ron"));
     }
 
     @Test
