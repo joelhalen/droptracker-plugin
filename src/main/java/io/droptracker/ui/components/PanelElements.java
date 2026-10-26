@@ -73,7 +73,7 @@ public class PanelElements {
      * A non-image body decodes to null; any failure returns null.
      */
     @Nullable
-    private static BufferedImage fetchImage(@Nullable HttpUrl imageUrl) {
+    public static BufferedImage fetchImage(@Nullable HttpUrl imageUrl) {
         if (httpClient == null || imageUrl == null) {
             return null;
         }
@@ -133,11 +133,6 @@ public class PanelElements {
      */
     public static ImageIcon getExpandedIcon() {
         return EXPANDED_ICON;
-    }
-
-    /** Small board icon (16x16) used by board pop-out buttons. */
-    public static ImageIcon getBoardIcon() {
-        return BOARD_ICON;
     }
 
     /** Small "opens externally" icon (16x16), for buttons that leave the client. */

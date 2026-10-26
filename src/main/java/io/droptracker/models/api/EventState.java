@@ -41,16 +41,9 @@ public class EventState {
         private int tasksCompleted;
         @SerializedName("tasks_total")
         private int tasksTotal;
-        private BoardInfo board;
-        private List<Standing> standings;
         /** Full team task list (picker + tooltips); null from older servers. */
         @Nullable
         private List<TaskInfo> tasks;
-        /** Own-team roster (capped server-side); null from older servers. */
-        @Nullable
-        private List<Member> members;
-        @SerializedName("members_total")
-        private int membersTotal;
         /**
          * The own team's latest scoring submissions, in the shape the Player
          * and Group tabs already render (capped server-side); null from older
@@ -186,28 +179,4 @@ public class EventState {
         private String iconPath;
     }
 
-    @Getter
-    public static class Member {
-        @SerializedName("player_id")
-        private int playerId;
-        private String name;
-    }
-
-    @Getter
-    public static class BoardInfo {
-        private boolean available;
-        @SerializedName("team_id")
-        private int teamId;
-    }
-
-    @Getter
-    public static class Standing {
-        @SerializedName("team_id")
-        private int teamId;
-        private String name;
-        private int score;
-        private int rank;
-        @Nullable
-        private String color;
-    }
 }

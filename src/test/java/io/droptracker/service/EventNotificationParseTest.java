@@ -117,8 +117,6 @@ public class EventNotificationParseTest {
         assertEquals("active", board.getBoardStatus());
         assertEquals("board", board.getFocusTask().getSource());
         assertEquals(Integer.valueOf(11832), board.getFocusTask().getIconItemId());
-        assertEquals(2, board.getStandings().size());
-        assertTrue(board.getBoard().isAvailable());
 
         EventState.Entry bingo = state.getEvents().get(1);
         assertNull(bingo.getBoardStatus());
@@ -126,7 +124,7 @@ public class EventNotificationParseTest {
         assertEquals("metrics/magic.png", bingo.getFocusTask().getIconPath());
         assertEquals("#cc4444", bingo.getTeam().getColor());
 
-        // P3 additions: full task list + roster (absent on older servers).
+        // P3 additions: full task list (absent on older servers).
         assertNull(board.getTasks());
         assertNotNull(bingo.getTasks());
         assertEquals(2, bingo.getTasks().size());
@@ -141,9 +139,6 @@ public class EventNotificationParseTest {
         assertEquals(Integer.valueOf(2), points.getRequirements().get(1).getQuantity());
         assertNull(points.getRequirements().get(0).getObtained());
         assertEquals(Boolean.TRUE, points.getRequirements().get(1).getObtained());
-        assertEquals(2, bingo.getMembers().size());
-        assertEquals("Ra ine", bingo.getMembers().get(1).getName());
-        assertEquals(69, bingo.getMembersTotal());
     }
 
     @Test

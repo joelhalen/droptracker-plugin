@@ -13,7 +13,6 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.*;
 import net.runelite.client.util.ImageUtil;
-import okhttp3.HttpUrl;
 
 import javax.annotation.Nullable;
 import javax.swing.*;
@@ -28,17 +27,18 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * "Events" side-panel tab: one card per active event — themed header with the
+ * "Events" side-panel tab: the active event's card — themed header with the
  * time remaining, stat tiles, the tracked task (click any task in the list to
- * pin it; the top pin leads the HUD, and with none the server decides), a
- * full-width standings table with per-team board pop-outs, the team's recent
- * submissions and the team roster.
+ * pin it; the top pin leads the HUD, and with none the server decides) and the
+ * team's recent submissions. With several events, a row per event picks the
+ * active one. Standings, boards, rosters and history live in the
+ * {@link EventWindow}.
  */
 public class EventsPanel {
-    private final DropTrackerConfig config;
-    private final DropTrackerApi api;
+    final DropTrackerConfig config;
+    final DropTrackerApi api;
     private final EventNotificationService service;
-    private final Client client;
+    final Client client;
     private final ItemManager itemManager;
     private final ItemImageCache itemImages;
     private final RemoteImageCache remoteImages;
@@ -98,9 +98,16 @@ public class EventsPanel {
         header.setBackground(DropTrackerTheme.SURFACE_0);
         JLabel title = DropTrackerTheme.label("Your events", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         header.add(title, BorderLayout.WEST);
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 4, 0));
+        buttons.setOpaque(false);
+        JButton all = DropTrackerTheme.button("All events");
+        all.setToolTipText("Open the event window: every event you or your groups are running");
+        all.addActionListener(e -> EventWindow.open(this, 0));
+        buttons.add(all);
         JButton refresh = DropTrackerTheme.button("Refresh");
         refresh.addActionListener(e -> refreshAsync());
-        header.add(refresh, BorderLayout.EAST);
+        buttons.add(refresh);
+        header.add(buttons, BorderLayout.EAST);
         header.setBorder(new EmptyBorder(4, 6, 4, 6));
 
         scrollPane = new JScrollPane(listPanel,
@@ -133,7 +140,10 @@ public class EventsPanel {
 
     /** Called (any thread) when a fresh /event_state snapshot lands. */
     public void onUpdated() {
-        SwingUtilities.invokeLater(this::requestRebuild);
+        SwingUtilities.invokeLater(() -> {
+            requestRebuild();
+            EventWindow.stateUpdated();
+        });
     }
 
     /**
@@ -175,16 +185,19 @@ public class EventsPanel {
         } else if (entries == null || entries.isEmpty()) {
             listPanel.add(emptyLabel("No active events right now."));
         } else {
-            boolean multiple = entries.size() > 1;
-            // The event the HUD is actually rendering right now (explicit pin,
-            // else the first event) — cards mark it so "which event has the
-            // HUD" is always visible when the player is in several.
-            EventState.Entry hudEntry = service.hudEntry();
-            int hudEventId = hudEntry != null && hudEntry.getEvent() != null
-                ? hudEntry.getEvent().getId() : -1;
-            for (EventState.Entry entry : entries) {
-                listPanel.add(eventCard(entry, multiple, hudEventId));
-                listPanel.add(DropTrackerTheme.gap(8));
+            // The active event (explicit pick, else the first) drives this
+            // tab, the HUD and the team badges alike. With several, a row per
+            // event picks it; everything else is in the event window.
+            EventState.Entry active = service.hudEntry();
+            if (entries.size() > 1) {
+                for (EventState.Entry entry : entries) {
+                    listPanel.add(pickerRow(entry, entry == active));
+                    listPanel.add(DropTrackerTheme.gap(4));
+                }
+                listPanel.add(DropTrackerTheme.gap(4));
+            }
+            if (active != null) {
+                listPanel.add(eventCard(active));
             }
         }
         listPanel.add(Box.createVerticalGlue());
@@ -208,23 +221,59 @@ public class EventsPanel {
 
     /* ===================== event card ===================== */
 
-    private JPanel eventCard(EventState.Entry entry, boolean showHudPick, int hudEventId) {
+    /** One event in the picker: name, when, and Set active / Open. */
+    private JPanel pickerRow(EventState.Entry entry, boolean active) {
+        EventState.EventInfo event = entry.getEvent();
+        JPanel row = new DropTrackerTheme.FitPanel(new BorderLayout(4, 0));
+        row.setBackground(active ? DropTrackerTheme.SURFACE_3 : DropTrackerTheme.SURFACE_1);
+        row.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(active ? DropTrackerTheme.GOLD : DropTrackerTheme.BRONZE, 1),
+            new EmptyBorder(4, 6, 4, 4)));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JPanel text = DropTrackerTheme.vbox(row.getBackground());
+        JLabel name = DropTrackerTheme.label(event.getName(), FontManager.getRunescapeBoldFont(), active ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
+        name.setToolTipText(event.getName());
+        text.add(name);
+        text.add(DropTrackerTheme.label(subtitle(event), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED));
+        row.add(text, BorderLayout.CENTER);
+        JPanel east = new JPanel(new GridLayout(2, 1, 0, 2));
+        east.setOpaque(false);
+        if (active) {
+            JLabel chip = DropTrackerTheme.chip("ACTIVE", DropTrackerTheme.GOLD);
+            chip.setToolTipText("This tab, the HUD and your team badges follow this event");
+            east.add(chip);
+        } else {
+            JButton pick = DropTrackerTheme.button("Set active");
+            pick.setToolTipText("Show this event here, on the HUD and in your team badges");
+            pick.addActionListener(e -> {
+                config.setPinnedEventId(event.getId());
+                onUpdated();
+            });
+            east.add(pick);
+        }
+        east.add(openButton(event.getId()));
+        row.add(east, BorderLayout.EAST);
+        return row;
+    }
+
+    private JButton openButton(int eventId) {
+        JButton open = DropTrackerTheme.button("Open");
+        open.setToolTipText("Open the event window: tasks, board, teams, players and history");
+        open.addActionListener(e -> EventWindow.open(this, eventId));
+        return open;
+    }
+
+    private JPanel eventCard(EventState.Entry entry) {
         EventState.EventInfo event = entry.getEvent();
         EventState.TeamInfo team = entry.getTeam();
-        Color teamColor = team != null
-            ? parseColor(team.getColor(), DropTrackerTheme.GOLD) : DropTrackerTheme.GOLD;
-        boolean onHud = event.getId() == hudEventId;
 
         JPanel card = PanelElements.heightCappedPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(DropTrackerTheme.SURFACE_1);
-        // With several events running, the card owning the HUD gets the gold
-        // edge so the player can tell which event is in focus at a glance.
-        card.setBorder(BorderFactory.createLineBorder(
-            showHudPick && onHud ? DropTrackerTheme.GOLD : DropTrackerTheme.BRONZE, 1));
+        card.setBorder(BorderFactory.createLineBorder(DropTrackerTheme.BRONZE, 1));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        card.add(cardHeader(entry, showHudPick, onHud));
+        card.add(cardHeader(entry));
 
         JPanel body = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
         body.setBorder(new EmptyBorder(8, 8, 8, 8));
@@ -267,15 +316,6 @@ public class EventsPanel {
             body.add(vgap(8));
         }
 
-        List<EventState.Standing> standings = entry.getStandings();
-        if (standings != null && !standings.isEmpty()) {
-            boolean boardAvailable = entry.getBoard() != null && entry.getBoard().isAvailable();
-            JPanel table = standingsTable(entry, standings,
-                team != null ? team.getId() : -1, boardAvailable);
-            body.add(section(event.getId() + ":standings", "Standings", table, false));
-            body.add(vgap(8));
-        }
-
         if (team != null) {
             // Same grid the Player and Group tabs use, fed by the team's own
             // feed. Older servers send no field at all — the placeholder keeps
@@ -290,19 +330,12 @@ public class EventsPanel {
             body.add(vgap(8));
         }
 
-        List<EventState.Member> members = entry.getMembers();
-        if (members != null && !members.isEmpty()) {
-            String title = "Your team (" + Math.max(entry.getMembersTotal(), members.size()) + ")";
-            body.add(section(event.getId() + ":team", title,
-                membersBox(entry, members, teamColor), true));
-        }
-
         card.add(body);
         return card;
     }
 
     /** Header strip: event name + kind/countdown, HUD pick on the right. */
-    private JPanel cardHeader(EventState.Entry entry, boolean showHudPick, boolean onHud) {
+    private JPanel cardHeader(EventState.Entry entry) {
         EventState.EventInfo event = entry.getEvent();
 
         JPanel header = new DropTrackerTheme.FitPanel(new BorderLayout(6, 0));
@@ -314,43 +347,26 @@ public class EventsPanel {
 
         JPanel titleCol = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
 
-        JLabel name = DropTrackerTheme.label(entry.getEvent().getName(), FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
-        name.setToolTipText(entry.getEvent().getName());
+        JLabel name = DropTrackerTheme.label(event.getName(), FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
+        name.setToolTipText(event.getName());
         name.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(name);
 
-        String sub = kindLabel(event.getKind());
-        String endsIn = endsIn(event.getEndsAt());
-        if (endsIn != null) {
-            sub += "  ·  " + endsIn;
-        }
-        JLabel subLabel = DropTrackerTheme.label(sub, FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
+        JLabel subLabel = DropTrackerTheme.label(subtitle(event), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
         subLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(subLabel);
 
         header.add(titleCol, BorderLayout.CENTER);
-
-        if (showHudPick) {
-            JPanel east = new JPanel(new BorderLayout());
-            east.setBackground(DropTrackerTheme.SURFACE_2);
-            if (onHud) {
-                // The event the HUD is currently rendering (explicit pin or
-                // the default) — a chip, not a dead button.
-                JLabel chip = DropTrackerTheme.chip("ON HUD", DropTrackerTheme.GOLD);
-                chip.setToolTipText("The Enhanced Display HUD is showing this event");
-                east.add(chip, BorderLayout.NORTH);
-            } else {
-                JButton pin = DropTrackerTheme.button("Show on HUD");
-                pin.setToolTipText("Switch the Enhanced Display HUD to this event");
-                pin.addActionListener(e -> {
-                    config.setPinnedEventId(event.getId());
-                    onUpdated();
-                });
-                east.add(pin, BorderLayout.NORTH);
-            }
-            header.add(east, BorderLayout.EAST);
-        }
+        JPanel east = new JPanel(new BorderLayout());
+        east.setOpaque(false);
+        east.add(openButton(event.getId()), BorderLayout.NORTH);
+        header.add(east, BorderLayout.EAST);
         return header;
+    }
+
+    private static String subtitle(EventState.EventInfo event) {
+        String endsIn = endsIn(event.getEndsAt());
+        return kindLabel(event.getKind()) + (endsIn != null ? "  ·  " + endsIn : "");
     }
 
     /** The highlighted "working toward" block with icon + progress bar. */
@@ -405,7 +421,7 @@ public class EventsPanel {
 
         if (task.need > 1 || task.have > 0) {
             box.add(vgap(4));
-            box.add(progressBar(task.have, task.need));
+            box.add(progressBar(task.have, task.need, ValueFormat.progress(task.have, task.need), DropTrackerTheme.GREEN));
         }
 
         // Self-describing detail: the description and requirement completion the
@@ -895,118 +911,6 @@ public class EventsPanel {
             : Collections.singletonList(new EventState.TipLine(task.getLabel(), "title")));
     }
 
-    /* ===================== standings table ===================== */
-
-    private JPanel standingsTable(EventState.Entry entry, List<EventState.Standing> standings,
-                                  int ownTeamId, boolean boardAvailable) {
-        JPanel table = new JPanel(new GridBagLayout());
-        table.setBackground(DropTrackerTheme.SURFACE_1);
-        table.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        GridBagConstraints c = new GridBagConstraints();
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.insets = new Insets(1, 0, 1, 0);
-        c.gridy = 0;
-
-        for (EventState.Standing standing : standings) {
-            boolean own = standing.getTeamId() == ownTeamId;
-            Color rowBg = own ? DropTrackerTheme.SURFACE_3 : DropTrackerTheme.SURFACE_2;
-
-            JPanel rowPanel = new JPanel(new BorderLayout(5, 0));
-            rowPanel.setBackground(rowBg);
-            rowPanel.setBorder(new EmptyBorder(3, 5, 3, 4));
-
-            JLabel rank = DropTrackerTheme.label(String.valueOf(standing.getRank()), FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
-            rank.setPreferredSize(new Dimension(16, 16));
-            rowPanel.add(rank, BorderLayout.WEST);
-
-            JPanel nameCol = new JPanel(new BorderLayout(4, 0));
-            nameCol.setBackground(rowBg);
-            // An opaque block rather than a glyph: the colour IS the content,
-            // so there is nothing for a font to fail to render.
-            JLabel swatch = new JLabel();
-            swatch.setOpaque(true);
-            swatch.setBackground(parseColor(standing.getColor(), DropTrackerTheme.STONE));
-            swatch.setPreferredSize(new Dimension(8, 8));
-            nameCol.add(swatch, BorderLayout.WEST);
-            JLabel name = DropTrackerTheme.label(truncate(standing.getName(), 18) + (own ? " (you)" : ""), own ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT);
-            name.setToolTipText(standing.getName());
-            nameCol.add(name, BorderLayout.CENTER);
-            rowPanel.add(nameCol, BorderLayout.CENTER);
-
-            JPanel eastCol = new JPanel(new BorderLayout(5, 0));
-            eastCol.setBackground(rowBg);
-            JLabel score = DropTrackerTheme.label(ValueFormat.commas(standing.getScore()), FontManager.getRunescapeSmallFont(), own ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT_MUTED);
-            score.setToolTipText(standing.getScore() + " points");
-            eastCol.add(score, BorderLayout.CENTER);
-
-            if (boardAvailable) {
-                JLabel boardButton = new JLabel(PanelElements.getBoardIcon());
-                boardButton.setToolTipText("View " + escape(standing.getName()) + "'s board");
-                boardButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                final int teamId = standing.getTeamId();
-                final String teamName = standing.getName();
-                boardButton.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        openBoard(entry, teamId, teamName);
-                    }
-                });
-                eastCol.add(boardButton, BorderLayout.EAST);
-            }
-            rowPanel.add(eastCol, BorderLayout.EAST);
-
-            c.weightx = 1.0;
-            c.gridx = 0;
-            table.add(rowPanel, c);
-            c.gridy++;
-        }
-
-        return table;
-    }
-
-    private void openBoard(EventState.Entry entry, int teamId, String teamName) {
-        String playerName = client.getLocalPlayer() != null
-            ? client.getLocalPlayer().getName() : null;
-        if (playerName == null) {
-            return;
-        }
-        HttpUrl url = api.eventBoardImageUrl(entry.getEvent().getId(), teamId,
-            playerName, client.getAccountHash());
-        PanelElements.showRemoteImage(client,
-            entry.getEvent().getName() + " — " + teamName, url);
-    }
-
-    /* ===================== members ===================== */
-
-    private JComponent membersBox(EventState.Entry entry, List<EventState.Member> members,
-                                  Color teamColor) {
-        StringBuilder text = new StringBuilder();
-        for (int i = 0; i < members.size(); i++) {
-            if (i > 0) {
-                text.append(", ");
-            }
-            text.append(members.get(i).getName());
-        }
-        int hidden = entry.getMembersTotal() - members.size();
-        if (hidden > 0) {
-            text.append("  … and ").append(hidden).append(" more");
-        }
-        JTextArea area = new JTextArea(text.toString());
-        area.setWrapStyleWord(true);
-        area.setLineWrap(true);
-        area.setEditable(false);
-        area.setFocusable(false);
-        area.setOpaque(true);
-        area.setBackground(DropTrackerTheme.SURFACE_2);
-        area.setForeground(DropTrackerTheme.TEXT_MUTED);
-        area.setFont(FontManager.getRunescapeSmallFont());
-        area.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 2, 0, 0, teamColor),
-            new EmptyBorder(4, 6, 4, 6)));
-        return area;
-    }
-
     /* ===================== shared bits ===================== */
 
     /**
@@ -1069,11 +973,11 @@ public class EventsPanel {
         return wrap;
     }
 
-    /** Slim custom progress bar: bronze frame, green fill, centered count. */
-    private JComponent progressBar(long have, long need) {
+    /** Slim custom progress bar: bronze frame, {@code fill}-coloured progress, centered text. */
+    static JComponent progressBar(long have, long need, String text, Color fill) {
         long max = Math.max(need, 1);
         long value = Math.min(Math.max(have, 0), max);
-        String text = ValueFormat.progress(have, need);
+        Color body = fill.darker().darker();
         JComponent bar = new JComponent() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -1082,11 +986,11 @@ public class EventsPanel {
                 int h = getHeight();
                 g2.setColor(DropTrackerTheme.SURFACE_0);
                 g2.fillRect(0, 0, w, h);
-                int fill = (int) Math.round((double) value / max * (w - 2));
-                g2.setColor(new Color(0x2e5c33));
-                g2.fillRect(1, 1, fill, h - 2);
-                g2.setColor(DropTrackerTheme.GREEN);
-                g2.fillRect(1, 1, fill, 2);
+                int filled = (int) Math.round((double) value / max * (w - 2));
+                g2.setColor(body);
+                g2.fillRect(1, 1, filled, h - 2);
+                g2.setColor(fill);
+                g2.fillRect(1, 1, filled, 2);
                 g2.setColor(DropTrackerTheme.BRONZE);
                 g2.setStroke(new BasicStroke(1));
                 g2.drawRect(0, 0, w - 1, h - 1);
@@ -1121,7 +1025,7 @@ public class EventsPanel {
     /** Item sprite (rendered locally) or allowlisted remote icon, scaled to
      *  fit the slot with its aspect ratio preserved (item sprites are 36x32 —
      *  naive square scaling squishes them, raw addTo clips them). */
-    private void applyTaskIcon(JLabel target, @Nullable Integer iconItemId,
+    void applyTaskIcon(JLabel target, @Nullable Integer iconItemId,
                                @Nullable String iconPath, int size) {
         java.util.function.Consumer<BufferedImage> apply = image ->
             setIconNow(target, fitIcon(image, size));
@@ -1228,7 +1132,7 @@ public class EventsPanel {
         return PanelElements.escapeHtml(value);
     }
 
-    private static Color parseColor(String hex, Color fallback) {
+    static Color parseColor(String hex, Color fallback) {
         if (hex == null || hex.isEmpty()) {
             return fallback;
         }
@@ -1257,7 +1161,7 @@ public class EventsPanel {
      * wider content silently overflows past the right edge (the horizontal
      * scrollbar is disabled), narrower content leaves a gutter.
      */
-    private static class ScrollableColumn extends JPanel implements Scrollable {
+    static class ScrollableColumn extends JPanel implements Scrollable {
         @Override
         public Dimension getPreferredScrollableViewportSize() {
             return getPreferredSize();

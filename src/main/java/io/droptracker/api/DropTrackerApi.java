@@ -1101,6 +1101,18 @@ public class DropTrackerApi {
         }
     }
 
+    /** The events this account may open in the event window (its own, then its groups'). */
+    @Nullable
+    public EventView.Listing fetchEventList(String playerName, long accountHash) {
+        return fetchForPlayer("/plugin/events", playerName, accountHash, false, EventView.Listing.class);
+    }
+
+    /** One page of the event window, composed by the server. */
+    @Nullable
+    public EventView fetchEventView(int eventId, String page, String playerName, long accountHash) {
+        return fetchForPlayer("/plugin/events/" + eventId + "/view?page=" + page, playerName, accountHash, false, EventView.class);
+    }
+
     /**
      * URL of the server-rendered board image for an event (optionally one
      * team's view). The identity params ride along because the endpoint is
