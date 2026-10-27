@@ -11,6 +11,7 @@ import io.droptracker.*;
 import io.droptracker.api.DropTrackerApi;
 import io.droptracker.models.*;
 import io.droptracker.models.api.Manifest;
+import io.droptracker.util.WorldTypes;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
@@ -125,6 +126,14 @@ public class StateSyncService {
 	 */
 	public void sync(String source) {
 		if (!isEnabled() || !isPlayerReady()) {
+			return;
+		}
+		// The snapshot carries no world type, and the server files it against
+		// the main-game account: a Leagues, Deadman or Hardcore Worlds character
+		// would overwrite the main account's skills, quests and collection log.
+		if (!WorldTypes.isMainWorld(client.getWorldType())) {
+			log.debug("Not syncing state ({}) from a {} world", source,
+					WorldTypes.submissionName(client.getWorldType()));
 			return;
 		}
 		if (!syncing.compareAndSet(false, true)) {
