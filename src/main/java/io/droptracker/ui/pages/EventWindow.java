@@ -284,6 +284,13 @@ public class EventWindow extends JPanel {
         for (EventView.Row r : b.getRows()) {
             JPanel row = tableRow(b.getColumns(), r.getCells(), r.getColor(), r.getPage(), r.isHighlight(), false);
             row.setToolTipText(r.getTip());
+            if (r.getIconItemId() != null && row.getComponentCount() > 0) {
+                // An item row (a task's checklist): the icon leads its first cell.
+                JLabel first = (JLabel) row.getComponent(0);
+                first.setPreferredSize(new Dimension(0, 20));
+                first.setMinimumSize(first.getPreferredSize());
+                panel.applyTaskIcon(first, r.getIconItemId(), null, 18);
+            }
             t.add(row);
         }
         return t;
@@ -365,6 +372,17 @@ public class EventWindow extends JPanel {
                 body.add(line);
             }
             card.add(body, BorderLayout.CENTER);
+            if (i.getPage() != null) {
+                String link = i.getPage();
+                card.setToolTipText((i.getTip() != null ? i.getTip() + " " : "") + "Click to see what counts and who has it.");
+                card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                card.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mouseClicked(MouseEvent e) {
+                        show(eventId, link);
+                    }
+                });
+            }
             list.add(card);
             list.add(DropTrackerTheme.gap(4));
         }

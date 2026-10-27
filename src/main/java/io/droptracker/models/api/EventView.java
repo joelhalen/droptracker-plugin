@@ -11,7 +11,8 @@ import java.util.List;
  * Payloads of the event window ({@code /plugin/events...}). The server composes
  * every page as a list of blocks from a closed set (heading, text, stats,
  * table, tasks, board) holding plain text; the window draws the types it
- * knows and skips the rest. The only action is opening another page.
+ * knows and skips the rest. The only action is opening another page (a team,
+ * a board view, or one task's checklist).
  */
 @Getter
 public class EventView {
@@ -88,6 +89,9 @@ public class EventView {
         private String tip;
         @Nullable
         private String points;
+        /** A task's own page ({@code task:<id>}). */
+        @Nullable
+        private String page;
         @SerializedName("icon_item_id")
         @Nullable
         private Integer iconItemId;
@@ -123,5 +127,8 @@ public class EventView {
         @Nullable
         private String tip;
         private boolean highlight;
+        @SerializedName("icon_item_id")
+        @Nullable
+        private Integer iconItemId;
     }
 }
