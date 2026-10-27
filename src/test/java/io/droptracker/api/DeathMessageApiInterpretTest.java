@@ -79,4 +79,12 @@ public class DeathMessageApiInterpretTest {
         assertEquals(DeathMessageApi.UNREACHABLE, DeathMessageApi.interpret(gson, 422, "not json").error);
         assertEquals(DeathMessageApi.UNREACHABLE, DeathMessageApi.interpret(gson, 200, "").error);
     }
+
+    @Test
+    public void anUnlinkedAccountGetsTheServersSentence() {
+        // /player/privacy answers 409 when no Discord account owns this one.
+        assertEquals("Link your Discord first.",
+            DeathMessageApi.errorText(gson, 409, "{\"error\":\"Link your Discord first.\"}"));
+        assertEquals(DeathMessageApi.UNREACHABLE, DeathMessageApi.errorText(gson, 409, "not json"));
+    }
 }

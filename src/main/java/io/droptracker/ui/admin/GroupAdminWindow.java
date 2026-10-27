@@ -319,9 +319,9 @@ public class GroupAdminWindow extends JPanel {
         navItems.clear();
         nav.removeAll();
         nav.add(navHeading("GROUP"));
-        addNav("Overview", 0, true);
+        addNav("Overview", 0);
         pages.add(members, "page1");
-        addNav("Members", 1, true);
+        addNav("Members", 1);
         nav.add(navHeading("SETTINGS"));
         int index = 2;
         for (GroupAdmin.Category category : loaded.getCategories()) {
@@ -335,10 +335,8 @@ public class GroupAdminWindow extends JPanel {
             scroll.getVerticalScrollBar().setUnitIncrement(16);
             scroll.getViewport().setBackground(DropTrackerTheme.SURFACE_0);
             pages.add(scroll, "page" + index);
-            addNav(category.getLabel(), index++, true);
+            addNav(category.getLabel(), index++);
         }
-        nav.add(navHeading("COMING SOON"));
-        addNav("Events", -1, false);
         nav.add(Box.createVerticalGlue());
         nav.revalidate();
         nav.repaint();
@@ -576,8 +574,8 @@ public class GroupAdminWindow extends JPanel {
         return forms.stream().mapToInt(SettingsForm::dirtyCount).sum();
     }
 
-    private void addNav(String label, int page, boolean enabled) {
-        NavItem item = new NavItem(label, page, enabled);
+    private void addNav(String label, int page) {
+        NavItem item = new NavItem(label, page);
         navItems.add(item);
         nav.add(item);
     }
@@ -644,42 +642,39 @@ public class GroupAdminWindow extends JPanel {
         final int page;
         boolean selected;
 
-        NavItem(String text, int page, boolean enabled) {
-            super(enabled ? text : text + "  (soon)");
+        NavItem(String text, int page) {
+            super(text);
             this.page = page;
             setFont(FontManager.getRunescapeSmallFont());
             setOpaque(true);
             setAlignmentX(LEFT_ALIGNMENT);
             setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
-            setEnabled(enabled);
             setSelected(false);
-            if (enabled) {
-                setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        showPage(page);
-                    }
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showPage(page);
+                }
 
-                    @Override
-                    public void mouseEntered(MouseEvent e) {
-                        if (!selected) {
-                            setForeground(DropTrackerTheme.GOLD_BRIGHT);
-                        }
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    if (!selected) {
+                        setForeground(DropTrackerTheme.GOLD_BRIGHT);
                     }
+                }
 
-                    @Override
-                    public void mouseExited(MouseEvent e) {
-                        setSelected(selected);
-                    }
-                });
-            }
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    setSelected(selected);
+                }
+            });
         }
 
         void setSelected(boolean selected) {
             this.selected = selected;
             setBackground(selected ? DropTrackerTheme.SURFACE_2 : DropTrackerTheme.SURFACE_1);
-            setForeground(!isEnabled() ? DropTrackerTheme.STONE : selected ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
+            setForeground(selected ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
             setBorder(new CompoundBorder(new MatteBorder(0, 3, 0, 0, selected ? DropTrackerTheme.GOLD : DropTrackerTheme.SURFACE_1),
                 new EmptyBorder(5, 11, 5, 8)));
         }

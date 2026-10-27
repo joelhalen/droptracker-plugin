@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import javax.annotation.Nullable;
@@ -74,6 +75,56 @@ public class DeathMessageApi {
         });
     }
 
+    /**
+     * Reads ({@code changes} null) or saves the privacy switches of the Discord
+     * account that owns this one ({@code GET/POST /player/privacy}). Answers on
+     * the Swing thread with the switches, or null and a sentence for the player.
+     */
+    public void privacy(@Nullable String playerName, long accountHash, @Nullable Map<String, Boolean> changes,
+                        BiConsumer<Map<String, Boolean>, String> callback) {
+        executor.execute(() -> {
+            Map<String, Boolean> settings = null;
+            String error = API_OFF;
+            HttpUrl url = config.useApi() ? HttpUrl.parse(api.getApiUrl() + "/player/privacy") : null;
+            if (url != null) {
+                Request.Builder request = new Request.Builder().cacheControl(CacheControl.FORCE_NETWORK);
+                String name = playerName == null ? "" : playerName;
+                if (changes == null) {
+                    request.url(url.newBuilder().addQueryParameter("player_name", name)
+                        .addQueryParameter("acc_hash", String.valueOf(accountHash)).build());
+                } else {
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("player_name", name);
+                    body.put("acc_hash", String.valueOf(accountHash));
+                    body.put("settings", changes);
+                    request.url(url).post(RequestBody.create(JSON, gson.toJson(body)));
+                }
+                error = UNREACHABLE;
+                try (Response response = httpClient.newCall(request.build()).execute()) {
+                    ResponseBody raw = response.body();
+                    String text = raw == null ? "" : raw.string();
+                    if (response.code() == 200) {
+                        JsonObject parsed = gson.fromJson(text, JsonObject.class);
+                        settings = new LinkedHashMap<>();
+                        for (Map.Entry<String, JsonElement> e : parsed.getAsJsonObject("settings").entrySet()) {
+                            settings.put(e.getKey(), e.getValue().getAsBoolean());
+                        }
+                        error = null;
+                    } else {
+                        error = errorText(gson, response.code(), text);
+                    }
+                } catch (IOException | RuntimeException e) {
+                    log.debug("Privacy request failed: {}", e.toString());
+                    settings = null;
+                    error = UNREACHABLE;
+                }
+            }
+            Map<String, Boolean> answer = settings;
+            String problem = error;
+            SwingUtilities.invokeLater(() -> callback.accept(answer, problem));
+        });
+    }
+
     private Result fetchNow(@Nullable String playerName, long accountHash, String type) {
         HttpUrl base = endpoint();
         if (base == null) {
@@ -125,7 +176,7 @@ public class DeathMessageApi {
         return HttpUrl.parse(api.getApiUrl() + "/player/death_messages");
     }
 
-    static final String API_OFF = "Turn on \"Use API Connections\" in the plugin settings to edit your messages here.";
+    static final String API_OFF = "Turn on \"Use API Connections\" in the plugin settings to change this here.";
     static final String UNREACHABLE = "Couldn't reach the DropTracker. Try again in a moment.";
     static final String NOT_REGISTERED = "This account isn't registered with the DropTracker yet. Submit something first, then try again.";
     static final String TOO_MANY = "That's a lot of saves - wait a minute and try again.";
@@ -140,23 +191,28 @@ public class DeathMessageApi {
                 return Result.failed(UNREACHABLE);
             }
         }
+        return Result.failed(errorText(gson, code, body));
+    }
+
+    /** The sentence to show for a refused call. */
+    static String errorText(Gson gson, int code, String body) {
         if (code == 404) {
-            return Result.failed(NOT_REGISTERED);
+            return NOT_REGISTERED;
         }
         if (code == 429) {
-            return Result.failed(TOO_MANY);
+            return TOO_MANY;
         }
-        if (code == 422 || code == 400) {
+        if (code == 422 || code == 400 || code == 409) {
             // The server's refusal is written for the player; show it as is.
             try {
                 JsonObject error = gson.fromJson(body, JsonObject.class);
                 if (error != null && error.has("error") && error.get("error").isJsonPrimitive()) {
-                    return Result.failed(error.get("error").getAsString());
+                    return error.get("error").getAsString();
                 }
             } catch (JsonSyntaxException | IllegalStateException e) {
                 // fall through to the generic message
             }
         }
-        return Result.failed(UNREACHABLE);
+        return UNREACHABLE;
     }
 }
