@@ -99,7 +99,7 @@ public class HomePanel {
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JTextArea body = new JTextArea(
-            "Enable \"Use API Connections\" in the plugin settings to unlock:\n"
+            "Turn on \"Use API\" (settings, under Advanced) to unlock:\n"
             + "- Live top player & group leaderboards\n"
             + "- Player and group lookups\n"
             + "- Submission tracking with retries\n"
@@ -115,9 +115,9 @@ public class HomePanel {
         body.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JButton learnMore = DropTrackerTheme.button("Learn more");
-        learnMore.setToolTipText("Read about the DropTracker API on the wiki");
+        learnMore.setToolTipText("Read about the DropTracker API");
         learnMore.setAlignmentX(Component.LEFT_ALIGNMENT);
-        learnMore.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("wiki").toString()));
+        learnMore.addActionListener(e -> LinkBrowser.browse(DropTrackerUrls.web("docs", "runelite-plugin").toString()));
 
         card.add(title);
         card.add(body);
@@ -126,7 +126,7 @@ public class HomePanel {
         return card;
     }
 
-    /** 2x2 grid of quick links: wiki, discord, suggestions, bug reports. */
+    /** 2x2 grid of quick links: docs, discord, suggestions, bug reports. */
     private JPanel createQuickLinks() {
         JPanel quickAccessPanel = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         quickAccessPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -137,10 +137,10 @@ public class HomePanel {
         JPanel bottomButtonRow = new JPanel(new GridLayout(1, 2, 5, 0));
         bottomButtonRow.setBackground(DropTrackerTheme.SURFACE_0);
 
-        topButtonRow.add(linkButton("Read the Wiki", DropTrackerUrls.web("wiki").toString()));
+        topButtonRow.add(linkButton("Read the Docs", DropTrackerUrls.web("docs").toString()));
         topButtonRow.add(linkButton("Join Discord", DropTrackerUrls.web("discord").toString()));
-        bottomButtonRow.add(linkButton("Suggest Features", DropTrackerUrls.web("forums", "suggestions").toString()));
-        bottomButtonRow.add(linkButton("Report a Bug", DropTrackerUrls.web("forums", "bug-reports").toString()));
+        bottomButtonRow.add(linkButton("Suggest Features", DropTrackerUrls.web("suggestions").toString()));
+        bottomButtonRow.add(linkButton("Report a Bug", DropTrackerUrls.web("tickets").toString()));
 
         quickAccessPanel.add(topButtonRow);
         quickAccessPanel.add(DropTrackerTheme.gap(8));

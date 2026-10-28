@@ -38,7 +38,7 @@ public class ChatMessageUtil {
     {
         if (event.getCommand().equals("droptracker"))
         {
-            LinkBrowser.browse(DropTrackerUrls.web("wiki", "why-api").toString());
+            LinkBrowser.browse(DropTrackerUrls.web("docs", "runelite-plugin").toString());
         }
         if (event.getCommand().equals("debugurl"))
         {

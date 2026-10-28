@@ -342,13 +342,13 @@ public class DropTrackerPanel extends PluginPanel {
 		}
 	}
 
-	/** Registers a group in game; without the API or a logged-in account, the website's guide. */
+	/** Registers a group in game; without the API or a logged-in account, the website's setup wizard. */
 	public void openRegister() {
 		String name = config.lastAccountName();
 		if (config.useApi() && name != null && !name.isEmpty() && client.getAccountHash() != -1) {
 			io.droptracker.ui.admin.RegisterWindow.open(client, clientThread, config, groupAdminApi);
 		} else {
-			LinkBrowser.browse(DropTrackerUrls.web("wiki", "create-group").toString());
+			LinkBrowser.browse(DropTrackerUrls.web("groups", "new").toString());
 		}
 	}
 
