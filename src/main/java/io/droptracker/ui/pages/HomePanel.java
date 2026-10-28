@@ -103,7 +103,7 @@ public class HomePanel {
             + "- Live top player & group leaderboards\n"
             + "- Player and group lookups\n"
             + "- Submission tracking with retries\n"
-            + "- Participation in clan events");
+            + "- In-game event updates");
         body.setWrapStyleWord(true);
         body.setLineWrap(true);
         body.setOpaque(false);

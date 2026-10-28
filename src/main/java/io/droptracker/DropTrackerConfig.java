@@ -417,8 +417,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "useApi",
         name = "Use API",
-        description = "<html>Enables external connections to the DropTracker database, for panel data.<br />"
-            + "<b>Note</b>: The API is currently <b>required</b> for participation in events!</html>",
+        description = "<html>Enables external connections to the DropTracker database,<br />"
+            + "for panel data, lookups and in-game event updates.</html>",
         position = 1,
         section = advancedSection,
         warning = "<html><b>WARNING</b>: In order to connect to the DropTracker API,<br>"
