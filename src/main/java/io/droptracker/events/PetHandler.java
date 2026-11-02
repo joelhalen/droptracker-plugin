@@ -29,7 +29,7 @@ public class PetHandler extends BaseEventHandler {
     static final Pattern PET_REGEX = Pattern.compile("You (?:have a funny feeling like you|feel something weird sneaking).*");
 
     @VisibleForTesting
-    static final Pattern CLAN_REGEX = Pattern.compile("\\b(?<user>[\\w\\s]+) (?:has a funny feeling like .+ followed|feels something weird sneaking into .+ backpack): (?<pet>.+) at (?<milestone>.+)");
+    static final Pattern CLAN_REGEX = Pattern.compile("\\b(?<user>[\\w\\s]+) (?:has a funny feeling like .+ followed|feels something weird sneaking into .+ backpack): (?<pet>.+?)(?: from .+?)?(?: at (?<milestone>.+?))?\\.?$");
 
     private static final Pattern UNTRADEABLE_REGEX = Pattern.compile("Untradeable drop: (.+)");
     private static final Pattern COLLECTION_LOG_REGEX = Pattern.compile("New item added to your collection log: (.+)");
@@ -76,6 +76,13 @@ public class PetHandler extends BaseEventHandler {
     private volatile String pendingPetName = null;
     private volatile boolean pendingCollection = false;
 
+    /**
+     * Item lines seen while waiting for a name with no manifest (Use API off).
+     * A pet's line can't be told from a clue scroll's then, so all are sent and
+     * the server picks the pet.
+     */
+    private final List<String> candidates = new ArrayList<>();
+
     private static final String PRIMED_NAME = "";
 
     @Override
@@ -113,14 +120,16 @@ public class PetHandler extends BaseEventHandler {
                 this.pendingCollection = false;
             }
         } else if (PRIMED_NAME.equals(petName) || !collection) {
-            parseItemFromGameMessage(chatMessage)
-                    .filter(this::isPet)
-                    .ifPresent(parseResult -> {
-                        this.petName = parseResult.itemName;
-                        if (parseResult.collectionLog) {
-                            this.collection = true;
-                        }
-                    });
+            parseItemFromGameMessage(chatMessage).ifPresent(parseResult -> {
+                if (isPet(parseResult)) {
+                    this.petName = parseResult.itemName;
+                    if (parseResult.collectionLog) {
+                        this.collection = true;
+                    }
+                } else if (PRIMED_NAME.equals(petName) && pets().isEmpty()) {
+                    candidates.add(parseResult.itemName);
+                }
+            });
         }
     }
 
@@ -161,6 +170,7 @@ public class PetHandler extends BaseEventHandler {
         this.ticksWaited.set(0);
         this.pendingPetName = null;
         this.pendingCollection = false;
+        this.candidates.clear();
     }
 
     private void handleNotify() {
@@ -198,6 +208,9 @@ public class PetHandler extends BaseEventHandler {
         
         if (milestone != null) {
             fieldData.put("milestone", milestone);
+        }
+        if ((petName == null || petName.isEmpty()) && !candidates.isEmpty()) {
+            fieldData.put("pet_candidates", String.join("|", candidates));
         }
         
         if (previouslyOwned != null) {

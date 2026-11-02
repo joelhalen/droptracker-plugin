@@ -35,7 +35,7 @@ public class PetHandlerParseTest {
         assertTrue(m.find());
         assertEquals("Koeppy", m.group("user"));
         assertEquals("Herbi", m.group("pet"));
-        assertEquals("500 kills.", m.group("milestone"));
+        assertEquals("500 kills", m.group("milestone"));
     }
 
     @Test
@@ -45,7 +45,23 @@ public class PetHandlerParseTest {
         assertTrue(m.find());
         assertEquals("Big Man", m.group("user"));
         assertEquals("Baby mole", m.group("pet"));
-        assertEquals("200 kills.", m.group("milestone"));
+        assertEquals("200 kills", m.group("milestone"));
+    }
+
+    // The Hueycoatl's line names the source and has no count.
+    @Test
+    public void clanRegexReadsPetWithSourceAndNoCount() {
+        Matcher m = PetHandler.CLAN_REGEX.matcher(
+                "Tookez has a funny feeling like she's being followed: Huberte from Hueycoatl.");
+        assertTrue(m.find());
+        assertEquals("Tookez", m.group("user"));
+        assertEquals("Huberte", m.group("pet"));
+        assertEquals(null, m.group("milestone"));
+
+        m = PetHandler.CLAN_REGEX.matcher(
+                "Grinder has a funny feeling like she's being followed: Ikkle hydra.");
+        assertTrue(m.find());
+        assertEquals("Ikkle hydra", m.group("pet"));
     }
 
     // Pet names come from the server's manifest ("pets": name -> kill-count boss).
