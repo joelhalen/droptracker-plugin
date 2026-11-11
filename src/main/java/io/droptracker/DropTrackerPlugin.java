@@ -200,7 +200,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.24";
+	public String pluginVersion = "6.1.25";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -247,7 +247,10 @@ public class DropTrackerPlugin extends Plugin {
 		// the plugin while already logged in and sitting in a clan fires no
 		// ClanChannelChanged, so without this the inbound direction (and the
 		// ?clan= presence heartbeat) stays dead until the next relog.
-		clientThread.invokeLater(() -> clanRelayService.updateClanChannel(client.getClanChannel()));
+		clientThread.invokeLater(() -> {
+			clanRelayService.updateClanChannel(client.getClanChannel());
+			clanRelayService.updateGuestClanChannel(client.getGuestClanChannel());
+		});
 		// Same for a slayer task already in progress: no varp changes to
 		// announce it, so the handler reads it directly.
 		slayerHandler.startUp();
@@ -597,8 +600,13 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onClanChannelChanged(ClanChannelChanged event) {
 		// Keep the relay's clan binding current even while chat is quiet —
-		// presence heartbeats and relayed lines both attach this name.
-		clanRelayService.updateClanChannel(client.getClanChannel());
+		// presence heartbeats and relayed lines both attach this name. The
+		// guest channel feeds only the guest broadcast echo.
+		if (event.isGuest()) {
+			clanRelayService.updateGuestClanChannel(client.getGuestClanChannel());
+		} else {
+			clanRelayService.updateClanChannel(client.getClanChannel());
+		}
 	}
 
 	@Subscribe

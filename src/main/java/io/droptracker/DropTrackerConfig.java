@@ -469,6 +469,19 @@ public interface DropTrackerConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "showGuestBroadcasts",
+            name = "Show broadcasts as a clan guest",
+            description = "<html>When you are a guest in a clan chat, show that clan's broadcasts (drops,<br />"
+                    + "pets, personal bests) relayed by its members' plugins, which the game hides<br />"
+                    + "from guests. Only for clans whose group turned this on. Needs the API.</html>",
+            position = 4,
+            section = advancedSection
+    )
+    default boolean showGuestBroadcasts() {
+        return true;
+    }
+
+    @ConfigItem(
         keyName = "syncAccountState",
         name = "Sync account progress",
         description = "<html>Periodically send your skills, quests, achievement diaries,<br>"

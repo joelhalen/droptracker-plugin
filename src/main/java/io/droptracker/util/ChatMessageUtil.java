@@ -175,6 +175,28 @@ public class ChatMessageUtil {
     }
 
     /**
+     * A broadcast of the clan the player is visiting as a guest, which the
+     * game shows to members only, rendered as that clan's guest broadcast
+     * (visible only to this client — nothing is sent to the game server).
+     * The text must already be sanitized/capped by the caller.
+     */
+    public void sendGuestClanBroadcast(String message) {
+        clientThread.invokeLater(() -> {
+            String clanName = client.getGuestClanChannel() != null
+                    ? Text.removeTags(client.getGuestClanChannel().getName())
+                    : "";
+            chatMessageManager.queue(
+                    QueuedMessage.builder()
+                            .type(ChatMessageType.CLAN_GUEST_MESSAGE)
+                            .name("")
+                            .sender(clanName)
+                            .value(message)
+                            .build()
+            );
+        });
+    }
+
+    /**
      * A muted clanmate's line as their clan chat, with a muted icon before the
      * name: the game showed it to nobody, so clanmates without the plugin did
      * not see it. Client thread. False when the icon can't be loaded yet.

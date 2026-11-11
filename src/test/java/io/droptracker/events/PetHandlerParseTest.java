@@ -23,6 +23,16 @@ public class PetHandlerParseTest {
     }
 
     @Test
+    public void probitaPetIsNotADuplicate() {
+        // Follower out + full inventory: the duplicate line prints for a NEW pet
+        // that goes to Probita, next to its collection log line (bug #244).
+        assertFalse(PetHandler.isDuplicatePet(true, true));
+        assertTrue(PetHandler.isDuplicatePet(true, false));
+        assertFalse(PetHandler.isDuplicatePet(false, false));
+        assertFalse(PetHandler.isDuplicatePet(false, true));
+    }
+
+    @Test
     public void petRegexRejectsUnrelatedMessages() {
         assertFalse(PetHandler.PET_REGEX.matcher("You have completed a Treasure Trail.").matches());
         assertFalse(PetHandler.PET_REGEX.matcher("You feel a funny sensation.").matches());

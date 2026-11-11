@@ -105,6 +105,13 @@ public class ClanRelayService {
      */
     private volatile String currentClanName = null;
 
+    /**
+     * The clan channel the local player is visiting as a GUEST, if any. Never
+     * relayed from; only the guest broadcast echo reads it (the game hides a
+     * clan's broadcasts from its guests, a group can choose to show them).
+     */
+    private volatile String currentGuestClanName = null;
+
     /** How long the published opted-in clan list is trusted before a refetch. */
     private static final long PUBLISHED_CLANS_TTL_MS = TimeUnit.MINUTES.toMillis(10);
 
@@ -125,6 +132,31 @@ public class ClanRelayService {
     /** The current clan's name, or null when not in a clan. Thread-safe. */
     public String getCurrentClanName() {
         return currentClanName;
+    }
+
+    /** Called from the client thread whenever the guest clan channel changes. */
+    public void updateGuestClanChannel(ClanChannel channel) {
+        currentGuestClanName = channel != null ? Text.removeTags(channel.getName()) : null;
+    }
+
+    /** The clan the player is a guest in, or null. Thread-safe. */
+    public String getCurrentGuestClanName() {
+        return currentGuestClanName;
+    }
+
+    /**
+     * Whether the guest broadcast echo should be live (poll with the guest
+     * clan + display). API only, like Discord lines: the echoes arrive by
+     * polling our server. Whether a clan's broadcasts are shown to guests is
+     * that clan's group's choice, made on the server.
+     */
+    public boolean guestBroadcastsActive() {
+        return config.useApi() && config.showGuestBroadcasts() && currentGuestClanName != null;
+    }
+
+    /** A visited clan's broadcast, shown as that clan's guest broadcast. */
+    public void showGuestBroadcast(String message) {
+        chatMessageUtil.sendGuestClanBroadcast(message);
     }
 
     /**

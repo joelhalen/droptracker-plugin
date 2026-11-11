@@ -40,7 +40,7 @@ public class DropTrackerConfigKeyNamesTest {
         "eventHudDetail", "eventTeamIndicators", "eventTeamIndicatorColorNames",
         "eventTeamIndicatorsPublicChat",
         // Clan Chat
-        "clanChatSync", "receiveDiscordChat",
+        "clanChatSync", "receiveDiscordChat", "showGuestBroadcasts",
         // Advanced
         "useApi", "inGameMessages", "dropConfirmations", "syncAccountState",
         "uploadCharacterModel", "showSidePanel", "debugLogging",

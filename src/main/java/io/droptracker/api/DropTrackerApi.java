@@ -1006,7 +1006,7 @@ public class DropTrackerApi {
      */
     @Nullable
     public Call newNotificationsCall(String playerName, long accountHash, int waitSeconds, String clanName,
-                                     @Nullable String catchUpHidden) {
+                                     @Nullable String guestClanName, @Nullable String catchUpHidden) {
         if (!canIdentify(playerName, accountHash)) {
             return null;
         }
@@ -1019,6 +1019,10 @@ public class DropTrackerApi {
         }
         if (clanName != null && !clanName.isEmpty()) {
             url.addQueryParameter("clan", clanName);
+        }
+        if (guestClanName != null && !guestClanName.isEmpty()) {
+            // Presence for the guest broadcast echo (suggestion #234).
+            url.addQueryParameter("guest_clan", guestClanName);
         }
         if (catchUpHidden != null) {
             // The session's first batch: a stale backlog comes back as one

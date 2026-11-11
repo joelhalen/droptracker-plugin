@@ -245,8 +245,9 @@ public class EventNotificationService {
             // the (throttled, maybe-never) config cache refresh (P0-2). The
             // chat bridge holds too — Discord lines should land in seconds.
             final boolean bridgeActive = clanRelayService.discordChatActive();
+            final boolean guestActive = clanRelayService.guestBroadcastsActive();
             final int waitSeconds =
-                ((api.hasActiveEvent() || serverReportedActiveEvent || bridgeActive)
+                ((api.hasActiveEvent() || serverReportedActiveEvent || bridgeActive || guestActive)
                     && serverSupportsLongPoll)
                 ? LONG_POLL_WAIT_SECONDS : 0;
             // The clan param doubles as the bridge presence heartbeat: the
@@ -254,8 +255,11 @@ public class EventNotificationService {
             // polling with this clan recently.
             final String bridgeClan = bridgeActive
                 ? clanRelayService.getCurrentClanName() : null;
+            // The clan visited as a guest: the guest broadcast echo's presence.
+            final String guestClan = guestActive
+                ? clanRelayService.getCurrentGuestClanName() : null;
             Call call = api.newNotificationsCall(playerName, accountHash, waitSeconds, bridgeClan,
-                firstBatchOfSession ? hiddenQuery() : null);
+                guestClan, firstBatchOfSession ? hiddenQuery() : null);
             if (call == null) {
                 scheduleNext(POLL_INTERVAL_SECONDS * 1000L);
                 return;
@@ -393,6 +397,17 @@ public class EventNotificationService {
         List<EventNotification> remainder = new ArrayList<>(batch.size());
         long nowSeconds = System.currentTimeMillis() / 1000L;
         for (EventNotification n : batch) {
+            if ("clan_broadcast_echo".equals(n.getType())) {
+                // A broadcast of the clan visited as a guest, which the game
+                // showed to members only. Same staleness rule as chat lines.
+                EventNotification.Data echo = n.getData();
+                String line = echo != null ? clean(echo.getMessage(), BRIDGE_MESSAGE_MAX_CHARS) : null;
+                boolean stale = n.getTs() > 0 && nowSeconds - n.getTs() > BRIDGE_LINE_MAX_AGE_SECONDS;
+                if (line != null && !stale && clanRelayService.guestBroadcastsActive()) {
+                    clanRelayService.showGuestBroadcast(line);
+                }
+                continue;
+            }
             boolean muted = "clan_chat_muted".equals(n.getType());
             if (!muted && !"clan_chat_message".equals(n.getType())) {
                 remainder.add(n);

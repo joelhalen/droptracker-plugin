@@ -173,9 +173,22 @@ public class PetHandler extends BaseEventHandler {
         this.candidates.clear();
     }
 
+    /**
+     * Whether a pet roll is a duplicate. The game prints the duplicate line
+     * ("...would have been followed...") for a NEW pet too, when a follower is
+     * out and the inventory is full: the pet goes to Probita. That roll also
+     * prints "New item added to your collection log", which a pet already owned
+     * never does, so the collection log line overrules the duplicate line.
+     */
+    @VisibleForTesting
+    static boolean isDuplicatePet(boolean duplicateLine, boolean newToCollectionLog) {
+        return duplicateLine && !newToCollectionLog;
+    }
+
     private void handleNotify() {
+        boolean duplicatePet = isDuplicatePet(duplicate, collection);
         Boolean previouslyOwned;
-        if (duplicate) {
+        if (duplicatePet) {
             previouslyOwned = true;
         } else if (client.getVarbitValue(VarbitID.OPTION_COLLECTION_NEW_ITEM) % 2 == 1) {
             // when collection log chat notification is enabled, presence or absence of notification indicates ownership history
@@ -204,7 +217,10 @@ public class PetHandler extends BaseEventHandler {
         Map<String, Object> fieldData = new HashMap<>();
         fieldData.put("pet_name", petName != null && !petName.isEmpty() ? ucFirst(petName) : "Unknown Pet");
         fieldData.put("game_message", gameMessage);
-        fieldData.put("duplicate", duplicate);
+        fieldData.put("duplicate", duplicatePet);
+        // The game's own "New item added to your collection log" for this pet;
+        // the server trusts it over the duplicate line (bug #244).
+        fieldData.put("collection_log_new", collection);
         
         if (milestone != null) {
             fieldData.put("milestone", milestone);
