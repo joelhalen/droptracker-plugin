@@ -154,6 +154,27 @@ public class DropTrackerApi {
         this.onGroupConfigsLoadedCallback = callback;
     }
 
+    /** ::dttest — asks the server to post a sample drop to the player's clans. */
+    public String requestTestNotification(String playerName, long accountHash) {
+        if (!canIdentify(playerName, accountHash)) {
+            return "Turn on the API connection and log in first.";
+        }
+        HttpUrl.Builder url = playerUrl("/test_notification", playerName, accountHash);
+        if (url == null) {
+            return "No API endpoint is configured.";
+        }
+        try (Response response = panelHttpClient.newCall(getRequest(url.build())).execute()) {
+            JsonObject json = response.body() == null ? null
+                : gson.fromJson(response.body().string(), JsonObject.class);
+            if (json != null && json.has("message")) {
+                return json.get("message").getAsString();
+            }
+            return "The test request failed (" + response.code() + ").";
+        } catch (Exception e) {
+            return "Couldn't reach the DropTracker API: " + e.getMessage();
+        }
+    }
+
     /* ===================== Aggregate panel data (GET /panel_data) ===================== */
 
     /**

@@ -437,7 +437,7 @@ public class EventBroadcastPriorityTest {
     private EventNotificationService service(DropTrackerConfig config, ChatMessageUtil chat) {
         // Only the config and the chat sink are touched while rendering a
         // batch; the polling collaborators stay unused (and so null) here.
-        return new EventNotificationService(config, null, chat, null, null, null, null);
+        return new EventNotificationService(config, null, chat, null, null, null, null, null);
     }
 
     /**
@@ -450,7 +450,7 @@ public class EventBroadcastPriorityTest {
         private int tracked;
 
         PrefsService(DropTrackerConfig config, ChatMessageUtil chat) {
-            super(config, null, chat, null, null, null, null);
+            super(config, null, chat, null, null, null, null, null);
         }
 
         @Override

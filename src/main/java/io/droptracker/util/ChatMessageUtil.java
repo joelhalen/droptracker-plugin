@@ -13,6 +13,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.util.*;
 
 import java.awt.*;
+import java.util.*;
 
 
 public class ChatMessageUtil {
@@ -47,6 +48,28 @@ public class ChatMessageUtil {
             sendChatMessage("All outgoing requests will now be sent to " + apiUrlToUse);
         }
     }
+    /** Lines this client drew as clan broadcasts, so the chat subscriber never
+     *  feeds them back through the bridge or the broadcast parsers. */
+    private final Set<String> injectedClanLines = Collections.newSetFromMap(
+        new LinkedHashMap<String, Boolean>() {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
+                return size() > 16;
+            }
+        });
+
+    /** A server line shown as a clan broadcast (visible only to this client). */
+    public void sendClanBroadcastLine(String text) {
+        injectedClanLines.add(Text.removeTags(text));
+        clientThread.invokeLater(() -> chatMessageManager.queue(
+            QueuedMessage.builder().type(ChatMessageType.CLAN_MESSAGE)
+                .runeLiteFormattedMessage(text).build()));
+    }
+
+    public boolean isInjectedClanLine(String rawMessage) {
+        return rawMessage != null && injectedClanLines.contains(Text.removeTags(rawMessage));
+    }
+
     public void warnApiSetting() {
         queueWarning("It is strongly recommended that you enable our API connections in the DropTracker plugin configuration. To learn more, type ::droptracker");
     }

@@ -111,6 +111,9 @@ public class EventNotification {
         private String tone;
         @Nullable
         private String emphasis;
+        /** "clan": shown as a clan broadcast line; anything else is a game line. */
+        @Nullable
+        private String channel;
     }
 
     /** The typed fields still read here; gson leaves absent ones null. */

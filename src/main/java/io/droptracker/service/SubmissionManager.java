@@ -363,6 +363,11 @@ public class SubmissionManager {
                 if (trace.getRosterSource() != null && !trace.getRosterSource().isEmpty()) {
                     embed.addField("roster_source", trace.getRosterSource(), false);
                 }
+                // Where the loot was claimed: inside the raid, or outside it
+                // while still in a RuneLite party. Outside and alone is how a
+                // leaver claims a team's chest as a solo (points rule, 2026-11).
+                embed.addField("in_raid", String.valueOf(nearbyPlayerTracker.isInsideRaid()), false);
+                embed.addField("in_party", String.valueOf(trace.isInParty()), false);
             }
         }
 

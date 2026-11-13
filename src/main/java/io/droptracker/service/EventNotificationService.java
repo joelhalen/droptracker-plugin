@@ -2,6 +2,7 @@ package io.droptracker.service;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
+import io.droptracker.events.WidgetEventHandler;
 import io.droptracker.models.*;
 import io.droptracker.models.api.*;
 import io.droptracker.util.*;
@@ -86,6 +87,7 @@ public class EventNotificationService {
     private final ScheduledExecutorService executor;
     private final ConfigManager configManager;
     private final ClanRelayService clanRelayService;
+    private final WidgetEventHandler widgetEventHandler;
 
     /** Next scheduled poll cycle; guarded by {@code this}. */
     private ScheduledFuture<?> pollTask;
@@ -777,8 +779,12 @@ public class EventNotificationService {
                     "... and " + (chatLines.size() - MAX_CHAT_LINES_PER_EVENT) + " more event updates.");
                 break;
             }
-            sendLine(eventName, teamName, line.chatTag, line.chatHex,
-                line.chatEmphasis, line.text);
+            String body = line.chatText != null ? line.chatText : line.text;
+            if ("clan".equals(line.chatChannel)) {
+                chatMessageUtil.sendClanBroadcastLine(body);
+            } else {
+                sendLine(eventName, teamName, line.chatTag, line.chatHex, line.chatEmphasis, body);
+            }
             lines++;
         }
         return groupToasts;
@@ -958,6 +964,10 @@ public class EventNotificationService {
         String chatHex;
         /** Substring of {@link #text} to lift out of the accent (item name). */
         String chatEmphasis;
+        /** "clan" = a clan broadcast line instead of a game line. */
+        String chatChannel;
+        /** The chat line's text when it differs from {@link #text} (icon tags). */
+        String chatText;
         Integer iconItemId;
         EventNotification.Priority priority = EventNotification.Priority.NORMAL;
         boolean chatEligible = true;
@@ -1011,12 +1021,20 @@ public class EventNotificationService {
             DebugLogger.log("[EventNotifications] no display for type=" + type);
             return null;
         }
+        String chatText = text;
+        if ("clan_announcement".equals(type)) {
+            // ":vorki:" becomes the pet's icon in chat; the pop-up reads the name.
+            chatText = widgetEventHandler.expandIcons(text, true);
+            text = widgetEventHandler.expandIcons(text, false);
+        }
         Rendered rendered = new Rendered(title, text);
+        rendered.chatText = chatText;
         EventNotification.Chat chat = d.getChat();
         if (chat != null) {
             rendered.chatTag = clean(chat.getTag(), 24);
             rendered.chatHex = chat.getTone() != null ? TONES.get(chat.getTone()) : null;
             rendered.chatEmphasis = clean(chat.getEmphasis());
+            rendered.chatChannel = clean(chat.getChannel(), 8);
         }
         rendered.iconItemId = d.getIconItemId();
         rendered.toastEligible = !Boolean.FALSE.equals(d.getToast());

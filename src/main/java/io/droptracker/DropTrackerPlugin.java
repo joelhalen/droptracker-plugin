@@ -200,7 +200,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.26";
+	public String pluginVersion = "6.1.27";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -429,6 +429,13 @@ public class DropTrackerPlugin extends Plugin {
 	@Subscribe
 	public void onCommandExecuted(CommandExecuted command) {
 		chatMessageUtil.onCommandExecuted(command);
+		if ("dttest".equals(command.getCommand())) {
+			// ::dttest — the server posts a sample drop to the player's clans so
+			// a leader can check their channel setup without a real drop (#221).
+			String name = getLocalPlayerName();
+			long hash = client.getAccountHash();
+			executor.submit(() -> chatMessageUtil.sendChatMessage(api.requestTestNotification(name, hash)));
+		}
 		// ::dtpopup sample pop-ups live in src/test (EventPopupPreview) so they
 		// don't ship; to use them, move the class back and route the command here.
 	}
@@ -579,6 +586,9 @@ public class DropTrackerPlugin extends Plugin {
 				break;
 			case CLAN_MESSAGE:
 			case CLAN_GIM_MESSAGE:
+				if (chatMessageUtil.isInjectedClanLine(message.getMessage())) {
+					break; // our own announcement line, not the game's
+				}
                 petHandler.onClanChatNotification(chatMessage);
                 // Clan-broadcast relay (group feature): CLAN_MESSAGE only —
                 // GIM broadcasts are a different channel and stay local.

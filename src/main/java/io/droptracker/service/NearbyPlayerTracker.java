@@ -433,6 +433,12 @@ public class NearbyPlayerTracker
         return null;
     }
 
+    /** Whether the game's raid varbits currently place the player inside a raid. */
+    public boolean isInsideRaid()
+    {
+        return activeRaidType != null;
+    }
+
     /** Reads the authoritative roster source for the given raid into {@code into}. */
     private void captureAuthoritativeRoster(String raidType, Set<String> into)
     {
@@ -695,13 +701,6 @@ public class NearbyPlayerTracker
             coxTeamCount,
             partyService.isInParty(),
             partyService.isInParty() ? partyService.getMembers().size() : 0,
-            scanStats.worldViewsScanned,
-            scanStats.playersSeen,
-            scanStats.playersWithinRadius,
-            scanStats.playersAdded,
-            authoritativeRoster.size(),
-            fallbackRoster.size(),
-            System.currentTimeMillis(),
             null
         );
         DebugLogger.log("[NearbyPlayerTracker] " + trace.toDebugSummary());
@@ -860,13 +859,6 @@ public class NearbyPlayerTracker
         private final int coxTeamCount;
         private final boolean inParty;
         private final int partySize;
-        private final int worldViewsScanned;
-        private final int playersSeen;
-        private final int playersWithinRadius;
-        private final int uniquePlayersAdded;
-        private final int authoritativeRosterSize;
-        private final int fallbackRosterSize;
-        private final long capturedAtMs;
         private final String fallbackReason;
 
         public static NearbyPlayerTrace empty(int radiusTiles, String fallbackReason)
@@ -887,13 +879,6 @@ public class NearbyPlayerTracker
                 0,
                 false,
                 0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                System.currentTimeMillis(),
                 fallbackReason
             );
         }
@@ -904,6 +889,11 @@ public class NearbyPlayerTracker
         }
 
         /** Where the participant list came from: {@code authoritative | solo | proximity-fallback | proximity | none}. */
+        public boolean isInParty()
+        {
+            return inParty;
+        }
+
         public String getRosterSource()
         {
             return rosterSource;
@@ -934,14 +924,7 @@ public class NearbyPlayerTracker
                 + ", coxTeamCount=" + coxTeamCount
                 + ", inParty=" + inParty
                 + ", partySize=" + partySize
-                + ", worldViewsScanned=" + worldViewsScanned
-                + ", playersSeen=" + playersSeen
-                + ", playersWithinRadius=" + playersWithinRadius
-                + ", uniquePlayersAdded=" + uniquePlayersAdded
-                + ", authoritativeRosterSize=" + authoritativeRosterSize
-                + ", fallbackRosterSize=" + fallbackRosterSize
                 + ", nearbyPlayers=" + nearbyPlayers
-                + ", capturedAtMs=" + capturedAtMs
                 + (fallbackReason != null ? ", fallbackReason=" + fallbackReason : "");
         }
     }

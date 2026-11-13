@@ -249,7 +249,7 @@ public class PopupRenderersTest {
                 @Override
                 public void setLastAccountHash(String accountHash) {
                 }
-            }, null, new ChatMessageUtil(), null, null, null, null);
+            }, null, new ChatMessageUtil(), null, null, null, null, null);
         service.setPreviewHudEntry(sampleEntry(), Long.MAX_VALUE);
         Map<String, String> samples = new LinkedHashMap<>();
         samples.put("tile", "event_completion|high|{\"task_id\":1,\"task_label\":\"Obtain Bandos tassets\","

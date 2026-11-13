@@ -75,6 +75,9 @@ public class WidgetEventHandler {
 
     private int petsIconIdx = -1;
     private int[] pets;
+    /** ":vorki:" / ":chaos elemental:" -> the pet's mod-icon tag (suggestion #247). */
+    private final Map<String, String> petIconTokens = new HashMap<>();
+    private static final Pattern ICON_TOKEN = Pattern.compile(":([a-z0-9' -]{2,40}):");
 
 
     private boolean advLogLoaded = false;
@@ -378,6 +381,32 @@ public class WidgetEventHandler {
         return bossNameRegistry.canonicalName(boss, WordUtils::capitalize);
     }
 
+    /**
+     * Replaces each known ":pet name:" token with the pet's icon tag, or (for
+     * text drawn outside the chatbox) with the bare name. Unknown tokens stay.
+     */
+    public String expandIcons(String text, boolean asImages)
+    {
+        if (text == null || petIconTokens.isEmpty() || text.indexOf(':') < 0)
+        {
+            return text;
+        }
+        Matcher m = ICON_TOKEN.matcher(text.toLowerCase());
+        StringBuilder out = new StringBuilder();
+        int last = 0;
+        while (m.find())
+        {
+            String tag = petIconTokens.get(m.group(1));
+            if (tag == null)
+            {
+                continue;
+            }
+            out.append(text, last, m.start()).append(asImages ? tag : m.group(1));
+            last = m.end();
+        }
+        return out.append(text.substring(last)).toString();
+    }
+
     private void loadPets()
     {
         assert petsIconIdx == -1;
@@ -404,6 +433,8 @@ public class WidgetEventHandler {
 
             final AsyncBufferedImage abi = itemManager.getImage(petId);
             final int idx = petsIconIdx + i;
+            String petName = itemManager.getItemComposition(petId).getName().toLowerCase();
+            petIconTokens.put(petName.startsWith("pet ") ? petName.substring(4) : petName, "<img=" + idx + ">");
             abi.onLoaded(() ->
             {
                 final BufferedImage image = ImageUtil.resizeImage(abi, 18, 16);
