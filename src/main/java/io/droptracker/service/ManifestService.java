@@ -1,4 +1,5 @@
 package io.droptracker.service;
+import lombok.Getter;
 
 import lombok.RequiredArgsConstructor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -34,6 +35,7 @@ public class ManifestService {
 	/** Guards against a second fetch while the first is still in flight. */
 	private final AtomicBoolean fetching = new AtomicBoolean(false);
 
+	@Getter
 	private volatile Manifest manifest;
 
 	/**
@@ -44,9 +46,6 @@ public class ManifestService {
 	 * existed.
 	 */
 	@Nullable
-	public Manifest getManifest() {
-		return manifest;
-	}
 
 	/** Kicks off the one fetch for this session. Safe to call more than once. */
 	public void startUp() {

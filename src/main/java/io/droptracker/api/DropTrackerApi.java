@@ -163,14 +163,10 @@ public class DropTrackerApi {
         if (url == null) {
             return "No API endpoint is configured.";
         }
-        try (Response response = panelHttpClient.newCall(getRequest(url.build())).execute()) {
-            JsonObject json = response.body() == null ? null
-                : gson.fromJson(response.body().string(), JsonObject.class);
-            if (json != null && json.has("message")) {
-                return json.get("message").getAsString();
-            }
-            return "The test request failed (" + response.code() + ").";
-        } catch (Exception e) {
+        try {
+            JsonObject json = getJson(url.build(), JsonObject.class);
+            return json != null && json.has("message") ? json.get("message").getAsString() : "The test request failed.";
+        } catch (IOException e) {
             return "Couldn't reach the DropTracker API: " + e.getMessage();
         }
     }
@@ -732,12 +728,9 @@ public class DropTrackerApi {
         if (url == null) {
             return null;
         }
-        try (Response response = panelHttpClient.newCall(getRequest(url)).execute()) {
-            if (!response.isSuccessful() || response.body() == null) {
-                return null;
-            }
-            return gson.fromJson(response.body().string(), VersionInfo.class);
-        } catch (Exception e) {
+        try {
+            return getJson(url, VersionInfo.class);
+        } catch (IOException e) {
             log.debug("Version check failed: {}", e.getMessage());
             return null;
         }

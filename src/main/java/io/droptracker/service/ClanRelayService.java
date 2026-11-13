@@ -5,6 +5,8 @@
  */
 package io.droptracker.service;
 
+import lombok.Getter;
+
 import lombok.RequiredArgsConstructor;
 import com.google.inject.*;
 import io.droptracker.*;
@@ -103,6 +105,7 @@ public class ClanRelayService {
      * the notification poller can attach it to presence heartbeats without
      * touching client state off-thread.
      */
+    @Getter
     private volatile String currentClanName = null;
 
     /**
@@ -110,6 +113,7 @@ public class ClanRelayService {
      * relayed from; only the guest broadcast echo reads it (the game hides a
      * clan's broadcasts from its guests, a group can choose to show them).
      */
+    @Getter
     private volatile String currentGuestClanName = null;
 
     /** How long the published opted-in clan list is trusted before a refetch. */
@@ -129,19 +133,9 @@ public class ClanRelayService {
         currentClanName = channel != null ? Text.removeTags(channel.getName()) : null;
     }
 
-    /** The current clan's name, or null when not in a clan. Thread-safe. */
-    public String getCurrentClanName() {
-        return currentClanName;
-    }
-
     /** Called from the client thread whenever the guest clan channel changes. */
     public void updateGuestClanChannel(ClanChannel channel) {
         currentGuestClanName = channel != null ? Text.removeTags(channel.getName()) : null;
-    }
-
-    /** The clan the player is a guest in, or null. Thread-safe. */
-    public String getCurrentGuestClanName() {
-        return currentGuestClanName;
     }
 
     /**

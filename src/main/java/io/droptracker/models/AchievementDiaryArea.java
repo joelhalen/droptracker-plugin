@@ -1,4 +1,5 @@
 package io.droptracker.models;
+import lombok.Getter;
 
 import net.runelite.api.Client;
 
@@ -37,14 +38,11 @@ public enum AchievementDiaryArea {
 	private static final int VALUES_PER_TIER = 3;
 	private static final int TIER_COUNT = 4;
 
+	@Getter
 	private final int id;
 
 	AchievementDiaryArea(int id) {
 		this.id = id;
-	}
-
-	public int getId() {
-		return id;
 	}
 
 	/**

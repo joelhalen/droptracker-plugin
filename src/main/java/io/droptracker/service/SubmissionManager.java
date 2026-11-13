@@ -1147,8 +1147,6 @@ public class SubmissionManager {
 
         private Boolean processed;
 
-        @SerializedName("submission_id")
-        private String submissionId;
     }
 
     /**

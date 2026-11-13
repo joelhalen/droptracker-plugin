@@ -1,8 +1,7 @@
 package io.droptracker.service;
+import lombok.Getter;
 
-import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
-import lombok.AllArgsConstructor;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
 import net.runelite.api.coords.WorldPoint;
@@ -532,11 +531,10 @@ public class NearbyPlayerTracker
             WorldView topLevel = client.getTopLevelWorldView();
             if (topLevel != null)
             {
-                ScanStats ignored = new ScanStats();
-                collectNamesFromWorldView(topLevel, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, fallbackRoster, ignored);
+                collectNamesFromWorldView(topLevel, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, fallbackRoster);
                 for (WorldView subWorldView : topLevel.worldViews())
                 {
-                    collectNamesFromWorldView(subWorldView, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, fallbackRoster, ignored);
+                    collectNamesFromWorldView(subWorldView, center, ROSTER_SCAN_RADIUS_TILES, localPlayer, fallbackRoster);
                 }
             }
         }
@@ -607,7 +605,6 @@ public class NearbyPlayerTracker
         Set<String> names = new LinkedHashSet<>();
         String rosterSource;
         boolean localPlayerInRoster = false;
-        ScanStats scanStats = new ScanStats();
 
         if (submissionRaidType != null)
         {
@@ -659,7 +656,7 @@ public class NearbyPlayerTracker
                     names.addAll(fallbackRoster);
                 }
                 int fallbackRadius = Math.max(effectiveRadius, ROSTER_SCAN_RADIUS_TILES);
-                scanWorldViews(center, fallbackRadius, localPlayer, names, scanStats);
+                scanWorldViews(center, fallbackRadius, localPlayer, names);
                 rosterSource = "proximity-fallback";
             }
         }
@@ -667,7 +664,7 @@ public class NearbyPlayerTracker
         {
             // Non-raid submission: plain proximity scan. The raid roster is
             // deliberately NOT merged here.
-            scanWorldViews(center, effectiveRadius, localPlayer, names, scanStats);
+            scanWorldViews(center, effectiveRadius, localPlayer, names);
             rosterSource = "proximity";
         }
 
@@ -685,39 +682,29 @@ public class NearbyPlayerTracker
                 gameReportedTeamSize(submissionRaidType), accumulated, names.size());
         }
 
-        NearbyPlayerTrace trace = new NearbyPlayerTrace(
-            new ArrayList<>(names),
-            effectiveRadius,
-            localName,
-            center,
-            inRaidContext,
-            raidType,
-            sourceName,
-            rosterSource,
-            localPlayerInRoster,
-            raidPartySize,
-            toaTeamCount,
-            tobTeamCount,
-            coxTeamCount,
-            partyService.isInParty(),
-            partyService.isInParty() ? partyService.getMembers().size() : 0,
-            null
-        );
+        boolean inParty = partyService.isInParty();
+        NearbyPlayerTrace trace = new NearbyPlayerTrace(new ArrayList<>(names), rosterSource, raidPartySize, inParty,
+            "radius=" + effectiveRadius + ", localPlayer=" + localName + ", localPoint=" + center.getX() + ","
+                + center.getY() + "," + center.getPlane() + ", inRaidContext=" + inRaidContext + ", raidType=" + raidType
+                + ", sourceName=" + sourceName + ", rosterSource=" + rosterSource + ", localPlayerInRoster="
+                + localPlayerInRoster + ", raidPartySize=" + raidPartySize + ", teams toa/tob/cox=" + toaTeamCount + "/"
+                + tobTeamCount + "/" + coxTeamCount + ", inParty=" + inParty + ", partySize="
+                + (inParty ? partyService.getMembers().size() : 0) + ", nearbyPlayers=" + names);
         DebugLogger.log("[NearbyPlayerTracker] " + trace.toDebugSummary());
         return trace;
     }
 
-    private void scanWorldViews(WorldPoint center, int radiusTiles, Player localPlayer, Set<String> names, ScanStats scanStats)
+    private void scanWorldViews(WorldPoint center, int radiusTiles, Player localPlayer, Set<String> names)
     {
         WorldView topLevel = client.getTopLevelWorldView();
         if (topLevel == null)
         {
             return;
         }
-        collectNamesFromWorldView(topLevel, center, radiusTiles, localPlayer, names, scanStats);
+        collectNamesFromWorldView(topLevel, center, radiusTiles, localPlayer, names);
         for (WorldView subWorldView : topLevel.worldViews())
         {
-            collectNamesFromWorldView(subWorldView, center, radiusTiles, localPlayer, names, scanStats);
+            collectNamesFromWorldView(subWorldView, center, radiusTiles, localPlayer, names);
         }
     }
 
@@ -726,19 +713,15 @@ public class NearbyPlayerTracker
         WorldPoint center,
         int radiusTiles,
         Player localPlayer,
-        Set<String> names,
-        ScanStats scanStats
-    )
+        Set<String> names)
     {
         if (worldView == null)
         {
             return;
         }
-        scanStats.worldViewsScanned++;
 
         for (Player player : worldView.players())
         {
-            scanStats.playersSeen++;
             if (player == null || player == localPlayer)
             {
                 continue;
@@ -760,12 +743,10 @@ public class NearbyPlayerTracker
             {
                 continue;
             }
-            scanStats.playersWithinRadius++;
 
             String normalizedName = normalizePlayerName(playerName);
             if (normalizedName != null && names.add(normalizedName))
             {
-                scanStats.playersAdded++;
             }
         }
     }
@@ -833,99 +814,40 @@ public class NearbyPlayerTracker
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private static final class ScanStats
-    {
-        int worldViewsScanned;
-        int playersSeen;
-        int playersWithinRadius;
-        int playersAdded;
-    }
-
-    @AllArgsConstructor(access = AccessLevel.PRIVATE)
     public static final class NearbyPlayerTrace
     {
+        @Getter
         private final List<String> nearbyPlayers;
-        private final int radiusTiles;
-        private final String localPlayer;
-        private final WorldPoint localWorldPoint;
-        private final boolean inRaidContext;
-        private final String raidType;
-        private final String sourceName;
+        @Getter
         private final String rosterSource;
-        private final boolean localPlayerInRoster;
+        @Getter
         private final int raidPartySize;
-        private final int toaTeamCount;
-        private final int tobTeamCount;
-        private final int coxTeamCount;
+        @Getter
         private final boolean inParty;
-        private final int partySize;
-        private final String fallbackReason;
+        private final String debugSummary;
+
+        NearbyPlayerTrace(List<String> nearbyPlayers, String rosterSource, int raidPartySize,
+                          boolean inParty, String debugSummary)
+        {
+            this.nearbyPlayers = nearbyPlayers;
+            this.rosterSource = rosterSource;
+            this.raidPartySize = raidPartySize;
+            this.inParty = inParty;
+            this.debugSummary = debugSummary;
+        }
 
         public static NearbyPlayerTrace empty(int radiusTiles, String fallbackReason)
         {
-            return new NearbyPlayerTrace(
-                Collections.emptyList(),
-                radiusTiles,
-                null,
-                null,
-                false,
-                "none",
-                null,
-                "none",
-                false,
-                0,
-                0,
-                0,
-                0,
-                false,
-                0,
-                fallbackReason
-            );
+            return new NearbyPlayerTrace(Collections.emptyList(), "none", 0, false,
+                "radius=" + radiusTiles + ", fallbackReason=" + fallbackReason);
         }
 
-        public List<String> getNearbyPlayers()
-        {
-            return nearbyPlayers;
-        }
 
-        /** Where the participant list came from: {@code authoritative | solo | proximity-fallback | proximity | none}. */
-        public boolean isInParty()
-        {
-            return inParty;
-        }
 
-        public String getRosterSource()
-        {
-            return rosterSource;
-        }
-
-        /** Best-evidence raid party size (receiver included); 0 for non-raid submissions. */
-        public int getRaidPartySize()
-        {
-            return raidPartySize;
-        }
 
         public String toDebugSummary()
         {
-            String localPointSummary = localWorldPoint == null
-                ? "unknown"
-                : localWorldPoint.getX() + "," + localWorldPoint.getY() + "," + localWorldPoint.getPlane();
-            return "radius=" + radiusTiles
-                + ", localPlayer=" + (localPlayer != null ? localPlayer : "unknown")
-                + ", localPoint=" + localPointSummary
-                + ", inRaidContext=" + inRaidContext
-                + ", raidType=" + raidType
-                + ", sourceName=" + (sourceName != null ? sourceName : "none")
-                + ", rosterSource=" + rosterSource
-                + ", localPlayerInRoster=" + localPlayerInRoster
-                + ", raidPartySize=" + raidPartySize
-                + ", toaTeamCount=" + toaTeamCount
-                + ", tobTeamCount=" + tobTeamCount
-                + ", coxTeamCount=" + coxTeamCount
-                + ", inParty=" + inParty
-                + ", partySize=" + partySize
-                + ", nearbyPlayers=" + nearbyPlayers
-                + (fallbackReason != null ? ", fallbackReason=" + fallbackReason : "");
+            return debugSummary;
         }
     }
 }

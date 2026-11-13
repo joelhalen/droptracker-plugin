@@ -28,6 +28,8 @@
  */
 package io.droptracker.events;
 
+import lombok.Getter;
+
 import lombok.AllArgsConstructor;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.*;
@@ -50,7 +52,6 @@ import org.apache.commons.text.WordUtils;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.regex.*;
-import java.util.stream.Collectors;
 
 public class WidgetEventHandler {
 
@@ -101,22 +102,14 @@ public class WidgetEventHandler {
 
     @AllArgsConstructor
     private static class BossPB {
+        @Getter
         private final String bossName;
+        @Getter
         private final String teamSize;
+        @Getter
         private final double time;
     
     
-        public String getBossName() {
-            return bossName;
-        }
-    
-        public String getTeamSize() {
-            return teamSize;
-        }
-    
-        public double getTime() {
-            return time;
-        }
     }
 
 

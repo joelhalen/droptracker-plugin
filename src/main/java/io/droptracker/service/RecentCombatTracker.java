@@ -1,4 +1,5 @@
 package io.droptracker.service;
+import lombok.Getter;
 
 import java.lang.ref.WeakReference;
 import java.util.*;
@@ -295,9 +296,15 @@ public final class RecentCombatTracker {
     public static final class Engagement {
 
         private WeakReference<Actor> actor;
+        @Getter
+        @Nullable
         private final String name;
+        @Getter
+        @Nullable
         private final Integer npcId;
+        @Getter
         private final int combatLevel;
+        @Getter
         private final boolean player;
         private final boolean attackable;
         private final boolean friendly;
@@ -318,24 +325,6 @@ public final class RecentCombatTracker {
             this.attackable = attackable;
             this.friendly = friendly;
             this.lastTick = tick;
-        }
-
-        @Nullable
-        public String getName() {
-            return name;
-        }
-
-        @Nullable
-        public Integer getNpcId() {
-            return npcId;
-        }
-
-        public int getCombatLevel() {
-            return combatLevel;
-        }
-
-        public boolean isPlayer() {
-            return player;
         }
 
         public boolean isNpc() {

@@ -1,4 +1,5 @@
 package io.droptracker.util;
+import lombok.Getter;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -37,21 +38,11 @@ public final class RegionNameRegistry {
     /** A named area and the coarse bucket RuneLite files it under. */
     @AllArgsConstructor(access = AccessLevel.PACKAGE)
     public static final class Area {
+        @Getter
         private final String name;
+        @Getter
         private final String type;
 
-        /** Human-readable area name, e.g. {@code "Theatre of Blood"}. */
-        public String getName() {
-            return name;
-        }
-
-        /**
-         * One of {@code BOSSES}, {@code RAIDS}, {@code DUNGEONS}, {@code CITIES},
-         * {@code MINIGAMES}, {@code REGIONS}.
-         */
-        public String getType() {
-            return type;
-        }
 
         @Override
         public String toString() {

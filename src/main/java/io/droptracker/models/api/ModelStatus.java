@@ -1,4 +1,5 @@
 package io.droptracker.models.api;
+import lombok.Getter;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.annotations.SerializedName;
@@ -18,6 +19,7 @@ import com.google.gson.annotations.SerializedName;
  */
 public class ModelStatus {
 
+    @Getter
     private boolean accepted;
 
     @SerializedName("has_model")
@@ -43,9 +45,6 @@ public class ModelStatus {
     }
 
     // Hand-written rather than Lombok's: @Getter would name these isHasModel().
-    public boolean isAccepted() {
-        return accepted;
-    }
 
     public boolean hasModel() {
         return hasModel;

@@ -33,10 +33,6 @@ public final class GroupAdmin {
         private String name;
         /** "owner" or "admin". */
         private String role;
-        /** A device session for this group is stored and still valid. */
-        private boolean linked;
-        @SerializedName("icon_url")
-        private String iconUrl;
         @SerializedName("member_count")
         private int memberCount;
         /** Subscription tier label, e.g. "Supporter"; null on the free tier. */

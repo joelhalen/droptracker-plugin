@@ -1,4 +1,5 @@
 package io.droptracker.models.submissions;
+import lombok.Getter;
 
 /**
  * Represents the lifecycle status of a ValidSubmission.
@@ -17,7 +18,9 @@ public enum SubmissionStatus {
     /** Submission failed after exhausting retries */
     FAILED("Failed", "#FF0000");
 
+    @Getter
     private final String description;
+    @Getter
     private final String hexColor;
 
     SubmissionStatus(String description, String hexColor) {
@@ -25,13 +28,6 @@ public enum SubmissionStatus {
         this.hexColor = hexColor;
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public String getHexColor() {
-        return hexColor;
-    }
 
     /**
      * Whether this status represents a terminal state that should not be automatically retried

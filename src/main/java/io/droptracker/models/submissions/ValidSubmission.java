@@ -37,8 +37,6 @@ public class ValidSubmission {
     // time since submission was created on the client-side
     private String timeReceived;
 
-    // message or response from the API on initial submission
-    private String initialResponse;
     // time that the API responded with a successful processing of the submission
     private String timeProcessedAt;
     // current status of the submission (enum-based)
@@ -212,48 +210,14 @@ public class ValidSubmission {
      * Get a display-friendly label for the submission type
      */
     public String getTypeLabel() {
-        if (type == null) {
-            return "Submission";
-        }
-        switch (type) {
-            case DROP: return "Drop";
-            case KILL_TIME: return "Personal Best";
-            case COLLECTION_LOG: return "Collection Log";
-            case COMBAT_ACHIEVEMENT: return "Combat Achievement";
-            case LEVEL_UP: return "Level Up";
-            case QUEST_COMPLETION: return "Quest Completion";
-            case EXPERIENCE: return "Experience";
-            case EXPERIENCE_MILESTONE: return "Experience Milestone";
-            case EXPERIENCE_UPDATE: return "Experience Sync";
-            case PET: return "Pet";
-            case SLAYER_TASK: return "Slayer Task";
-            case ADVENTURE_LOG: return "Adventure Log";
-            default: return "Submission";
-        }
+        return type == null ? "Submission" : type.label;
     }
     
     /**
      * Get a short label for the submission type (used in the UI type indicator)
      */
     public String getTypeShortLabel() {
-        if (type == null) {
-            return "SUB";
-        }
-        switch (type) {
-            case DROP: return "DROP";
-            case KILL_TIME: return "PB";
-            case COLLECTION_LOG: return "CLOG";
-            case COMBAT_ACHIEVEMENT: return "CA";
-            case LEVEL_UP: return "LVL";
-            case QUEST_COMPLETION: return "QST";
-            case PET: return "PET";
-            case SLAYER_TASK: return "SLAY";
-            case EXPERIENCE: return "XP";
-            case EXPERIENCE_MILESTONE: return "XP";
-            case EXPERIENCE_UPDATE: return "XP";
-            case ADVENTURE_LOG: return "LOG";
-            default: return "SUB";
-        }
+        return type == null ? "SUB" : type.shortLabel;
     }
 
     /**

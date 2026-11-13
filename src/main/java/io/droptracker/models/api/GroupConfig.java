@@ -13,8 +13,6 @@ public class GroupConfig {
     private String groupId;
     @SerializedName("group_name")
     private String groupName;
-    @SerializedName("min_value")
-    private int minValue;
     @SerializedName("only_screenshots")
     private boolean onlyScreenshots;
     @SerializedName("send_drops")
@@ -39,9 +37,6 @@ public class GroupConfig {
     private boolean sendXP;
     @SerializedName("minimum_level")
     private int minimumLevel;
-    // add for later -- these handlers don't exist "properly" yet
-    @SerializedName("send_kills")
-    private boolean sendKills;
     @SerializedName("send_deaths")
     private boolean sendDeaths;
     @SerializedName("send_diaries")
@@ -67,6 +62,4 @@ public class GroupConfig {
     private String clanChatSlug;
 
     /* Variables that we'll modify after init */
-    @Setter
-    private int lastUpdateUnix;
 }

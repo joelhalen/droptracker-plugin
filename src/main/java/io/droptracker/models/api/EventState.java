@@ -70,8 +70,6 @@ public class EventState {
         private int id;
         private String name;
         private String kind;
-        @SerializedName("has_bingo")
-        private boolean hasBingo;
         @SerializedName("ends_at")
         @Nullable
         private String endsAt;

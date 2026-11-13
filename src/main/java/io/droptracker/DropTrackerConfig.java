@@ -55,8 +55,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "clogEmbeds",
         name = "Collection Logs",
-        description = "<html>Should we send new collection log slot unlocks to the DropTracker?<br>"
-            + "<b>Note</b>: Requires Collection Log Notification and popup Enabled in OSRS settings</html>",
+        description = "<html>Send new collection log slots to DropTracker. Needs the game's collection<br>"
+            + "log notification and pop-up enabled.</html>",
         position = 3,
         section = trackingSection
     )
@@ -100,8 +100,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "xpMilestoneEmbeds",
         name = "XP Milestones",
-        description = "<html>Send a notification when a level-99 skill crosses an XP milestone.<br />"
-            + "Your group's settings determine which milestones are announced (default: every 25M XP).</html>",
+        description = "<html>Notify when a level-99 skill crosses an XP milestone. Your group's settings<br />"
+            + "pick which milestones are announced (default every 25M).</html>",
         position = 7,
         section = trackingSection
     )
@@ -175,9 +175,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "clanChatSync",
             name = "Clan chat sync",
-            description = "<html>Sync your clan chat and its broadcasts with your group's Discord.<br />"
-                    + "Only active while you are in a clan that has been set up on droptracker.io.<br />"
-                    + "Otherwise nothing is sent. Works with or without the API.</html>",
+            description = "<html>Sync your clan chat and broadcasts with your group's Discord. Only active in<br />"
+                    + "a clan set up on droptracker.io; otherwise nothing is sent. API not required.</html>",
             position = 13,
             section = trackingSection
     )
@@ -221,12 +220,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "screenshotUntradeables",
         name = "Screenshot untradeables",
-        description = "<html>Take screenshots of the untradeable drops on DropTracker's notable list<br />"
-            + "(champion scrolls, boss heads and jars, ornament and raid kits, slayer boss parts,<br />"
-            + "Wintertodt gear and the like) even though they arrive with no GE value.<br />"
-            + "Common pieces like ancient shards, dark totem parts and crystal shards are not on it.<br />"
-            + "Note: with the API enabled, an item required by one of your active events<br />"
-            + "is always screenshotted for proof, regardless of this setting.</html>",
+        description = "<html>Screenshot 0gp drops on DropTracker's notable list: champion scrolls, boss heads<br />"
+            + "and jars, ornament and raid kits, slayer boss parts. Ancient shards, totem parts and<br />"
+            + "crystal shards are not on it. Items an active event needs are always screenshotted.</html>",
         position = 3,
         section = screenshotSection
     )
@@ -237,8 +233,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "minLevelToScreenshot",
         name = "Minimum level to screenshot",
-        description = "<html>Only screenshot level-ups at or above this level.<br />"
-            + "Levels below it are still tracked and sent - just without an image.</html>",
+        description = "<html>Screenshot level-ups from this level up; lower ones still send without an image.</html>",
         position = 4,
         section = screenshotSection
     )
@@ -249,12 +244,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "privacyMode",
         name = "Privacy mode",
-        description = "<html>What to hide from the frame a screenshot captures.<br />"
-            + "Hide DMs: private messages. With split private chat off they are<br />"
-            + "ordinary chat lines, so the transcript is hidden with them.<br />"
-            + "Hide messages + DMs: always hides the transcript and typed input.<br />"
-            + "Hide entire chatbox: the whole chat area; in fixed mode the game<br />"
-            + "view expands into the freed space for the shot.</html>",
+        description = "<html>What a screenshot hides. Hide DMs: private messages (the whole transcript<br />"
+            + "when split chat is off). Hide messages + DMs: transcript and typed input.<br />"
+            + "Hide entire chatbox: the chat area; fixed mode widens the game view instead.</html>",
         position = 5,
         section = screenshotSection
     )
@@ -279,8 +271,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "compressImages",
         name = "Compress screenshots",
-        description = "<html>Convert large screenshots to JPEG before sending.<br />"
-            + "Turn this off to always send lossless PNG, whatever the size.</html>",
+        description = "<html>Convert large screenshots to JPEG before sending; off = always lossless PNG.</html>",
         position = 6,
         section = screenshotSection
     )
@@ -293,9 +284,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "screenshotCompressionKb",
         name = "Compression threshold (KB)",
-        description = "<html>Maximum screenshot size (in KB) before JPEG compression is applied.<br>"
-            + "Screenshots smaller than this threshold are sent as lossless PNG.<br>"
-            + "Set to 0 to always compress to JPEG.</html>",
+        description = "<html>Screenshots above this size (KB) are sent as JPEG, smaller ones as PNG.<br>"
+            + "0 = always JPEG.</html>",
         position = 7,
         section = screenshotSection
     )
@@ -306,9 +296,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "xpMilestoneScreenshots",
         name = "Screenshot XP milestones",
-        description = "<html>Take a screenshot each time a level-99 skill crosses 1M XP.<br />"
-            + "Off = the milestone is still tracked and sent, just without an image<br />"
-            + "(and without the screenshot flicker every million XP).</html>",
+        description = "<html>Screenshot each 1M XP milestone past 99. Off: the milestone still sends,<br />"
+            + "without the image (and without the flicker every million XP).</html>",
         position = 8,
         section = screenshotSection
     )
@@ -329,9 +318,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventNotifications",
         name = "Receive notifications",
-        description = "<html>Show in-game notifications about your DropTracker events<br />"
-            + "(task completions, lead changes, board turns...).<br />"
-            + "Requires 'Use API Connections'. Fine-tune which types you receive on the website.</html>",
+        description = "<html>In-game notifications for your DropTracker events (completions, lead changes,<br />"
+            + "board turns). Needs the API; choose the types on the website.</html>",
         position = 1,
         section = eventSection
     )
@@ -342,12 +330,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventDisplayMode",
         name = "Display type",
-        description = "<html>How event notifications appear:<br />"
-            + "<b>Chat messages only</b> - lines in your chatbox.<br />"
-            + "<b>Chat + text pop-ups</b> - also shows a slim banner for each update.<br />"
-            + "<b>Enhanced display (HUD)</b> - larger showcase pop-ups, plus a movable<br />"
-            + "overlay with your current task, progress and team standing<br />"
-            + "(hold Alt to drag either one).</html>",
+        description = "<html><b>Chat messages only</b>: chatbox lines. <b>Chat + text pop-ups</b>: plus a slim<br />"
+            + "banner per update. <b>Enhanced display (HUD)</b>: showcase pop-ups and a movable<br />"
+            + "overlay with your task, progress and standing (Alt-drag to move).</html>",
         position = 2,
         section = eventSection
     )
@@ -358,8 +343,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventTaskProgressNotifications",
         name = "Task progress notifications",
-        description = "<html>Notify when teammates progress (not just complete) your team's tasks.<br />"
-            + "The chattiest type - this is the mute switch for it.</html>",
+        description = "<html>Notify when teammates progress (not just complete) your team's tasks. The chattiest type.</html>",
         position = 3,
         section = eventSection
     )
@@ -383,10 +367,9 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventTeamIndicators",
         name = "Team indicators in chat",
-        description = "<html>Mark clan chat lines from players in your event with their team.<br />"
-            + "<b>Team color orb</b> - the same colored circle their team's Discord channel uses.<br />"
-            + "<b>Tag</b> - a short team label, e.g. [RR].<br />"
-            + "Only applies while you are in a live event, and only to its participants.</html>",
+        description = "<html>Badge clan chat lines from your event's players with their team: a<br />"
+            + "<b>color orb</b> (their Discord channel's color) or a short <b>tag</b> like [RR].<br />"
+            + "Only during a live event, only for its participants.</html>",
         position = 5,
         section = eventSection
     )
@@ -397,8 +380,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "eventTeamIndicatorColorNames",
         name = "Color teammates' names",
-        description = "<html>Draw the sender's name in their team's color, as well as badging the line.<br />"
-            + "Reads the room at a glance during a clan-vs-clan; turn it off if you find it busy.</html>",
+        description = "<html>Also draw the sender's name in their team's color. Handy in a clan-vs-clan;<br />"
+            + "turn it off if it looks busy.</html>",
         position = 6,
         section = eventSection
     )
@@ -432,8 +415,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "useApi",
         name = "Use API",
-        description = "<html>Enables external connections to the DropTracker database,<br />"
-            + "for panel data, lookups and in-game event updates.</html>",
+        description = "<html>Connect to DropTracker for panel data, lookups and in-game event updates.</html>",
         position = 1,
         section = advancedSection,
         warning = "<html><b>WARNING</b>: In order to connect to the DropTracker API,<br>"
@@ -461,8 +443,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "dropConfirmations",
         name = "Drop confirmations",
-        description = "<html>Show the \"Drop processed - a message has been sent to your group\" chat line.<br />"
-            + "Warnings, like a drop held back for a missing screenshot, still show.</html>",
+        description = "<html>Show the \"Drop processed\" chat line. Warnings (a drop held back for a<br />"
+            + "missing screenshot) still show.</html>",
         position = 3,
         section = advancedSection
     )
@@ -473,9 +455,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "receiveDiscordChat",
             name = "Show Discord messages in game",
-            description = "<html>Display messages sent in your group's Discord bridge channel inside your<br />"
-                    + "clan chat box (visible only to you; nothing is sent to the game server).<br />"
-                    + "Needs Clan chat sync.</html>",
+            description = "<html>Show your group's Discord bridge channel in your clan chat box (only you see<br />"
+                    + "it; nothing goes to the game server). Needs Clan chat sync.</html>",
             position = 4,
             section = advancedSection
     )
@@ -486,9 +467,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
             keyName = "showGuestBroadcasts",
             name = "Show broadcasts as a clan guest",
-            description = "<html>When you are a guest in a clan chat, show that clan's broadcasts (drops,<br />"
-                    + "pets, personal bests) relayed by its members' plugins, which the game hides<br />"
-                    + "from guests. Only for clans whose group turned this on. Needs the API.</html>",
+            description = "<html>As a clan chat guest, see that clan's broadcasts (drops, pets, PBs) relayed by<br />"
+                    + "its members' plugins. Only for clans that turned this on. Needs the API.</html>",
             position = 4,
             section = advancedSection
     )
@@ -499,10 +479,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "syncAccountState",
         name = "Sync account progress",
-        description = "<html>Periodically send your skills, quests, achievement diaries,<br>"
-            + "combat achievements and collection log to DropTracker, so your<br>"
-            + "profile page can show your current progress.<br>"
-            + "This sends <b>progress data only</b> - never your bank, inventory or location.</html>",
+        description = "<html>Periodically send skills, quests, diaries, combat achievements and collection<br>"
+            + "log for your profile page. <b>Progress only</b>: never bank, inventory or location.</html>",
         position = 5,
         section = advancedSection
     )
@@ -513,10 +491,8 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "uploadCharacterModel",
         name = "Send character model & gear",
-        description = "<html>Send a 3D model of your character (and pet) so your profile page<br>"
-            + "can show it, and so the gear and inventory you were carrying can be<br>"
-            + "pictured alongside your personal bests.<br>"
-            + "The model is sent once per outfit, while you are standing still - never during combat.</html>",
+        description = "<html>Send your character (and pet) model so your profile can show it and your<br>"
+            + "gear can appear beside personal bests. Sent once per outfit while standing still.</html>",
         position = 6,
         section = advancedSection
     )
@@ -527,8 +503,7 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "showSidePanel",
         name = "Show Side Panel",
-        description = "<html>Do you want to render the <br>side-panel to lookup players, etc?<br>"
-            + "<b>Note</b>: Requires the API to be enabled.</html>",
+        description = "<html>Show the side panel (player lookups and more). Needs the API.</html>",
         position = 7,
         section = advancedSection
     )

@@ -376,24 +376,8 @@ public class ExperienceHandler extends BaseEventHandler {
 
         int interval = XP_INTERVAL_MILLIONS * 1_000_000;
         List<String> milestones = new ArrayList<>(n);
-        
-        StringBuilder skillMessage = new StringBuilder();
-        boolean first = true;
-        
         for (Skill skill : xpReached) {
-            int xp = currentXp.getOrDefault(skill, 0);
-            xp -= xp % interval;
             milestones.add(skill.getName());
-            
-            if (!first) {
-                skillMessage.append(", ");
-            }
-            first = false;
-            
-            skillMessage.append(skill.getName())
-                       .append(" to ")
-                       .append(QuantityFormatter.formatNumber(xp))
-                       .append(" XP");
         }
         
         Map<String, Object> experienceData = new HashMap<>();
@@ -447,26 +431,11 @@ public class ExperienceHandler extends BaseEventHandler {
         Map<String, Integer> lSkills = new HashMap<>(count);
         Map<String, Integer> currentLevels = new HashMap<>(this.currentLevels);
 
-        // Build skill message and collect skills involved
+        // Collect the skills involved
         Set<Skill> skillsInvolved = EnumSet.noneOf(Skill.class);
-        StringBuilder skillMessage = new StringBuilder();
-        
         for (int index = 0; index < count; index++) {
             String skill = levelled.get(index);
-            if (index > 0) {
-                if (count > 2) {
-                    skillMessage.append(",");
-                }
-                skillMessage.append(" ");
-                if (index + 1 == count) {
-                    skillMessage.append("and ");
-                }
-            }
-            Integer level = currentLevels.get(skill);
-            skillMessage.append(skill)
-                        .append(" to ")
-                        .append(level < LEVEL_FOR_MAX_XP ? level : "Max XP (200M)");
-            lSkills.put(skill, level);
+            lSkills.put(skill, currentLevels.get(skill));
             
             // Add skill to involved skills if it's not combat
             if (!COMBAT_NAME.equals(skill)) {
