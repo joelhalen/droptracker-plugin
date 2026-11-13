@@ -34,7 +34,7 @@ public class DropTrackerConfigKeyNamesTest {
         // Screenshots
         "screenshots", "screenshotValue", "screenshotUntradeables",
         "minLevelToScreenshot", "privacyMode", "compressImages",
-        "screenshotCompressionKb",
+        "screenshotCompressionKb", "xpMilestoneScreenshots",
         // Events
         "eventNotifications", "eventDisplayMode", "eventTaskProgressNotifications",
         "eventHudDetail", "eventTeamIndicators", "eventTeamIndicatorColorNames",

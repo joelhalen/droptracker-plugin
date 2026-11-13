@@ -221,8 +221,10 @@ public interface DropTrackerConfig extends Config {
     @ConfigItem(
         keyName = "screenshotUntradeables",
         name = "Screenshot untradeables",
-        description = "<html>Take screenshots of notable untradeable drops (champion scrolls, boss heads,<br />"
-            + "raid kits, etc.) even though they arrive with no GE value.<br />"
+        description = "<html>Take screenshots of the untradeable drops on DropTracker's notable list<br />"
+            + "(champion scrolls, boss heads and jars, ornament and raid kits, slayer boss parts,<br />"
+            + "Wintertodt gear and the like) even though they arrive with no GE value.<br />"
+            + "Common pieces like ancient shards, dark totem parts and crystal shards are not on it.<br />"
             + "Note: with the API enabled, an item required by one of your active events<br />"
             + "is always screenshotted for proof, regardless of this setting.</html>",
         position = 3,
@@ -299,6 +301,19 @@ public interface DropTrackerConfig extends Config {
     )
     default int imageCompressionThresholdKb() {
         return 1500;
+    }
+
+    @ConfigItem(
+        keyName = "xpMilestoneScreenshots",
+        name = "Screenshot XP milestones",
+        description = "<html>Take a screenshot each time a level-99 skill crosses 1M XP.<br />"
+            + "Off = the milestone is still tracked and sent, just without an image<br />"
+            + "(and without the screenshot flicker every million XP).</html>",
+        position = 8,
+        section = screenshotSection
+    )
+    default boolean xpMilestoneScreenshots() {
+        return true;
     }
 
     // ==================== Events ====================

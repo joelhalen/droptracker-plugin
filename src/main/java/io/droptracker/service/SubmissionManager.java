@@ -157,9 +157,15 @@ public class SubmissionManager {
                 debugLogEventFlow("send", type, "direct");
                 sendWebhookDirect(webhook, null, null);
                 return;
+            case EXPERIENCE_MILESTONE:
+                // Every 1M XP past 99 is a milestone to the client; a player
+                // can keep the notification and drop the screenshot (the
+                // flicker every million XP was the complaint).
+                requiredScreenshot = config.screenshots() && config.xpMilestoneScreenshots();
+                break;
             default:
                 // Collection log, combat achievements, quests, pets, deaths,
-                // diaries, slayer tasks and XP milestones.
+                // diaries and slayer tasks.
                 requiredScreenshot = config.screenshots();
                 break;
         }

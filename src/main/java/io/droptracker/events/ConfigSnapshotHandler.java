@@ -99,6 +99,7 @@ public class ConfigSnapshotHandler extends BaseEventHandler {
         setting("Screenshots", "privacyMode", DropTrackerConfig::privacyMode),
         setting("Screenshots", "compressImages", DropTrackerConfig::compressImages),
         setting("Screenshots", "screenshotCompressionKb", DropTrackerConfig::imageCompressionThresholdKb),
+        setting("Screenshots", "xpMilestoneScreenshots", DropTrackerConfig::xpMilestoneScreenshots),
 
         setting("Events", "eventNotifications", DropTrackerConfig::eventNotifications),
         setting("Events", "eventDisplayMode", DropTrackerConfig::eventDisplayMode),
