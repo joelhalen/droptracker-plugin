@@ -9,11 +9,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.GameState;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.RuneLiteProperties;
-import net.runelite.client.config.*;
+import net.runelite.client.config.RuneLiteConfig;
 
 import javax.annotation.Nullable;
 import javax.inject.*;
-import java.lang.reflect.*;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
@@ -55,54 +54,78 @@ public class ConfigSnapshotHandler extends BaseEventHandler {
         "customApiEndpoint", "lastAccountHash");
 
     /** One setting in the snapshot: its section, key, and how to read it. */
-    /** One snapshot row: the section label, the keyName and the getter. */
     static final class Setting {
         final String section;
         final String key;
-        final Method read;
+        final Function<DropTrackerConfig, Object> read;
 
-        Setting(String section, String key, Method read) {
+        Setting(String section, String key, Function<DropTrackerConfig, Object> read) {
             this.section = section;
             this.key = key;
             this.read = read;
         }
     }
 
-    /**
-     * Every non-String {@code @ConfigItem} on the interface except
-     * {@link #EXCLUDED}, read off the annotations so a new setting is in the
-     * snapshot the day it is added. Hidden items (or ones outside a section)
-     * file under "Hidden"; the rest under their {@code @ConfigSection} name.
-     */
-    static final List<Setting> SETTINGS = discover();
-
-    private static List<Setting> discover() {
-        Map<String, String> sectionNames = new HashMap<>();
-        for (Field f : DropTrackerConfig.class.getDeclaredFields()) {
-            ConfigSection section = f.getAnnotation(ConfigSection.class);
-            try {
-                if (section != null) {
-                    // @ConfigItem.section carries the constant's VALUE, not its name.
-                    sectionNames.put(String.valueOf(f.get(null)), section.name());
-                }
-            } catch (IllegalAccessException ignored) {
-                // a non-public constant: fall through to the raw section string
-            }
-        }
-        List<Setting> out = new ArrayList<>();
-        for (Method m : DropTrackerConfig.class.getDeclaredMethods()) {
-            ConfigItem item = m.getAnnotation(ConfigItem.class);
-            if (item == null || m.getParameterCount() != 0 || m.getReturnType() == String.class
-                || EXCLUDED.contains(item.keyName())) {
-                continue;
-            }
-            String section = item.hidden() || item.section().isEmpty() ? "Hidden"
-                : sectionNames.getOrDefault(item.section(), item.section());
-            out.add(new Setting(section, item.keyName(), m));
-        }
-        out.sort(Comparator.comparing(s -> s.key));
-        return out;
+    private static Setting setting(String section, String key, Function<DropTrackerConfig, Object> read) {
+        return new Setting(section, key, read);
     }
+
+    /**
+     * Every setting the snapshot carries, in panel order, grouped by config
+     * section ("Hidden" for settings not shown in the panel). Text settings
+     * and the {@link #EXCLUDED} bookkeeping keys are deliberately absent;
+     * {@code ConfigSnapshotHandlerTest} fails when a new boolean, number or
+     * enum setting is added to {@link DropTrackerConfig} but not listed here.
+     */
+    static final List<Setting> SETTINGS = List.of(
+        setting("Tracking", "lootEmbeds", DropTrackerConfig::lootEmbeds),
+        setting("Tracking", "pbEmbeds", DropTrackerConfig::pbEmbeds),
+        setting("Tracking", "clogEmbeds", DropTrackerConfig::clogEmbeds),
+        setting("Tracking", "caEmbeds", DropTrackerConfig::caEmbeds),
+        setting("Tracking", "petEmbeds", DropTrackerConfig::petEmbeds),
+        setting("Tracking", "levelEmbed", DropTrackerConfig::levelEmbed),
+        setting("Tracking", "xpMilestoneEmbeds", DropTrackerConfig::xpMilestoneEmbeds),
+        setting("Tracking", "questsEmbed", DropTrackerConfig::questsEmbed),
+        setting("Tracking", "deathEmbeds", DropTrackerConfig::deathEmbeds),
+        setting("Tracking", "diaryEmbeds", DropTrackerConfig::diaryEmbeds),
+        setting("Tracking", "slayerEmbeds", DropTrackerConfig::slayerEmbeds),
+        setting("Tracking", "trackActivities", DropTrackerConfig::trackActivities),
+        setting("Tracking", "clanChatSync", DropTrackerConfig::clanChatSync),
+
+        setting("Screenshots", "screenshots", DropTrackerConfig::screenshots),
+        setting("Screenshots", "screenshotValue", DropTrackerConfig::screenshotValue),
+        setting("Screenshots", "screenshotUntradeables", DropTrackerConfig::screenshotUntradeables),
+        setting("Screenshots", "minLevelToScreenshot", DropTrackerConfig::minLevelToScreenshot),
+        setting("Screenshots", "privacyMode", DropTrackerConfig::privacyMode),
+        setting("Screenshots", "compressImages", DropTrackerConfig::compressImages),
+        setting("Screenshots", "screenshotCompressionKb", DropTrackerConfig::imageCompressionThresholdKb),
+        setting("Screenshots", "xpMilestoneScreenshots", DropTrackerConfig::xpMilestoneScreenshots),
+
+        setting("Events", "eventNotifications", DropTrackerConfig::eventNotifications),
+        setting("Events", "eventDisplayMode", DropTrackerConfig::eventDisplayMode),
+        setting("Events", "eventTaskProgressNotifications", DropTrackerConfig::eventTaskProgressNotifications),
+        setting("Events", "eventHudDetail", DropTrackerConfig::eventHudDetail),
+        setting("Events", "eventTeamIndicators", DropTrackerConfig::eventTeamIndicators),
+        setting("Events", "eventTeamIndicatorColorNames", DropTrackerConfig::eventTeamIndicatorColorNames),
+        setting("Events", "eventTeamIndicatorsPublicChat", DropTrackerConfig::eventTeamIndicatorsPublicChat),
+
+        setting("Advanced", "useApi", DropTrackerConfig::useApi),
+        setting("Advanced", "inGameMessages", DropTrackerConfig::receiveInGameMessages),
+        setting("Advanced", "dropConfirmations", DropTrackerConfig::dropConfirmations),
+        setting("Advanced", "receiveDiscordChat", DropTrackerConfig::receiveDiscordChat),
+        setting("Advanced", "showGuestBroadcasts", DropTrackerConfig::showGuestBroadcasts),
+        setting("Advanced", "syncAccountState", DropTrackerConfig::syncAccountState),
+        setting("Advanced", "uploadCharacterModel", DropTrackerConfig::uploadCharacterModel),
+        setting("Advanced", "showSidePanel", DropTrackerConfig::showSidePanel),
+        setting("Advanced", "debugLogging", DropTrackerConfig::debugLogging),
+
+        setting("Hidden", "hideWhispers", DropTrackerConfig::hideDMs),
+        setting("Hidden", "trackExperience", DropTrackerConfig::trackExperience),
+        setting("Hidden", "trackTrawling", DropTrackerConfig::trackTrawling),
+        setting("Hidden", "sendLoadoutWithPbs", DropTrackerConfig::sendLoadoutWithPbs),
+        setting("Hidden", "eventImportantPopupsOnly", DropTrackerConfig::eventImportantPopupsOnly),
+        setting("Hidden", "pollUpdates", DropTrackerConfig::pollUpdates)
+    );
 
     @Inject
     private Gson gson;
@@ -207,8 +230,8 @@ public class ConfigSnapshotHandler extends BaseEventHandler {
         for (Setting setting : SETTINGS) {
             Object value;
             try {
-                value = setting.read.invoke(config);
-            } catch (ReflectiveOperationException | RuntimeException e) {
+                value = setting.read.apply(config);
+            } catch (RuntimeException e) {
                 continue;
             }
             JsonObject target = sections.computeIfAbsent(setting.section, s -> new JsonObject());
