@@ -552,7 +552,7 @@ public class DropTrackerApi {
             return false;
         }
 
-        // The mesh; the server writes the glTF from it (GlbExporter).
+        // The model as the client holds it; the server builds the glTF (ModelDump).
         MediaType mesh = MediaType.parse("application/octet-stream");
         MultipartBody.Builder body = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)

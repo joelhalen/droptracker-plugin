@@ -10,7 +10,7 @@ import javax.inject.*;
 
 import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DropTrackerApi;
-import io.droptracker.modelexport.GlbExporter;
+import io.droptracker.modelexport.ModelDump;
 import io.droptracker.models.api.ModelStatus;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -381,7 +381,7 @@ public class PlayerModelService {
 	@Nullable
 	private byte[] exportModel(Player local) throws Exception {
 		Model model = local.getModel();
-		return model == null ? null : GlbExporter.toBytes(client, model, "player");
+		return model == null ? null : ModelDump.toBytes(client, model);
 	}
 
 	/**
@@ -393,7 +393,7 @@ public class PlayerModelService {
 		try {
 			NPC follower = client.getFollower();
 			Model model = follower == null ? null : follower.getModel();
-			return model == null ? null : GlbExporter.toBytes(client, model, "pet");
+			return model == null ? null : ModelDump.toBytes(client, model);
 		} catch (Exception e) {
 			log.debug("Could not export the pet model: {}", e.toString());
 			return null;
