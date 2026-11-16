@@ -149,7 +149,7 @@ public class DeathMessageEditor extends JPanel {
             // so a long message would otherwise widen the whole window.
             field.setPreferredSize(new Dimension(WIDTH - 24, field.getPreferredSize().height));
             field.setToolTipText("Message " + (i + 1) + " - leave blank if you don't need it");
-            io.droptracker.ui.admin.SettingsForm.listen(field, this::refresh);
+            DropTrackerTheme.listen(field, this::refresh);
             field.addFocusListener(new FocusAdapter() {
                 @Override
                 public void focusGained(FocusEvent e) {

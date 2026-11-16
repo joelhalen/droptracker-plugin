@@ -158,4 +158,27 @@ public final class DropTrackerTheme {
             new EmptyBorder(1, 4, 1, 4)));
         return label;
     }
+    public static JComponent left(JComponent c) {
+        c.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return c;
+    }
+
+    /** Runs {@code onChange} whenever the text is edited. */
+    public static void listen(javax.swing.text.JTextComponent c, Runnable onChange) {
+        c.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                onChange.run();
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                onChange.run();
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+            }
+        });
+    }
 }

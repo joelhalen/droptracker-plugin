@@ -13,7 +13,6 @@ import io.droptracker.DropTrackerConfig;
 import io.droptracker.api.DeathMessageApi;
 import io.droptracker.service.PlayerModelService;
 import io.droptracker.ui.DropTrackerTheme;
-import io.droptracker.ui.admin.SettingsForm;
 import io.droptracker.ui.components.DeathMessageDialog;
 import lombok.RequiredArgsConstructor;
 import net.runelite.api.Client;
@@ -35,7 +34,7 @@ public class ExtrasPanel {
     public JPanel create() {
         JPanel page = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_0);
         page.setBorder(new EmptyBorder(8, 0, 8, 0));
-        page.add(SettingsForm.left(DropTrackerTheme.label("Extras", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD)));
+        page.add(DropTrackerTheme.left(DropTrackerTheme.label("Extras", FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD)));
         page.add(DropTrackerTheme.gap(4));
         page.add(wrapped("Set these up once. They're saved to your account on the DropTracker, not in your "
             + "plugin settings, so they follow you to every clan.", 60));
@@ -123,7 +122,7 @@ public class ExtrasPanel {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setBackground(DropTrackerTheme.SURFACE_1);
         card.setBorder(DropTrackerTheme.cardBorder(8, 10, 10, 10));
-        card.add(SettingsForm.left(DropTrackerTheme.label(title, FontManager.getRunescapeFont(), DropTrackerTheme.TEXT)));
+        card.add(DropTrackerTheme.left(DropTrackerTheme.label(title, FontManager.getRunescapeFont(), DropTrackerTheme.TEXT)));
         card.add(wrapped(text, 80));
         card.add(DropTrackerTheme.gap(8));
         JButton open = DropTrackerTheme.button(button);
@@ -137,8 +136,8 @@ public class ExtrasPanel {
             action.accept(open);
         });
         open.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-        card.add(SettingsForm.left(open));
-        return SettingsForm.left(card);
+        card.add(DropTrackerTheme.left(open));
+        return DropTrackerTheme.left(card);
     }
 
     /**
@@ -148,7 +147,7 @@ public class ExtrasPanel {
      * spare height, which pushed each button to the bottom of its card.
      */
     private static JComponent wrapped(String text, int inset) {
-        return SettingsForm.left(DropTrackerTheme.label("<html><div style='width:" + (PluginPanel.PANEL_WIDTH - inset)
+        return DropTrackerTheme.left(DropTrackerTheme.label("<html><div style='width:" + (PluginPanel.PANEL_WIDTH - inset)
             + "px'>" + text + "</div></html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED));
     }
 

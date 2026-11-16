@@ -76,10 +76,6 @@ public class DropTrackerPanel extends PluginPanel {
 	private io.droptracker.service.PlayerModelService playerModelService;
 	@Inject
 	private io.droptracker.api.DeathMessageApi deathMessageApi;
-	@Inject
-	private io.droptracker.api.GroupAdminApi groupAdminApi;
-	@Inject
-	private net.runelite.client.callback.ClientThread clientThread;
 
 	private PlayerStatsPanel statsPanel;
 	private GroupPanel groupPanel;
@@ -136,7 +132,7 @@ public class DropTrackerPanel extends PluginPanel {
 		tabbedPane.setForeground(DropTrackerTheme.TEXT);
 		tabbedPane.setFont(FontManager.getRunescapeSmallFont());
 
-		homePanel = new HomePanel(config, api, client, this, groupAdminApi);
+		homePanel = new HomePanel(config, api, client, this);
 		homeComponent = homePanel.create();
 
 		if (config.useApi()) {
@@ -342,14 +338,9 @@ public class DropTrackerPanel extends PluginPanel {
 		}
 	}
 
-	/** Registers a group in game; without the API or a logged-in account, the website's setup wizard. */
+	/** Opens the website's group setup wizard. */
 	public void openRegister() {
-		String name = config.lastAccountName();
-		if (config.useApi() && name != null && !name.isEmpty() && client.getAccountHash() != -1) {
-			io.droptracker.ui.admin.RegisterWindow.open(client, clientThread, config, groupAdminApi);
-		} else {
-			LinkBrowser.browse(DropTrackerUrls.web("groups", "new").toString());
-		}
+		LinkBrowser.browse(DropTrackerUrls.web("groups", "new").toString());
 	}
 
 	// Update the Activity tab with the current session's valid submissions
