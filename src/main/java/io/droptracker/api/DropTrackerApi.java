@@ -525,6 +525,32 @@ public class DropTrackerApi {
     }
 
     /**
+     * Tells the server this player just logged out, so it can read their
+     * hiscores entry while it is fresh. Name and account hash only. Blocking;
+     * call off the client thread.
+     *
+     * @return true when the server took the message.
+     */
+    public boolean postLogout(String playerName, long accountHash) {
+        if (!canIdentify(playerName, accountHash)) {
+            return false;
+        }
+        HttpUrl url = apiUrl("/state/logout");
+        if (url == null) {
+            return false;
+        }
+        Map<String, String> body = new HashMap<>();
+        body.put("player_name", playerName);
+        body.put("acc_hash", String.valueOf(accountHash));
+        try (Response response = panelHttpClient.newCall(postJson(url, body)).execute()) {
+            return response.isSuccessful();
+        } catch (IOException e) {
+            log.debug("Logout signal failed: {}", e.toString());
+            return false;
+        }
+    }
+
+    /**
      * Uploads the player's character model as binary glTF. Blocking; call off
      * the client thread.
      *

@@ -145,6 +145,10 @@ public class DropTrackerPlugin extends Plugin {
 	private StateSyncService stateSyncService;
 	@Inject
 	private StateSyncScheduler stateSyncScheduler;
+	/* Tells the server when the player logs out, so their hiscores entry is
+	 * read while it is fresh. Name and account hash only; needs "Use API". */
+	@Inject
+	private LogoutSignal logoutSignal;
 	@Inject
 	private CollectionLogScraper collectionLogScraper;
 
@@ -200,7 +204,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.28";
+	public String pluginVersion = "6.1.29";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -231,6 +235,7 @@ public class DropTrackerPlugin extends Plugin {
 		// Scheduling only; nothing is sent until the manifest has loaded and the
 		// player is logged in, and nothing at all if the user has not opted in.
 		stateSyncScheduler.startUp();
+		logoutSignal.startUp();
 		collectionLogScraper.startUp();
 
 		// In-game event notifications + HUD: the overlays render nothing on
@@ -340,6 +345,7 @@ public class DropTrackerPlugin extends Plugin {
 		screenshotPrivacyService.shutDown();
 
 		collectionLogScraper.shutDown();
+		logoutSignal.shutDown();
 		stateSyncScheduler.shutDown();
 		stateSyncService.reset();
 		playerModelService.reset();
