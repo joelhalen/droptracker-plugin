@@ -1,13 +1,11 @@
 package io.droptracker.service;
 
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import io.droptracker.DropTrackerConfig;
-import io.droptracker.api.DropTrackerApi;
+import io.droptracker.DropTrackerPlugin;
 import io.droptracker.util.WorldTypes;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -27,8 +25,9 @@ import net.runelite.client.events.ClientShutdown;
  * Without the signal it finds out by polling, hours later.
  *
  * <p>The message carries the player's name and account hash and nothing else:
- * no progress, no location. It is sent only when "Use API" is on, like every
- * other request to DropTracker's server.
+ * no progress, no location. It goes out the way every other submission does,
+ * to the API when "Use API" is on and through our Discord webhooks when it
+ * is not, so statistics stay current for every player whichever they use.
  *
  * <p>The identity is remembered while logged in because by the time the game
  * reports the login screen, the local player is gone. A world hop is not a
@@ -40,9 +39,8 @@ import net.runelite.client.events.ClientShutdown;
 public class LogoutSignal {
 
 	private final Client client;
-	private final DropTrackerConfig config;
-	private final DropTrackerApi api;
-	private final ScheduledExecutorService executor;
+	private final DropTrackerPlugin plugin;
+	private final SubmissionManager submissionManager;
 	private final EventBus eventBus;
 
 	/** Who is logged in on a main-game world right now; null when nobody is. */
@@ -50,12 +48,11 @@ public class LogoutSignal {
 	private volatile long accountHash = -1L;
 
 	@Inject
-	public LogoutSignal(Client client, DropTrackerConfig config, DropTrackerApi api,
-			ScheduledExecutorService executor, EventBus eventBus) {
+	public LogoutSignal(Client client, DropTrackerPlugin plugin, SubmissionManager submissionManager,
+			EventBus eventBus) {
 		this.client = client;
-		this.config = config;
-		this.api = api;
-		this.executor = executor;
+		this.plugin = plugin;
+		this.submissionManager = submissionManager;
 		this.eventBus = eventBus;
 	}
 
@@ -123,21 +120,17 @@ public class LogoutSignal {
 		String name = playerName;
 		long hash = accountHash;
 		forget();
-		if (name == null || !config.useApi()) {
+		if (name == null || !trackingEnabled()) {
 			return null;
 		}
-		return dispatch(() -> deliver(name, hash));
+		return deliver(name, hash);
 	}
 
-	Future<?> dispatch(Runnable task) {
-		return executor.submit(task);
+	boolean trackingEnabled() {
+		return plugin.isTracking;
 	}
 
-	void deliver(String name, long hash) {
-		try {
-			api.postLogout(name, hash);
-		} catch (Exception e) {
-			log.debug("Logout signal failed: {}", e.toString());
-		}
+	Future<?> deliver(String name, long hash) {
+		return submissionManager.sendLogout(name, hash, plugin.pluginVersion);
 	}
 }

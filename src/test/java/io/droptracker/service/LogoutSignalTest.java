@@ -1,6 +1,5 @@
 package io.droptracker.service;
 
-import io.droptracker.DropTrackerConfig;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Player;
@@ -43,27 +42,27 @@ public class LogoutSignalTest {
     /** A signal whose sends are recorded instead of going to the network. */
     private static final class Recording extends LogoutSignal {
         final List<String> sent = new ArrayList<>();
+        boolean tracking = true;
 
-        Recording(Client client, DropTrackerConfig config) {
-            super(client, config, null, null, null);
+        Recording(Client client) {
+            super(client, null, null, null);
         }
 
         @Override
-        Future<?> dispatch(Runnable task) {
-            task.run();
-            return CompletableFuture.completedFuture(null);
+        boolean trackingEnabled() {
+            return tracking;
         }
 
         @Override
-        void deliver(String name, long hash) {
+        Future<?> deliver(String name, long hash) {
             sent.add(name + ":" + hash);
+            return CompletableFuture.completedFuture(null);
         }
     }
 
     private final Map<String, Object> clientAnswers = new HashMap<>();
-    private final Map<String, Object> configAnswers = new HashMap<>();
 
-    private Recording signal(String name, long hash, EnumSet<WorldType> world, boolean useApi) {
+    private Recording signal(String name, long hash, EnumSet<WorldType> world, boolean tracking) {
         if (name != null) {
             Map<String, Object> player = new HashMap<>();
             player.put("getName", name);
@@ -71,8 +70,9 @@ public class LogoutSignalTest {
         }
         clientAnswers.put("getAccountHash", hash);
         clientAnswers.put("getWorldType", world);
-        configAnswers.put("useApi", useApi);
-        return new Recording(stub(Client.class, clientAnswers), stub(DropTrackerConfig.class, configAnswers));
+        Recording recording = new Recording(stub(Client.class, clientAnswers));
+        recording.tracking = tracking;
+        return recording;
     }
 
     private static GameStateChanged state(GameState gameState) {
@@ -114,7 +114,7 @@ public class LogoutSignalTest {
     }
 
     @Test
-    public void nothingIsSentWithTheApiOff() {
+    public void nothingIsSentWhileTrackingIsPaused() {
         Recording signal = signal("Some Player", 42L, MAIN, false);
         signal.onGameTick(new GameTick());
         signal.onGameStateChanged(state(GameState.LOGIN_SCREEN));

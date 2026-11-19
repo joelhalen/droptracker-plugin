@@ -146,7 +146,8 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private StateSyncScheduler stateSyncScheduler;
 	/* Tells the server when the player logs out, so their hiscores entry is
-	 * read while it is fresh. Name and account hash only; needs "Use API". */
+	 * read while it is fresh. Name and account hash only, on whichever
+	 * transport the player uses. */
 	@Inject
 	private LogoutSignal logoutSignal;
 	@Inject

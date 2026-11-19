@@ -526,6 +526,64 @@ public class SubmissionManager {
         sendWebhookWithRetry(webhook, screenshot, 0, submission);
     }
 
+    /**
+     * Tells the server a player has just logged out, on whichever transport
+     * the player uses (the API, or our Discord webhooks, which the server
+     * reads), so their hiscores entry is read while it is fresh.
+     *
+     * <p>Built from an identity the caller remembered, because by the time
+     * the game reports a logout the client can no longer name the player. One
+     * attempt and no retry: it is only worth sending now, and the server has
+     * a slower way of noticing on its own.
+     *
+     * @return a future that completes when the request has finished, either
+     *         way, so a closing client can wait for it.
+     */
+    public CompletableFuture<Void> sendLogout(String playerName, long accountHash, String pluginVersion) {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        HttpUrl url;
+        try {
+            url = config.useApi() ? HttpUrl.parse(api.getApiUrl() + "/webhook") : UrlManager.getRandomEndpoint();
+        } catch (Exception e) {
+            done.complete(null);
+            return done;
+        }
+        if (url == null || !urlManager.isValidDiscordWebhookUrl(url)) {
+            done.complete(null);
+            return done;
+        }
+        CustomWebhookBody webhook = new CustomWebhookBody();
+        webhook.setContent("DropTracker Event");
+        CustomWebhookBody.Embed embed = new CustomWebhookBody.Embed();
+        embed.setTitle("Logout");
+        embed.addField("type", "logout", true);
+        embed.addField("player_name", playerName, true);
+        embed.addField("acc_hash", String.valueOf(accountHash), true);
+        embed.addField("p_v", pluginVersion, true);
+        embed.addField("guid", System.currentTimeMillis() / 1000L + "-" + accountHash + "-"
+                + ThreadLocalRandom.current().nextLong(Long.MAX_VALUE), true);
+        embed.addField("world_type", WorldTypes.MAIN, true);
+        webhook.getEmbeds().add(embed);
+
+        Request request = new Request.Builder().url(url)
+                .post(new MultipartBody.Builder().setType(MultipartBody.FORM)
+                        .addFormDataPart("payload_json", gson.toJson(webhook)).build())
+                .build();
+        okHttpClient.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NotNull Call call, @NotNull IOException e) {
+                done.complete(null);
+            }
+
+            @Override
+            public void onResponse(@NotNull Call call, @NotNull Response response) {
+                response.close();
+                done.complete(null);
+            }
+        });
+        return done;
+    }
+
     private void sendWebhookWithRetry(CustomWebhookBody webhook, byte[] screenshot, int attempt, ValidSubmission submission) {
 
         MultipartBody.Builder requestBodyBuilder = new MultipartBody.Builder()
