@@ -30,9 +30,11 @@ import net.runelite.client.events.ClientShutdown;
  * is not, so statistics stay current for every player whichever they use.
  *
  * <p>The identity is remembered while logged in because by the time the game
- * reports the login screen, the local player is gone. A world hop is not a
- * logout and sends nothing. Only main-game worlds count: a Leagues or Deadman
- * character has its own hiscores.
+ * reports the login screen, the local player is gone. A world hop updates
+ * the hiscores as well, so it is reported too, but only when the player has
+ * gained experience since the last report: hopping back and forth must not
+ * send a message each time. Only main-game worlds count: a Leagues or
+ * Deadman character has its own hiscores.
  */
 @Slf4j
 @Singleton
@@ -46,6 +48,8 @@ public class LogoutSignal {
 	/** Who is logged in on a main-game world right now; null when nobody is. */
 	private volatile String playerName;
 	private volatile long accountHash = -1L;
+	/** Total experience when this player was last reported (or first seen). */
+	private volatile long reportedXp = -1L;
 
 	@Inject
 	public LogoutSignal(Client client, DropTrackerPlugin plugin, SubmissionManager submissionManager,
@@ -79,9 +83,15 @@ public class LogoutSignal {
 		if (state == GameState.LOGIN_SCREEN) {
 			send();
 		} else if (state == GameState.HOPPING) {
-			// Same account, possibly a different kind of world: look again
-			// once the new world has loaded.
-			forget();
+			// The hiscores update on a hop too. Report it if anything was
+			// gained, then look again once the new world has loaded: it may be
+			// a different kind of world.
+			long xp = client.getOverallExperience();
+			if (playerName != null && reportedXp >= 0 && xp != reportedXp) {
+				send();
+			} else {
+				forget();
+			}
 		}
 	}
 
@@ -107,12 +117,14 @@ public class LogoutSignal {
 			return;
 		}
 		accountHash = hash;
+		reportedXp = client.getOverallExperience();
 		playerName = local.getName();
 	}
 
 	private void forget() {
 		playerName = null;
 		accountHash = -1L;
+		reportedXp = -1L;
 	}
 
 	/** Sends the signal for whoever was logged in, once. Null when there is nothing to send. */

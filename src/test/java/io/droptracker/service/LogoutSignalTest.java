@@ -101,7 +101,8 @@ public class LogoutSignalTest {
     }
 
     @Test
-    public void aWorldHopIsNotALogout() {
+    public void aWorldHopWithNothingGainedSendsNothing() {
+        clientAnswers.put("getOverallExperience", 1000L);
         Recording signal = signal("Some Player", 42L, MAIN, true);
         signal.onGameTick(new GameTick());
         signal.onGameStateChanged(state(GameState.HOPPING));
@@ -110,6 +111,20 @@ public class LogoutSignalTest {
         // And the player is picked up again in the new world.
         signal.onGameTick(new GameTick());
         signal.onGameStateChanged(state(GameState.LOGIN_SCREEN));
+        assertEquals(1, signal.sent.size());
+    }
+
+    @Test
+    public void aWorldHopAfterGainingExperienceIsReported() {
+        clientAnswers.put("getOverallExperience", 1000L);
+        Recording signal = signal("Some Player", 42L, MAIN, true);
+        signal.onGameTick(new GameTick());
+        clientAnswers.put("getOverallExperience", 1500L);
+        signal.onGameStateChanged(state(GameState.HOPPING));
+        assertEquals(1, signal.sent.size());
+        // Hopping again straight away, with nothing new, is not reported again.
+        signal.onGameTick(new GameTick());
+        signal.onGameStateChanged(state(GameState.HOPPING));
         assertEquals(1, signal.sent.size());
     }
 
