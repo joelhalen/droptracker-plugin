@@ -28,9 +28,10 @@ import net.runelite.client.events.ConfigChanged;
  * <p>The interval and the debounce both come from the manifest, so sync load is
  * tunable — and switchable off — from the server without a Plugin Hub release.
  *
- * <p>On logout the remaining delay is preserved rather than restarted. Without
- * that, a player who hops worlds every few minutes would restart a 60-minute
- * timer each time and never sync at all.
+ * <p>On logout or a hop the remaining delay is preserved rather than
+ * restarted. Without that, a player who hops worlds every few minutes would
+ * restart the timer each time and never sync at all. Loading screens are not
+ * logins and change nothing (see {@link #react}).
  */
 @Slf4j
 @Singleton
@@ -97,23 +98,64 @@ public class StateSyncScheduler {
 		}
 	}
 
+	/** What a game state change means for syncing. */
+	enum Reaction { LOGIN, RESUME, PAUSE, IGNORE }
+
+	/**
+	 * Decides what a change of game state means.
+	 *
+	 * <p>The client passes through LOADING and back to LOGGED_IN on every
+	 * loading screen: a teleport, a new region, entering a house. Until
+	 * this fix each of those counted as a login and sent a full sync three
+	 * seconds later, about seventeen an hour per player, almost all of them
+	 * with nothing new in them. Only arriving from the login screen is a
+	 * login. Coming back from a hop or a dropped connection resumes the
+	 * timer where it stopped.
+	 *
+	 * @param previous the last state seen that was not LOADING; null before any
+	 */
+	static Reaction react(GameState previous, GameState now) {
+		if (now == GameState.LOADING) {
+			return Reaction.IGNORE;
+		}
+		if (now == GameState.LOGGED_IN) {
+			if (previous == GameState.LOGGED_IN) {
+				return Reaction.IGNORE;
+			}
+			boolean wasAway = previous == GameState.HOPPING || previous == GameState.CONNECTION_LOST;
+			return wasAway ? Reaction.RESUME : Reaction.LOGIN;
+		}
+		return Reaction.PAUSE;
+	}
+
+	/** The last game state seen that was not LOADING. */
+	private GameState lastState;
+
 	@Subscribe
 	public void onGameStateChanged(GameStateChanged event) {
-		if (!stateSyncService.isEnabled()) {
+		GameState now = event.getGameState();
+		Reaction reaction = react(lastState, now);
+		if (now != GameState.LOADING) {
+			lastState = now;
+		}
+		if (!stateSyncService.isEnabled() || reaction == Reaction.IGNORE) {
 			return;
 		}
 
-		if (event.getGameState() == GameState.LOGGED_IN) {
+		if (reaction == Reaction.LOGIN) {
 			// A login is the one moment we know the client's view is fresh and
 			// possibly stale server-side, so sync promptly rather than waiting
 			// out whatever was left on the timer.
 			scheduleRapid("login");
 			return;
 		}
+		if (reaction == Reaction.RESUME) {
+			scheduleNext();
+			return;
+		}
 
-		// Hopping is not really "away" — but treating it the same is harmless,
-		// because the resume below restores the remaining time rather than
-		// restarting it.
+		// Away (login screen, hopping, connection lost): keep what was left on
+		// the timer so the resume above restores it rather than restarting it.
 		synchronized (lock) {
 			if (pendingSync != null) {
 				remainingOnPause = Math.max(0, pendingSync.getDelay(TimeUnit.MILLISECONDS));

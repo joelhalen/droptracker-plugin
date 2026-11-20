@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.gameval.*;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.config.ConfigManager;
 
 /**
  * Builds and sends {@link StateSnapshot}s — the account's current state, which
@@ -37,6 +38,11 @@ public class StateSyncService {
 	private final ManifestService manifestService;
 	private final ScheduledExecutorService executor;
 	private final DropTrackerPlugin plugin;
+	private final ConfigManager configManager;
+
+	/** Where RuneLite's Chat Commands plugin keeps kill counts, per account. */
+	private static final String KILL_COUNT_GROUP = "killcount";
+	private static final int MAX_KILL_COUNTS = 300;
 
 	/**
 	 * Collection log slots seen so far this session, item id -> quantity.
@@ -173,6 +179,7 @@ public class StateSyncService {
 		snapshot.setCombatLevel(local != null ? local.getCombatLevel() : null);
 
 		collectSkills(snapshot);
+		collectKillCounts(snapshot);
 		collectQuests(snapshot, manifest);
 		collectCombatAchievements(snapshot, manifest);
 		collectDiaries(snapshot);
@@ -187,6 +194,41 @@ public class StateSyncService {
 			skills.put(skill.getName(), client.getSkillExperience(skill));
 		}
 		snapshot.setSkills(skills);
+	}
+
+	/**
+	 * Attaches the kill counts RuneLite already holds for this account.
+	 *
+	 * <p>The Chat Commands plugin records each boss's count from the game's
+	 * own chat line, so these are the game's numbers, current the moment a
+	 * kill lands, where the hiscores only catch up at logout. Nothing is read
+	 * from the game here, only from RuneLite's saved settings; a failure
+	 * leaves the snapshot without them rather than failing it.
+	 */
+	private void collectKillCounts(StateSnapshot snapshot) {
+		try {
+			String profile = configManager.getRSProfileKey();
+			if (profile == null) {
+				return;
+			}
+			String prefix = KILL_COUNT_GROUP + "." + profile + ".";
+			Map<String, Integer> counts = new HashMap<>();
+			for (String key : configManager.getRSProfileConfigurationKeys(KILL_COUNT_GROUP, profile, "")) {
+				if (counts.size() >= MAX_KILL_COUNTS) {
+					break;
+				}
+				String boss = key.startsWith(prefix) ? key.substring(prefix.length()) : key;
+				Integer count = configManager.getRSProfileConfiguration(KILL_COUNT_GROUP, boss, int.class);
+				if (count != null && count > 0) {
+					counts.put(boss, count);
+				}
+			}
+			if (!counts.isEmpty()) {
+				snapshot.setKillCounts(counts);
+			}
+		} catch (Exception e) {
+			log.debug("Could not read stored kill counts: {}", e.toString());
+		}
 	}
 
 	/**

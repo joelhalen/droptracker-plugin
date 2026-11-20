@@ -55,6 +55,14 @@ public class StateSnapshot {
 	/** Skill name -> total experience. */
 	private Map<String, Integer> skills = new HashMap<>();
 
+	/**
+	 * Boss name -> kill count, as RuneLite's Chat Commands plugin has
+	 * recorded them from the game's own "kill count is" messages. Null when
+	 * none are stored.
+	 */
+	@SerializedName("kill_counts")
+	private Map<String, Integer> killCounts;
+
 	/** Quest id -> 0 not started, 1 in progress, 2 finished. */
 	private Map<Integer, Integer> quests = new HashMap<>();
 
