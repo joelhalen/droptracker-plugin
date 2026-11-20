@@ -285,11 +285,17 @@ public class ClanRelayService {
      * Broadcasts feed both the Discord bridge (they are part of the chat box)
      * and broadcast tracking, under the one Clan chat sync setting.
      */
-    public void onClanBroadcast(String message) {
+    public void onClanBroadcast(String message, String raw) {
         if (!config.clanChatSync()) {
             return;
         }
-        queueLine(new PendingLine(SubmissionType.CLAN_BROADCAST, null, message));
+        PendingLine line = new PendingLine(SubmissionType.CLAN_BROADCAST, null, message);
+        // The game's own text, tags included: the server cleans it too, so a
+        // Jagex markup change no longer needs a plugin release to be read.
+        if (raw != null && !raw.equals(message)) {
+            line.raw = raw.length() > MAX_MESSAGE_CHARS * 2 ? raw.substring(0, MAX_MESSAGE_CHARS * 2) : raw;
+        }
+        queueLine(line);
     }
 
     /**
@@ -471,6 +477,9 @@ public class ClanRelayService {
             embed.addField("type", type == SubmissionType.CLAN_BROADCAST ? "clan_broadcast" : "clan_chat", true);
             embed.addField("clan_name", line.clanName, true);
             embed.addField("message", line.message, false);
+            if (line.raw != null) {
+                embed.addField("raw", line.raw, false);
+            }
             if (line.sender != null) {
                 embed.addField("sender", line.sender, true);
             }
@@ -496,6 +505,7 @@ public class ClanRelayService {
         private final String sender;
         private String clanName;
         private String message;
+        private String raw;
         private String accountType;
         private boolean self;
 

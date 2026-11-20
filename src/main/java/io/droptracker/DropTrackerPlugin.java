@@ -205,7 +205,7 @@ public class DropTrackerPlugin extends Plugin {
 	@Inject
 	private ClientThread clientThread;
 
-	public String pluginVersion = "6.1.29";
+	public String pluginVersion = "6.1.30";
 	// Add a new flag to track when we need to update on next available tick
 	private boolean needsPanelUpdateOnLogin = false;
 
@@ -600,7 +600,7 @@ public class DropTrackerPlugin extends Plugin {
                 // Clan-broadcast relay (group feature): CLAN_MESSAGE only —
                 // GIM broadcasts are a different channel and stay local.
                 if (message.getType() == ChatMessageType.CLAN_MESSAGE) {
-                    clanRelayService.onClanBroadcast(chatMessage);
+                    clanRelayService.onClanBroadcast(chatMessage, message.getMessage());
                 }
                 break;
 			case CLAN_CHAT:

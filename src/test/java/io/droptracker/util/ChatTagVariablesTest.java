@@ -37,4 +37,11 @@ public class ChatTagVariablesTest {
     public void valueWithReplacementCharactersIsLiteral() {
         assertEquals("cost $1 \\ ok", ChatMessageUtil.expandTagVariables("<str_v_0=$1 \\ ok>cost <str_v_0>"));
     }
+
+    @Test
+    public void referenceWithFormatSuffixExpands() {
+        String raw = "<num_value_0=1,234>X received a drop: Whip (<num_value_0,1> coins).";
+        assertEquals("X received a drop: Whip (1,234 coins).",
+            Text.removeTags(ChatMessageUtil.expandTagVariables(raw)).trim());
+    }
 }

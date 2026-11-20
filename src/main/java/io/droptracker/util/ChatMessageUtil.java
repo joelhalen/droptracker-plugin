@@ -138,8 +138,10 @@ public class ChatMessageUtil {
     // underscore keeps <col=..>, <img=..> and <str> out of the match.
     private static final java.util.regex.Pattern TAG_VAR_DEF =
         java.util.regex.Pattern.compile("<([a-zA-Z]+_[a-zA-Z0-9_]+)=([^>]*)>");
+    // A reference may carry a format suffix ("<num_x_0,1>"); the bare value
+    // beats losing the number.
     private static final java.util.regex.Pattern TAG_VAR_REF =
-        java.util.regex.Pattern.compile("<([a-zA-Z]+_[a-zA-Z0-9_]+)>");
+        java.util.regex.Pattern.compile("<([a-zA-Z]+_[a-zA-Z0-9_]+)(?:[,:|][^>]*)?>");
 
     /**
      * Drops {@code <name=value>} definitions and replaces each {@code <name>}
