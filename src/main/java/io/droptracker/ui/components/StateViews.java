@@ -32,7 +32,7 @@ public final class StateViews {
 
         panel.add(DropTrackerTheme.gap(20));
 
-        JLabel errorLabel = new JLabel("<html><div style='text-align:center;'>" + message + "</div></html>");
+        JLabel errorLabel = new JLabel("<html><div style='text-align:center;'>" + PanelElements.escapeHtml(message) + "</div></html>");
         errorLabel.setFont(FontManager.getRunescapeSmallFont());
         errorLabel.setForeground(DropTrackerTheme.RED);
         errorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -57,7 +57,7 @@ public final class StateViews {
 
         panel.add(Box.createRigidArea(new Dimension(0, topGap)));
 
-        JLabel label = new JLabel("<html><div style='text-align:center;'>" + text + "</div></html>");
+        JLabel label = new JLabel("<html><div style='text-align:center;'>" + PanelElements.escapeHtml(text) + "</div></html>");
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setForeground(color);
         label.setAlignmentX(Component.CENTER_ALIGNMENT);

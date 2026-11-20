@@ -351,7 +351,7 @@ public class PanelElements {
         JLabel valueLabel = DropTrackerTheme.label(value, FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
         valueLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         // Long values are cut to the tile; the tooltip has them whole.
-        valueLabel.setToolTipText(value);
+        valueLabel.setToolTipText(tip(value));
 
         box.add(nameLabel);
         box.add(valueLabel);
@@ -504,11 +504,12 @@ public class PanelElements {
     }
 
     public static JButton createExternalLinkButton(String text, String tooltip, boolean withIcon, Runnable action) {
-        JButton button = new JButton(text);
+        JButton button = DropTrackerTheme.plain(new JButton());
+        button.setText(text);
         if (withIcon) {
             button.setIcon(EXTERNAL_LINK_ICON);
         }
-        button.setToolTipText(tooltip);
+        button.setToolTipText(tip(tooltip));
         DropTrackerTheme.styleButton(button);
         button.setPreferredSize(new Dimension(150, 30));
         button.addActionListener(e -> action.run());
@@ -519,9 +520,10 @@ public class PanelElements {
         // No remote <img> tags here: Swing HTML would fetch them over the network.
         // The board icon already signals "opens externally"; the old " ⇱"
         // suffix had no glyph in any bundled font.
-        JButton button = new JButton(text);
+        JButton button = DropTrackerTheme.plain(new JButton());
+        button.setText(text);
         button.setIcon(BOARD_ICON);
-        button.setToolTipText(tooltip);
+        button.setToolTipText(tip(tooltip));
         DropTrackerTheme.styleButton(button);
         button.addActionListener(e -> action.run());
         return button;
@@ -850,13 +852,21 @@ public class PanelElements {
     /**
      * Escapes text that is about to be interpolated into a Swing {@code <html>}
      * string. Swing's HTML renderer resolves {@code <img src>} over the network, so
-     * any server-supplied string reaching a JLabel or tooltip must come through
-     * here — otherwise the API could make the client fetch an arbitrary URL without
-     * a single line of request code being involved.
+     * any string that is not a literal in this plugin must come through here
+     * before it reaches HTML in a JLabel or tooltip. The HTML 3 set, because
+     * that is what Swing renders: it prints the newer named entities literally.
      */
     public static String escapeHtml(String value) {
-        return value == null ? "" : value
-            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return value == null ? "" : org.apache.commons.text.StringEscapeUtils.escapeHtml3(value);
+    }
+
+    /**
+     * Tooltip text for a string that is not a literal in this plugin. A tooltip
+     * is its own component, so turning HTML off on the owner does not reach it;
+     * the text is escaped instead. Null or blank gives no tooltip.
+     */
+    public static String tip(String value) {
+        return value == null || value.trim().isEmpty() ? null : "<html>" + escapeHtml(value) + "</html>";
     }
 
     private static void displayImageInDialog(JDialog imageDialog, BufferedImage originalImage, JFrame parentFrame) {

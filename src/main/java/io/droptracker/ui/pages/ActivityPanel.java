@@ -188,7 +188,7 @@ public class ActivityPanel {
                 feedListPanel.add(DropTrackerTheme.gap(3));
             }
         } else {
-            JLabel emptyLabel = DropTrackerTheme.label("<html>Qualifying drops and achievements will appear here as you receive them. Failed sends can be retried.</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
+            JLabel emptyLabel = DropTrackerTheme.richLabel("<html>Qualifying drops and achievements will appear here as you receive them. Failed sends can be retried.</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED);
             emptyLabel.setBorder(new EmptyBorder(5, 5, 5, 5));
             feedListPanel.add(emptyLabel);
         }
@@ -322,15 +322,15 @@ public class ActivityPanel {
         tooltip.append("<html><div style='font-size: 10px; line-height: 1.2; padding: 3px;'>");
 
         tooltip.append("<div style='color: #ffb83f; font-weight: bold; margin-bottom: 3px;'>")
-               .append(submission.getTypeShortLabel()).append(" SUBMISSION</div>");
+               .append(PanelElements.escapeHtml(submission.getTypeShortLabel())).append(" SUBMISSION</div>");
 
         tooltip.append("<div style='color: #efe6d2; margin-bottom: 3px;'>")
-               .append(submission.getDisplayText()).append("</div>");
+               .append(PanelElements.escapeHtml(submission.getDisplayText())).append("</div>");
 
         SubmissionStatus status = submission.getStatus();
         String statusColor = status != null ? status.getHexColor() : "#808080";
         tooltip.append("<div style='color: ").append(statusColor).append("; margin-bottom: 3px;'>")
-               .append("Status: ").append(submission.getStatusDescription()).append("</div>");
+               .append("Status: ").append(PanelElements.escapeHtml(submission.getStatusDescription())).append("</div>");
 
         if (submission.getGroupIds() != null && submission.getGroupIds().length > 0) {
             tooltip.append("<div style='color: #d8c9a3; margin-bottom: 3px;'>")
@@ -340,7 +340,7 @@ public class ActivityPanel {
         String receivedAt = formatReceivedTime(submission.getTimeReceived());
         if (receivedAt != null) {
             tooltip.append("<div style='color: #d8c9a3; margin-bottom: 3px;'>")
-                   .append("Received: ").append(receivedAt).append("</div>");
+                   .append("Received: ").append(PanelElements.escapeHtml(receivedAt)).append("</div>");
         }
 
         if (submission.getRetryAttempts() > 0) {
@@ -350,7 +350,7 @@ public class ActivityPanel {
 
         if (submission.getLastFailureReason() != null && !submission.getLastFailureReason().isEmpty()) {
             tooltip.append("<div style='color: #e05c4d; margin-bottom: 3px;'>")
-                   .append("Last failure: ").append(submission.getLastFailureReason()).append("</div>");
+                   .append("Last failure: ").append(PanelElements.escapeHtml(submission.getLastFailureReason())).append("</div>");
         }
 
         tooltip.append("</div></html>");

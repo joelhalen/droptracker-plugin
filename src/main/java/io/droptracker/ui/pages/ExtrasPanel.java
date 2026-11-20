@@ -70,7 +70,7 @@ public class ExtrasPanel {
         deathMessageApi.privacy(name, hash, null, (settings, error) -> {
             button.setEnabled(true);
             if (settings == null) {
-                JOptionPane.showMessageDialog(button, error, "Your privacy", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(button, message(error), "Your privacy", JOptionPane.INFORMATION_MESSAGE);
                 return;
             }
             JPanel form = new JPanel(new GridLayout(0, 1, 0, 4));
@@ -94,9 +94,16 @@ public class ExtrasPanel {
                 return;
             }
             deathMessageApi.privacy(name, hash, changes, (saved, saveError) -> JOptionPane.showMessageDialog(button,
-                saved != null ? "Saved. It can take a minute to show on the site." : saveError, "Your privacy",
+                message(saved != null ? "Saved. It can take a minute to show on the site." : saveError), "Your privacy",
                 JOptionPane.INFORMATION_MESSAGE));
         });
+    }
+
+    /** Dialog text from the server, shown literally: a bare string would be rendered as HTML. */
+    private static JLabel message(String text) {
+        JLabel label = DropTrackerTheme.plain(new JLabel());
+        label.setText(text);
+        return label;
     }
 
     /** Sends the character as it looks now; the button narrates, then resets. */
@@ -107,7 +114,7 @@ public class ExtrasPanel {
         playerModelService.sendCurrentModel((ok, message) -> {
             // Already on the EDT.
             button.setText(ok ? "Model sent!" : "Failed to send");
-            button.setToolTipText(message);
+            button.setToolTipText(io.droptracker.ui.components.PanelElements.tip(message));
             Timer restore = new Timer(4000, ev -> {
                 button.setText(idle);
                 button.setEnabled(true);
@@ -147,8 +154,8 @@ public class ExtrasPanel {
      * spare height, which pushed each button to the bottom of its card.
      */
     private static JComponent wrapped(String text, int inset) {
-        return DropTrackerTheme.left(DropTrackerTheme.label("<html><div style='width:" + (PluginPanel.PANEL_WIDTH - inset)
-            + "px'>" + text + "</div></html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED));
+        return DropTrackerTheme.left(DropTrackerTheme.richLabel("<html><div style='width:" + (PluginPanel.PANEL_WIDTH - inset)
+            + "px'>" + io.droptracker.ui.components.PanelElements.escapeHtml(text) + "</div></html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED));
     }
 
 }

@@ -407,7 +407,7 @@ public class DeathMessageEditor extends JPanel {
 
     /** Clan names and messages are user-written; a JLabel would render their HTML. */
     static String escape(String text) {
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        return PanelElements.escapeHtml(text);
     }
 
     private static JTextArea wrapped(String text) {

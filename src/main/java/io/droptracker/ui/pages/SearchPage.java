@@ -195,7 +195,7 @@ abstract class SearchPage {
         // Text wraps to what the icon and the clear button leave of the row.
         int width = PluginPanel.PANEL_WIDTH - (icon != null ? 150 : 80);
         JPanel names = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_1);
-        names.add(left(DropTrackerTheme.label(html(card.getTitle(), width), FontManager.getRunescapeBoldFont(),
+        names.add(left(DropTrackerTheme.richLabel(html(card.getTitle(), width), FontManager.getRunescapeBoldFont(),
             DropTrackerTheme.TEXT)));
         PanelCard.Subtitle sub = card.getSubtitle();
         if (sub != null) {
@@ -215,7 +215,7 @@ abstract class SearchPage {
         }
         lines.addAll(card.getList());
         for (String line : lines) {
-            names.add(left(DropTrackerTheme.label(html(line, width), FontManager.getRunescapeSmallFont(),
+            names.add(left(DropTrackerTheme.richLabel(html(line, width), FontManager.getRunescapeSmallFont(),
                 DropTrackerTheme.TEXT_MUTED)));
         }
 
