@@ -71,6 +71,12 @@ public class EventWindow extends JPanel {
                 show(events.get(i).getId(), "overview");
             }
         });
+        // Event names come from the server; the list must show them literally.
+        ListCellRenderer<? super String> base = switcher.getRenderer();
+        switcher.setRenderer((list, value, index, selected, focused) -> {
+            Component c = base.getListCellRendererComponent(list, value, index, selected, focused);
+            return c instanceof JComponent ? DropTrackerTheme.plain((JComponent) c) : c;
+        });
         switcher.setVisible(false);
         actions.add(switcher);
         JButton refresh = DropTrackerTheme.button("Refresh");
@@ -258,7 +264,7 @@ public class EventWindow extends JPanel {
                 stats.setOpaque(false);
                 for (EventView.Item i : b.getItems()) {
                     JPanel box = PanelElements.createStatBox(i.getLabel(), i.getValue());
-                    box.setToolTipText(i.getTip());
+                    box.setToolTipText(PanelElements.tip(i.getTip()));
                     stats.add(box);
                 }
                 return fit(stats);
@@ -283,7 +289,7 @@ public class EventWindow extends JPanel {
         t.add(tableRow(b.getColumns(), heads, null, null, false, true));
         for (EventView.Row r : b.getRows()) {
             JPanel row = tableRow(b.getColumns(), r.getCells(), r.getColor(), r.getPage(), r.isHighlight(), false);
-            row.setToolTipText(r.getTip());
+            row.setToolTipText(PanelElements.tip(r.getTip()));
             if (r.getIconItemId() != null && row.getComponentCount() > 0) {
                 // An item row (a task's checklist): the icon leads its first cell.
                 JLabel first = (JLabel) row.getComponent(0);
@@ -311,7 +317,7 @@ public class EventWindow extends JPanel {
                 head ? DropTrackerTheme.TEXT_MUTED : highlight ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT);
             cell.setPreferredSize(new Dimension(0, cell.getPreferredSize().height));
             cell.setMinimumSize(cell.getPreferredSize());
-            cell.setToolTipText(cells.get(i));
+            cell.setToolTipText(PanelElements.tip(cells.get(i)));
             if (col != null && col.isRight()) {
                 cell.setHorizontalAlignment(SwingConstants.RIGHT);
             }
@@ -340,7 +346,7 @@ public class EventWindow extends JPanel {
             JPanel card = new DropTrackerTheme.FitPanel(new BorderLayout(8, 4));
             card.setBackground(DropTrackerTheme.SURFACE_1);
             card.setBorder(DropTrackerTheme.cardBorder(6, 8, 6, 8));
-            card.setToolTipText(i.getTip());
+            card.setToolTipText(PanelElements.tip(i.getTip()));
             JLabel icon = new JLabel();
             icon.setPreferredSize(new Dimension(28, 28));
             panel.applyTaskIcon(icon, i.getIconItemId(), null, 28);
@@ -365,7 +371,7 @@ public class EventWindow extends JPanel {
                 JLabel team = DropTrackerTheme.label(bar.getLabel(), bar.isHighlight() ? FontManager.getRunescapeBoldFont() : FontManager.getRunescapeSmallFont(),
                     bar.isHighlight() ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT_MUTED);
                 team.setPreferredSize(new Dimension(130, 14));
-                team.setToolTipText(bar.getLabel());
+                team.setToolTipText(PanelElements.tip(bar.getLabel()));
                 line.add(team, BorderLayout.WEST);
                 line.add(EventsPanel.progressBar(bar.getHave(), bar.getNeed(), bar.getText(),
                     bar.getColor() != null ? parse(bar.getColor()) : DropTrackerTheme.GREEN), BorderLayout.CENTER);
@@ -374,7 +380,7 @@ public class EventWindow extends JPanel {
             card.add(body, BorderLayout.CENTER);
             if (i.getPage() != null) {
                 String link = i.getPage();
-                card.setToolTipText((i.getTip() != null ? i.getTip() + " " : "") + "Click to see what counts and who has it.");
+                card.setToolTipText(PanelElements.tip((i.getTip() != null ? i.getTip() + " " : "") + "Click to see what counts and who has it."));
                 card.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 card.addMouseListener(new MouseAdapter() {
                     @Override

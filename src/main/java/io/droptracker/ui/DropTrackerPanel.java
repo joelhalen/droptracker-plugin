@@ -247,7 +247,7 @@ public class DropTrackerPanel extends PluginPanel {
 		statusRow.setBackground(DropTrackerTheme.SURFACE_1);
 		statusRow.setMaximumSize(new Dimension(PluginPanel.PANEL_WIDTH, 18));
 
-		JLabel accountLabel = new JLabel();
+		JLabel accountLabel = DropTrackerTheme.plain(new JLabel());
 		accountLabel.setFont(FontManager.getRunescapeSmallFont());
 		String lastAccount = config.lastAccountName();
 		if (lastAccount != null && !lastAccount.isEmpty()) {

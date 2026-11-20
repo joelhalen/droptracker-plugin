@@ -76,9 +76,37 @@ public final class DropTrackerTheme {
         return panel;
     }
 
-    /** A label in the given font and colour. */
+    /**
+     * Turns HTML rendering off for a component, so its text is always shown
+     * literally. Swing renders any text that starts with {@code <html>} as
+     * markup, and its renderer fetches {@code <img src>} over the network, so
+     * every component showing text that is not a literal in this plugin goes
+     * through here (or escapes the text, where markup is wanted).
+     */
+    public static <T extends JComponent> T plain(T component) {
+        component.putClientProperty("html.disable", Boolean.TRUE);
+        return component;
+    }
+
+    /** A plain-text label in the given font and colour. Never renders HTML. */
     public static JLabel label(String text, Font font, Color color) {
-        JLabel label = new JLabel(text);
+        return richLabel(text, font, color, false);
+    }
+
+    /**
+     * A label whose text is HTML written by this plugin. Anything interpolated
+     * into it must already be escaped with {@code PanelElements.escapeHtml}.
+     */
+    public static JLabel richLabel(String html, Font font, Color color) {
+        return richLabel(html, font, color, true);
+    }
+
+    private static JLabel richLabel(String text, Font font, Color color, boolean html) {
+        JLabel label = new JLabel();
+        if (!html) {
+            plain(label);
+        }
+        label.setText(text);
         label.setFont(font);
         label.setForeground(color);
         return label;
@@ -91,7 +119,8 @@ public final class DropTrackerTheme {
 
     /** Applies the standard themed button look (SURFACE_2 body, gold-bright hover). */
     public static JButton button(String text) {
-        JButton button = new JButton(text);
+        JButton button = plain(new JButton());
+        button.setText(text);
         styleButton(button);
         return button;
     }
@@ -148,7 +177,8 @@ public final class DropTrackerTheme {
      * The chip text is rendered in the accent color on a SURFACE_2 body.
      */
     public static JLabel chip(String text, Color accent) {
-        JLabel label = new JLabel(text);
+        JLabel label = plain(new JLabel());
+        label.setText(text);
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setForeground(accent);
         label.setOpaque(true);

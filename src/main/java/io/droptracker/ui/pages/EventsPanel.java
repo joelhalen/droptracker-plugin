@@ -211,7 +211,7 @@ public class EventsPanel {
     }
 
     private JLabel emptyLabel(String text) {
-        JLabel label = new JLabel("<html><div style='text-align:center;'>" + text + "</div></html>");
+        JLabel label = new JLabel("<html><div style='text-align:center;'>" + escape(text) + "</div></html>");
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setForeground(DropTrackerTheme.TEXT_MUTED);
         label.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -232,7 +232,7 @@ public class EventsPanel {
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
         JPanel text = DropTrackerTheme.vbox(row.getBackground());
         JLabel name = DropTrackerTheme.label(event.getName(), FontManager.getRunescapeBoldFont(), active ? DropTrackerTheme.GOLD : DropTrackerTheme.TEXT);
-        name.setToolTipText(event.getName());
+        name.setToolTipText(PanelElements.tip(event.getName()));
         text.add(name);
         text.add(DropTrackerTheme.label(subtitle(event), FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT_MUTED));
         row.add(text, BorderLayout.CENTER);
@@ -348,7 +348,7 @@ public class EventsPanel {
         JPanel titleCol = DropTrackerTheme.vbox(DropTrackerTheme.SURFACE_2);
 
         JLabel name = DropTrackerTheme.label(event.getName(), FontManager.getRunescapeBoldFont(), DropTrackerTheme.GOLD);
-        name.setToolTipText(event.getName());
+        name.setToolTipText(PanelElements.tip(event.getName()));
         name.setAlignmentX(Component.LEFT_ALIGNMENT);
         titleCol.add(name);
 
@@ -415,7 +415,7 @@ public class EventsPanel {
         applyTaskIcon(icon, task.iconItemId, task.iconPath, 24);
         row.add(icon, BorderLayout.WEST);
 
-        JLabel label = DropTrackerTheme.label("<html>" + escape(task.label) + "</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
+        JLabel label = DropTrackerTheme.richLabel("<html>" + escape(task.label) + "</html>", FontManager.getRunescapeSmallFont(), DropTrackerTheme.TEXT);
         row.add(label, BorderLayout.CENTER);
         box.add(row);
 
@@ -511,7 +511,7 @@ public class EventsPanel {
      *  server sends no id), or a short name token when no icon resolves. */
     private JComponent requirementSlot(EventState.Requirement req) {
         boolean obtained = Boolean.TRUE.equals(req.getObtained());
-        JLabel slot = new JLabel();
+        JLabel slot = DropTrackerTheme.plain(new JLabel());
         slot.setHorizontalAlignment(SwingConstants.CENTER);
         slot.setVerticalAlignment(SwingConstants.CENTER);
         slot.setPreferredSize(new Dimension(REQ_ICON_SLOT, REQ_ICON_SLOT));
@@ -769,7 +769,8 @@ public class EventsPanel {
         applyTaskIcon(icon, task.getIconItemId(), task.getIconPath(), 20);
         row.add(icon, BorderLayout.WEST);
 
-        JLabel label = new JLabel(truncate(task.getLabel(), controls ? 22 : 30));
+        JLabel label = DropTrackerTheme.plain(new JLabel());
+        label.setText(truncate(task.getLabel(), controls ? 22 : 30));
         label.setFont(FontManager.getRunescapeSmallFont());
         label.setForeground(task.isCompleted() || hidden ? DropTrackerTheme.TEXT_MUTED
             : (isDisplayed ? DropTrackerTheme.GOLD_BRIGHT : DropTrackerTheme.TEXT));

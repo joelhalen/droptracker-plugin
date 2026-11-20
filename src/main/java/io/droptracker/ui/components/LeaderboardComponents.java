@@ -52,7 +52,7 @@ public class LeaderboardComponents {
         searchField.setForeground(DropTrackerTheme.TEXT);
         searchField.setCaretColor(DropTrackerTheme.GOLD);
         searchField.setBorder(new StrokeBorder(new BasicStroke(1), DropTrackerTheme.SURFACE_3));
-        searchField.setToolTipText(searchPlaceholder);
+        searchField.setToolTipText(PanelElements.tip(searchPlaceholder));
         searchField.setHorizontalAlignment(JTextField.LEFT);
         searchField.setMargin(new Insets(5, 8, 5, 8));
         searchField.setFont(FontManager.getRunescapeSmallFont());
@@ -190,7 +190,8 @@ public class LeaderboardComponents {
         
         // Name button. No remote <img> tags: Swing HTML would fetch them over the network.
         String name = item.getName() != null && !item.getName().trim().isEmpty() ? item.getName() : "Unknown";
-        JButton nameButton = new JButton(name);
+        JButton nameButton = DropTrackerTheme.plain(new JButton());
+        nameButton.setText(name);
         nameButton.setFont(FontManager.getRunescapeSmallFont());
         nameButton.setForeground(DropTrackerTheme.TEXT);
         nameButton.setHorizontalAlignment(JLabel.LEFT);
@@ -198,7 +199,7 @@ public class LeaderboardComponents {
         nameButton.setOpaque(false);
         nameButton.setContentAreaFilled(false);
         nameButton.setFocusPainted(false);
-        nameButton.setToolTipText(name);
+        nameButton.setToolTipText(PanelElements.tip(name));
         nameButton.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
         nameButton.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
